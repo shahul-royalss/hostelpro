@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>LuxeHostel - Warden Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-container": "#1c2b45",
+                        "on-error-container": "#93000a",
+                        "surface-bright": "#fbf8fb",
+                        "on-secondary-fixed-variant": "#474742",
+                        "primary-fixed": "#d7e3ff",
+                        "surface-container-lowest": "#ffffff",
+                        "glass-fill": "rgba(255, 255, 255, 0.65)",
+                        "on-primary-fixed-variant": "#384762",
+                        "primary": "#06162f",
+                        "outline-variant": "#c5c6ce",
+                        "surface-container": "#efedf0",
+                        "on-tertiary-container": "#aa8e5f",
+                        "text-muted": "#6E7480",
+                        "on-tertiary-fixed": "#271900",
+                        "glass-border": "rgba(255, 255, 255, 0.50)",
+                        "surface-variant": "#e4e2e4",
+                        "tertiary-fixed-dim": "#e1c28f",
+                        "on-primary": "#ffffff",
+                        "text-charcoal": "#2A2E35",
+                        "on-primary-fixed": "#0b1b35",
+                        "outline": "#75777e",
+                        "on-primary-container": "#8492b2",
+                        "secondary": "#5f5e59",
+                        "secondary-container": "#e5e2db",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-container": "#65645f",
+                        "on-secondary-fixed": "#1c1c18",
+                        "surface-dim": "#dbd9dc",
+                        "tertiary-container": "#3a2803",
+                        "on-error": "#ffffff",
+                        "background-ivory": "#F6F4EF",
+                        "surface-container-highest": "#e4e2e4",
+                        "inverse-primary": "#b8c7e8",
+                        "secondary-fixed-dim": "#c9c6c0",
+                        "on-surface": "#1b1b1d",
+                        "inverse-on-surface": "#f2f0f3",
+                        "on-surface-variant": "#44474d",
+                        "surface": "#fbf8fb",
+                        "status-sage": "#8CA687",
+                        "surface-container-low": "#f5f3f5",
+                        "error-container": "#ffdad6",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed": "#ffdea9",
+                        "status-red": "#C4574E",
+                        "background": "#fbf8fb",
+                        "surface-container-high": "#eae7ea",
+                        "secondary-fixed": "#e5e2db",
+                        "primary-fixed-dim": "#b8c7e8",
+                        "tertiary": "#211400",
+                        "surface-tint": "#505f7b",
+                        "accent-teal": "#3E7C74",
+                        "status-sand": "#D8B98A",
+                        "inverse-surface": "#303032",
+                        "on-tertiary-fixed-variant": "#58431b",
+                        "on-background": "#1b1b1d",
+                        "error": "#ba1a1a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "page-margin-desktop": "24px",
+                        "sidebar-width": "232px",
+                        "page-margin-mobile": "16px",
+                        "safe-bottom": "env(safe-area-inset-bottom, 20px)"
+                    },
+                    "fontFamily": {
+                        "stat-display-mobile": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "stat-display": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "stat-display-mobile": ["28px", { "lineHeight": "34px", "fontWeight": "700" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "stat-display": ["36px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["16px", { "lineHeight": "24px", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background-ivory');
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(255, 255, 255, 0.4) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(255, 255, 255, 0.4) 0px, transparent 50%);
+            background-attachment: fixed;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 8px 32px rgba(6, 22, 47, 0.04);
+        }
+        
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        .material-symbols-outlined[data-weight="fill"] {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        .pb-safe {
+            padding-bottom: env(safe-area-inset-bottom, 20px);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="text-on-surface antialiased flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 backdrop-blur-xl bg-glass-fill border-b border-glass-border shadow-sm flex justify-between items-center px-page-margin-mobile h-16 transition-all duration-300 ease-in-out md:hidden">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-status-sand/20 flex items-center justify-center overflow-hidden border border-status-sand/30">
+<img alt="Warden Profile" class="w-full h-full object-cover" data-alt="A close-up, high-quality portrait of a professional female hostel warden in her late 30s. She is smiling warmly, wearing a smart casual sage green blouse. The background is slightly out of focus, showing a clean, modern, well-lit interior with neutral tones and soft natural light coming from a large window. The overall aesthetic is professional, welcoming, and high-end." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-7Cf4lNhLQFREMZPvmhdTJCjTB23tjyKqrjAdsIs4XQK-XyZ8ZfBvT37FqIPzDn-97MSahmnTFEkgeV14Zfb5kWXbqSQ69F7EVt7TI0dTlLQsG8we6OK5xBO67qArZUsIAzmK0BR4sYlx1mazDWAh713ul2qETkCDifDrFoUGQ2fZm5IsmoY1B9CdO442fnrdk3eDSdipJTbWalOsFru-NqMh7hcsojSLosLUWrSXIW85M8cPtlXGbQ"/>
+</div>
+<span class="font-headline-md text-headline-md font-bold text-primary">LuxeHostel</span>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-primary hover:bg-surface-variant/50 transition-colors active:scale-95">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 pt-20 px-page-margin-mobile pb-32 max-w-md mx-auto w-full md:max-w-4xl md:px-page-margin-desktop md:pt-8 md:pl-[256px]">
+<!-- Welcome Header -->
+<div class="mb-6 mt-2">
+<h1 class="font-headline-lg text-headline-lg text-primary tracking-tight">Good morning, Warden.</h1>
+<p class="font-body-md text-body-md text-text-muted mt-1">Here is the status of LuxeHostel today.</p>
+</div>
+<!-- Occupancy Hero Card -->
+<div class="glass-card rounded-[20px] p-6 mb-6">
+<div class="flex justify-between items-center mb-4">
+<h2 class="font-headline-md text-headline-md text-primary">Occupancy</h2>
+<span class="material-symbols-outlined text-primary/50">bed</span>
+</div>
+<div class="mb-5">
+<div class="flex items-baseline gap-2">
+<span class="font-stat-display-mobile text-stat-display-mobile text-primary">86</span>
+<span class="font-body-md text-body-md text-text-muted font-medium">/ 120 beds filled</span>
+</div>
+<!-- Progress Bar -->
+<div class="h-2 w-full bg-surface-container-high rounded-full mt-4 overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 71%"></div>
+</div>
+</div>
+<!-- Quick Stats -->
+<div class="grid grid-cols-2 gap-4 pt-4 border-t border-glass-border">
+<div class="flex flex-col">
+<span class="font-body-md text-body-md text-text-muted">Free beds</span>
+<span class="font-headline-md text-headline-md text-status-sage mt-1">34</span>
+</div>
+<div class="flex flex-col">
+<span class="font-body-md text-body-md text-text-muted">Fees pending</span>
+<span class="font-headline-md text-headline-md text-status-red mt-1">12 students</span>
+</div>
+</div>
+</div>
+<!-- Quick Actions Bento Grid -->
+<div class="grid grid-cols-2 gap-4 mb-6">
+<!-- Action 1 -->
+<button class="glass-card rounded-2xl p-4 flex flex-col items-center justify-center gap-3 aspect-square active:scale-[0.98] transition-transform">
+<div class="w-12 h-12 rounded-full bg-primary/5 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined">person_add</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary text-[14px]">Register</span>
+</button>
+<!-- Action 2 -->
+<button class="glass-card rounded-2xl p-4 flex flex-col items-center justify-center gap-3 aspect-square active:scale-[0.98] transition-transform">
+<div class="w-12 h-12 rounded-full bg-primary/5 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined">meeting_room</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary text-[14px]">Rooms</span>
+</button>
+<!-- Action 3 -->
+<button class="glass-card rounded-2xl p-4 flex flex-col items-center justify-center gap-3 aspect-square active:scale-[0.98] transition-transform">
+<div class="w-12 h-12 rounded-full bg-primary/5 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined">payments</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary text-[14px]">Fees</span>
+</button>
+<!-- Action 4 -->
+<button class="glass-card rounded-2xl p-4 flex flex-col items-center justify-center gap-3 aspect-square active:scale-[0.98] transition-transform">
+<div class="w-12 h-12 rounded-full bg-primary/5 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined">groups</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary text-[14px]">Visitors</span>
+</button>
+</div>
+<!-- Announcements Card -->
+<div class="glass-card rounded-[20px] p-5 mb-8">
+<div class="flex justify-between items-center mb-4">
+<h2 class="font-headline-md text-headline-md text-primary">Announcements</h2>
+<button class="text-text-muted font-body-md text-body-md text-[13px] hover:text-primary transition-colors">See all</button>
+</div>
+<div class="flex flex-col gap-4">
+<div class="flex items-start gap-3">
+<div class="mt-1 w-2 h-2 rounded-full bg-status-sand flex-shrink-0"></div>
+<div>
+<p class="font-body-md text-body-md text-primary font-medium">Water maintenance tomorrow</p>
+<p class="font-body-md text-body-md text-text-muted text-[13px] mt-0.5">Supply interrupted 10 AM - 2 PM.</p>
+</div>
+</div>
+<div class="h-px w-full bg-glass-border"></div>
+<div class="flex items-start gap-3">
+<div class="mt-1 w-2 h-2 rounded-full bg-status-sage flex-shrink-0"></div>
+<div>
+<p class="font-body-md text-body-md text-primary font-medium">New Wi-Fi routers installed</p>
+<p class="font-body-md text-body-md text-text-muted text-[13px] mt-0.5">Check wing B for improved connectivity.</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 backdrop-blur-2xl bg-glass-fill border-t border-glass-border shadow-[0_-4px_20px_rgba(0,0,0,0.04)] rounded-t-xl flex justify-around items-center h-20 px-2 pb-safe md:hidden">
+<!-- Home (Active) -->
+<button class="flex flex-col items-center justify-center text-on-primary bg-primary rounded-xl px-3 py-1.5 transition-transform duration-200 active:scale-90">
+<span class="material-symbols-outlined" data-icon="dashboard" data-weight="fill">dashboard</span>
+<span class="font-label-caps text-label-caps mt-1">Home</span>
+</button>
+<!-- Rooms -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-transform duration-200 active:scale-90 px-3 py-1.5">
+<span class="material-symbols-outlined" data-icon="bed">bed</span>
+<span class="font-label-caps text-label-caps mt-1">Rooms</span>
+</button>
+<!-- Register (Center Raised FAB style) -->
+<button class="relative -top-4 flex flex-col items-center justify-center w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg border-4 border-[#F6F4EF] hover:bg-primary/90 transition-transform duration-200 active:scale-90">
+<span class="material-symbols-outlined text-[28px]" data-icon="person_add">person_add</span>
+</button>
+<!-- Fees -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-transform duration-200 active:scale-90 px-3 py-1.5">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-label-caps text-label-caps mt-1">Fees</span>
+</button>
+<!-- More / Leaves -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-transform duration-200 active:scale-90 px-3 py-1.5">
+<span class="material-symbols-outlined" data-icon="event_busy">event_busy</span>
+<span class="font-label-caps text-label-caps mt-1">Leaves</span>
+</button>
+</nav>
+</body></html>

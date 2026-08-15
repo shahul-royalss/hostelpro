@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>My Room - HostelHub</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed-variant": "#474742",
+                        "status-sand": "#D8B98A",
+                        "on-tertiary-fixed": "#271900",
+                        "surface-container-highest": "#e4e2e4",
+                        "on-primary-fixed-variant": "#384762",
+                        "on-tertiary": "#ffffff",
+                        "inverse-primary": "#b8c7e8",
+                        "text-charcoal": "#2A2E35",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "primary-fixed-dim": "#b8c7e8",
+                        "primary-container": "#1c2b45",
+                        "background-ivory": "#F6F4EF",
+                        "outline-variant": "#c5c6ce",
+                        "on-error": "#ffffff",
+                        "inverse-on-surface": "#f2f0f3",
+                        "on-secondary-fixed": "#1c1c18",
+                        "primary-fixed": "#d7e3ff",
+                        "on-primary-container": "#8492b2",
+                        "glass-border": "rgba(255, 255, 255, 0.50)",
+                        "error": "#ba1a1a",
+                        "surface-variant": "#e4e2e4",
+                        "surface-tint": "#505f7b",
+                        "on-secondary": "#ffffff",
+                        "glass-fill": "rgba(255, 255, 255, 0.65)",
+                        "accent-teal": "#3E7C74",
+                        "status-sage": "#8CA687",
+                        "on-surface-variant": "#44474d",
+                        "tertiary-fixed": "#ffdea9",
+                        "on-background": "#1b1b1d",
+                        "secondary": "#5f5e59",
+                        "on-surface": "#1b1b1d",
+                        "on-secondary-container": "#65645f",
+                        "on-tertiary-container": "#aa8e5f",
+                        "secondary-fixed": "#e5e2db",
+                        "on-primary": "#ffffff",
+                        "inverse-surface": "#303032",
+                        "primary": "#06162f",
+                        "outline": "#75777e",
+                        "surface": "#fbf8fb",
+                        "on-primary-fixed": "#0b1b35",
+                        "tertiary-container": "#3a2803",
+                        "tertiary-fixed-dim": "#e1c28f",
+                        "tertiary": "#211400",
+                        "surface-container": "#efedf0",
+                        "surface-dim": "#dbd9dc",
+                        "surface-bright": "#fbf8fb",
+                        "text-muted": "#6E7480",
+                        "on-tertiary-fixed-variant": "#58431b",
+                        "secondary-container": "#e5e2db",
+                        "surface-container-high": "#eae7ea",
+                        "surface-container-low": "#f5f3f5",
+                        "secondary-fixed-dim": "#c9c6c0",
+                        "background": "#fbf8fb",
+                        "status-red": "#C4574E",
+                        "surface-container-lowest": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "sidebar-width": "232px",
+                        "page-margin-mobile": "16px",
+                        "page-margin-desktop": "24px"
+                    },
+                    "fontFamily": {
+                        "stat-display-mobile": ["Inter"],
+                        "stat-display": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "stat-display-mobile": ["28px", { "lineHeight": "34px", "fontWeight": "700" }],
+                        "stat-display": ["36px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["16px", { "lineHeight": "24px", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        /* Custom extremely soft shadow for glass cards */
+        .glass-shadow {
+            box-shadow: 0 8px 32px -4px rgba(6, 22, 47, 0.04), 0 4px 16px -4px rgba(6, 22, 47, 0.03);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-ivory min-h-screen relative overflow-x-hidden pt-[80px] pb-[96px]">
+<!-- Decorative background blobs for liquid glass effect -->
+<div class="fixed top-20 left-[-10%] w-[60vw] h-[60vw] bg-surface-container-high/50 rounded-full mix-blend-multiply filter blur-[80px] opacity-70 z-0 pointer-events-none"></div>
+<div class="fixed bottom-32 right-[-10%] w-[50vw] h-[50vw] bg-secondary-fixed/40 rounded-full mix-blend-multiply filter blur-[60px] opacity-60 z-0 pointer-events-none"></div>
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-page-margin-mobile h-16 bg-glass-fill/65 backdrop-blur-xl border-b border-glass-border shadow-sm">
+<div class="flex items-center hover:opacity-80 transition-opacity active:scale-95 transition-transform cursor-pointer">
+<img class="w-9 h-9 rounded-full object-cover border border-glass-border shadow-sm" data-alt="A close-up profile portrait of a modern university student, shot with warm, natural lighting against a soft, blurred light ivory background. The student has a friendly, approachable expression, consistent with a clean, high-end mobile app aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA__Pc50JCBDRU_BE1FqcaLdZU87Vh9gVYJYDchk-aol_km78-fCMb2q5HiDXnDqTBo-KitC4PHAlA-yrPbEt1gKrNbCyWfI0g1bvJEx5ezBJ3FLDLMQvXBPCVb30ifYgl903UnzIZNfnbvTPSx_vlOxs57A0jMDwIErfRpJ3CTtY6Lh5fC5-503aWPQo8WKKUHjfqYF32C8IVGJz4rxKOBTGBDcRyMCnBkRzK4teSNnDZqZjDrrBVTMA"/>
+</div>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-primary tracking-tight font-bold">HostelHub</h1>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-on-surface-variant/5 transition-colors active:scale-95 text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0, 'wght' 300;">notifications</span>
+</button>
+</header>
+<!-- Main Content -->
+<main class="relative z-10 px-page-margin-mobile flex flex-col gap-8 max-w-md mx-auto">
+<!-- Header Section -->
+<section class="flex flex-col gap-4">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-primary font-bold px-1">My Room</h2>
+<!-- Room Info Card -->
+<div class="bg-glass-fill/65 backdrop-blur-[24px] border border-glass-border rounded-[20px] p-5 glass-shadow relative overflow-hidden">
+<!-- Inner subtle glow -->
+<div class="absolute -right-8 -top-8 w-32 h-32 bg-surface-container-lowest rounded-full opacity-60 blur-xl pointer-events-none"></div>
+<div class="relative z-10 flex flex-col gap-5">
+<div class="flex justify-between items-start">
+<div class="flex flex-col gap-1">
+<h3 class="font-stat-display-mobile text-stat-display-mobile text-primary tracking-tight">Room 204</h3>
+<div class="flex items-center gap-3 font-body-md text-body-md text-text-muted">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px] opacity-70">layers</span> Floor 2</span>
+<span class="w-1 h-1 rounded-full bg-outline-variant"></span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px] opacity-70">group</span> Capacity: 4</span>
+</div>
+</div>
+<!-- Highlighted Bed Pill -->
+<div class="bg-primary text-on-primary rounded-full px-3 py-1.5 flex items-center gap-1.5 shadow-[0_2px_8px_rgba(6,22,47,0.25)]">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">bed</span>
+<span class="font-label-caps text-label-caps mt-[1px]">My Bed: 2</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Roommates Section -->
+<section class="flex flex-col gap-3">
+<h3 class="font-headline-md-mobile text-headline-md-mobile text-primary font-semibold px-1 mb-1">Roommates</h3>
+<!-- Roommate 1 -->
+<div class="bg-glass-fill/65 backdrop-blur-xl border border-glass-border rounded-[16px] p-3 flex items-center justify-between glass-shadow active:scale-[0.98] transition-transform duration-200">
+<div class="flex items-center gap-4">
+<div class="relative">
+<img class="w-12 h-12 rounded-full object-cover border border-glass-border shadow-sm" data-alt="A well-lit, professional yet casual profile photo of a young female college student with a bright smile. The lighting is soft and airy, creating a modern, premium feel. Background is a subtle, out-of-focus bright interior, perfect for a high-quality UI avatar." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAPJnyuUyeghgR3l_TFw9hG8OQ7uTy2LlGOdgOH3aTrK2b4Pe6hGgJIQVEbyL1q_qZwhEOzKZPseyW0Nzptbh47raCzMF5_YClgggbKsHx-RzyNdufmCtLzi9qpwRPfg6r7_BUOvr5IZlvotI3oK-_outmOVQrnPeh-Dd04MSyrdD9YwefOGteRIR3SSMfiKB_mhuJnkrVTXrL8HKfIrnFQXO-XaBVOYghDj6xfL_vzgb_KYUPCQp57MA"/>
+<div class="absolute bottom-0 right-0 w-3 h-3 bg-status-sage rounded-full border-2 border-surface-container-lowest"></div>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-md-mobile text-headline-md-mobile text-primary">Sarah Jenkins</span>
+<span class="font-body-md text-body-md text-text-muted text-[13px]">Bed 1 • Computer Science</span>
+</div>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-lowest border border-glass-border flex items-center justify-center text-primary hover:bg-surface-container transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'wght' 300;">call</span>
+</button>
+</div>
+<!-- Roommate 2 -->
+<div class="bg-glass-fill/65 backdrop-blur-xl border border-glass-border rounded-[16px] p-3 flex items-center justify-between glass-shadow active:scale-[0.98] transition-transform duration-200">
+<div class="flex items-center gap-4">
+<div class="relative">
+<img class="w-12 h-12 rounded-full object-cover border border-glass-border shadow-sm" data-alt="A crisp, high-resolution portrait of a young male university student looking relaxed and confident. Shot with soft studio lighting that highlights natural skin tones. The background is a clean, neutral soft grey to perfectly blend into a light-mode glassmorphic interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDBdI4zvgyYsoBZQqCrdrgXlr1t9xrSakQnL-ntsBtfxWo2rAi5LhhT-tPo4z847pQ1PwXBySYdy2l9JeZdKFPGNJGUbjDckJWGrvpuUixNsqfYWvrttvizCpth4-Gw_GY6RLK_nTCyBMGIFOCvUtIJIh_kiIsSSV621izdfcVm31Awjg8P69ivZJkqLZWVFDuw7qc_2q5SjT4s1G0IGQxIzs2G5d2pyFNL0jgSeIfmMNEgDHNcZ5iS7g"/>
+<div class="absolute bottom-0 right-0 w-3 h-3 bg-status-sage rounded-full border-2 border-surface-container-lowest"></div>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-md-mobile text-headline-md-mobile text-primary">Marcus Chen</span>
+<span class="font-body-md text-body-md text-text-muted text-[13px]">Bed 3 • Architecture</span>
+</div>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-lowest border border-glass-border flex items-center justify-center text-primary hover:bg-surface-container transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'wght' 300;">call</span>
+</button>
+</div>
+<!-- Roommate 3 -->
+<div class="bg-glass-fill/65 backdrop-blur-xl border border-glass-border rounded-[16px] p-3 flex items-center justify-between glass-shadow active:scale-[0.98] transition-transform duration-200">
+<div class="flex items-center gap-4">
+<div class="relative">
+<img class="w-12 h-12 rounded-full object-cover border border-glass-border shadow-sm" data-alt="An inviting, modern headshot of a female student with a soft, warm aesthetic. The lighting is bright and evenly distributed, avoiding harsh shadows. The image has a clean, premium visual style suited for an upscale roommate management application, set against a pristine, soft background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBVQ7gF9E99TYOAEuT34WEVDKRMKdoCYVNUPq2pdkuvY5Iw-IwgF0Yf3fUEFG5wDTdvpNhfvpQMFZDhzmKJfs70iXbUW1Z6rONZ16wFxxeC2A5qomuiYU8RPloaU9q3IUIZmQCwJLyeNm2R5mMnOujU4GSt5r9tvOptSVCXkVmZ5x6a22sKsX3xNjqPHP3d566SuazebQ91TPsT626kwSCwxaOyUh1V-XxnD85IqnlULmkzeteKVfOnVA"/>
+<div class="absolute bottom-0 right-0 w-3 h-3 bg-outline-variant rounded-full border-2 border-surface-container-lowest"></div>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-md-mobile text-headline-md-mobile text-primary">Elena Rossi</span>
+<span class="font-body-md text-body-md text-text-muted text-[13px]">Bed 4 • Business</span>
+</div>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-lowest border border-glass-border flex items-center justify-center text-primary hover:bg-surface-container transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'wght' 300;">call</span>
+</button>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-3 bg-glass-fill/65 backdrop-blur-xl rounded-t-[24px] shadow-[0_-8px_32px_-4px_rgba(6,22,47,0.05)] border border-glass-border md:hidden">
+<!-- Home (Inactive) -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant/70 px-3 py-1.5 hover:bg-on-surface-variant/5 rounded-xl active:scale-90 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined text-[24px] mb-1" style="font-variation-settings: 'wght' 300;">home</span>
+<span class="font-label-caps text-label-caps text-[10px]">Home</span>
+</a>
+<!-- Menu (Inactive) -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant/70 px-3 py-1.5 hover:bg-on-surface-variant/5 rounded-xl active:scale-90 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined text-[24px] mb-1" style="font-variation-settings: 'wght' 300;">restaurant_menu</span>
+<span class="font-label-caps text-label-caps text-[10px]">Menu</span>
+</a>
+<!-- Reports (Inactive) -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant/70 px-3 py-1.5 hover:bg-on-surface-variant/5 rounded-xl active:scale-90 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined text-[24px] mb-1" style="font-variation-settings: 'wght' 300;">assignment_late</span>
+<span class="font-label-caps text-label-caps text-[10px]">Reports</span>
+</a>
+<!-- Room (Active) -->
+<a class="flex flex-col items-center justify-center bg-primary text-on-primary rounded-[14px] px-4 py-2 shadow-sm active:scale-90 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined text-[24px] mb-0.5" style="font-variation-settings: 'FILL' 1, 'wght' 400;">group</span>
+<span class="font-label-caps text-label-caps text-[11px] tracking-wider">Room</span>
+</a>
+<!-- Profile (Inactive) -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant/70 px-3 py-1.5 hover:bg-on-surface-variant/5 rounded-xl active:scale-90 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined text-[24px] mb-1" style="font-variation-settings: 'wght' 300;">person</span>
+<span class="font-label-caps text-label-caps text-[10px]">Profile</span>
+</a>
+</nav>
+</body></html>

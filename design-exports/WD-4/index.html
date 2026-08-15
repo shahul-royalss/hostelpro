@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Room Details - LuxeHostel</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-container": "#1c2b45",
+                        "on-error-container": "#93000a",
+                        "surface-bright": "#fbf8fb",
+                        "on-secondary-fixed-variant": "#474742",
+                        "primary-fixed": "#d7e3ff",
+                        "surface-container-lowest": "#ffffff",
+                        "glass-fill": "rgba(255, 255, 255, 0.65)",
+                        "on-primary-fixed-variant": "#384762",
+                        "primary": "#06162f",
+                        "outline-variant": "#c5c6ce",
+                        "surface-container": "#efedf0",
+                        "on-tertiary-container": "#aa8e5f",
+                        "text-muted": "#6E7480",
+                        "on-tertiary-fixed": "#271900",
+                        "glass-border": "rgba(255, 255, 255, 0.50)",
+                        "surface-variant": "#e4e2e4",
+                        "tertiary-fixed-dim": "#e1c28f",
+                        "on-primary": "#ffffff",
+                        "text-charcoal": "#2A2E35",
+                        "on-primary-fixed": "#0b1b35",
+                        "outline": "#75777e",
+                        "on-primary-container": "#8492b2",
+                        "secondary": "#5f5e59",
+                        "secondary-container": "#e5e2db",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-container": "#65645f",
+                        "on-secondary-fixed": "#1c1c18",
+                        "surface-dim": "#dbd9dc",
+                        "tertiary-container": "#3a2803",
+                        "on-error": "#ffffff",
+                        "background-ivory": "#F6F4EF",
+                        "surface-container-highest": "#e4e2e4",
+                        "inverse-primary": "#b8c7e8",
+                        "secondary-fixed-dim": "#c9c6c0",
+                        "on-surface": "#1b1b1d",
+                        "inverse-on-surface": "#f2f0f3",
+                        "on-surface-variant": "#44474d",
+                        "surface": "#fbf8fb",
+                        "status-sage": "#8CA687",
+                        "surface-container-low": "#f5f3f5",
+                        "error-container": "#ffdad6",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed": "#ffdea9",
+                        "status-red": "#C4574E",
+                        "background": "#fbf8fb",
+                        "surface-container-high": "#eae7ea",
+                        "secondary-fixed": "#e5e2db",
+                        "primary-fixed-dim": "#b8c7e8",
+                        "tertiary": "#211400",
+                        "surface-tint": "#505f7b",
+                        "accent-teal": "#3E7C74",
+                        "status-sand": "#D8B98A",
+                        "inverse-surface": "#303032",
+                        "on-tertiary-fixed-variant": "#58431b",
+                        "on-background": "#1b1b1d",
+                        "error": "#ba1a1a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "page-margin-desktop": "24px",
+                        "sidebar-width": "232px",
+                        "page-margin-mobile": "16px"
+                    },
+                    "fontFamily": {
+                        "stat-display-mobile": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "stat-display": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "stat-display-mobile": ["28px", { "lineHeight": "34px", "fontWeight": "700" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "stat-display": ["36px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["16px", { "lineHeight": "24px", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-card {
+            background-color: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.50);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        }
+        .liquid-glass-bg {
+            background: radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.4) 0%, transparent 50%),
+                        radial-gradient(circle at 100% 100%, rgba(216, 185, 138, 0.15) 0%, transparent 50%);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-ivory text-on-surface antialiased font-body-md min-h-screen pb-24 liquid-glass-bg">
+<!-- TopAppBar -->
+<header class="bg-glass-fill border-b border-glass-border shadow-sm fixed top-0 w-full z-50 backdrop-blur-xl transition-all duration-300 ease-in-out md:hidden">
+<div class="flex justify-between items-center px-page-margin-mobile h-16 w-full">
+<button class="flex items-center justify-center w-10 h-10 rounded-full hover:bg-surface-variant/50 text-primary active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary truncate">Room 204 · Floor 2</h1>
+<button class="flex items-center justify-center w-10 h-10 rounded-full hover:bg-surface-variant/50 text-primary active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</header>
+<main class="pt-24 px-page-margin-mobile max-w-md mx-auto space-y-6">
+<!-- Summary Card -->
+<section class="glass-card rounded-[20px] p-5">
+<div class="flex justify-between items-start mb-4">
+<div>
+<h2 class="font-headline-md text-headline-md text-primary">Room Details</h2>
+<p class="text-on-surface-variant text-sm mt-1">Quadruple Standard</p>
+</div>
+<div class="bg-primary/10 text-primary px-3 py-1 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="meeting_room">meeting_room</span>
+<span class="font-label-caps text-label-caps">204</span>
+</div>
+</div>
+<div class="h-px w-full bg-glass-border my-4"></div>
+<div class="grid grid-cols-3 gap-4">
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1">Capacity</p>
+<p class="font-headline-md text-headline-md text-primary">4</p>
+</div>
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1">Occupied</p>
+<p class="font-headline-md text-headline-md text-primary">3</p>
+</div>
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1">Monthly Fee</p>
+<p class="font-headline-md text-headline-md text-primary">₹6,500</p>
+</div>
+</div>
+</section>
+<h3 class="font-headline-md text-headline-md text-primary px-2">Beds &amp; Assignments</h3>
+<!-- Bed 1 - Occupied -->
+<article class="glass-card rounded-[20px] p-4 flex flex-col gap-3">
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="single_bed">single_bed</span>
+<span class="font-headline-md text-headline-md text-primary">Bed 1</span>
+</div>
+<div class="bg-accent-teal/10 text-accent-teal px-3 py-1 rounded-full font-label-caps text-label-caps">
+                    Paid
+                </div>
+</div>
+<div class="flex items-center gap-4 bg-surface-bright/50 rounded-xl p-3">
+<img class="w-12 h-12 rounded-full object-cover border border-glass-border" data-alt="A portrait photo of a young female college student looking bright and cheerful, wearing modern casual clothing in a softly lit dorm environment, conveying a sense of youthful energy and academic life." src="https://lh3.googleusercontent.com/aida-public/AB6AXuARl2awEHljvlU6LhuAkkRlESqMrdWRdezLijPMFFA3rT967RmMhXYnwGgYVE8wbP7XeTQS2sdlQdLUmMetDCF8IyNEHmkaEgkGmyymO-2ypzex3Rn4dXIZ0WsC7DSwLjdKtqI2PYdl1Gi5pzcqL_8Y-kjO6zkv9iTMuBT4q5Mfmw4q_vvwQefIqiAVwxC1CJZrbLHlv3Dj657O9kFOkZWTf8R98injLua1hN1UQ2cvOxJnmekQtpCvqA"/>
+<div class="flex-1">
+<p class="font-headline-md text-headline-md text-primary">Elena Rodriguez</p>
+<p class="text-on-surface-variant text-sm mt-0.5 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="call">call</span>
+                        +1 555 123-4567
+                    </p>
+</div>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</article>
+<!-- Bed 2 - Occupied -->
+<article class="glass-card rounded-[20px] p-4 flex flex-col gap-3">
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="single_bed">single_bed</span>
+<span class="font-headline-md text-headline-md text-primary">Bed 2</span>
+</div>
+<div class="bg-status-red/10 text-status-red px-3 py-1 rounded-full font-label-caps text-label-caps">
+                    Due Soon
+                </div>
+</div>
+<div class="flex items-center gap-4 bg-surface-bright/50 rounded-xl p-3">
+<img class="w-12 h-12 rounded-full object-cover border border-glass-border" data-alt="A portrait photo of a young male university student with short hair, wearing a casual hoodie, softly lit against a neutral light background, exuding a calm and focused demeanor." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBcVrz7kVLbrS1iKWXaSrrudhI_BOEoeQxSAkrqnY27AVigpHq-gS2Iuy-Sa3FZFdtshqAFtKLvdE64cOHM-9vq2L9vhLMBOUB8R-6HhF4Uo-yJOZsQyV5m1ICyabFb8uOEqINs4ufBOJKxGV-gdCSrEJi5C4egCCNN-aZCWoIjzmn-IrWNFS3ynffc3-RrcIIEX1JykrJGu0h_8g7mY6G47SC3Lj7-puPorBCGEtoCT0OxWXJDbyqsdg"/>
+<div class="flex-1">
+<p class="font-headline-md text-headline-md text-primary">Marcus Chen</p>
+<p class="text-on-surface-variant text-sm mt-0.5 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="call">call</span>
+                        +1 555 987-6543
+                    </p>
+</div>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</article>
+<!-- Bed 3 - Free -->
+<article class="bg-surface-bright/40 border border-dashed border-outline-variant/60 rounded-[20px] p-4 flex flex-col gap-4 backdrop-blur-sm">
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="single_bed">single_bed</span>
+<span class="font-headline-md text-headline-md text-on-surface-variant">Bed 3 — Free</span>
+</div>
+<div class="bg-status-sage/15 text-status-sage px-3 py-1 rounded-full font-label-caps text-label-caps">
+                    Available
+                </div>
+</div>
+<button class="w-full py-3 rounded-xl bg-glass-fill border border-glass-border text-primary font-headline-md text-headline-md flex items-center justify-center gap-2 hover:bg-white/80 active:scale-[0.98] transition-all shadow-sm">
+<span class="material-symbols-outlined text-[18px]" data-icon="person_add">person_add</span>
+                Assign Student
+            </button>
+</article>
+<!-- Bed 4 - Occupied -->
+<article class="glass-card rounded-[20px] p-4 flex flex-col gap-3">
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="single_bed">single_bed</span>
+<span class="font-headline-md text-headline-md text-primary">Bed 4</span>
+</div>
+<div class="bg-accent-teal/10 text-accent-teal px-3 py-1 rounded-full font-label-caps text-label-caps">
+                    Paid
+                </div>
+</div>
+<div class="flex items-center gap-4 bg-surface-bright/50 rounded-xl p-3">
+<div class="w-12 h-12 rounded-full bg-status-sand/20 text-tertiary-container flex items-center justify-center font-headline-lg text-headline-lg border border-glass-border">
+                    SJ
+                </div>
+<div class="flex-1">
+<p class="font-headline-md text-headline-md text-primary">Sarah Jenkins</p>
+<p class="text-on-surface-variant text-sm mt-0.5 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="call">call</span>
+                        +1 555 456-7890
+                    </p>
+</div>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</article>
+</main>
+<!-- BottomNavBar -->
+<nav class="bg-glass-fill dark:bg-primary-container/90 fixed bottom-0 w-full z-50 backdrop-blur-2xl rounded-t-xl border-t border-glass-border dark:border-outline-variant/10 shadow-[0_-4px_20px_rgba(0,0,0,0.04)] md:hidden">
+<div class="flex justify-around items-center h-20 px-2 pb-safe">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-primary-container hover:text-primary dark:hover:text-primary-fixed transition-transform duration-200 active:scale-90" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="dashboard">dashboard</span>
+<span class="font-label-caps text-label-caps">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-primary bg-primary dark:bg-primary-fixed dark:text-on-primary-fixed rounded-xl px-3 py-1.5 transition-transform duration-200 active:scale-90" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="bed" data-weight="fill" style="font-variation-settings: 'FILL' 1;">bed</span>
+<span class="font-label-caps text-label-caps">Rooms</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-primary-container hover:text-primary dark:hover:text-primary-fixed transition-transform duration-200 active:scale-90" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="person_add">person_add</span>
+<span class="font-label-caps text-label-caps">Register</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-primary-container hover:text-primary dark:hover:text-primary-fixed transition-transform duration-200 active:scale-90" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="payments">payments</span>
+<span class="font-label-caps text-label-caps">Fees</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-primary-container hover:text-primary dark:hover:text-primary-fixed transition-transform duration-200 active:scale-90" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="event_busy">event_busy</span>
+<span class="font-label-caps text-label-caps">Leaves</span>
+</a>
+</div>
+</nav>
+</body></html>

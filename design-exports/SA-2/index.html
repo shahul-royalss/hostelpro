@@ -1,0 +1,380 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Stitch UI - Create Owner &amp; Hostel</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-highest": "#e4e2e4",
+                        "on-background": "#1b1b1d",
+                        "on-secondary-fixed-variant": "#474742",
+                        "surface": "#fbf8fb",
+                        "primary-fixed": "#d7e3ff",
+                        "on-primary-container": "#8492b2",
+                        "primary-container": "#1c2b45",
+                        "error": "#ba1a1a",
+                        "background": "#fbf8fb",
+                        "surface-container": "#efedf0",
+                        "on-primary-fixed": "#0b1b35",
+                        "on-tertiary-fixed-variant": "#58431b",
+                        "surface-variant": "#e4e2e4",
+                        "accent-teal": "#3E7C74",
+                        "primary": "#06162f",
+                        "on-tertiary-container": "#aa8e5f",
+                        "tertiary-fixed-dim": "#e1c28f",
+                        "status-red": "#C4574E",
+                        "text-charcoal": "#2A2E35",
+                        "glass-border": "rgba(255, 255, 255, 0.50)",
+                        "on-secondary-fixed": "#1c1c18",
+                        "inverse-on-surface": "#f2f0f3",
+                        "on-secondary-container": "#65645f",
+                        "on-surface-variant": "#44474d",
+                        "on-primary-fixed-variant": "#384762",
+                        "on-surface": "#1b1b1d",
+                        "on-tertiary-fixed": "#271900",
+                        "surface-dim": "#dbd9dc",
+                        "primary-fixed-dim": "#b8c7e8",
+                        "status-sand": "#D8B98A",
+                        "glass-fill": "rgba(255, 255, 255, 0.65)",
+                        "inverse-surface": "#303032",
+                        "status-sage": "#8CA687",
+                        "surface-container-low": "#f5f3f5",
+                        "surface-bright": "#fbf8fb",
+                        "inverse-primary": "#b8c7e8",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-high": "#eae7ea",
+                        "on-error-container": "#93000a",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed-dim": "#c9c6c0",
+                        "secondary-fixed": "#e5e2db",
+                        "on-secondary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "surface-tint": "#505f7b",
+                        "on-error": "#ffffff",
+                        "background-ivory": "#F6F4EF",
+                        "secondary": "#5f5e59",
+                        "secondary-container": "#e5e2db",
+                        "tertiary-fixed": "#ffdea9",
+                        "outline-variant": "#c5c6ce",
+                        "tertiary-container": "#3a2803",
+                        "text-muted": "#6E7480",
+                        "tertiary": "#211400",
+                        "error-container": "#ffdad6",
+                        "outline": "#75777e"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px",
+                        "2xl": "1.25rem"
+                    },
+                    "spacing": {
+                        "sidebar-width": "232px",
+                        "page-margin-mobile": "16px",
+                        "gutter": "16px",
+                        "page-margin-desktop": "24px"
+                    },
+                    "fontFamily": {
+                        "label-caps": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "stat-display": ["Inter"],
+                        "stat-display-mobile": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-md": ["16px", { "lineHeight": "24px", "fontWeight": "500" }],
+                        "stat-display": ["36px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "stat-display-mobile": ["28px", { "lineHeight": "34px", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #F6F4EF;
+            background-image: radial-gradient(circle at 100% 0%, rgba(216, 185, 138, 0.15) 0%, transparent 40%),
+                              radial-gradient(circle at 0% 100%, rgba(140, 166, 135, 0.15) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+        
+        /* Custom Scrollbar for textareas/overflows */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(6, 22, 47, 0.1);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(6, 22, 47, 0.2);
+        }
+
+        /* Glassmorphism Utilities */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 8px 32px 0 rgba(6, 22, 47, 0.04);
+        }
+        
+        .glass-input {
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            transition: all 0.2s ease;
+        }
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.8);
+            border-color: #06162f;
+            box-shadow: 0 0 0 2px rgba(6, 22, 47, 0.1);
+            outline: none;
+        }
+    </style>
+</head>
+<body class="text-on-background font-body-md antialiased min-h-screen flex">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col h-screen w-sidebar-width fixed left-0 top-0 bg-glass-fill backdrop-blur-xl border-r border-glass-border shadow-sm z-50">
+<div class="flex flex-col h-full py-6">
+<!-- Header -->
+<div class="px-6 mb-8 flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-bold shadow-sm">
+                    S
+                </div>
+<div>
+<h1 class="font-headline-lg text-headline-lg text-primary tracking-tight">Stitch UI</h1>
+<p class="font-label-caps text-label-caps text-text-muted opacity-80">Hostel Management</p>
+</div>
+</div>
+<!-- Main Tabs -->
+<div class="flex-1 space-y-1">
+<a class="text-on-surface-variant hover:bg-surface-variant/50 rounded-lg mx-2 px-4 py-2 flex items-center gap-3 transition-colors group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors" data-icon="dashboard">dashboard</span>
+<span class="font-headline-md text-headline-md">Dashboard</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-variant/50 rounded-lg mx-2 px-4 py-2 flex items-center gap-3 transition-colors group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors" data-icon="domain">domain</span>
+<span class="font-headline-md text-headline-md">Hostels</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-variant/50 rounded-lg mx-2 px-4 py-2 flex items-center gap-3 transition-colors group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors" data-icon="loyalty">loyalty</span>
+<span class="font-headline-md text-headline-md">Subscriptions</span>
+</a>
+<!-- Active State -->
+<a class="bg-primary text-on-primary rounded-lg mx-2 px-4 py-2 flex items-center gap-3 active:scale-95 transition-transform shadow-sm" href="#">
+<span class="material-symbols-outlined" data-icon="person_add" data-weight="fill" style="font-variation-settings: 'FILL' 1;">person_add</span>
+<span class="font-headline-md text-headline-md">Create Owner</span>
+</a>
+</div>
+<!-- Footer Tabs -->
+<div class="mt-auto space-y-1 pt-4 border-t border-glass-border mx-2">
+<a class="text-on-surface-variant hover:bg-surface-variant/50 rounded-lg px-4 py-2 flex items-center gap-3 transition-colors group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors" data-icon="settings">settings</span>
+<span class="font-headline-md text-headline-md">Settings</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-variant/50 rounded-lg px-4 py-2 flex items-center gap-3 transition-colors group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-error transition-colors" data-icon="logout">logout</span>
+<span class="font-headline-md text-headline-md text-text-muted group-hover:text-error transition-colors">Logout</span>
+</a>
+</div>
+</div>
+</nav>
+<!-- Main Content Wrapper -->
+<div class="flex-1 ml-0 md:ml-[232px] flex flex-col min-h-screen">
+<!-- TopNavBar (Contextual Header) -->
+<header class="w-full h-20 flex justify-between items-center px-page-margin-desktop bg-transparent z-40 relative">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-primary tracking-tight">Create Owner &amp; Hostel</h2>
+<p class="font-body-md text-body-md text-text-muted mt-1">Setup a new property and management account.</p>
+</div>
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 rounded-full bg-glass-fill border border-glass-border flex items-center justify-center text-text-charcoal hover:bg-white hover:shadow-sm transition-all">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<div class="w-10 h-10 rounded-full overflow-hidden border border-glass-border shadow-sm">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A close-up portrait of a professional individual looking slightly off-camera with a soft, warm smile. The lighting is bright and airy, reflecting a clean, modern aesthetic with soft shadows. The background is a gently blurred, light-toned office space, maintaining a premium, unobtrusive feel." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBiuwBGfzbkingdgWlNnmVjjnucWHAo_gvs6-8dmWJNzVR-EbZ9h1voo8jZiZJitWfGvH2GCp-cBoCMmzzodVFb551T40GuazdGeG3gas5rcQiv3jQKWoB_fgvzOoD7S0RbJZFAp_Tqj2TyH6h7SlJAIgt-OJrxJcYJIFd9TTFgNSVl1UKspCKMaa7nZeNmAWRIjazS3qTuv5KyUp3Lz0ojDfshvICYgluFiSLF1vmi93CoMSpcIl8Euw">
+</div>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 px-page-margin-desktop pb-page-margin-desktop">
+<div class="max-w-6xl mx-auto h-full flex flex-col xl:flex-row gap-6 items-start pt-4">
+<!-- Main Wizard Card -->
+<div class="glass-card rounded-[24px] flex-1 w-full p-8 flex flex-col relative overflow-hidden">
+<!-- Decorative background blur inside card -->
+<div class="absolute -top-32 -right-32 w-64 h-64 bg-status-sand/10 rounded-full blur-3xl pointer-events-none"></div>
+<!-- Stepper -->
+<div class="w-full mb-10 relative z-10">
+<div class="flex items-center justify-between relative">
+<!-- Connecting Line -->
+<div class="absolute left-0 top-1/2 -translate-y-1/2 w-full h-[2px] bg-surface-container-high -z-10"></div>
+<div class="absolute left-0 top-1/2 -translate-y-1/2 w-1/3 h-[2px] bg-primary-container -z-10 transition-all duration-500"></div>
+<!-- Step 1: Owner (Completed) -->
+<div class="flex flex-col items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-primary-container text-white flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-[18px]" data-icon="check">check</span>
+</div>
+<span class="font-label-caps text-label-caps text-primary">Owner</span>
+</div>
+<!-- Step 2: Hostel (Active) -->
+<div class="flex flex-col items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-white border-2 border-primary-container text-primary-container flex items-center justify-center shadow-sm font-bold text-sm">
+                                    2
+                                </div>
+<span class="font-label-caps text-label-caps text-primary font-bold">Hostel</span>
+</div>
+<!-- Step 3: Subscription (Upcoming) -->
+<div class="flex flex-col items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-high border border-glass-border text-outline flex items-center justify-center text-sm">
+                                    3
+                                </div>
+<span class="font-label-caps text-label-caps text-text-muted">Subscription</span>
+</div>
+<!-- Step 4: Review (Upcoming) -->
+<div class="flex flex-col items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-high border border-glass-border text-outline flex items-center justify-center text-sm">
+                                    4
+                                </div>
+<span class="font-label-caps text-label-caps text-text-muted">Review</span>
+</div>
+</div>
+</div>
+<!-- Step Content: Hostel Details -->
+<div class="flex-1 relative z-10">
+<div class="mb-8">
+<h3 class="font-headline-lg text-headline-lg text-primary mb-2">Hostel Details</h3>
+<p class="font-body-md text-body-md text-text-muted">Configure the physical layout of the new property.</p>
+</div>
+<form class="space-y-6 max-w-2xl">
+<!-- Hostel Name -->
+<div>
+<label class="block font-headline-md text-headline-md text-text-charcoal mb-2" for="hostel-name">Hostel Name</label>
+<input class="glass-input w-full px-4 py-3 rounded-xl font-body-md text-body-md text-text-charcoal placeholder-text-muted/60" id="hostel-name" placeholder="e.g. Sunny Days Downtown" type="text">
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+<!-- Floors Stepper -->
+<div>
+<label class="block font-headline-md text-headline-md text-text-charcoal mb-2">Number of Floors</label>
+<div class="flex items-center glass-input rounded-xl overflow-hidden h-[46px]">
+<button class="w-12 h-full flex items-center justify-center text-text-charcoal hover:bg-black/5 transition-colors border-r border-glass-border" type="button">
+<span class="material-symbols-outlined" data-icon="remove">remove</span>
+</button>
+<input class="flex-1 h-full text-center bg-transparent border-none focus:ring-0 font-headline-md text-headline-md text-text-charcoal p-0 m-0" min="1" style="-moz-appearance: textfield;" type="number" value="1">
+<button class="w-12 h-full flex items-center justify-center text-text-charcoal hover:bg-black/5 transition-colors border-l border-glass-border" type="button">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+</div>
+</div>
+<!-- Rooms Stepper -->
+<div>
+<label class="block font-headline-md text-headline-md text-text-charcoal mb-2">Number of Rooms</label>
+<div class="flex items-center glass-input rounded-xl overflow-hidden h-[46px]">
+<button class="w-12 h-full flex items-center justify-center text-text-charcoal hover:bg-black/5 transition-colors border-r border-glass-border" type="button">
+<span class="material-symbols-outlined" data-icon="remove">remove</span>
+</button>
+<input class="flex-1 h-full text-center bg-transparent border-none focus:ring-0 font-headline-md text-headline-md text-text-charcoal p-0 m-0" min="1" style="-moz-appearance: textfield;" type="number" value="10">
+<button class="w-12 h-full flex items-center justify-center text-text-charcoal hover:bg-black/5 transition-colors border-l border-glass-border" type="button">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Address -->
+<div>
+<label class="block font-headline-md text-headline-md text-text-charcoal mb-2" for="address">Physical Address</label>
+<textarea class="glass-input w-full px-4 py-3 rounded-xl font-body-md text-body-md text-text-charcoal placeholder-text-muted/60 resize-none" id="address" placeholder="Enter complete address..." rows="3"></textarea>
+</div>
+<!-- Helper Note -->
+<div class="flex items-start gap-2 pt-2">
+<span class="material-symbols-outlined text-[16px] text-text-muted mt-0.5" data-icon="info">info</span>
+<p class="font-body-md text-body-md text-text-charcoal opacity-80 text-sm">Rooms and beds will be auto-generated based on these inputs. You can customize them later in the dashboard.</p>
+</div>
+</form>
+</div>
+<!-- Card Footer Actions -->
+<div class="mt-12 pt-6 border-t border-glass-border flex items-center justify-between relative z-10">
+<button class="px-6 py-3 rounded-xl font-headline-md text-headline-md text-text-charcoal hover:bg-surface-variant/50 transition-colors flex items-center gap-2" type="button">
+<span class="material-symbols-outlined text-[18px]" data-icon="arrow_back">arrow_back</span>
+                            Back
+                        </button>
+<button class="px-8 py-3 rounded-xl font-headline-md text-headline-md bg-primary-container text-white shadow-sm hover:bg-primary transition-colors flex items-center gap-2 active:scale-[0.98]" type="button">
+                            Continue
+                            <span class="material-symbols-outlined text-[18px]" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Right Side Panel: Summary -->
+<div class="w-full xl:w-[320px] shrink-0 space-y-6">
+<!-- Summary Card -->
+<div class="glass-card rounded-[20px] p-6">
+<div class="flex items-center gap-3 mb-6 pb-4 border-b border-glass-border">
+<span class="material-symbols-outlined text-text-muted" data-icon="person">person</span>
+<h4 class="font-headline-md text-headline-md text-primary">Owner Details</h4>
+<span class="ml-auto text-xs font-medium text-accent-teal bg-accent-teal/10 px-2 py-1 rounded-full">Saved</span>
+</div>
+<ul class="space-y-4">
+<li>
+<span class="block font-label-caps text-label-caps text-text-muted mb-1">Full Name</span>
+<span class="block font-body-md text-body-md text-text-charcoal font-medium">Eleanor Vance</span>
+</li>
+<li>
+<span class="block font-label-caps text-label-caps text-text-muted mb-1">Email Address</span>
+<span class="block font-body-md text-body-md text-text-charcoal font-medium truncate">eleanor.vance@example.com</span>
+</li>
+<li>
+<span class="block font-label-caps text-label-caps text-text-muted mb-1">Phone Number</span>
+<span class="block font-body-md text-body-md text-text-charcoal font-medium">+1 (555) 019-2834</span>
+</li>
+</ul>
+<div class="mt-6 pt-4 border-t border-glass-border">
+<button class="w-full py-2 rounded-lg text-sm font-medium text-text-muted hover:text-primary hover:bg-surface-variant/30 transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[16px]" data-icon="edit">edit</span>
+                                Edit Owner Details
+                            </button>
+</div>
+</div>
+<!-- Helpful Tip Card (Optional/Atmospheric) -->
+<div class="glass-card rounded-[20px] p-6 bg-gradient-to-br from-white/40 to-status-sage/10">
+<div class="flex gap-3">
+<div class="mt-0.5 text-accent-teal">
+<span class="material-symbols-outlined" data-icon="lightbulb">lightbulb</span>
+</div>
+<div>
+<h5 class="font-headline-md text-headline-md text-primary mb-1">Pro Tip</h5>
+<p class="font-body-md text-body-md text-text-charcoal opacity-80 text-sm leading-relaxed">
+                                     Accurate floor counts help our auto-generator create realistic room numbering (e.g., 101, 201) saving you time later.
+                                 </p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<script>
+        // Simple script to handle number input steppers visually preventing negative numbers
+        // removing default browser spinner behavior is handled in CSS (-moz-appearance) and tailwind plugins
+        document.querySelectorAll('input[type="number"]').forEach(input => {
+            // Prevent scrolling to change value to keep it grounded
+            input.addEventListener('wheel', function(e) {
+                e.preventDefault();
+            });
+        });
+    </script>
+</body></html>

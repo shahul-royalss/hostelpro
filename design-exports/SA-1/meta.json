@@ -1,0 +1,16 @@
+{
+  "id": "SA-1",
+  "title": "Super Admin Dashboard",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "d09fa12250964ef4877b70f3337aecea",
+  "stitchScreenName": "projects/15365392661227774313/screens/d09fa12250964ef4877b70f3337aecea",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2048",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.jpg"
+  },
+  "htmlBytes": 17481,
+  "screenshotBytes": 31445
+}

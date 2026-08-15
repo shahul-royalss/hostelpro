@@ -1,0 +1,16 @@
+{
+  "id": "ST-2",
+  "title": "Student Profile",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "0b4e14db4ebf4917aea5c2007fb1a6a7",
+  "stitchScreenName": "projects/15365392661227774313/screens/0b4e14db4ebf4917aea5c2007fb1a6a7",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "2634",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 16323,
+  "screenshotBytes": 33164
+}

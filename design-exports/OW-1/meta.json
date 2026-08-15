@@ -1,0 +1,16 @@
+{
+  "id": "OW-1",
+  "title": "Owner Dashboard",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "1b1a6e045562401caaae332119c9c467",
+  "stitchScreenName": "projects/15365392661227774313/screens/1b1a6e045562401caaae332119c9c467",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2048",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 19243,
+  "screenshotBytes": 51422
+}

@@ -1,0 +1,16 @@
+{
+  "id": "WD-1",
+  "title": "Warden Home",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "e17f32e4c4de4e229c86c40a1bad737a",
+  "stitchScreenName": "projects/15365392661227774313/screens/e17f32e4c4de4e229c86c40a1bad737a",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "2332",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 15073,
+  "screenshotBytes": 25488
+}

@@ -1,0 +1,16 @@
+{
+  "id": "A-1",
+  "title": "Login",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "f4465226c5a741c4906d9f8f3a3a586c",
+  "stitchScreenName": "projects/15365392661227774313/screens/f4465226c5a741c4906d9f8f3a3a586c",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2048",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 12299,
+  "screenshotBytes": 15761
+}

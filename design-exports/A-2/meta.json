@@ -1,0 +1,16 @@
+{
+  "id": "A-2",
+  "title": "Change Password (First Login)",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "e98d00507bef41e68f37c383002b7c24",
+  "stitchScreenName": "projects/15365392661227774313/screens/e98d00507bef41e68f37c383002b7c24",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2048",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 13107,
+  "screenshotBytes": 36717
+}

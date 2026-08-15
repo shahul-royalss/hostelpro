@@ -1,0 +1,16 @@
+{
+  "id": "ST-4",
+  "title": "My Complaints",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "a22766766ef24eff9636573aae39d46f",
+  "stitchScreenName": "projects/15365392661227774313/screens/a22766766ef24eff9636573aae39d46f",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 14251,
+  "screenshotBytes": 31333
+}

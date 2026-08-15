@@ -1,0 +1,16 @@
+{
+  "id": "WD-5",
+  "title": "Fees Tracker",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "b52be6bbcc0343fca277c555eb9896c9",
+  "stitchScreenName": "projects/15365392661227774313/screens/b52be6bbcc0343fca277c555eb9896c9",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 18232,
+  "screenshotBytes": 37789
+}

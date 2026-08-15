@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Weekly Mess Menu - LuxeHostel</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-high": "#eae7ea",
+                    "on-primary-fixed": "#0b1b35",
+                    "tertiary-container": "#3a2803",
+                    "on-surface": "#1b1b1d",
+                    "surface-container-low": "#f5f3f5",
+                    "status-sage": "#8CA687",
+                    "glass-fill": "rgba(255, 255, 255, 0.65)",
+                    "surface-tint": "#505f7b",
+                    "surface-bright": "#fbf8fb",
+                    "surface-container-highest": "#e4e2e4",
+                    "inverse-surface": "#303032",
+                    "on-tertiary-container": "#aa8e5f",
+                    "secondary-fixed-dim": "#c9c6c0",
+                    "outline": "#75777e",
+                    "text-charcoal": "#2A2E35",
+                    "on-primary-fixed-variant": "#384762",
+                    "surface-container-lowest": "#ffffff",
+                    "status-sand": "#D8B98A",
+                    "background-ivory": "#F6F4EF",
+                    "on-tertiary": "#ffffff",
+                    "surface-container": "#efedf0",
+                    "primary-fixed-dim": "#b8c7e8",
+                    "on-error-container": "#93000a",
+                    "background": "#fbf8fb",
+                    "on-tertiary-fixed-variant": "#58431b",
+                    "error-container": "#ffdad6",
+                    "accent-teal": "#3E7C74",
+                    "tertiary-fixed": "#ffdea9",
+                    "glass-border": "rgba(255, 255, 255, 0.50)",
+                    "on-secondary-container": "#65645f",
+                    "error": "#ba1a1a",
+                    "surface-dim": "#dbd9dc",
+                    "on-secondary-fixed-variant": "#474742",
+                    "tertiary": "#211400",
+                    "secondary": "#5f5e59",
+                    "inverse-on-surface": "#f2f0f3",
+                    "on-secondary": "#ffffff",
+                    "primary": "#06162f",
+                    "outline-variant": "#c5c6ce",
+                    "text-muted": "#6E7480",
+                    "on-tertiary-fixed": "#271900",
+                    "secondary-fixed": "#e5e2db",
+                    "status-red": "#C4574E",
+                    "on-primary-container": "#8492b2",
+                    "primary-fixed": "#d7e3ff",
+                    "inverse-primary": "#b8c7e8",
+                    "primary-container": "#1c2b45",
+                    "surface-variant": "#e4e2e4",
+                    "tertiary-fixed-dim": "#e1c28f",
+                    "surface": "#fbf8fb",
+                    "on-primary": "#ffffff",
+                    "on-surface-variant": "#44474d",
+                    "on-error": "#ffffff",
+                    "on-secondary-fixed": "#1c1c18",
+                    "on-background": "#1b1b1d",
+                    "secondary-container": "#e5e2db"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "page-margin-desktop": "24px",
+                    "gutter": "16px",
+                    "page-margin-mobile": "16px",
+                    "sidebar-width": "232px"
+            },
+            "fontFamily": {
+                    "label-caps": [
+                            "Inter"
+                    ],
+                    "headline-lg": [
+                            "Inter"
+                    ],
+                    "headline-md": [
+                            "Inter"
+                    ],
+                    "stat-display": [
+                            "Inter"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ],
+                    "stat-display-mobile": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "label-caps": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-lg": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "stat-display": [
+                            "36px",
+                            {
+                                    "lineHeight": "1.2",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "stat-display-mobile": [
+                            "28px",
+                            {
+                                    "lineHeight": "34px",
+                                    "fontWeight": "700"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-fill {
+            font-variation-settings: 'FILL' 1, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(110, 116, 128, 0.2);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(110, 116, 128, 0.4);
+        }
+    </style>
+</head>
+<body class="bg-background-ivory text-on-surface font-body-md antialiased min-h-screen flex selection:bg-primary-fixed selection:text-on-primary-fixed">
+<nav class="fixed left-0 top-0 h-full w-sidebar-width bg-glass-fill backdrop-blur-xl border-r border-glass-border shadow-sm flex flex-col py-6 px-4 gap-8 z-50">
+<div class="px-2">
+<h1 class="font-headline-lg text-headline-lg text-primary tracking-tight">LuxeHostel</h1>
+<p class="font-label-caps text-label-caps text-text-muted mt-1 uppercase tracking-widest">Management Portal</p>
+</div>
+<button class="w-full flex items-center justify-center gap-2 bg-primary text-on-primary py-3 px-4 rounded-xl font-headline-md text-headline-md hover:bg-primary-container transition-colors shadow-sm active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[20px]">add</span>
+            New Entry
+        </button>
+<div class="flex-1 flex flex-col gap-1 overflow-y-auto">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span class="font-headline-md text-headline-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">payments</span>
+<span class="font-headline-md text-headline-md">Daily Expenses</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">trending_up</span>
+<span class="font-headline-md text-headline-md">Daily Revenue</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary text-on-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px] icon-fill">restaurant_menu</span>
+<span class="font-headline-md text-headline-md">Mess Menu Editor</span>
+</a>
+</div>
+<div class="flex flex-col gap-1 border-t border-glass-border pt-4">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="font-headline-md text-headline-md">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">help</span>
+<span class="font-headline-md text-headline-md">Support</span>
+</a>
+</div>
+</nav>
+<div class="ml-sidebar-width flex-1 flex flex-col min-h-screen relative">
+<header class="w-full h-16 bg-transparent flex justify-between items-center px-page-margin-desktop sticky top-0 z-40">
+<div class="flex-1 flex items-center gap-4">
+<span class="font-headline-md text-headline-md font-bold text-primary">Hostel Management</span>
+<div class="relative w-64 hidden lg:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="w-full h-9 pl-10 pr-4 bg-surface-container-high border-none rounded-full text-body-md text-on-surface placeholder:text-text-muted focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Search..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<button class="text-on-surface-variant hover:text-primary transition-opacity duration-200 relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-status-red rounded-full"></span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-opacity duration-200">
+<span class="material-symbols-outlined">calendar_today</span>
+</button>
+<div class="w-px h-6 bg-glass-border mx-2"></div>
+<img alt="Manager Avatar" class="w-9 h-9 rounded-full object-cover border border-glass-border cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all" data-alt="A small circular avatar of a professional looking individual, warm lighting, simple clean background, perfect for a high-end application profile picture." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCHBVW3Ude6dOpPS-2v5-J0-i3N39BBcRn3pt11JCogNnQ146z420kKzbEsKgltfSUdery_iTjzmLc85R247TQ1I3ilo94O9uDc6EkicqgByH44zRzBcwvvg3AoSoj0x1wLZH1LHc_9ZpBTxNMPpJKCLK8Ccf0-l3fSEI28_oucA4aZXUw99AWVikwZ6RPZrK6W7P7FHtmt2bVAYbonA4bKVqzkzRH-ON7cQaXC8T-orTNQxMR3OvRcww"/>
+</div>
+</header>
+<main class="flex-1 px-page-margin-desktop py-8 flex flex-col max-w-[1600px] mx-auto w-full">
+<div class="mb-8">
+<h1 class="font-headline-lg text-headline-lg text-primary tracking-tight">Weekly mess menu</h1>
+<div class="flex items-center gap-2 mt-2 px-3 py-1.5 bg-surface-container-low rounded-lg inline-flex border border-glass-border">
+<span class="material-symbols-outlined text-[16px] text-accent-teal">visibility</span>
+<span class="font-body-md text-body-md text-text-muted">Students see this menu in their app.</span>
+</div>
+</div>
+<div class="bg-glass-fill backdrop-blur-xl border border-glass-border shadow-sm rounded-[20px] flex-1 flex flex-col overflow-hidden relative">
+<div class="grid grid-cols-[100px_1fr_1fr_1fr_1fr] gap-4 p-5 bg-surface-container-highest/30 border-b border-glass-border">
+<div class="font-headline-md text-headline-md text-primary pt-1">Day</div>
+<div class="font-headline-md text-headline-md text-primary flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px] text-status-sand">wb_twilight</span> Breakfast
+                    </div>
+<div class="font-headline-md text-headline-md text-primary flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px] text-status-sand">sunny</span> Lunch
+                    </div>
+<div class="font-headline-md text-headline-md text-primary flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px] text-status-sand">local_cafe</span> Snacks
+                    </div>
+<div class="font-headline-md text-headline-md text-primary flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px] text-primary-fixed-dim">mode_night</span> Dinner
+                    </div>
+</div>
+<div class="p-5 flex flex-col gap-5 overflow-y-auto pb-24">
+<div class="grid grid-cols-[100px_1fr_1fr_1fr_1fr] gap-4 items-start group">
+<div class="font-headline-md text-headline-md text-on-surface-variant pt-3 pl-2">Monday</div>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Idli, sambar, chutney"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Rice, dal, mixed veg"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Tea, biscuits"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Roti, paneer butter masala"></textarea>
+</div>
+<div class="h-px w-full bg-glass-border/50"></div>
+<div class="grid grid-cols-[100px_1fr_1fr_1fr_1fr] gap-4 items-start group">
+<div class="font-headline-md text-headline-md text-on-surface-variant pt-3 pl-2">Tuesday</div>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Idli, sambar, chutney"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Rice, dal, mixed veg"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Tea, biscuits"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Roti, paneer butter masala"></textarea>
+</div>
+<div class="h-px w-full bg-glass-border/50"></div>
+<div class="grid grid-cols-[100px_1fr_1fr_1fr_1fr] gap-4 items-start group">
+<div class="font-headline-md text-headline-md text-on-surface-variant pt-3 pl-2">Wednesday</div>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Idli, sambar, chutney"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Rice, dal, mixed veg"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Tea, biscuits"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Roti, paneer butter masala"></textarea>
+</div>
+<div class="h-px w-full bg-glass-border/50"></div>
+<div class="grid grid-cols-[100px_1fr_1fr_1fr_1fr] gap-4 items-start group">
+<div class="font-headline-md text-headline-md text-on-surface-variant pt-3 pl-2">Thursday</div>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Idli, sambar, chutney"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Rice, dal, mixed veg"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Tea, biscuits"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Roti, paneer butter masala"></textarea>
+</div>
+<div class="h-px w-full bg-glass-border/50"></div>
+<div class="grid grid-cols-[100px_1fr_1fr_1fr_1fr] gap-4 items-start group">
+<div class="font-headline-md text-headline-md text-on-surface-variant pt-3 pl-2">Friday</div>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Idli, sambar, chutney"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Rice, dal, mixed veg"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Tea, biscuits"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Roti, paneer butter masala"></textarea>
+</div>
+<div class="h-px w-full bg-glass-border/50"></div>
+<div class="grid grid-cols-[100px_1fr_1fr_1fr_1fr] gap-4 items-start group">
+<div class="font-headline-md text-headline-md text-on-surface-variant pt-3 pl-2">Saturday</div>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Idli, sambar, chutney"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Rice, dal, mixed veg"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Tea, biscuits"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Roti, paneer butter masala"></textarea>
+</div>
+<div class="h-px w-full bg-glass-border/50"></div>
+<div class="grid grid-cols-[100px_1fr_1fr_1fr_1fr] gap-4 items-start group">
+<div class="font-headline-md text-headline-md text-on-surface-variant pt-3 pl-2">Sunday</div>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Idli, sambar, chutney"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Rice, dal, mixed veg"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Tea, biscuits"></textarea>
+<textarea class="w-full h-[100px] resize-none bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all shadow-sm group-hover:border-outline-variant" placeholder="e.g., Roti, paneer butter masala"></textarea>
+</div>
+</div>
+<div class="absolute bottom-0 left-0 right-0 bg-glass-fill/90 backdrop-blur-md border-t border-glass-border px-6 py-4 flex justify-end gap-4 z-10 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
+<button class="px-6 py-2.5 rounded-xl font-headline-md text-headline-md bg-transparent text-primary border border-primary hover:bg-surface-container-highest transition-colors">
+                        Reset
+                    </button>
+<button class="px-6 py-2.5 rounded-xl font-headline-md text-headline-md bg-primary text-on-primary hover:bg-primary-container transition-colors shadow-sm">
+                        Save menu
+                    </button>
+</div>
+</div>
+</main>
+</div>
+</body></html>

@@ -1,0 +1,16 @@
+{
+  "id": "OW-3",
+  "title": "Broadcast Updates",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "abf001b218f2400ab478f6620b2b6647",
+  "stitchScreenName": "projects/15365392661227774313/screens/abf001b218f2400ab478f6620b2b6647",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2048",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 23957,
+  "screenshotBytes": 45069
+}

@@ -1,0 +1,16 @@
+{
+  "id": "SA-4",
+  "title": "Hostel Detail (Monitoring)",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "cd5e6d2bbf344eeebf1fddb14c12dd7e",
+  "stitchScreenName": "projects/15365392661227774313/screens/cd5e6d2bbf344eeebf1fddb14c12dd7e",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2048",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 17794,
+  "screenshotBytes": 38398
+}

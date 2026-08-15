@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Complaints</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-fixed-variant": "#474742",
+                    "status-sand": "#D8B98A",
+                    "on-tertiary-fixed": "#271900",
+                    "surface-container-highest": "#e4e2e4",
+                    "on-primary-fixed-variant": "#384762",
+                    "on-tertiary": "#ffffff",
+                    "inverse-primary": "#b8c7e8",
+                    "text-charcoal": "#2A2E35",
+                    "on-error-container": "#93000a",
+                    "error-container": "#ffdad6",
+                    "primary-fixed-dim": "#b8c7e8",
+                    "primary-container": "#1c2b45",
+                    "background-ivory": "#F6F4EF",
+                    "outline-variant": "#c5c6ce",
+                    "on-error": "#ffffff",
+                    "inverse-on-surface": "#f2f0f3",
+                    "on-secondary-fixed": "#1c1c18",
+                    "primary-fixed": "#d7e3ff",
+                    "on-primary-container": "#8492b2",
+                    "glass-border": "rgba(255, 255, 255, 0.50)",
+                    "error": "#ba1a1a",
+                    "surface-variant": "#e4e2e4",
+                    "surface-tint": "#505f7b",
+                    "on-secondary": "#ffffff",
+                    "glass-fill": "rgba(255, 255, 255, 0.65)",
+                    "accent-teal": "#3E7C74",
+                    "status-sage": "#8CA687",
+                    "on-surface-variant": "#44474d",
+                    "tertiary-fixed": "#ffdea9",
+                    "on-background": "#1b1b1d",
+                    "secondary": "#5f5e59",
+                    "on-surface": "#1b1b1d",
+                    "on-secondary-container": "#65645f",
+                    "on-tertiary-container": "#aa8e5f",
+                    "secondary-fixed": "#e5e2db",
+                    "on-primary": "#ffffff",
+                    "inverse-surface": "#303032",
+                    "primary": "#06162f",
+                    "outline": "#75777e",
+                    "surface": "#fbf8fb",
+                    "on-primary-fixed": "#0b1b35",
+                    "tertiary-container": "#3a2803",
+                    "tertiary-fixed-dim": "#e1c28f",
+                    "tertiary": "#211400",
+                    "surface-container": "#efedf0",
+                    "surface-dim": "#dbd9dc",
+                    "surface-bright": "#fbf8fb",
+                    "text-muted": "#6E7480",
+                    "on-tertiary-fixed-variant": "#58431b",
+                    "secondary-container": "#e5e2db",
+                    "surface-container-high": "#eae7ea",
+                    "surface-container-low": "#f5f3f5",
+                    "secondary-fixed-dim": "#c9c6c0",
+                    "background": "#fbf8fb",
+                    "status-red": "#C4574E",
+                    "surface-container-lowest": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "gutter": "16px",
+                    "sidebar-width": "232px",
+                    "page-margin-mobile": "16px",
+                    "page-margin-desktop": "24px"
+            },
+            "fontFamily": {
+                    "stat-display-mobile": ["Inter"],
+                    "stat-display": ["Inter"],
+                    "label-caps": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-md": ["Inter"]
+            },
+            "fontSize": {
+                    "stat-display-mobile": ["28px", {"lineHeight": "34px", "fontWeight": "700"}],
+                    "stat-display": ["36px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-lg": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-md": ["16px", {"lineHeight": "24px", "fontWeight": "500"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background-ivory');
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(255, 255, 255, 0.4) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(216, 185, 138, 0.1) 0px, transparent 50%);
+            background-attachment: fixed;
+            min-height: 100vh;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-md text-on-surface antialiased pb-24">
+<!-- TopAppBar -->
+<nav class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-page-margin-mobile h-16 bg-glass-fill/65 backdrop-blur-xl border-b border-glass-border shadow-sm">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-status-sand/20 flex items-center justify-center overflow-hidden border border-glass-border">
+<img class="w-full h-full object-cover" data-alt="A small, circular avatar portrait of a student, clear lighting, warm colors, professional composition." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAc-dC9tkH1n132Qizi65xGgXHhv9t7j5efDkwgrP5z7Lv4KRO7ktErLJjgPYEfdonnI5JvstN2kLCGlBK8LSGippLVaT4SXEq0JtBIpLMzOBSmivYRnD7yqblY6rK2h_QRK3gTn13kZCK_3LMiDEolFaod1cc3hTxRVrrmEpGUn4XjvJRKoVZyX6V8vcS1YnYhsWXSd4vyNmVGaEzSOkCFjn_kL0z_JxwaLKu7K1KySxQQ_stpHMPYlA"/>
+</div>
+<span class="font-headline-lg-mobile text-headline-lg-mobile text-primary tracking-tight font-bold">Complaints</span>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:opacity-80 transition-opacity active:scale-95 transition-transform text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span>
+</button>
+</nav>
+<!-- Main Content Canvas -->
+<main class="pt-20 px-page-margin-mobile space-y-4">
+<!-- Complaint Card: Open -->
+<div class="bg-glass-fill/65 backdrop-blur-[20px] border border-glass-border rounded-[20px] p-5 shadow-[0_4px_24px_rgba(0,0,0,0.04)] cursor-pointer hover:bg-white/80 transition-colors" onclick="toggleDetails('complaint-1')">
+<div class="flex justify-between items-start mb-3">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-status-red/10 flex items-center justify-center text-status-red border border-status-red/20">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">water_drop</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-text-charcoal">Leaking tap in bathroom</h3>
+<p class="font-body-md text-body-md text-text-muted">Oct 24, 2023</p>
+</div>
+</div>
+<div class="bg-status-red/10 text-status-red px-3 py-1 rounded-full font-label-caps text-label-caps border border-status-red/20">
+                    OPEN
+                </div>
+</div>
+<div class="hidden mt-4 pt-4 border-t border-glass-border" id="complaint-1">
+<div class="relative pl-6 border-l-2 border-surface-container-high space-y-6">
+<div class="relative">
+<div class="absolute -left-[31px] top-1 w-3 h-3 rounded-full bg-status-red border-2 border-background-ivory"></div>
+<p class="font-label-caps text-label-caps text-text-muted mb-1">TODAY, 09:30 AM</p>
+<p class="font-body-md text-body-md text-text-charcoal">Complaint submitted.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Complaint Card: In Progress -->
+<div class="bg-glass-fill/65 backdrop-blur-[20px] border border-glass-border rounded-[20px] p-5 shadow-[0_4px_24px_rgba(0,0,0,0.04)] cursor-pointer hover:bg-white/80 transition-colors" onclick="toggleDetails('complaint-2')">
+<div class="flex justify-between items-start mb-3">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-status-sand/10 flex items-center justify-center text-status-sand border border-status-sand/20">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">wifi_off</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-text-charcoal">Wi-Fi router dead</h3>
+<p class="font-body-md text-body-md text-text-muted">Oct 22, 2023</p>
+</div>
+</div>
+<div class="bg-status-sand/10 text-status-sand px-3 py-1 rounded-full font-label-caps text-label-caps border border-status-sand/20">
+                    IN PROGRESS
+                </div>
+</div>
+<div class="hidden mt-4 pt-4 border-t border-glass-border" id="complaint-2">
+<div class="relative pl-6 border-l-2 border-status-sand/30 space-y-6">
+<div class="relative">
+<div class="absolute -left-[31px] top-1 w-3 h-3 rounded-full bg-status-sand border-2 border-background-ivory"></div>
+<p class="font-label-caps text-label-caps text-text-muted mb-1">YESTERDAY, 02:15 PM</p>
+<p class="font-body-md text-body-md text-text-charcoal">Technician assigned: John D.</p>
+</div>
+<div class="relative">
+<div class="absolute -left-[31px] top-1 w-3 h-3 rounded-full bg-surface-container-high border-2 border-background-ivory"></div>
+<p class="font-label-caps text-label-caps text-text-muted mb-1">OCT 22, 10:00 AM</p>
+<p class="font-body-md text-body-md text-text-charcoal">Complaint submitted.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Complaint Card: Resolved -->
+<div class="bg-glass-fill/65 backdrop-blur-[20px] border border-glass-border rounded-[20px] p-5 shadow-[0_4px_24px_rgba(0,0,0,0.04)] cursor-pointer hover:bg-white/80 transition-colors" onclick="toggleDetails('complaint-3')">
+<div class="flex justify-between items-start mb-3">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-accent-teal/10 flex items-center justify-center text-accent-teal border border-accent-teal/20">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">bolt</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-text-charcoal">Power socket burnt</h3>
+<p class="font-body-md text-body-md text-text-muted">Oct 15, 2023</p>
+</div>
+</div>
+<div class="bg-accent-teal/10 text-accent-teal px-3 py-1 rounded-full font-label-caps text-label-caps border border-accent-teal/20">
+                    RESOLVED
+                </div>
+</div>
+<div class="hidden mt-4 pt-4 border-t border-glass-border" id="complaint-3">
+<div class="relative pl-6 border-l-2 border-accent-teal/30 space-y-6">
+<div class="relative">
+<div class="absolute -left-[31px] top-1 w-3 h-3 rounded-full bg-accent-teal border-2 border-background-ivory"></div>
+<p class="font-label-caps text-label-caps text-text-muted mb-1">OCT 16, 04:30 PM</p>
+<p class="font-body-md text-body-md text-text-charcoal">Socket replaced and tested.</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Action Button -->
+<button class="fixed bottom-24 right-4 w-14 h-14 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg hover:bg-primary/90 active:scale-95 transition-all z-40 border border-primary-fixed/20">
+<span class="material-symbols-outlined text-[28px]" style="font-variation-settings: 'FILL' 0;">add</span>
+</button>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-4 pt-2 bg-glass-fill/65 backdrop-blur-xl rounded-t-xl border-t border-glass-border shadow-lg">
+<button class="flex flex-col items-center justify-center text-on-surface-variant/70 px-3 py-1.5 hover:bg-on-surface-variant/5 rounded-xl active:scale-90 duration-200 transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">home</span>
+<span class="font-label-caps text-label-caps mt-1">Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant/70 px-3 py-1.5 hover:bg-on-surface-variant/5 rounded-xl active:scale-90 duration-200 transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">restaurant_menu</span>
+<span class="font-label-caps text-label-caps mt-1">Menu</span>
+</button>
+<button class="flex flex-col items-center justify-center bg-primary text-on-primary rounded-xl px-3 py-1.5 active:scale-90 duration-200 transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">assignment_late</span>
+<span class="font-label-caps text-label-caps mt-1">Reports</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant/70 px-3 py-1.5 hover:bg-on-surface-variant/5 rounded-xl active:scale-90 duration-200 transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">group</span>
+<span class="font-label-caps text-label-caps mt-1">Room</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant/70 px-3 py-1.5 hover:bg-on-surface-variant/5 rounded-xl active:scale-90 duration-200 transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">person</span>
+<span class="font-label-caps text-label-caps mt-1">Profile</span>
+</button>
+</nav>
+<script>
+        function toggleDetails(id) {
+            const el = document.getElementById(id);
+            if (el.classList.contains('hidden')) {
+                el.classList.remove('hidden');
+            } else {
+                el.classList.add('hidden');
+            }
+        }
+    </script>
+</body></html>

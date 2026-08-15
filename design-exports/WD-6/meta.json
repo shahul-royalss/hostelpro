@@ -1,0 +1,16 @@
+{
+  "id": "WD-6",
+  "title": "Leaves & Visitors Management",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "f3f74b31d3554ae6b186525372965e74",
+  "stitchScreenName": "projects/15365392661227774313/screens/f3f74b31d3554ae6b186525372965e74",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 15260,
+  "screenshotBytes": 42616
+}

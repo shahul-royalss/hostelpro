@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Staff &amp; Tasks - HostelPro</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-fill {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "glass-border": "rgba(255, 255, 255, 0.50)",
+                        "secondary-fixed-dim": "#c9c6c0",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-highest": "#e4e2e4",
+                        "outline": "#75777e",
+                        "error": "#ba1a1a",
+                        "on-tertiary-fixed": "#271900",
+                        "on-primary-fixed": "#0b1b35",
+                        "primary": "#06162f",
+                        "background": "#fbf8fb",
+                        "on-secondary-fixed": "#1c1c18",
+                        "glass-fill": "rgba(255, 255, 255, 0.65)",
+                        "tertiary": "#211400",
+                        "on-tertiary-fixed-variant": "#58431b",
+                        "primary-fixed": "#d7e3ff",
+                        "accent-teal": "#3E7C74",
+                        "secondary-container": "#e5e2db",
+                        "on-surface": "#1b1b1d",
+                        "on-surface-variant": "#44474d",
+                        "secondary-fixed": "#e5e2db",
+                        "background-ivory": "#F6F4EF",
+                        "surface-dim": "#dbd9dc",
+                        "tertiary-fixed": "#ffdea9",
+                        "on-background": "#1b1b1d",
+                        "primary-container": "#1c2b45",
+                        "inverse-on-surface": "#f2f0f3",
+                        "tertiary-fixed-dim": "#e1c28f",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed-variant": "#474742",
+                        "on-error-container": "#93000a",
+                        "on-error": "#ffffff",
+                        "surface-container": "#efedf0",
+                        "status-red": "#C4574E",
+                        "status-sand": "#D8B98A",
+                        "on-tertiary-container": "#aa8e5f",
+                        "on-primary": "#ffffff",
+                        "surface-variant": "#e4e2e4",
+                        "on-primary-fixed-variant": "#384762",
+                        "error-container": "#ffdad6",
+                        "inverse-surface": "#303032",
+                        "on-secondary-container": "#65645f",
+                        "on-tertiary": "#ffffff",
+                        "surface-tint": "#505f7b",
+                        "surface-container-low": "#f5f3f5",
+                        "secondary": "#5f5e59",
+                        "outline-variant": "#c5c6ce",
+                        "primary-fixed-dim": "#b8c7e8",
+                        "tertiary-container": "#3a2803",
+                        "text-charcoal": "#2A2E35",
+                        "status-sage": "#8CA687",
+                        "surface-container-high": "#eae7ea",
+                        "surface-bright": "#fbf8fb",
+                        "on-primary-container": "#8492b2",
+                        "text-muted": "#6E7480",
+                        "inverse-primary": "#b8c7e8",
+                        "surface": "#fbf8fb"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "2xl": "20px",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "page-margin-mobile": "16px",
+                        "page-margin-desktop": "24px",
+                        "sidebar-width": "232px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "stat-display": ["Inter"],
+                        "stat-display-mobile": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["16px", { "lineHeight": "24px", "fontWeight": "500" }],
+                        "stat-display": ["36px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "stat-display-mobile": ["28px", { "lineHeight": "34px", "fontWeight": "700" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background-ivory text-on-surface font-sans antialiased min-h-screen flex overflow-hidden">
+<!-- SideNavBar -->
+<nav class="hidden md:flex bg-glass-fill/65 backdrop-blur-xl text-primary font-headline-md text-headline-md fixed left-0 top-0 h-full w-[232px] border-r border-glass-border shadow-sm flex-col h-full py-6 z-20">
+<div class="px-6 mb-8 flex items-center gap-3">
+<span class="material-symbols-outlined icon-fill text-primary text-[32px]">apartment</span>
+<div>
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary tracking-tight">HostelPro</h1>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider text-[10px]">Management Suite</p>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-1 px-2">
+<a class="text-on-surface-variant hover:bg-secondary-container/50 rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-colors transition-all duration-200 active:scale-95 gap-3" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="text-on-surface-variant hover:bg-secondary-container/50 rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-colors transition-all duration-200 active:scale-95 gap-3" href="#">
+<span class="material-symbols-outlined">report_problem</span>
+<span>Complaints</span>
+</a>
+<a class="text-on-surface-variant hover:bg-secondary-container/50 rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-colors transition-all duration-200 active:scale-95 gap-3" href="#">
+<span class="material-symbols-outlined">campaign</span>
+<span>Updates</span>
+</a>
+<a class="bg-primary text-on-primary rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-all duration-200 active:scale-95 gap-3" href="#">
+<span class="material-symbols-outlined">badge</span>
+<span>Staff</span>
+</a>
+<a class="text-on-surface-variant hover:bg-secondary-container/50 rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-colors transition-all duration-200 active:scale-95 gap-3" href="#">
+<span class="material-symbols-outlined">group</span>
+<span>Students</span>
+</a>
+<a class="text-on-surface-variant hover:bg-secondary-container/50 rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-colors transition-all duration-200 active:scale-95 gap-3" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span>Finance</span>
+</a>
+</div>
+<div class="mt-auto flex flex-col gap-1 px-2 pt-4 border-t border-glass-border mx-4">
+<a class="text-on-surface-variant hover:bg-secondary-container/50 rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-colors transition-all duration-200 active:scale-95 gap-3" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span>Settings</span>
+</a>
+<a class="text-on-surface-variant hover:bg-secondary-container/50 rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-colors transition-all duration-200 active:scale-95 gap-3" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span>Logout</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-[232px] flex flex-col h-screen overflow-hidden">
+<!-- TopNavBar -->
+<header class="bg-background-ivory/80 backdrop-blur-md text-primary font-headline-md text-headline-md fixed top-0 right-0 w-[calc(100%-232px)] h-16 border-b border-outline-variant/30 flex justify-between items-center px-page-margin-desktop w-full z-10">
+<div class="flex items-center gap-4">
+<h2 class="font-headline-lg text-headline-lg font-bold text-primary hidden lg:block">Staff Overview</h2>
+</div>
+<div class="flex items-center gap-6">
+<button class="text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-70 flex items-center justify-center w-10 h-10 rounded-full hover:bg-secondary-container/50">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="flex items-center gap-3 pl-6 border-l border-outline-variant/30">
+<div class="text-right hidden sm:block">
+<p class="font-headline-md text-headline-md text-primary">Admin User</p>
+<p class="font-body-md text-body-md text-on-surface-variant text-xs">System Admin</p>
+</div>
+<img alt="Manager Avatar" class="w-10 h-10 rounded-full object-cover border-2 border-surface-container-lowest shadow-sm" data-alt="A detailed, professional studio portrait of a corporate manager in a high-key lighting setup. The aesthetic is clean, modern light-mode with warm sand and pristine white tones. The subject is calm and confident." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBa9Q29EQqbfkYQctkWULWjvX-rO-KtMsXtcYxyuhIlCFzIpzCBxe_VXC7MA6XWCzBw2Z7Ht2D0mR9sraomTNKMX04sFd5cpoe2ht4yH2ph9hJpshN-Inw00j7m31aaHufw5fs-_iJlGWKBmOpw-Hj1Cc-P1ut7tEb0Kq_q7w-tFHON52QFULUDWRlDBCxsD3U2qs0-gLX88I_jFUI6nth5v3nOjJEXKx-CrI9wILmggui0cf_gNV1b0A"/>
+</div>
+</div>
+</header>
+<!-- Scrollable Content -->
+<div class="flex-1 overflow-y-auto pt-24 pb-12 px-page-margin-desktop">
+<div class="max-w-6xl mx-auto space-y-8">
+<!-- Staff Cards Row -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<!-- Manager Card -->
+<div class="bg-glass-fill/65 backdrop-blur-xl border border-glass-border rounded-2xl p-6 shadow-sm flex flex-col gap-6">
+<div class="flex justify-between items-start">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Manager</span>
+<span class="bg-status-sage/15 text-status-sage font-headline-md text-[13px] px-3 py-1 rounded-full flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-status-sage"></span>
+                                Active
+                            </span>
+</div>
+<div class="flex items-center gap-5">
+<img alt="Elena Rodriguez Avatar" class="w-20 h-20 rounded-full object-cover border-4 border-surface-container-lowest shadow-sm" data-alt="A close-up portrait of Elena Rodriguez, a professional property manager, set against a blurred, airy, modern office background. High-key lighting, soft shadows, pristine light-mode aesthetic with subtle warm ivory tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDbmPbH_yJA0YYwgt1DAYOZ2yr1uAjk4uPtpjinPTqhuEutsXza7j1BOJY65dLdqYrCwlaivT32wdbW_zRg_RuaxlBijiivSMg4Ga23r7Wq1TSVtyeluPjvtaRIfuq91n-N1FkkvSbHMjZhb5fL1Ycfy3_UbBGYY_c8wd-fwMNu9SfjPmK9mDP4wlLHjzwnxAmorh4SBxpIajmVuSbouFkrTnCL24eo3Z-znyhQBRDDPDJyc2zK2R3cbg"/>
+<div>
+<h3 class="font-headline-lg text-headline-lg text-primary mb-1">Elena Rodriguez</h3>
+<div class="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
+<span class="material-symbols-outlined text-[18px]">call</span>
+<span>+1 (555) 123-4567</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md mt-1">
+<span class="material-symbols-outlined text-[18px]">mail</span>
+<span>elena.r@hostelpro.com</span>
+</div>
+</div>
+</div>
+<div class="mt-auto pt-4 border-t border-outline-variant/20 flex justify-end">
+<button class="bg-surface-container-lowest/50 hover:bg-surface-container-lowest border border-glass-border text-primary font-headline-md text-headline-md px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">lock_reset</span>
+                                Reset password
+                            </button>
+</div>
+</div>
+<!-- Warden Card -->
+<div class="bg-glass-fill/65 backdrop-blur-xl border border-glass-border rounded-2xl p-6 shadow-sm flex flex-col gap-6">
+<div class="flex justify-between items-start">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Warden</span>
+<span class="bg-status-sage/15 text-status-sage font-headline-md text-[13px] px-3 py-1 rounded-full flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-status-sage"></span>
+                                Active
+                            </span>
+</div>
+<div class="flex items-center gap-5">
+<img alt="David Chen Avatar" class="w-20 h-20 rounded-full object-cover border-4 border-surface-container-lowest shadow-sm" data-alt="A portrait of David Chen, a friendly yet authoritative hostel warden. The setting is a bright, sunlit corridor with frosted glass elements. The color palette emphasizes calm navy and warm stone hues, aligning with a premium, organic minimal UI." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAaPDc-Hqu3UXJpnn5A9oOUhjN6QtfrdmXX81h_ijTkNSL7m2D2LAqYbO-PSfB4jHx1XRdjkJWVY9u152VOl3QU0K7fRQGLNuNS4RcyP3OXxJMP0X3MZFx5s5n8sVq9aZFVmELSiVCWhJIcU3ivg3bvrUWqngB6ji3_HffzpX_Z5M2vOBt6ov9WVp1kzI8fE3Yu5lks0rg7VHT3nL8s8Ph72Gp73kvSrkj8dsbu6ZQ7lcMkHtMIzFbLBA"/>
+<div>
+<h3 class="font-headline-lg text-headline-lg text-primary mb-1">David Chen</h3>
+<div class="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
+<span class="material-symbols-outlined text-[18px]">call</span>
+<span>+1 (555) 987-6543</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md mt-1">
+<span class="material-symbols-outlined text-[18px]">mail</span>
+<span>david.c@hostelpro.com</span>
+</div>
+</div>
+</div>
+<div class="mt-auto pt-4 border-t border-outline-variant/20 flex justify-end">
+<button class="bg-surface-container-lowest/50 hover:bg-surface-container-lowest border border-glass-border text-primary font-headline-md text-headline-md px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">lock_reset</span>
+                                Reset password
+                            </button>
+</div>
+</div>
+</div>
+<!-- Tasks Section -->
+<div class="bg-glass-fill/65 backdrop-blur-xl border border-glass-border rounded-2xl p-6 shadow-sm">
+<h3 class="font-headline-lg text-headline-lg text-primary mb-6 flex items-center gap-3">
+<span class="material-symbols-outlined text-accent-teal">task_alt</span>
+                        Tasks for manager
+                    </h3>
+<!-- Add Task Input Row -->
+<div class="flex flex-col sm:flex-row gap-4 mb-8 bg-surface-container-lowest/40 p-2 rounded-xl border border-glass-border">
+<div class="flex-1 relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50">add_task</span>
+<input class="w-full bg-surface-container-lowest border-none rounded-lg pl-10 pr-4 py-3 font-body-md text-body-md text-primary placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/20 transition-shadow" placeholder="Add a new task..." type="text"/>
+</div>
+<div class="w-full sm:w-48 relative border-l border-glass-border sm:pl-4">
+<span class="material-symbols-outlined absolute left-7 top-1/2 -translate-y-1/2 text-on-surface-variant/50">calendar_today</span>
+<input class="w-full bg-transparent border-none pl-10 pr-4 py-3 font-body-md text-body-md text-primary focus:ring-0 cursor-pointer" type="date"/>
+</div>
+<button class="bg-primary hover:bg-primary-container text-on-primary font-headline-md text-headline-md px-6 py-3 rounded-lg transition-colors flex items-center justify-center gap-2 whitespace-nowrap">
+                            Add Task
+                        </button>
+</div>
+<!-- Task List -->
+<div class="space-y-2">
+<!-- Task Item 1 -->
+<div class="flex items-center justify-between p-4 rounded-xl hover:bg-surface-container-lowest/50 transition-colors group">
+<div class="flex items-center gap-4">
+<span class="bg-status-sand/15 text-status-sand font-headline-md text-[13px] px-3 py-1 rounded-full w-28 text-center">Pending</span>
+<span class="font-headline-md text-headline-md text-primary">Review monthly maintenance report</span>
+</div>
+<div class="flex items-center gap-6">
+<span class="font-body-md text-body-md text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">schedule</span>
+                                    Today, 5:00 PM
+                                </span>
+<button class="text-on-surface-variant hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+<div class="h-px w-full bg-outline-variant/20"></div>
+<!-- Task Item 2 -->
+<div class="flex items-center justify-between p-4 rounded-xl hover:bg-surface-container-lowest/50 transition-colors group">
+<div class="flex items-center gap-4">
+<span class="bg-primary/15 text-primary font-headline-md text-[13px] px-3 py-1 rounded-full w-28 text-center">In progress</span>
+<span class="font-headline-md text-headline-md text-primary">Schedule fire safety drill for block B</span>
+</div>
+<div class="flex items-center gap-6">
+<span class="font-body-md text-body-md text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">schedule</span>
+                                    Tomorrow
+                                </span>
+<button class="text-on-surface-variant hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+<div class="h-px w-full bg-outline-variant/20"></div>
+<!-- Task Item 3 -->
+<div class="flex items-center justify-between p-4 rounded-xl hover:bg-surface-container-lowest/50 transition-colors group opacity-60">
+<div class="flex items-center gap-4">
+<span class="bg-accent-teal/15 text-accent-teal font-headline-md text-[13px] px-3 py-1 rounded-full w-28 text-center flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[14px]">check</span> Done
+                                </span>
+<span class="font-headline-md text-headline-md text-primary line-through decoration-primary/30">Approve budget request for common area</span>
+</div>
+<div class="flex items-center gap-6">
+<span class="font-body-md text-body-md text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">schedule</span>
+                                    Oct 12
+                                </span>
+<button class="text-on-surface-variant hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

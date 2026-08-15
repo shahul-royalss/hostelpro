@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Finance Overview - HostelPro</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "glass-border": "rgba(255, 255, 255, 0.50)",
+                    "secondary-fixed-dim": "#c9c6c0",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-container-highest": "#e4e2e4",
+                    "outline": "#75777e",
+                    "error": "#ba1a1a",
+                    "on-tertiary-fixed": "#271900",
+                    "on-primary-fixed": "#0b1b35",
+                    "primary": "#06162f",
+                    "background": "#fbf8fb",
+                    "on-secondary-fixed": "#1c1c18",
+                    "glass-fill": "rgba(255, 255, 255, 0.65)",
+                    "tertiary": "#211400",
+                    "on-tertiary-fixed-variant": "#58431b",
+                    "primary-fixed": "#d7e3ff",
+                    "accent-teal": "#3E7C74",
+                    "secondary-container": "#e5e2db",
+                    "on-surface": "#1b1b1d",
+                    "on-surface-variant": "#44474d",
+                    "secondary-fixed": "#e5e2db",
+                    "background-ivory": "#F6F4EF",
+                    "surface-dim": "#dbd9dc",
+                    "tertiary-fixed": "#ffdea9",
+                    "on-background": "#1b1b1d",
+                    "primary-container": "#1c2b45",
+                    "inverse-on-surface": "#f2f0f3",
+                    "tertiary-fixed-dim": "#e1c28f",
+                    "on-secondary": "#ffffff",
+                    "on-secondary-fixed-variant": "#474742",
+                    "on-error-container": "#93000a",
+                    "on-error": "#ffffff",
+                    "surface-container": "#efedf0",
+                    "status-red": "#C4574E",
+                    "status-sand": "#D8B98A",
+                    "on-tertiary-container": "#aa8e5f",
+                    "on-primary": "#ffffff",
+                    "surface-variant": "#e4e2e4",
+                    "on-primary-fixed-variant": "#384762",
+                    "error-container": "#ffdad6",
+                    "inverse-surface": "#303032",
+                    "on-secondary-container": "#65645f",
+                    "on-tertiary": "#ffffff",
+                    "surface-tint": "#505f7b",
+                    "surface-container-low": "#f5f3f5",
+                    "secondary": "#5f5e59",
+                    "outline-variant": "#c5c6ce",
+                    "primary-fixed-dim": "#b8c7e8",
+                    "tertiary-container": "#3a2803",
+                    "text-charcoal": "#2A2E35",
+                    "status-sage": "#8CA687",
+                    "surface-container-high": "#eae7ea",
+                    "surface-bright": "#fbf8fb",
+                    "on-primary-container": "#8492b2",
+                    "text-muted": "#6E7480",
+                    "inverse-primary": "#b8c7e8",
+                    "surface": "#fbf8fb"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "page-margin-mobile": "16px",
+                    "page-margin-desktop": "24px",
+                    "sidebar-width": "232px",
+                    "gutter": "16px"
+            },
+            "fontFamily": {
+                    "headline-md": [
+                            "Inter"
+                    ],
+                    "stat-display": [
+                            "Inter"
+                    ],
+                    "stat-display-mobile": [
+                            "Inter"
+                    ],
+                    "label-caps": [
+                            "Inter"
+                    ],
+                    "headline-lg": [
+                            "Inter"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "headline-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "stat-display": [
+                            "36px",
+                            {
+                                    "lineHeight": "1.2",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "stat-display-mobile": [
+                            "28px",
+                            {
+                                    "lineHeight": "34px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "label-caps": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-lg": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #F6F4EF; /* background-ivory */
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,0.03) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,0.03) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,0.03) 0, transparent 50%);
+            min-height: 100vh;
+        }
+        
+        /* Glassmorphism utilities */
+        .glass-card {
+            background-color: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.50);
+            box-shadow: 0 4px 24px rgba(6, 22, 47, 0.04);
+            border-radius: 20px;
+        }
+        
+        .glass-panel {
+            background-color: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border-right: 1px solid rgba(255, 255, 255, 0.50);
+        }
+        
+        .glass-topbar {
+            background-color: rgba(246, 244, 239, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md text-on-surface antialiased overflow-x-hidden">
+<!-- TopNavBar -->
+<nav class="fixed top-0 right-0 w-[calc(100%-232px)] h-16 glass-topbar z-40 flex justify-between items-center px-page-margin-desktop border-b border-outline-variant/30 hidden md:flex">
+<div class="flex items-center">
+<!-- Search bar is hidden as per JSON -->
+</div>
+<div class="flex items-center space-x-6">
+<button class="text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-70 flex items-center justify-center relative">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-status-red rounded-full"></span>
+</button>
+<div class="h-8 w-8 rounded-full bg-status-sand text-on-tertiary-fixed flex items-center justify-center font-headline-md text-headline-md">
+                JD
+            </div>
+</div>
+</nav>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-[232px] glass-panel z-50 flex flex-col h-full py-6 shadow-sm hidden md:flex">
+<div class="px-6 mb-8 flex flex-col">
+<span class="font-headline-lg text-headline-lg font-bold text-primary tracking-tight">HostelPro</span>
+<span class="text-label-caps font-label-caps text-on-surface-variant mt-1 uppercase tracking-wider">Management Suite</span>
+</div>
+<nav class="flex-1 flex flex-col space-y-1">
+<a class="text-on-surface-variant hover:bg-secondary-container/50 rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-colors duration-200 active:scale-95 group" href="#">
+<span class="material-symbols-outlined mr-3 text-on-surface-variant group-hover:text-primary transition-colors" style="font-variation-settings: 'FILL' 0;">dashboard</span>
+<span class="font-headline-md text-headline-md">Dashboard</span>
+</a>
+<a class="text-on-surface-variant hover:bg-secondary-container/50 rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-colors duration-200 active:scale-95 group" href="#">
+<span class="material-symbols-outlined mr-3 text-on-surface-variant group-hover:text-primary transition-colors" style="font-variation-settings: 'FILL' 0;">report_problem</span>
+<span class="font-headline-md text-headline-md">Complaints</span>
+</a>
+<a class="text-on-surface-variant hover:bg-secondary-container/50 rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-colors duration-200 active:scale-95 group" href="#">
+<span class="material-symbols-outlined mr-3 text-on-surface-variant group-hover:text-primary transition-colors" style="font-variation-settings: 'FILL' 0;">campaign</span>
+<span class="font-headline-md text-headline-md">Updates</span>
+</a>
+<a class="text-on-surface-variant hover:bg-secondary-container/50 rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-colors duration-200 active:scale-95 group" href="#">
+<span class="material-symbols-outlined mr-3 text-on-surface-variant group-hover:text-primary transition-colors" style="font-variation-settings: 'FILL' 0;">badge</span>
+<span class="font-headline-md text-headline-md">Staff</span>
+</a>
+<a class="text-on-surface-variant hover:bg-secondary-container/50 rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-colors duration-200 active:scale-95 group" href="#">
+<span class="material-symbols-outlined mr-3 text-on-surface-variant group-hover:text-primary transition-colors" style="font-variation-settings: 'FILL' 0;">group</span>
+<span class="font-headline-md text-headline-md">Students</span>
+</a>
+<a class="bg-primary text-on-primary rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-all duration-200 active:scale-95" href="#">
+<span class="material-symbols-outlined mr-3 text-on-primary" style="font-variation-settings: 'FILL' 1;">payments</span>
+<span class="font-headline-md text-headline-md">Finance</span>
+</a>
+</nav>
+<div class="mt-auto flex flex-col space-y-1">
+<a class="text-on-surface-variant hover:bg-secondary-container/50 rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-colors duration-200 active:scale-95 group" href="#">
+<span class="material-symbols-outlined mr-3 text-on-surface-variant group-hover:text-primary transition-colors" style="font-variation-settings: 'FILL' 0;">settings</span>
+<span class="font-headline-md text-headline-md">Settings</span>
+</a>
+<a class="text-on-surface-variant hover:bg-secondary-container/50 rounded-lg mx-2 my-1 flex items-center px-4 py-3 transition-colors duration-200 active:scale-95 group" href="#">
+<span class="material-symbols-outlined mr-3 text-on-surface-variant group-hover:text-primary transition-colors" style="font-variation-settings: 'FILL' 0;">logout</span>
+<span class="font-headline-md text-headline-md">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="md:ml-[232px] pt-16 min-h-screen pb-12">
+<div class="p-page-margin-desktop max-w-7xl mx-auto space-y-6">
+<!-- Header Section -->
+<div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pt-4">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-primary">Finance Overview</h1>
+<p class="text-on-surface-variant mt-1">Track revenue, expenses, and overall profitability.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="relative glass-card bg-white/40 px-4 py-2 flex items-center rounded-xl cursor-pointer hover:bg-white/60 transition-colors border border-glass-border">
+<span class="material-symbols-outlined text-on-surface-variant mr-2" style="font-variation-settings: 'FILL' 0; font-size: 20px;">calendar_month</span>
+<select class="appearance-none bg-transparent border-none p-0 pr-6 text-primary font-headline-md text-headline-md focus:ring-0 cursor-pointer w-32 outline-none">
+<option>October 2023</option>
+<option>September 2023</option>
+<option>August 2023</option>
+<option>July 2023</option>
+</select>
+<span class="material-symbols-outlined text-on-surface-variant absolute right-3 pointer-events-none" style="font-size: 20px;">expand_more</span>
+</div>
+<button class="bg-primary text-on-primary px-4 py-2 rounded-xl font-headline-md text-headline-md flex items-center hover:bg-primary/90 transition-colors shadow-sm">
+<span class="material-symbols-outlined mr-2" style="font-size: 20px;">add</span>
+                        New Entry
+                    </button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- Stat Cards -->
+<div class="glass-card p-6 flex flex-col justify-between h-40">
+<div class="flex justify-between items-start">
+<span class="text-on-surface-variant font-headline-md text-headline-md">Total Revenue</span>
+<div class="p-2 bg-accent-teal/10 rounded-full">
+<span class="material-symbols-outlined text-accent-teal" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+</div>
+</div>
+<div>
+<div class="font-stat-display text-stat-display text-accent-teal">$42,500</div>
+<div class="flex items-center mt-1 text-accent-teal text-sm">
+<span class="material-symbols-outlined mr-1" style="font-size: 16px;">trending_up</span>
+<span>+5.2% vs last month</span>
+</div>
+</div>
+</div>
+<div class="glass-card p-6 flex flex-col justify-between h-40">
+<div class="flex justify-between items-start">
+<span class="text-on-surface-variant font-headline-md text-headline-md">Total Expenses</span>
+<div class="p-2 bg-status-red/10 rounded-full">
+<span class="material-symbols-outlined text-status-red" style="font-variation-settings: 'FILL' 1;">receipt_long</span>
+</div>
+</div>
+<div>
+<div class="font-stat-display text-stat-display text-status-red">$18,240</div>
+<div class="flex items-center mt-1 text-status-red text-sm">
+<span class="material-symbols-outlined mr-1" style="font-size: 16px;">trending_up</span>
+<span>+1.8% vs last month</span>
+</div>
+</div>
+</div>
+<div class="glass-card p-6 flex flex-col justify-between h-40">
+<div class="flex justify-between items-start">
+<span class="text-on-surface-variant font-headline-md text-headline-md">Net Profit</span>
+<div class="p-2 bg-primary/10 rounded-full">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">savings</span>
+</div>
+</div>
+<div>
+<div class="font-stat-display text-stat-display text-primary">$24,260</div>
+<div class="flex items-center mt-1 text-accent-teal text-sm">
+<span class="material-symbols-outlined mr-1" style="font-size: 16px;">trending_up</span>
+<span>+8.4% vs last month</span>
+</div>
+</div>
+</div>
+<!-- Charts Section -->
+<div class="glass-card p-6 md:col-span-1 flex flex-col">
+<h3 class="font-headline-md text-headline-md text-primary mb-4">Expenses by Category</h3>
+<div class="flex-1 relative min-h-[250px] flex items-center justify-center">
+<canvas id="expensesDoughnut"></canvas>
+<!-- Center text overlay -->
+<div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-4">
+<span class="text-on-surface-variant text-xs uppercase tracking-wider font-semibold">Total</span>
+<span class="text-primary font-headline-lg text-headline-lg">$18.2k</span>
+</div>
+</div>
+<div class="mt-4 grid grid-cols-2 gap-2 text-sm">
+<div class="flex items-center"><div class="w-3 h-3 rounded-full mr-2" style="background-color: #06162f;"></div>Staff</div>
+<div class="flex items-center"><div class="w-3 h-3 rounded-full mr-2" style="background-color: #3E7C74;"></div>Groceries</div>
+<div class="flex items-center"><div class="w-3 h-3 rounded-full mr-2" style="background-color: #C4574E;"></div>Electricity</div>
+<div class="flex items-center"><div class="w-3 h-3 rounded-full mr-2" style="background-color: #D8B98A;"></div>Water</div>
+<div class="flex items-center col-span-2"><div class="w-3 h-3 rounded-full mr-2" style="background-color: #8CA687;"></div>Maintenance</div>
+</div>
+</div>
+<div class="glass-card p-6 md:col-span-2 flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-headline-md text-headline-md text-primary">Daily Profit Trend</h3>
+<div class="flex bg-surface-container-high rounded-lg p-1">
+<button class="px-3 py-1 text-xs font-semibold rounded-md bg-white shadow-sm text-primary">Week</button>
+<button class="px-3 py-1 text-xs font-semibold rounded-md text-on-surface-variant hover:text-primary">Month</button>
+</div>
+</div>
+<div class="flex-1 w-full min-h-[250px]">
+<canvas id="profitLineChart"></canvas>
+</div>
+</div>
+<!-- Recent Transactions Table -->
+<div class="glass-card md:col-span-3 overflow-hidden flex flex-col">
+<div class="p-6 border-b border-glass-border flex justify-between items-center">
+<h3 class="font-headline-md text-headline-md text-primary">Recent Entries</h3>
+<a class="text-primary font-headline-md text-headline-md hover:underline flex items-center text-sm" href="#">
+                            View All <span class="material-symbols-outlined ml-1" style="font-size: 16px;">arrow_forward</span>
+</a>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low/50">
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant border-b border-glass-border">Date</th>
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant border-b border-glass-border">Description</th>
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant border-b border-glass-border">Category</th>
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant border-b border-glass-border">Recorded By</th>
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant border-b border-glass-border text-right">Amount</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-glass-border">
+<tr class="hover:bg-white/30 transition-colors">
+<td class="px-6 py-4 text-on-surface-variant text-sm whitespace-nowrap">Oct 24, 2023</td>
+<td class="px-6 py-4">
+<div class="font-medium text-primary">Monthly Electricity Bill</div>
+<div class="text-xs text-on-surface-variant mt-0.5">Invoice #92341</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-status-red/10 text-status-red">
+                                            Electricity
+                                        </span>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center">
+<div class="h-6 w-6 rounded-full bg-surface-tint text-white flex items-center justify-center text-xs mr-2">MS</div>
+<span class="text-sm text-on-surface-variant">Mike S.</span>
+</div>
+</td>
+<td class="px-6 py-4 text-right font-medium text-status-red whitespace-nowrap">
+                                        -$1,450.00
+                                    </td>
+</tr>
+<tr class="hover:bg-white/30 transition-colors">
+<td class="px-6 py-4 text-on-surface-variant text-sm whitespace-nowrap">Oct 23, 2023</td>
+<td class="px-6 py-4">
+<div class="font-medium text-primary">Student Fee Collection</div>
+<div class="text-xs text-on-surface-variant mt-0.5">Batch B Term 2</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-accent-teal/10 text-accent-teal">
+                                            Revenue
+                                        </span>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center">
+<div class="h-6 w-6 rounded-full bg-status-sand text-on-tertiary-fixed flex items-center justify-center text-xs mr-2">JD</div>
+<span class="text-sm text-on-surface-variant">Jane D.</span>
+</div>
+</td>
+<td class="px-6 py-4 text-right font-medium text-accent-teal whitespace-nowrap">
+                                        +$8,500.00
+                                    </td>
+</tr>
+<tr class="hover:bg-white/30 transition-colors">
+<td class="px-6 py-4 text-on-surface-variant text-sm whitespace-nowrap">Oct 22, 2023</td>
+<td class="px-6 py-4">
+<div class="font-medium text-primary">Cafeteria Groceries</div>
+<div class="text-xs text-on-surface-variant mt-0.5">Weekly Restock</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-surface-tint/10 text-surface-tint">
+                                            Groceries
+                                        </span>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center">
+<div class="h-6 w-6 rounded-full bg-surface-tint text-white flex items-center justify-center text-xs mr-2">MS</div>
+<span class="text-sm text-on-surface-variant">Mike S.</span>
+</div>
+</td>
+<td class="px-6 py-4 text-right font-medium text-status-red whitespace-nowrap">
+                                        -$980.50
+                                    </td>
+</tr>
+<tr class="hover:bg-white/30 transition-colors">
+<td class="px-6 py-4 text-on-surface-variant text-sm whitespace-nowrap">Oct 20, 2023</td>
+<td class="px-6 py-4">
+<div class="font-medium text-primary">Plumbing Repair</div>
+<div class="text-xs text-on-surface-variant mt-0.5">Block C, Floor 2</div>
+</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-status-sage/10 text-status-sage">
+                                            Maintenance
+                                        </span>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center">
+<div class="h-6 w-6 rounded-full bg-status-sage text-white flex items-center justify-center text-xs mr-2">RJ</div>
+<span class="text-sm text-on-surface-variant">Robert J.</span>
+</div>
+</td>
+<td class="px-6 py-4 text-right font-medium text-status-red whitespace-nowrap">
+                                        -$345.00
+                                    </td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</main>
+<script>
+        // Chart.js Setup
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            // Common chart options for the liquid glass aesthetic
+            Chart.defaults.font.family = 'Inter, sans-serif';
+            Chart.defaults.color = '#75777e'; // outline color
+            Chart.defaults.scale.grid.color = 'rgba(255, 255, 255, 0.3)';
+            Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(28, 43, 69, 0.9)'; // primary-container
+            Chart.defaults.plugins.tooltip.padding = 12;
+            Chart.defaults.plugins.tooltip.cornerRadius = 8;
+            Chart.defaults.plugins.tooltip.titleFont.size = 14;
+            Chart.defaults.plugins.tooltip.bodyFont.size = 13;
+
+            // Expenses Doughnut Chart
+            const ctxDoughnut = document.getElementById('expensesDoughnut').getContext('2d');
+            new Chart(ctxDoughnut, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Staff', 'Groceries', 'Electricity', 'Water', 'Maintenance'],
+                    datasets: [{
+                        data: [45, 25, 15, 5, 10],
+                        backgroundColor: [
+                            '#06162f', // primary
+                            '#3E7C74', // accent-teal
+                            '#C4574E', // status-red
+                            '#D8B98A', // status-sand
+                            '#8CA687'  // status-sage
+                        ],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '75%',
+                    plugins: {
+                        legend: {
+                            display: false // Using custom HTML legend below chart
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += context.parsed + '%';
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Profit Line Chart
+            const ctxLine = document.getElementById('profitLineChart').getContext('2d');
+            
+            // Create gradient for the line chart
+            const gradient = ctxLine.createLinearGradient(0, 0, 0, 300);
+            gradient.addColorStop(0, 'rgba(6, 22, 47, 0.2)'); // primary color with opacity
+            gradient.addColorStop(1, 'rgba(6, 22, 47, 0)');
+
+            new Chart(ctxLine, {
+                type: 'line',
+                data: {
+                    labels: ['Oct 1', 'Oct 5', 'Oct 10', 'Oct 15', 'Oct 20', 'Oct 25', 'Oct 31'],
+                    datasets: [{
+                        label: 'Net Profit',
+                        data: [1200, 2100, 1800, 3200, 2900, 4100, 4800],
+                        borderColor: '#06162f', // primary
+                        backgroundColor: gradient,
+                        borderWidth: 3,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: '#06162f',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        fill: true,
+                        tension: 0.4 // smooth curves
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false,
+                                drawBorder: false
+                            },
+                            ticks: {
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(197, 198, 206, 0.2)', // outline-variant with low opacity
+                                drawBorder: false,
+                                borderDash: [5, 5]
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value;
+                                },
+                                font: {
+                                    size: 12
+                                },
+                                maxTicksLimit: 6
+                            }
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index',
+                    },
+                }
+            });
+        });
+    </script>
+</body></html>

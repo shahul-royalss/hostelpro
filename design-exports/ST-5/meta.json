@@ -1,0 +1,16 @@
+{
+  "id": "ST-5",
+  "title": "My Room & Roommates",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "cf7779c7a9bb49b295ee7ccd1752f074",
+  "stitchScreenName": "projects/15365392661227774313/screens/cf7779c7a9bb49b295ee7ccd1752f074",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 16887,
+  "screenshotBytes": 58691
+}

@@ -1,0 +1,16 @@
+{
+  "id": "WD-4",
+  "title": "Room Detail View",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "16193162931a4af090072b6d729e8554",
+  "stitchScreenName": "projects/15365392661227774313/screens/16193162931a4af090072b6d729e8554",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "2106",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 16431,
+  "screenshotBytes": 45976
+}

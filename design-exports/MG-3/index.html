@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Daily Revenue Tracking - LuxeHostel</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-container-high": "#eae7ea",
+                      "on-primary-fixed": "#0b1b35",
+                      "tertiary-container": "#3a2803",
+                      "on-surface": "#1b1b1d",
+                      "surface-container-low": "#f5f3f5",
+                      "status-sage": "#8CA687",
+                      "glass-fill": "rgba(255, 255, 255, 0.65)",
+                      "surface-tint": "#505f7b",
+                      "surface-bright": "#fbf8fb",
+                      "surface-container-highest": "#e4e2e4",
+                      "inverse-surface": "#303032",
+                      "on-tertiary-container": "#aa8e5f",
+                      "secondary-fixed-dim": "#c9c6c0",
+                      "outline": "#75777e",
+                      "text-charcoal": "#2A2E35",
+                      "on-primary-fixed-variant": "#384762",
+                      "surface-container-lowest": "#ffffff",
+                      "status-sand": "#D8B98A",
+                      "background-ivory": "#F6F4EF",
+                      "on-tertiary": "#ffffff",
+                      "surface-container": "#efedf0",
+                      "primary-fixed-dim": "#b8c7e8",
+                      "on-error-container": "#93000a",
+                      "background": "#fbf8fb",
+                      "on-tertiary-fixed-variant": "#58431b",
+                      "error-container": "#ffdad6",
+                      "accent-teal": "#3E7C74",
+                      "tertiary-fixed": "#ffdea9",
+                      "glass-border": "rgba(255, 255, 255, 0.50)",
+                      "on-secondary-container": "#65645f",
+                      "error": "#ba1a1a",
+                      "surface-dim": "#dbd9dc",
+                      "on-secondary-fixed-variant": "#474742",
+                      "tertiary": "#211400",
+                      "secondary": "#5f5e59",
+                      "inverse-on-surface": "#f2f0f3",
+                      "on-secondary": "#ffffff",
+                      "primary": "#06162f",
+                      "outline-variant": "#c5c6ce",
+                      "text-muted": "#6E7480",
+                      "on-tertiary-fixed": "#271900",
+                      "secondary-fixed": "#e5e2db",
+                      "status-red": "#C4574E",
+                      "on-primary-container": "#8492b2",
+                      "primary-fixed": "#d7e3ff",
+                      "inverse-primary": "#b8c7e8",
+                      "primary-container": "#1c2b45",
+                      "surface-variant": "#e4e2e4",
+                      "tertiary-fixed-dim": "#e1c28f",
+                      "surface": "#fbf8fb",
+                      "on-primary": "#ffffff",
+                      "on-surface-variant": "#44474d",
+                      "on-error": "#ffffff",
+                      "on-secondary-fixed": "#1c1c18",
+                      "on-background": "#1b1b1d",
+                      "secondary-container": "#e5e2db"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "page-margin-desktop": "24px",
+                      "gutter": "16px",
+                      "page-margin-mobile": "16px",
+                      "sidebar-width": "232px"
+              },
+              "fontFamily": {
+                      "label-caps": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "stat-display": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "stat-display-mobile": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "label-caps": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "stat-display": [
+                              "36px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "stat-display-mobile": [
+                              "28px",
+                              {
+                                      "lineHeight": "34px",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+</head>
+<body class="bg-background-ivory text-on-surface min-h-screen flex selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- SideNavBar (Desktop) -->
+<nav class="hidden md:flex flex-col py-6 px-4 gap-8 fixed left-0 top-0 h-full w-sidebar-width bg-glass-fill backdrop-blur-xl border-r border-glass-border shadow-sm z-50">
+<!-- Header -->
+<div class="flex items-center gap-3 px-2">
+<div class="w-10 h-10 rounded-full bg-surface-container overflow-hidden flex-shrink-0 border border-glass-border">
+<img alt="Hostel Manager Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a modern hostel manager, smiling warmly. The lighting is soft and natural, emphasizing a welcoming, trustworthy vibe consistent with a premium hospitality brand. Shot against a neutral, light-toned background to blend seamlessly with a high-end, light-mode UI." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDYPww6uEhfT-5-C_tc_JnM65DWMgrL4DGoaRu74__pLGKfMA9jTJRkYvt9-cZXxeJFFbkx-zRto8kARH0nG_KgpWG9IPhj_FRtponoXXp9PAugJWh8pjRb6RfXO8nIhAQzQ72UNRBHTxVoWrs_PcpP1hxhz55GiNkookv8_zuNLqtTat5gRHx1UFzklVRj4XYC9nN2KGtNwc9lw8C9cFvLEHTQDaiEbwY0PIL_1z-jAA1-YNZuIoxgFg"/>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-lg text-headline-lg text-primary tracking-tight">LuxeHostel</span>
+<span class="font-label-caps text-label-caps text-on-surface-variant">Management Portal</span>
+</div>
+</div>
+<!-- Main Navigation Tabs -->
+<div class="flex flex-col gap-1 flex-1 mt-4">
+<!-- Dashboard (Inactive) -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-200 active:scale-95 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span>Dashboard</span>
+</a>
+<!-- Daily Expenses (Inactive) -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-200 active:scale-95 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]">payments</span>
+<span>Daily Expenses</span>
+</a>
+<!-- Daily Revenue (ACTIVE) -->
+<a class="flex items-center gap-3 px-4 py-3 bg-primary text-on-primary rounded-lg transition-colors active:scale-95 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+<span>Daily Revenue</span>
+</a>
+<!-- Mess Menu Editor (Inactive) -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-200 active:scale-95 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]">restaurant_menu</span>
+<span>Mess Menu Editor</span>
+</a>
+</div>
+<!-- CTA Button -->
+<button class="w-full py-3 px-4 bg-glass-fill border border-glass-border text-primary font-headline-md text-headline-md rounded-lg shadow-sm hover:bg-surface-container-low transition-all active:scale-95 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">add</span>
+            New Entry
+        </button>
+<!-- Footer Tabs -->
+<div class="flex flex-col gap-1 pt-4 border-t border-glass-border">
+<a class="flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-200 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-all duration-200 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]">help</span>
+<span>Support</span>
+</a>
+</div>
+</nav>
+<!-- Main Workspace -->
+<main class="flex-1 md:ml-sidebar-width flex flex-col min-h-screen relative">
+<!-- TopAppBar -->
+<header class="w-full h-16 bg-transparent flex justify-between items-center px-page-margin-desktop sticky top-0 z-40 backdrop-blur-md">
+<!-- Brand Logo / Product Name (Visible mainly on mobile or for context) -->
+<div class="flex items-center gap-2">
+<span class="font-headline-md text-headline-md font-bold text-primary">Hostel Management</span>
+</div>
+<!-- Actions & Profile -->
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-primary transition-opacity duration-200 w-10 h-10 rounded-full hover:bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-opacity duration-200 w-10 h-10 rounded-full hover:bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">calendar_today</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant shadow-sm ml-2">
+<img alt="Manager Avatar" class="w-full h-full object-cover" data-alt="A small profile thumbnail of a professional hostel manager. The lighting is soft and natural, emphasizing a welcoming vibe consistent with a premium hospitality brand. Neutral background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBMtYuayrkm3e-i_rX_8_entEk1HSHpZyJPVqC12lMz_GKyCkw3xEGVLtMSwOfVXkn26fbbrffFm_dCfER2hUZlo5Rkesb0GkDt2OMLbzb7IrPHFPXMhndkddcb80xmWhl00fJ9aA5JDj2cSDJZ9vN9AGFCxeqaVkL3tDPV1VVZ7a24-ILea0D26hWK6XGCV-qad7rCs1SYbisk3JaRLi5msHkU3lBl4i9Pu3qmeOlEIshJir_osW7Esg"/>
+</div>
+</div>
+</header>
+<!-- Page Content Canvas -->
+<div class="px-page-margin-desktop py-8 flex flex-col gap-8 max-w-5xl mx-auto w-full z-10 relative">
+<!-- Page Header -->
+<div class="flex flex-col gap-1 mb-2">
+<h1 class="font-stat-display text-stat-display text-primary">Daily Revenue</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Track and log incoming payments across all channels.</p>
+</div>
+<!-- Top Card: Add Revenue -->
+<section class="bg-glass-fill backdrop-blur-2xl border border-glass-border rounded-xl shadow-sm p-8 flex flex-col gap-6 relative overflow-hidden group hover:shadow-md transition-shadow duration-300">
+<!-- Subtle decorative background gradient to enhance glass effect -->
+<div class="absolute top-0 right-0 w-64 h-64 bg-primary-fixed opacity-20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none group-hover:opacity-30 transition-opacity"></div>
+<div class="flex items-center gap-2 border-b border-glass-border pb-4">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">add_circle</span>
+<h2 class="font-headline-lg text-headline-lg text-primary">Add revenue</h2>
+</div>
+<form class="flex flex-col gap-6 relative z-10">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- Date Field -->
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-label-caps text-on-surface-variant" for="date">Date</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none">calendar_month</span>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-10 pr-4 py-2.5 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" id="date" name="date" type="date"/>
+</div>
+</div>
+<!-- Source Dropdown -->
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-label-caps text-on-surface-variant" for="source">Source</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none">account_balance_wallet</span>
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-10 pr-10 py-2.5 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all appearance-none cursor-pointer" id="source" name="source">
+<option disabled="" selected="" value="">Select category</option>
+<option value="fees">Accommodation Fees</option>
+<option value="mess">Mess &amp; Dining</option>
+<option value="other">Other Services</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none">expand_more</span>
+</div>
+</div>
+<!-- Amount Field -->
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-label-caps text-on-surface-variant" for="amount">Amount</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-headline-md text-headline-md pointer-events-none">$</span>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-8 pr-4 py-2.5 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" id="amount" name="amount" placeholder="0.00" step="0.01" type="number"/>
+</div>
+</div>
+</div>
+<!-- Note Textarea -->
+<div class="flex flex-col gap-2 w-full">
+<label class="font-label-caps text-label-caps text-on-surface-variant" for="note">Note (Optional)</label>
+<textarea class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-4 py-3 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all resize-none" id="note" name="note" placeholder="Brief description or reference number..." rows="2"></textarea>
+</div>
+<!-- Submit Action -->
+<div class="flex justify-end pt-2 border-t border-glass-border">
+<button class="bg-primary hover:bg-on-primary-fixed-variant text-on-primary font-headline-md text-headline-md rounded-lg px-8 py-3 shadow-sm active:scale-95 transition-all flex items-center gap-2" type="button">
+<span>Save revenue</span>
+<span class="material-symbols-outlined text-[18px]">check</span>
+</button>
+</div>
+</form>
+</section>
+<!-- Bottom Card: This Month Table -->
+<section class="bg-glass-fill backdrop-blur-2xl border border-glass-border rounded-xl shadow-sm flex flex-col overflow-hidden">
+<!-- Table Header Area -->
+<div class="px-8 py-6 border-b border-glass-border flex justify-between items-center bg-surface-container-lowest/30">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">calendar_view_month</span>
+<h3 class="font-headline-lg text-headline-lg text-primary">This month</h3>
+</div>
+<!-- Quick Summary Pill -->
+<div class="bg-secondary-fixed text-on-secondary-fixed-variant px-3 py-1 rounded-full font-label-caps text-label-caps flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-accent-teal inline-block"></span>
+                        12 Entries
+                    </div>
+</div>
+<!-- Table Content -->
+<div class="w-full overflow-x-auto">
+<table class="w-full text-left border-collapse min-w-[700px]">
+<thead>
+<tr class="border-b border-glass-border bg-surface-container-lowest/50">
+<th class="py-4 px-8 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider w-[15%]">Date</th>
+<th class="py-4 px-8 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider w-[25%]">Source</th>
+<th class="py-4 px-8 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider w-[40%]">Note</th>
+<th class="py-4 px-8 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider text-right w-[20%]">Amount</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-body-md text-on-surface divide-y divide-glass-border">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-lowest/40 transition-colors group">
+<td class="py-4 px-8 text-on-surface-variant group-hover:text-primary transition-colors">Oct 24, 2023</td>
+<td class="py-4 px-8">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-label-caps text-label-caps border border-primary-fixed-dim/30">
+<span class="material-symbols-outlined text-[14px]">bed</span>
+                                        Accommodation
+                                    </span>
+</td>
+<td class="py-4 px-8 text-on-surface-variant truncate max-w-[200px]">Room 302 - Q4 Advance</td>
+<td class="py-4 px-8 text-right font-headline-md text-headline-md text-accent-teal font-semibold">+$850.00</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-lowest/40 transition-colors group">
+<td class="py-4 px-8 text-on-surface-variant group-hover:text-primary transition-colors">Oct 23, 2023</td>
+<td class="py-4 px-8">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-label-caps text-label-caps border border-tertiary-fixed-dim/30">
+<span class="material-symbols-outlined text-[14px]">restaurant</span>
+                                        Mess &amp; Dining
+                                    </span>
+</td>
+<td class="py-4 px-8 text-on-surface-variant truncate max-w-[200px]">Monthly Meal Plan - 15 Students</td>
+<td class="py-4 px-8 text-right font-headline-md text-headline-md text-accent-teal font-semibold">+$1,200.00</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-lowest/40 transition-colors group">
+<td class="py-4 px-8 text-on-surface-variant group-hover:text-primary transition-colors">Oct 21, 2023</td>
+<td class="py-4 px-8">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-label-caps text-label-caps border border-primary-fixed-dim/30">
+<span class="material-symbols-outlined text-[14px]">bed</span>
+                                        Accommodation
+                                    </span>
+</td>
+<td class="py-4 px-8 text-on-surface-variant truncate max-w-[200px]">Room 105 - Late Fee Included</td>
+<td class="py-4 px-8 text-right font-headline-md text-headline-md text-accent-teal font-semibold">+$900.00</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container-lowest/40 transition-colors group">
+<td class="py-4 px-8 text-on-surface-variant group-hover:text-primary transition-colors">Oct 20, 2023</td>
+<td class="py-4 px-8">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-caps text-label-caps border border-outline-variant/30">
+<span class="material-symbols-outlined text-[14px]">local_laundry_service</span>
+                                        Other Services
+                                    </span>
+</td>
+<td class="py-4 px-8 text-on-surface-variant truncate max-w-[200px]">Laundry Tokens Bulk Purchase</td>
+<td class="py-4 px-8 text-right font-headline-md text-headline-md text-accent-teal font-semibold">+$150.00</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Table Footer (Totals & Export) -->
+<div class="px-8 py-6 bg-surface-container-lowest/60 border-t border-glass-border flex flex-col sm:flex-row justify-between items-center gap-4">
+<button class="bg-transparent border border-glass-border text-primary font-headline-md text-headline-md rounded-lg px-5 py-2.5 shadow-sm hover:bg-glass-fill transition-all flex items-center gap-2 active:scale-95 order-2 sm:order-1" type="button">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                        Export CSV
+                    </button>
+<div class="flex items-baseline gap-4 order-1 sm:order-2">
+<span class="font-headline-md text-headline-md text-on-surface-variant uppercase tracking-wider">Month Total</span>
+<span class="font-stat-display text-stat-display text-accent-teal">$3,100.00</span>
+</div>
+</div>
+</section>
+</div>
+</main>
+</body></html>

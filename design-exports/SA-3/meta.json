@@ -1,0 +1,16 @@
+{
+  "id": "SA-3",
+  "title": "Subscriptions Management",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "476b055bec7c4de3a26dfaaf98a1dfe9",
+  "stitchScreenName": "projects/15365392661227774313/screens/476b055bec7c4de3a26dfaaf98a1dfe9",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2048",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.jpg"
+  },
+  "htmlBytes": 22698,
+  "screenshotBytes": 22715
+}

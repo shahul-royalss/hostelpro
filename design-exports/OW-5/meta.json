@@ -1,0 +1,16 @@
+{
+  "id": "OW-5",
+  "title": "Students Directory",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "efb10a74ad27444e9b9557a2ef8a1cf0",
+  "stitchScreenName": "projects/15365392661227774313/screens/efb10a74ad27444e9b9557a2ef8a1cf0",
+  "deviceType": "DESKTOP",
+  "width": "3360",
+  "height": "2048",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 26417,
+  "screenshotBytes": 33937
+}

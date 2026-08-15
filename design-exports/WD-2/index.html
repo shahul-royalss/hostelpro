@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>LuxeHostel - New Student Registration</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary-container": "#1c2b45",
+                        "on-error-container": "#93000a",
+                        "surface-bright": "#fbf8fb",
+                        "on-secondary-fixed-variant": "#474742",
+                        "primary-fixed": "#d7e3ff",
+                        "surface-container-lowest": "#ffffff",
+                        "glass-fill": "rgba(255, 255, 255, 0.65)",
+                        "on-primary-fixed-variant": "#384762",
+                        "primary": "#06162f",
+                        "outline-variant": "#c5c6ce",
+                        "surface-container": "#efedf0",
+                        "on-tertiary-container": "#aa8e5f",
+                        "text-muted": "#6E7480",
+                        "on-tertiary-fixed": "#271900",
+                        "glass-border": "rgba(255, 255, 255, 0.50)",
+                        "surface-variant": "#e4e2e4",
+                        "tertiary-fixed-dim": "#e1c28f",
+                        "on-primary": "#ffffff",
+                        "text-charcoal": "#2A2E35",
+                        "on-primary-fixed": "#0b1b35",
+                        "outline": "#75777e",
+                        "on-primary-container": "#8492b2",
+                        "secondary": "#5f5e59",
+                        "secondary-container": "#e5e2db",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-container": "#65645f",
+                        "on-secondary-fixed": "#1c1c18",
+                        "surface-dim": "#dbd9dc",
+                        "tertiary-container": "#3a2803",
+                        "on-error": "#ffffff",
+                        "background-ivory": "#F6F4EF",
+                        "surface-container-highest": "#e4e2e4",
+                        "inverse-primary": "#b8c7e8",
+                        "secondary-fixed-dim": "#c9c6c0",
+                        "on-surface": "#1b1b1d",
+                        "inverse-on-surface": "#f2f0f3",
+                        "on-surface-variant": "#44474d",
+                        "surface": "#fbf8fb",
+                        "status-sage": "#8CA687",
+                        "surface-container-low": "#f5f3f5",
+                        "error-container": "#ffdad6",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed": "#ffdea9",
+                        "status-red": "#C4574E",
+                        "background": "#fbf8fb",
+                        "surface-container-high": "#eae7ea",
+                        "secondary-fixed": "#e5e2db",
+                        "primary-fixed-dim": "#b8c7e8",
+                        "tertiary": "#211400",
+                        "surface-tint": "#505f7b",
+                        "accent-teal": "#3E7C74",
+                        "status-sand": "#D8B98A",
+                        "inverse-surface": "#303032",
+                        "on-tertiary-fixed-variant": "#58431b",
+                        "on-background": "#1b1b1d",
+                        "error": "#ba1a1a"
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.25rem",
+                        lg: "0.5rem",
+                        xl: "0.75rem",
+                        "2xl": "1.25rem",
+                        full: "9999px"
+                    },
+                    spacing: {
+                        gutter: "16px",
+                        "page-margin-desktop": "24px",
+                        "sidebar-width": "232px",
+                        "page-margin-mobile": "16px",
+                        "pb-safe": "env(safe-area-inset-bottom, 24px)"
+                    },
+                    fontFamily: {
+                        "stat-display-mobile": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "stat-display": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"]
+                    },
+                    fontSize: {
+                        "stat-display-mobile": ["28px", { lineHeight: "34px", fontWeight: "700" }],
+                        "label-caps": ["12px", { lineHeight: "16px", letterSpacing: "0.05em", fontWeight: "600" }],
+                        "headline-lg": ["24px", { lineHeight: "32px", fontWeight: "600" }],
+                        "stat-display": ["36px", { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "700" }],
+                        "body-md": ["14px", { lineHeight: "20px", fontWeight: "400" }],
+                        "headline-md": ["16px", { lineHeight: "24px", fontWeight: "500" }]
+                    }
+                }
+            }
+        };
+    </script>
+<style>
+        body {
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* Custom scrollbar to maintain clean look */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(6, 22, 47, 0.1);
+            border-radius: 4px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-ivory text-on-surface antialiased min-h-screen flex flex-col font-body-md overflow-x-hidden md:hidden">
+<!-- Top App Bar -->
+<header class="fixed top-0 w-full z-50 bg-glass-fill dark:bg-primary-container/80 backdrop-blur-xl border-b border-glass-border shadow-sm transition-all duration-300 ease-in-out">
+<div class="flex justify-between items-center px-page-margin-mobile h-16 w-full">
+<button aria-label="Close" class="flex items-center justify-center p-2 rounded-full hover:bg-surface-variant/50 text-on-surface-variant transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+<h1 class="font-headline-md text-headline-md text-primary font-bold">New Student</h1>
+<div class="w-10"></div> <!-- Spacer for balance -->
+</div>
+<!-- Progress Bar -->
+<div class="h-1 w-full bg-surface-variant/50 relative overflow-hidden">
+<div class="absolute top-0 left-0 h-full bg-primary transition-all duration-500 ease-out w-2/5"></div>
+</div>
+<!-- Stepper Text -->
+<div class="flex px-page-margin-mobile py-2 bg-surface-container-lowest/40 backdrop-blur-md overflow-x-auto gap-4 hide-scrollbar">
+<div class="flex items-center gap-1.5 whitespace-nowrap text-on-surface-variant opacity-50">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-label-caps text-label-caps">PERSONAL</span>
+</div>
+<div class="flex items-center gap-1.5 whitespace-nowrap text-primary">
+<div class="w-4 h-4 rounded-full bg-primary text-on-primary flex items-center justify-center text-[10px] font-bold">2</div>
+<span class="font-label-caps text-label-caps">GUARDIAN</span>
+</div>
+<div class="flex items-center gap-1.5 whitespace-nowrap text-on-surface-variant opacity-40">
+<div class="w-4 h-4 rounded-full border border-on-surface-variant flex items-center justify-center text-[10px]">3</div>
+<span class="font-label-caps text-label-caps">ID PROOF</span>
+</div>
+<div class="flex items-center gap-1.5 whitespace-nowrap text-on-surface-variant opacity-40">
+<div class="w-4 h-4 rounded-full border border-on-surface-variant flex items-center justify-center text-[10px]">4</div>
+<span class="font-label-caps text-label-caps">ROOM &amp; FEE</span>
+</div>
+<div class="flex items-center gap-1.5 whitespace-nowrap text-on-surface-variant opacity-40">
+<div class="w-4 h-4 rounded-full border border-on-surface-variant flex items-center justify-center text-[10px]">5</div>
+<span class="font-label-caps text-label-caps">REVIEW</span>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-grow pt-[120px] pb-32 px-page-margin-mobile flex flex-col gap-6 relative z-10">
+<!-- Background Decor (Soft blob) -->
+<div class="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[300px] bg-primary/5 rounded-full blur-3xl -z-10 pointer-events-none"></div>
+<div class="flex flex-col gap-2 mb-2">
+<h2 class="font-stat-display-mobile text-stat-display-mobile text-primary">Guardian Details</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Emergency contact and permanent address information.</p>
+</div>
+<!-- Glass Form Card -->
+<form class="bg-glass-fill backdrop-blur-[20px] border border-glass-border rounded-[20px] p-5 shadow-[0_4px_24px_rgba(0,0,0,0.02)] flex flex-col gap-6">
+<!-- Input Group: Guardian Name -->
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-label-caps text-on-surface-variant pl-1" for="guardianName">Guardian Name</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-3.5 text-on-surface-variant/60">person</span>
+<input class="w-full bg-background-ivory/50 border border-outline-variant/40 rounded-xl py-3 pl-11 pr-4 font-body-md text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all bg-blend-overlay" id="guardianName" placeholder="Full Name" type="text"/>
+</div>
+</div>
+<!-- Input Group: Guardian Phone -->
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-label-caps text-on-surface-variant pl-1" for="guardianPhone">Guardian Phone</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-3.5 text-on-surface-variant/60">phone_iphone</span>
+<input class="w-full bg-background-ivory/50 border border-outline-variant/40 rounded-xl py-3 pl-11 pr-4 font-body-md text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all bg-blend-overlay" id="guardianPhone" placeholder="+1 (555) 000-0000" type="tel"/>
+</div>
+</div>
+<!-- Divider -->
+<hr class="border-t border-glass-border my-2"/>
+<!-- Input Group: Permanent Address -->
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-label-caps text-on-surface-variant pl-1" for="permanentAddress">Permanent Address</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3.5 top-3.5 text-on-surface-variant/60">home_pin</span>
+<textarea class="w-full bg-background-ivory/50 border border-outline-variant/40 rounded-xl py-3 pl-11 pr-4 font-body-md text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all resize-none bg-blend-overlay" id="permanentAddress" placeholder="Street address, City, State, Zip" rows="3"></textarea>
+</div>
+</div>
+<!-- Relationship Dropdown (Bonus detail for realism) -->
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-label-caps text-on-surface-variant pl-1" for="relationship">Relationship</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-3.5 text-on-surface-variant/60">family_restroom</span>
+<select class="w-full bg-background-ivory/50 border border-outline-variant/40 rounded-xl py-3 pl-11 pr-10 font-body-md text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all appearance-none" id="relationship">
+<option disabled="" selected="" value="">Select relationship</option>
+<option value="parent">Parent</option>
+<option value="sibling">Sibling</option>
+<option value="relative">Other Relative</option>
+<option value="guardian">Legal Guardian</option>
+</select>
+<span class="material-symbols-outlined absolute right-3.5 text-on-surface-variant/60 pointer-events-none">expand_more</span>
+</div>
+</div>
+</form>
+</main>
+<!-- Sticky Bottom Bar -->
+<div class="fixed bottom-0 w-full z-50 bg-glass-fill backdrop-blur-2xl border-t border-glass-border pb-safe">
+<div class="flex gap-4 p-page-margin-mobile">
+<button class="flex-shrink-0 flex items-center justify-center px-6 py-3.5 rounded-xl border border-outline-variant/30 text-on-surface font-headline-md text-headline-md bg-white/40 hover:bg-white/60 transition-colors active:scale-95">
+                Back
+            </button>
+<button class="flex-grow flex items-center justify-center px-6 py-3.5 rounded-xl bg-primary text-on-primary font-headline-md text-headline-md font-semibold hover:bg-primary/90 transition-colors active:scale-95 shadow-md shadow-primary/20">
+                Continue
+            </button>
+</div>
+</div>
+</body></html>

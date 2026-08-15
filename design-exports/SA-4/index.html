@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SA-4 · Hostel Detail</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container": "#efedf0",
+                        "secondary-fixed-dim": "#c9c6c0",
+                        "on-error": "#ffffff",
+                        "surface-bright": "#fbf8fb",
+                        "on-background": "#1b1b1d",
+                        "outline": "#75777e",
+                        "on-secondary-fixed": "#1c1c18",
+                        "on-tertiary": "#ffffff",
+                        "surface": "#fbf8fb",
+                        "inverse-primary": "#b8c7e8",
+                        "inverse-on-surface": "#f2f0f3",
+                        "on-tertiary-fixed-variant": "#58431b",
+                        "on-secondary-container": "#65645f",
+                        "background-ivory": "#F6F4EF",
+                        "on-primary-fixed": "#0b1b35",
+                        "primary-container": "#1c2b45",
+                        "on-primary": "#ffffff",
+                        "secondary-container": "#e5e2db",
+                        "error": "#ba1a1a",
+                        "outline-variant": "#c5c6ce",
+                        "surface-container-high": "#eae7ea",
+                        "glass-fill": "rgba(255, 255, 255, 0.65)",
+                        "glass-border": "rgba(255, 255, 255, 0.50)",
+                        "surface-tint": "#505f7b",
+                        "on-secondary-fixed-variant": "#474742",
+                        "secondary": "#5f5e59",
+                        "surface-container-highest": "#e4e2e4",
+                        "text-muted": "#6E7480",
+                        "tertiary-fixed": "#ffdea9",
+                        "secondary-fixed": "#e5e2db",
+                        "surface-variant": "#e4e2e4",
+                        "background": "#fbf8fb",
+                        "status-sage": "#8CA687",
+                        "tertiary-fixed-dim": "#e1c28f",
+                        "on-tertiary-fixed": "#271900",
+                        "status-red": "#C4574E",
+                        "surface-container-low": "#f5f3f5",
+                        "on-surface-variant": "#44474d",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed": "#d7e3ff",
+                        "error-container": "#ffdad6",
+                        "text-charcoal": "#2A2E35",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed-dim": "#b8c7e8",
+                        "inverse-surface": "#303032",
+                        "accent-teal": "#3E7C74",
+                        "on-primary-container": "#8492b2",
+                        "on-tertiary-container": "#aa8e5f",
+                        "primary": "#06162f",
+                        "on-surface": "#1b1b1d",
+                        "tertiary": "#211400",
+                        "status-sand": "#D8B98A",
+                        "on-primary-fixed-variant": "#384762",
+                        "on-error-container": "#93000a",
+                        "tertiary-container": "#3a2803",
+                        "surface-dim": "#dbd9dc"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sidebar-width": "232px",
+                        "page-margin-mobile": "16px",
+                        "page-margin-desktop": "24px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "stat-display": ["Inter"],
+                        "stat-display-mobile": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-md": ["16px", { "lineHeight": "24px", "fontWeight": "500" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "stat-display": ["36px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "stat-display-mobile": ["28px", { "lineHeight": "34px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: theme('colors.background-ivory'); }
+        .glass-card {
+            background-color: theme('colors.glass-fill');
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid theme('colors.glass-border');
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.04);
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body class="font-sans text-text-charcoal antialiased flex h-screen overflow-hidden">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col fixed left-0 top-0 h-screen w-sidebar-width border-r border-glass-border bg-glass-fill backdrop-blur-xl p-page-margin-desktop gap-y-4 shadow-sm z-50">
+<div class="mb-8">
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary">HostelPro</h1>
+<p class="font-label-caps text-label-caps text-secondary mt-1">Management Suite</p>
+</div>
+<div class="flex flex-col gap-y-2 flex-grow">
+<a class="flex items-center gap-x-3 px-4 py-3 rounded-lg text-secondary hover:text-primary hover:bg-surface-container-high transition-colors duration-200 font-medium font-body-md text-body-md active:scale-95" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-x-3 px-4 py-3 rounded-lg bg-primary text-on-primary font-medium font-body-md text-body-md active:scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">domain</span>
+                Properties
+            </a>
+<a class="flex items-center gap-x-3 px-4 py-3 rounded-lg text-secondary hover:text-primary hover:bg-surface-container-high transition-colors duration-200 font-medium font-body-md text-body-md active:scale-95" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">calendar_month</span>
+                Bookings
+            </a>
+<a class="flex items-center gap-x-3 px-4 py-3 rounded-lg text-secondary hover:text-primary hover:bg-surface-container-high transition-colors duration-200 font-medium font-body-md text-body-md active:scale-95" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">group</span>
+                Guests
+            </a>
+<a class="flex items-center gap-x-3 px-4 py-3 rounded-lg text-secondary hover:text-primary hover:bg-surface-container-high transition-colors duration-200 font-medium font-body-md text-body-md active:scale-95" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">badge</span>
+                Staff
+            </a>
+<a class="flex items-center gap-x-3 px-4 py-3 rounded-lg text-secondary hover:text-primary hover:bg-surface-container-high transition-colors duration-200 font-medium font-body-md text-body-md active:scale-95" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">insert_chart</span>
+                Analytics
+            </a>
+</div>
+<div class="mt-auto flex flex-col gap-y-2 pt-4 border-t border-glass-border">
+<a class="flex items-center gap-x-3 px-4 py-3 rounded-lg text-secondary hover:text-primary hover:bg-surface-container-high transition-colors duration-200 font-medium font-body-md text-body-md active:scale-95" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+                Settings
+            </a>
+<a class="flex items-center gap-x-3 px-4 py-3 rounded-lg text-secondary hover:text-primary hover:bg-surface-container-high transition-colors duration-200 font-medium font-body-md text-body-md active:scale-95" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">help_outline</span>
+                Support
+            </a>
+</div>
+</nav>
+<!-- TopNavBar -->
+<header class="fixed top-0 right-0 w-full md:w-[calc(100%-232px)] h-16 z-40 bg-background-ivory/80 backdrop-blur-md border-b border-outline-variant/30 flex justify-between items-center px-page-margin-desktop md:px-page-margin-desktop px-page-margin-mobile">
+<div class="flex items-center gap-4">
+<button class="md:hidden text-primary">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<h2 class="font-headline-md text-headline-md font-bold text-primary">Hostel Detail</h2>
+</div>
+<div class="flex items-center gap-x-4">
+<button class="text-secondary-fixed-variant hover:text-primary transition-colors cursor-pointer active:opacity-70">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-secondary-fixed-variant hover:text-primary transition-colors cursor-pointer active:opacity-70">
+<span class="material-symbols-outlined">apps</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-status-sand text-on-tertiary-fixed flex items-center justify-center font-label-caps text-label-caps overflow-hidden">
+<img alt="Admin User Avatar" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbdiByG1vGfBmtQCEoHqkzn9Ig_kjR9tvIm1RpyhjGmfBR6izkze7BBsBEf0povyHBGD_RSyjoECZv0wKwrJh3lxSP2M_LFdKSsYzipXjEqQiz8-szkucGSydxsMzR82gkrRsllfjWSXTlUALSzX9lPGEaxQ2VSDOw96Vf3bmz6oeOOwgO_EMyuWKMH7KK_avoQlGtXl7RTxAvG2f01ltbt23X1C2ZayuqSsWRwJ4Vhfx1I_tB-R8SfA"/>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 mt-16 md:ml-[232px] overflow-y-auto p-page-margin-mobile md:p-page-margin-desktop h-[calc(100vh-64px)]">
+<div class="max-w-7xl mx-auto space-y-8">
+<!-- Header Card -->
+<div class="glass-card p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<h2 class="font-stat-display-mobile md:font-stat-display text-stat-display-mobile md:text-stat-display text-primary">Oasis Backpackers</h2>
+<span class="px-3 py-1 bg-accent-teal/15 text-accent-teal rounded-full font-label-caps text-label-caps">Active</span>
+</div>
+<div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 text-text-muted font-body-md text-body-md">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">person</span>
+                            Elena Rodriguez
+                        </div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">phone</span>
+                            +91 98765 43210
+                        </div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">event</span>
+                            Renews: Dec 31, 2024
+                        </div>
+</div>
+</div>
+<button class="bg-primary text-on-primary px-6 py-3 rounded-lg font-body-md text-body-md font-medium hover:bg-primary/90 transition-colors shrink-0">
+                    Renew subscription
+                </button>
+</div>
+<!-- Stats Row -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+<!-- Occupancy -->
+<div class="glass-card p-6 flex flex-col justify-between">
+<p class="font-label-caps text-label-caps text-text-muted mb-2 uppercase">Occupancy %</p>
+<div class="flex items-end justify-between">
+<h3 class="font-stat-display text-stat-display text-primary">92%</h3>
+<div class="flex items-center text-accent-teal font-body-md text-body-md mb-2">
+<span class="material-symbols-outlined text-[20px]">trending_up</span>
+<span class="ml-1">+4%</span>
+</div>
+</div>
+</div>
+<!-- Students -->
+<div class="glass-card p-6 flex flex-col justify-between">
+<p class="font-label-caps text-label-caps text-text-muted mb-2 uppercase">Active Students</p>
+<div class="flex items-end justify-between">
+<h3 class="font-stat-display text-stat-display text-primary">112</h3>
+<div class="flex items-center text-text-muted font-body-md text-body-md mb-2">
+<span>Total capacity: 120</span>
+</div>
+</div>
+</div>
+<!-- Complaints -->
+<div class="glass-card p-6 flex flex-col justify-between">
+<p class="font-label-caps text-label-caps text-text-muted mb-2 uppercase">Open Complaints</p>
+<div class="flex items-end justify-between">
+<h3 class="font-stat-display text-stat-display text-status-red">4</h3>
+<div class="flex items-center text-status-red font-body-md text-body-md mb-2">
+<span class="material-symbols-outlined text-[20px]">warning</span>
+<span class="ml-1">Action needed</span>
+</div>
+</div>
+</div>
+<!-- Revenue -->
+<div class="glass-card p-6 flex flex-col justify-between">
+<p class="font-label-caps text-label-caps text-text-muted mb-2 uppercase">This Month Revenue</p>
+<div class="flex items-end justify-between">
+<h3 class="font-headline-lg text-headline-lg font-bold text-primary">₹2,45,000</h3>
+<div class="flex items-center text-accent-teal font-body-md text-body-md mb-1">
+<span class="material-symbols-outlined text-[20px]">arrow_upward</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Charts Row -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-8">
+<!-- Bar Chart -->
+<div class="glass-card p-6">
+<h3 class="font-headline-md text-headline-md text-primary mb-6">Revenue vs Expenses</h3>
+<div class="h-64 w-full relative">
+<canvas id="revExpChart"></canvas>
+</div>
+</div>
+<!-- Line Chart -->
+<div class="glass-card p-6">
+<h3 class="font-headline-md text-headline-md text-primary mb-6">Complaints per week</h3>
+<div class="h-64 w-full relative">
+<canvas id="complaintsChart"></canvas>
+</div>
+</div>
+</div>
+</div>
+</main>
+<script>
+        // Chart Configuration
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        boxWidth: 8,
+                        font: { family: 'Inter', size: 12 }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    grid: { color: 'rgba(117, 119, 126, 0.1)', drawBorder: false },
+                    ticks: { font: { family: 'Inter', size: 12 }, color: '#6E7480' }
+                },
+                x: {
+                    grid: { display: false, drawBorder: false },
+                    ticks: { font: { family: 'Inter', size: 12 }, color: '#6E7480' }
+                }
+            }
+        };
+
+        // Revenue vs Expenses Chart
+        const ctxRevExp = document.getElementById('revExpChart').getContext('2d');
+        new Chart(ctxRevExp, {
+            type: 'bar',
+            data: {
+                labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+                datasets: [
+                    {
+                        label: 'Revenue',
+                        data: [65000, 59000, 80000, 81000],
+                        backgroundColor: '#3E7C74',
+                        borderRadius: 4,
+                        barPercentage: 0.6,
+                        categoryPercentage: 0.8
+                    },
+                    {
+                        label: 'Expenses',
+                        data: [28000, 48000, 40000, 19000],
+                        backgroundColor: '#C4574E',
+                        borderRadius: 4,
+                        barPercentage: 0.6,
+                        categoryPercentage: 0.8
+                    }
+                ]
+            },
+            options: commonOptions
+        });
+
+        // Complaints Line Chart
+        const ctxComplaints = document.getElementById('complaintsChart').getContext('2d');
+        new Chart(ctxComplaints, {
+            type: 'line',
+            data: {
+                labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+                datasets: [{
+                    label: 'Complaints',
+                    data: [12, 8, 15, 4],
+                    borderColor: '#1C2B45',
+                    backgroundColor: 'rgba(28, 43, 69, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: '#1C2B45',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4
+                }]
+            },
+            options: commonOptions
+        });
+    </script>
+</body></html>

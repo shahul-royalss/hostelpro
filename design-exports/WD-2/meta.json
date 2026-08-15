@@ -1,0 +1,16 @@
+{
+  "id": "WD-2",
+  "title": "Register Student (Form)",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "3f73e3869f0f477e876559dd45a2d58a",
+  "stitchScreenName": "projects/15365392661227774313/screens/3f73e3869f0f477e876559dd45a2d58a",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1768",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 13322,
+  "screenshotBytes": 36582
+}

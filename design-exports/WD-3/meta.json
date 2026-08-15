@@ -1,0 +1,16 @@
+{
+  "id": "WD-3",
+  "title": "Rooms & Beds List",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "7af553efeb9141aab4068c9a73b1e8d8",
+  "stitchScreenName": "projects/15365392661227774313/screens/7af553efeb9141aab4068c9a73b1e8d8",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "2192",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 22817,
+  "screenshotBytes": 27297
+}

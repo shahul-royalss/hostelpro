@@ -1,0 +1,16 @@
+{
+  "id": "OW-4",
+  "title": "Staff & Tasks",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "b02b6b8789dc4dd2b51cd019c519faa1",
+  "stitchScreenName": "projects/15365392661227774313/screens/b02b6b8789dc4dd2b51cd019c519faa1",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2048",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 19981,
+  "screenshotBytes": 47054
+}

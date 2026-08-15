@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>HostelHub - Student Home</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed-variant": "#474742",
+                        "status-sand": "#D8B98A",
+                        "on-tertiary-fixed": "#271900",
+                        "surface-container-highest": "#e4e2e4",
+                        "on-primary-fixed-variant": "#384762",
+                        "on-tertiary": "#ffffff",
+                        "inverse-primary": "#b8c7e8",
+                        "text-charcoal": "#2A2E35",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "primary-fixed-dim": "#b8c7e8",
+                        "primary-container": "#1c2b45",
+                        "background-ivory": "#F6F4EF",
+                        "outline-variant": "#c5c6ce",
+                        "on-error": "#ffffff",
+                        "inverse-on-surface": "#f2f0f3",
+                        "on-secondary-fixed": "#1c1c18",
+                        "primary-fixed": "#d7e3ff",
+                        "on-primary-container": "#8492b2",
+                        "glass-border": "rgba(255, 255, 255, 0.50)",
+                        "error": "#ba1a1a",
+                        "surface-variant": "#e4e2e4",
+                        "surface-tint": "#505f7b",
+                        "on-secondary": "#ffffff",
+                        "glass-fill": "rgba(255, 255, 255, 0.65)",
+                        "accent-teal": "#3E7C74",
+                        "status-sage": "#8CA687",
+                        "on-surface-variant": "#44474d",
+                        "tertiary-fixed": "#ffdea9",
+                        "on-background": "#1b1b1d",
+                        "secondary": "#5f5e59",
+                        "on-surface": "#1b1b1d",
+                        "on-secondary-container": "#65645f",
+                        "on-tertiary-container": "#aa8e5f",
+                        "secondary-fixed": "#e5e2db",
+                        "on-primary": "#ffffff",
+                        "inverse-surface": "#303032",
+                        "primary": "#06162f",
+                        "outline": "#75777e",
+                        "surface": "#fbf8fb",
+                        "on-primary-fixed": "#0b1b35",
+                        "tertiary-container": "#3a2803",
+                        "tertiary-fixed-dim": "#e1c28f",
+                        "tertiary": "#211400",
+                        "surface-container": "#efedf0",
+                        "surface-dim": "#dbd9dc",
+                        "surface-bright": "#fbf8fb",
+                        "text-muted": "#6E7480",
+                        "on-tertiary-fixed-variant": "#58431b",
+                        "secondary-container": "#e5e2db",
+                        "surface-container-high": "#eae7ea",
+                        "surface-container-low": "#f5f3f5",
+                        "secondary-fixed-dim": "#c9c6c0",
+                        "background": "#fbf8fb",
+                        "status-red": "#C4574E",
+                        "surface-container-lowest": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "sidebar-width": "232px",
+                        "page-margin-mobile": "16px",
+                        "page-margin-desktop": "24px"
+                    },
+                    "fontFamily": {
+                        "stat-display-mobile": ["Inter"],
+                        "stat-display": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "stat-display-mobile": ["28px", { "lineHeight": "34px", "fontWeight": "700" }],
+                        "stat-display": ["36px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["16px", { "lineHeight": "24px", "fontWeight": "500" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background-ivory');
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.50);
+            box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.04);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="flex flex-col min-h-screen text-on-surface pb-24">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-page-margin-mobile h-16 bg-glass-fill/65 dark:bg-primary/80 backdrop-blur-xl border-b border-glass-border dark:border-outline-variant/20 shadow-sm">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container overflow-hidden border border-glass-border">
+<img alt="Student Profile Photo" class="w-full h-full object-cover" data-alt="A close up portrait photo of a young female college student named Elena, smiling warmly in a well lit modern university campus setting. The lighting is soft and natural, emphasizing a bright, optimistic mood suitable for a premium light-mode UI profile avatar." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA9iIexl4YnuSq9aK3ok-OrLZSxllyqgr60cElb8QrQ020gSjWgUpUqxfG6RaBE8r9gRLWFIsCkZNIAlKrsIld53x81-wKZrS_4TcJ6SbIv3jH36rrHEFEq_5jEslDx8xj6gxZaUHlJlsBwiIArSOq5nXh0CWWtqlK4BJkx8RAvMGoGISLz24LWS4DmelhIzq2QYbCVXmpicvsElxqHHIPl04ckrbR8fuoqX4IlwdlCB6SxGsxl0xXHDg"/>
+</div>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-primary dark:text-primary-fixed tracking-tight">HostelHub</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:opacity-80 transition-opacity active:scale-95 transition-transform text-primary dark:text-primary-fixed">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow pt-20 px-page-margin-mobile flex flex-col gap-6">
+<!-- Welcome & Status Area -->
+<section class="flex flex-col gap-4 mt-2">
+<div>
+<h2 class="font-stat-display-mobile text-stat-display-mobile text-primary">Hi, Elena</h2>
+<p class="font-body-md text-body-md text-text-muted mt-1">Here's your hostel summary for today.</p>
+</div>
+<!-- Hero Room Card -->
+<div class="glass-card rounded-[20px] p-5 flex flex-col gap-4">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-full bg-primary/5 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-2xl">apartment</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-primary font-bold">Room 204</h3>
+<p class="font-body-md text-body-md text-text-muted">Bed 2 · Floor 2</p>
+</div>
+</div>
+</div>
+<div class="h-px w-full bg-glass-border my-1"></div>
+<div class="flex items-center justify-between">
+<span class="font-body-md text-body-md text-on-surface-variant">March Fee Status</span>
+<div class="px-3 py-1 bg-accent-teal/15 text-accent-teal font-label-caps text-label-caps rounded-full flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                        Paid
+                    </div>
+</div>
+</div>
+</section>
+<!-- Quick Actions Grid -->
+<section>
+<h3 class="font-headline-md text-headline-md text-primary mb-3 pl-1">Quick Actions</h3>
+<div class="grid grid-cols-2 gap-3">
+<button class="glass-card rounded-xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-white/40 active:scale-95 transition-all">
+<div class="w-10 h-10 rounded-full bg-status-sand/20 text-tertiary-container flex items-center justify-center">
+<span class="material-symbols-outlined">restaurant</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary text-sm">Mess Menu</span>
+</button>
+<button class="glass-card rounded-xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-white/40 active:scale-95 transition-all">
+<div class="w-10 h-10 rounded-full bg-status-red/10 text-status-red flex items-center justify-center">
+<span class="material-symbols-outlined">report_problem</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary text-sm">Raise Complaint</span>
+</button>
+<button class="glass-card rounded-xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-white/40 active:scale-95 transition-all">
+<div class="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined">flight_takeoff</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary text-sm">Apply Leave</span>
+</button>
+<button class="glass-card rounded-xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-white/40 active:scale-95 transition-all">
+<div class="w-10 h-10 rounded-full bg-status-sage/20 text-accent-teal flex items-center justify-center">
+<span class="material-symbols-outlined">bed</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary text-sm">My Room</span>
+</button>
+</div>
+</section>
+<!-- Updates Card -->
+<section>
+<div class="flex items-center justify-between mb-3 pl-1">
+<h3 class="font-headline-md text-headline-md text-primary">Updates from hostel</h3>
+<button class="text-text-muted font-body-md text-body-md text-sm hover:text-primary transition-colors">View all</button>
+</div>
+<div class="glass-card rounded-[20px] p-4 flex flex-col gap-4">
+<div class="flex gap-4 items-start">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant flex-shrink-0 mt-1">
+<span class="material-symbols-outlined text-[20px]">wifi_tethering</span>
+</div>
+<div class="flex-grow pb-4 border-b border-glass-border">
+<h4 class="font-headline-md text-headline-md text-primary text-sm">Wi-Fi Maintenance Tomorrow</h4>
+<p class="font-body-md text-body-md text-text-muted text-xs mt-1">Network will be down from 2 AM to 4 AM for scheduled upgrades.</p>
+<span class="text-[10px] text-text-muted/70 mt-2 block uppercase tracking-wider">2 hours ago</span>
+</div>
+</div>
+<div class="flex gap-4 items-start">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant flex-shrink-0 mt-1">
+<span class="material-symbols-outlined text-[20px]">local_laundry_service</span>
+</div>
+<div class="flex-grow pb-1">
+<h4 class="font-headline-md text-headline-md text-primary text-sm">Laundry Room A Closed</h4>
+<p class="font-body-md text-body-md text-text-muted text-xs mt-1">Washing machines in Block A are under repair. Please use Block B.</p>
+<span class="text-[10px] text-text-muted/70 mt-2 block uppercase tracking-wider">Yesterday</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-4 pt-2 bg-glass-fill/65 dark:bg-primary/90 backdrop-blur-xl rounded-t-xl border-t border-glass-border dark:border-outline-variant/10 shadow-lg md:hidden">
+<!-- Active Tab: Home -->
+<button class="flex flex-col items-center justify-center bg-primary dark:bg-primary-fixed text-on-primary dark:text-on-primary-fixed rounded-xl px-3 py-1.5 active:scale-90 duration-200 transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-label-caps text-label-caps text-on-primary dark:text-on-primary-fixed mt-1">Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant/70 px-3 py-1.5 hover:bg-on-surface-variant/5 dark:hover:bg-primary-fixed/10 rounded-xl active:scale-90 duration-200 transition-all">
+<span class="material-symbols-outlined">restaurant_menu</span>
+<span class="font-label-caps text-label-caps text-primary dark:text-primary-fixed mt-1">Menu</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant/70 px-3 py-1.5 hover:bg-on-surface-variant/5 dark:hover:bg-primary-fixed/10 rounded-xl active:scale-90 duration-200 transition-all">
+<span class="material-symbols-outlined">assignment_late</span>
+<span class="font-label-caps text-label-caps text-primary dark:text-primary-fixed mt-1">Reports</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant/70 px-3 py-1.5 hover:bg-on-surface-variant/5 dark:hover:bg-primary-fixed/10 rounded-xl active:scale-90 duration-200 transition-all">
+<span class="material-symbols-outlined">group</span>
+<span class="font-label-caps text-label-caps text-primary dark:text-primary-fixed mt-1">Room</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant/70 px-3 py-1.5 hover:bg-on-surface-variant/5 dark:hover:bg-primary-fixed/10 rounded-xl active:scale-90 duration-200 transition-all">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-caps text-label-caps text-primary dark:text-primary-fixed mt-1">Profile</span>
+</button>
+</nav>
+</body></html>

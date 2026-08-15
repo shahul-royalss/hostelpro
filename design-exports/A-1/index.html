@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Stitch UI - Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                            "secondary-fixed": "#e5e2db",
+                            "on-primary-fixed-variant": "#384762",
+                            "on-primary-fixed": "#0b1b35",
+                            "surface-container": "#efedf0",
+                            "status-red": "#C4574E",
+                            "outline-variant": "#c5c6ce",
+                            "text-charcoal": "#2A2E35",
+                            "on-tertiary-container": "#aa8e5f",
+                            "surface-bright": "#fbf8fb",
+                            "on-tertiary-fixed": "#271900",
+                            "on-tertiary": "#ffffff",
+                            "surface": "#fbf8fb",
+                            "secondary-fixed-dim": "#c9c6c0",
+                            "text-muted": "#6E7480",
+                            "glass-fill": "rgba(255, 255, 255, 0.65)",
+                            "surface-dim": "#dbd9dc",
+                            "accent-teal": "#3E7C74",
+                            "surface-container-lowest": "#ffffff",
+                            "primary": "#06162f",
+                            "inverse-on-surface": "#f2f0f3",
+                            "secondary": "#5f5e59",
+                            "on-secondary-fixed-variant": "#474742",
+                            "on-secondary-container": "#65645f",
+                            "surface-container-highest": "#e4e2e4",
+                            "secondary-container": "#e5e2db",
+                            "tertiary-container": "#3a2803",
+                            "error": "#ba1a1a",
+                            "on-tertiary-fixed-variant": "#58431b",
+                            "on-error": "#ffffff",
+                            "on-primary": "#ffffff",
+                            "status-sage": "#8CA687",
+                            "outline": "#75777e",
+                            "tertiary-fixed-dim": "#e1c28f",
+                            "on-secondary": "#ffffff",
+                            "primary-fixed": "#d7e3ff",
+                            "on-error-container": "#93000a",
+                            "surface-tint": "#505f7b",
+                            "primary-container": "#1c2b45",
+                            "on-background": "#1b1b1d",
+                            "surface-variant": "#e4e2e4",
+                            "tertiary": "#211400",
+                            "primary-fixed-dim": "#b8c7e8",
+                            "glass-border": "rgba(255, 255, 255, 0.50)",
+                            "inverse-surface": "#303032",
+                            "surface-container-high": "#eae7ea",
+                            "tertiary-fixed": "#ffdea9",
+                            "error-container": "#ffdad6",
+                            "inverse-primary": "#b8c7e8",
+                            "status-sand": "#D8B98A",
+                            "background-ivory": "#F6F4EF",
+                            "surface-container-low": "#f5f3f5",
+                            "background": "#fbf8fb",
+                            "on-secondary-fixed": "#1c1c18",
+                            "on-surface": "#1b1b1d",
+                            "on-surface-variant": "#44474d",
+                            "on-primary-container": "#8492b2"
+                    },
+                    "borderRadius": {
+                            "DEFAULT": "0.25rem",
+                            "lg": "0.5rem",
+                            "xl": "0.75rem",
+                            "full": "9999px"
+                    },
+                    "spacing": {
+                            "sidebar-width": "232px",
+                            "page-margin-mobile": "16px",
+                            "gutter": "16px",
+                            "page-margin-desktop": "24px"
+                    },
+                    "fontFamily": {
+                            "headline-md": [
+                                    "Inter"
+                            ],
+                            "body-md": [
+                                    "Inter"
+                            ],
+                            "stat-display-mobile": [
+                                    "Inter"
+                            ],
+                            "stat-display": [
+                                    "Inter"
+                            ],
+                            "headline-lg": [
+                                    "Inter"
+                            ],
+                            "label-caps": [
+                                    "Inter"
+                            ]
+                    },
+                    "fontSize": {
+                            "headline-md": [
+                                    "16px",
+                                    {
+                                            "lineHeight": "24px",
+                                            "fontWeight": "500"
+                                    }
+                            ],
+                            "body-md": [
+                                    "14px",
+                                    {
+                                            "lineHeight": "20px",
+                                            "fontWeight": "400"
+                                    }
+                            ],
+                            "stat-display-mobile": [
+                                    "28px",
+                                    {
+                                            "lineHeight": "34px",
+                                            "fontWeight": "700"
+                                    }
+                            ],
+                            "stat-display": [
+                                    "36px",
+                                    {
+                                            "lineHeight": "1.2",
+                                            "letterSpacing": "-0.02em",
+                                            "fontWeight": "700"
+                                    }
+                            ],
+                            "headline-lg": [
+                                    "24px",
+                                    {
+                                            "lineHeight": "32px",
+                                            "fontWeight": "600"
+                                    }
+                            ],
+                            "label-caps": [
+                                    "12px",
+                                    {
+                                            "lineHeight": "16px",
+                                            "letterSpacing": "0.05em",
+                                            "fontWeight": "600"
+                                    }
+                            ]
+                    }
+            },
+                },
+        }
+    </script>
+<style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.50);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.04);
+        }
+        
+        .ambient-glow {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(28,43,69,0.1) 0%, rgba(62,124,116,0.1) 50%, rgba(246,244,239,0) 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 0;
+            pointer-events: none;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body class="bg-background-ivory min-h-screen flex flex-col items-center justify-center relative overflow-hidden font-body-md text-body-md text-text-charcoal antialiased">
+<!-- Ambient Glow Background -->
+<div class="ambient-glow"></div>
+<main class="w-full max-w-md px-page-margin-mobile md:px-page-margin-desktop z-10 relative">
+<!-- Frosted Glass Login Card -->
+<div class="glass-card rounded-[20px] p-8 md:p-10 w-full flex flex-col gap-8">
+<!-- Header -->
+<div class="flex flex-col items-center text-center gap-2">
+<div class="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center mb-2 shadow-sm">
+<span class="material-symbols-outlined text-on-primary text-2xl" style="font-variation-settings: 'FILL' 1;">dataset</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-primary tracking-tight">Stitch UI</h1>
+<p class="text-text-muted">Sign in to your hostel workspace</p>
+</div>
+<!-- Form -->
+<form class="flex flex-col gap-5">
+<!-- Email Field -->
+<div class="flex flex-col gap-1.5">
+<label class="font-label-caps text-label-caps text-text-charcoal" for="email">Email or Phone</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-lg pointer-events-none">mail</span>
+<input class="w-full bg-background-ivory border border-outline-variant rounded-[12px] py-2.5 pl-10 pr-4 text-text-charcoal focus:border-primary focus:ring-1 focus:ring-primary transition-colors outline-none placeholder:text-text-muted/50" id="email" placeholder="workspace@stitch.ui" type="text"/>
+</div>
+</div>
+<!-- Password Field -->
+<div class="flex flex-col gap-1.5">
+<div class="flex justify-between items-center">
+<label class="font-label-caps text-label-caps text-text-charcoal" for="password">Password</label>
+<a class="font-label-caps text-label-caps text-accent-teal hover:text-primary transition-colors" href="#">Forgot password?</a>
+</div>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-lg pointer-events-none">lock</span>
+<input class="w-full bg-background-ivory border border-outline-variant rounded-[12px] py-2.5 pl-10 pr-10 text-text-charcoal focus:border-primary focus:ring-1 focus:ring-primary transition-colors outline-none placeholder:text-text-muted/50" id="password" placeholder="••••••••" type="password"/>
+<button class="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-charcoal transition-colors focus:outline-none flex items-center justify-center" type="button">
+<span class="material-symbols-outlined text-lg">visibility</span>
+</button>
+</div>
+</div>
+<!-- Actions -->
+<div class="mt-2">
+<button class="w-full bg-primary-container text-on-primary font-headline-md text-headline-md py-3 rounded-[12px] hover:opacity-90 transition-opacity active:scale-[0.98] shadow-sm flex items-center justify-center gap-2" type="submit">
+                        Sign in
+                        <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+</form>
+</div>
+<!-- Footer Text -->
+<div class="mt-8 text-center w-full">
+<p class="font-label-caps text-label-caps text-text-muted">© 2024 Stitch UI. All rights reserved.</p>
+</div>
+</main>
+<script>
+        // Simple password visibility toggle
+        document.querySelector('button[type="button"]').addEventListener('click', function() {
+            const passwordInput = document.getElementById('password');
+            const icon = this.querySelector('.material-symbols-outlined');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                icon.textContent = 'visibility_off';
+            } else {
+                passwordInput.type = 'password';
+                icon.textContent = 'visibility';
+            }
+        });
+    </script>
+</body></html>

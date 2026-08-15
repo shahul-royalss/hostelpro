@@ -1,0 +1,16 @@
+{
+  "id": "MG-1",
+  "title": "Manager Dashboard",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "a8fda86df9c64da286d524b11757256b",
+  "stitchScreenName": "projects/15365392661227774313/screens/a8fda86df9c64da286d524b11757256b",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2048",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 21829,
+  "screenshotBytes": 52003
+}

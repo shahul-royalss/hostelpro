@@ -1,0 +1,16 @@
+{
+  "id": "SA-2",
+  "title": "Create Owner & Hostel Wizard",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "675ece7cbaf4486ebfafd197fcb04c28",
+  "stitchScreenName": "projects/15365392661227774313/screens/675ece7cbaf4486ebfafd197fcb04c28",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2048",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.jpg"
+  },
+  "htmlBytes": 21126,
+  "screenshotBytes": 31120
+}

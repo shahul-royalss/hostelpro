@@ -1,0 +1,16 @@
+{
+  "id": "MG-2",
+  "title": "Daily Expenses",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "292c0533e606441782d8717833c9e94d",
+  "stitchScreenName": "projects/15365392661227774313/screens/292c0533e606441782d8717833c9e94d",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2250",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 20190,
+  "screenshotBytes": 49043
+}

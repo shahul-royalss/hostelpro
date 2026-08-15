@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  HostelPro — "liquid glass" design language (DESIGN.md §1)
+  Frosted translucent white cards floating over a warm ivory background.
+*/
+
+@layer base {
+  :root {
+    --radius: 12px;
+    color-scheme: light;
+  }
+
+  * {
+    @apply border-line;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-ivory text-charcoal font-sans text-body;
+    background-image:
+      radial-gradient(at 0% 0%, rgba(255, 255, 255, 0.45) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(255, 255, 255, 0.4) 0px, transparent 50%);
+    background-attachment: fixed;
+    min-height: 100dvh;
+  }
+
+  h1, h2, h3, h4 {
+    @apply text-navy;
+    letter-spacing: -0.01em;
+  }
+
+  input, textarea, select {
+    font-size: 14px;
+  }
+
+  /* Prevent iOS zoom on focus for mobile forms */
+  @media (max-width: 767px) {
+    input, textarea, select {
+      font-size: 16px;
+    }
+  }
+}
+
+@layer components {
+  /* Frosted glass card — the core surface */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.65);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow: 0 8px 32px 0 rgba(6, 22, 47, 0.04);
+    @apply rounded-card;
+  }
+
+  .glass-card-strong {
+    background: rgba(255, 255, 255, 0.85);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px 0 rgba(6, 22, 47, 0.05);
+    @apply rounded-card;
+  }
+
+  /* Frosted bar for nav / sidebars */
+  .glass-bar {
+    background: rgba(255, 255, 255, 0.65);
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
+    border-color: rgba(255, 255, 255, 0.6);
+  }
+
+  /* Uppercase caption label */
+  .label-caps {
+    @apply text-caption uppercase tracking-[0.05em] text-muted;
+  }
+
+  /* Ambient glow behind auth cards */
+  .ambient-glow {
+    position: absolute;
+    width: 520px;
+    height: 520px;
+    background: radial-gradient(circle, rgba(28, 43, 69, 0.10) 0%, rgba(62, 124, 116, 0.10) 50%, rgba(246, 244, 239, 0) 70%);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 0;
+    pointer-events: none;
+    border-radius: 50%;
+    filter: blur(8px);
+  }
+
+  /* Bottom safe-area padding for mobile bottom navs */
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+  }
+
+  /* Thin scrollbar for horizontal chip rows */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* Recharts polish: no heavy gridlines */
+  .recharts-cartesian-grid-horizontal line,
+  .recharts-cartesian-grid-vertical line {
+    stroke: #E5E1D8;
+    stroke-dasharray: 3 3;
+  }
+  .recharts-default-tooltip {
+    border-radius: 12px !important;
+    border: 1px solid rgba(255,255,255,0.7) !important;
+    background: rgba(255,255,255,0.9) !important;
+    box-shadow: 0 8px 32px rgba(6,22,47,0.08) !important;
+    font-size: 12px;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}

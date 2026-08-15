@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>LuxeHostel - Fees</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-container": "#1c2b45",
+                        "on-error-container": "#93000a",
+                        "surface-bright": "#fbf8fb",
+                        "on-secondary-fixed-variant": "#474742",
+                        "primary-fixed": "#d7e3ff",
+                        "surface-container-lowest": "#ffffff",
+                        "glass-fill": "rgba(255, 255, 255, 0.65)",
+                        "on-primary-fixed-variant": "#384762",
+                        "primary": "#06162f",
+                        "outline-variant": "#c5c6ce",
+                        "surface-container": "#efedf0",
+                        "on-tertiary-container": "#aa8e5f",
+                        "text-muted": "#6E7480",
+                        "on-tertiary-fixed": "#271900",
+                        "glass-border": "rgba(255, 255, 255, 0.50)",
+                        "surface-variant": "#e4e2e4",
+                        "tertiary-fixed-dim": "#e1c28f",
+                        "on-primary": "#ffffff",
+                        "text-charcoal": "#2A2E35",
+                        "on-primary-fixed": "#0b1b35",
+                        "outline": "#75777e",
+                        "on-primary-container": "#8492b2",
+                        "secondary": "#5f5e59",
+                        "secondary-container": "#e5e2db",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-container": "#65645f",
+                        "on-secondary-fixed": "#1c1c18",
+                        "surface-dim": "#dbd9dc",
+                        "tertiary-container": "#3a2803",
+                        "on-error": "#ffffff",
+                        "background-ivory": "#F6F4EF",
+                        "surface-container-highest": "#e4e2e4",
+                        "inverse-primary": "#b8c7e8",
+                        "secondary-fixed-dim": "#c9c6c0",
+                        "on-surface": "#1b1b1d",
+                        "inverse-on-surface": "#f2f0f3",
+                        "on-surface-variant": "#44474d",
+                        "surface": "#fbf8fb",
+                        "status-sage": "#8CA687",
+                        "surface-container-low": "#f5f3f5",
+                        "error-container": "#ffdad6",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed": "#ffdea9",
+                        "status-red": "#C4574E",
+                        "background": "#fbf8fb",
+                        "surface-container-high": "#eae7ea",
+                        "secondary-fixed": "#e5e2db",
+                        "primary-fixed-dim": "#b8c7e8",
+                        "tertiary": "#211400",
+                        "surface-tint": "#505f7b",
+                        "accent-teal": "#3E7C74",
+                        "status-sand": "#D8B98A",
+                        "inverse-surface": "#303032",
+                        "on-tertiary-fixed-variant": "#58431b",
+                        "on-background": "#1b1b1d",
+                        "error": "#ba1a1a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "page-margin-desktop": "24px",
+                        "sidebar-width": "232px",
+                        "page-margin-mobile": "16px"
+                    },
+                    "fontFamily": {
+                        "stat-display-mobile": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "stat-display": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "stat-display-mobile": ["28px", { "lineHeight": "34px", "fontWeight": "700" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "stat-display": ["36px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["16px", { "lineHeight": "24px", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background-ivory');
+            -webkit-tap-highlight-color: transparent;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .pb-safe {
+            padding-bottom: env(safe-area-inset-bottom, 20px);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-md text-on-surface antialiased flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 backdrop-blur-xl border-b border-glass-border dark:border-outline-variant/10 shadow-sm bg-glass-fill dark:bg-primary-container/80 flex justify-between items-center px-page-margin-mobile h-16 transition-all duration-300 ease-in-out md:hidden">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container overflow-hidden border border-glass-border">
+<img class="w-full h-full object-cover" data-alt="A close up portrait of a professional hostel warden in a bright, modern setting. Soft natural light highlights their face. Warm liquid glass aesthetic with neutral tones. High quality corporate photography." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBaxf8FrMX65jt5bijvNntafZ3G527X1DlgEUTyF5gVWCDT7iPPVrjBj0f--afK5_kKLE0mBwbT3FfZOdY8so65bkQqtealIy1UnyvKKQ_TUaw34YUqCaTZ-W07Ht-uf5ALyKTRcc9Be9XncV5Kd1Em-PXar_y-EjIRm_w059RrS-pnpT6n04Mq1kjwMqoVYYztvT_yOc68ObiCRKN4VOnkjf68SUZT7ax3xVrMCq2Dg7m-pI48JPrHIg"/>
+</div>
+</div>
+<div class="font-headline-lg text-headline-lg font-bold text-primary dark:text-primary-fixed">LuxeHostel</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50 dark:hover:bg-primary/50 text-primary dark:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 pt-20 pb-28 px-page-margin-mobile flex flex-col gap-6 md:hidden max-w-lg mx-auto w-full">
+<!-- Header & Month Selector -->
+<section class="flex flex-col gap-4 pt-2">
+<h1 class="font-stat-display-mobile text-stat-display-mobile text-primary tracking-tight">Fees</h1>
+<div class="flex overflow-x-auto hide-scrollbar gap-2 py-1 -mx-page-margin-mobile px-page-margin-mobile">
+<button class="px-5 py-2 rounded-full border border-glass-border bg-glass-fill text-on-surface-variant font-body-md text-body-md whitespace-nowrap backdrop-blur-md">May</button>
+<button class="px-5 py-2 rounded-full border border-glass-border bg-glass-fill text-on-surface-variant font-body-md text-body-md whitespace-nowrap backdrop-blur-md">Jun</button>
+<button class="px-5 py-2 rounded-full border border-transparent bg-primary text-on-primary font-body-md text-body-md font-medium whitespace-nowrap shadow-sm">Jul</button>
+<button class="px-5 py-2 rounded-full border border-glass-border bg-glass-fill text-on-surface-variant font-body-md text-body-md whitespace-nowrap backdrop-blur-md">Aug</button>
+<button class="px-5 py-2 rounded-full border border-glass-border bg-glass-fill text-on-surface-variant font-body-md text-body-md whitespace-nowrap backdrop-blur-md">Sep</button>
+</div>
+</section>
+<!-- Summary Strip -->
+<section class="flex gap-4">
+<div class="flex-1 rounded-[20px] bg-glass-fill border border-glass-border p-4 shadow-[0_4px_24px_rgba(0,0,0,0.02)] backdrop-blur-[20px] flex flex-col justify-center relative overflow-hidden">
+<div class="absolute top-0 right-0 p-3 opacity-10">
+<span class="material-symbols-outlined text-4xl text-accent-teal" data-icon="account_balance_wallet">account_balance_wallet</span>
+</div>
+<span class="font-label-caps text-label-caps text-text-muted mb-1">COLLECTED</span>
+<span class="font-headline-lg text-headline-lg text-accent-teal font-semibold">₹1.2L</span>
+</div>
+<div class="flex-1 rounded-[20px] bg-glass-fill border border-glass-border p-4 shadow-[0_4px_24px_rgba(0,0,0,0.02)] backdrop-blur-[20px] flex flex-col justify-center relative overflow-hidden">
+<div class="absolute top-0 right-0 p-3 opacity-10">
+<span class="material-symbols-outlined text-4xl text-status-red" data-icon="pending_actions">pending_actions</span>
+</div>
+<span class="font-label-caps text-label-caps text-text-muted mb-1">PENDING</span>
+<span class="font-headline-lg text-headline-lg text-status-red font-semibold">₹45K</span>
+</div>
+</section>
+<!-- Filters -->
+<section class="flex overflow-x-auto hide-scrollbar gap-2 py-1 -mx-page-margin-mobile px-page-margin-mobile">
+<button class="px-4 py-1.5 rounded-full border border-outline/20 bg-surface-container-highest text-on-surface font-label-caps text-label-caps">All</button>
+<button class="px-4 py-1.5 rounded-full border border-outline/20 bg-surface-container-lowest text-text-muted font-label-caps text-label-caps">Unpaid</button>
+<button class="px-4 py-1.5 rounded-full border border-outline/20 bg-surface-container-lowest text-text-muted font-label-caps text-label-caps">Partial</button>
+<button class="px-4 py-1.5 rounded-full border border-outline/20 bg-surface-container-lowest text-text-muted font-label-caps text-label-caps">Paid</button>
+</section>
+<!-- Student List -->
+<section class="flex flex-col gap-3">
+<!-- Item 1: Unpaid -->
+<div class="rounded-[20px] bg-glass-fill border border-glass-border p-4 shadow-[0_4px_24px_rgba(0,0,0,0.02)] backdrop-blur-[20px] flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-status-sand/20 text-status-sand flex items-center justify-center font-headline-md text-headline-md shrink-0">
+                    AK
+                </div>
+<div class="flex-1 min-w-0">
+<h3 class="font-headline-md text-headline-md text-primary truncate mb-0.5">Arjun Kapoor</h3>
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 rounded-md bg-surface-container text-text-muted font-label-caps text-[10px] tracking-wider">ROOM 204</span>
+<span class="text-text-muted font-body-md text-xs">• Due Jul 5</span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1.5 shrink-0">
+<span class="font-headline-md text-headline-md font-semibold text-primary">₹6,500</span>
+<span class="px-2.5 py-0.5 rounded-full bg-status-red/10 text-status-red font-label-caps text-[10px]">Unpaid</span>
+</div>
+</div>
+<!-- Item 2: Paid -->
+<div class="rounded-[20px] bg-glass-fill border border-glass-border p-4 shadow-[0_4px_24px_rgba(0,0,0,0.02)] backdrop-blur-[20px] flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-accent-teal/20 text-accent-teal flex items-center justify-center font-headline-md text-headline-md shrink-0 overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a young male student looking confident in a well-lit indoor environment. The aesthetic is clean, bright, and uses warm organic tones suitable for a modern mobile app avatar." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5NDpnWF_jh38guRAZzGkzfWexj8MWKVgCOhgqsUVd6nrdilZAsyNKxwHR2AM_9IbmA9DAnBeZswIEp5B0wDsfTEMjzRdND7BpQpE9luPVEjnkUKeZvClwwTkbFtUkfqXJ2-7eADve3aMTfM0W5vLgy90QGCVcTOaAzkX4oEfiKZKtpGykIJLDPN5Dh3xnxY27c78odFpVRZjUUJPRbrUOWyu54v5R4ChXg-5_M7xsdU_GI2ftm4KfeQ"/>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-headline-md text-headline-md text-primary truncate mb-0.5">Rahul Sharma</h3>
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 rounded-md bg-surface-container text-text-muted font-label-caps text-[10px] tracking-wider">ROOM 102</span>
+<span class="text-text-muted font-body-md text-xs">• Paid Jul 2</span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1.5 shrink-0">
+<span class="font-headline-md text-headline-md font-semibold text-primary">₹6,500</span>
+<span class="px-2.5 py-0.5 rounded-full bg-accent-teal/10 text-accent-teal font-label-caps text-[10px]">Paid</span>
+</div>
+</div>
+<!-- Item 3: Partial -->
+<div class="rounded-[20px] bg-glass-fill border border-glass-border p-4 shadow-[0_4px_24px_rgba(0,0,0,0.02)] backdrop-blur-[20px] flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-headline-md text-headline-md shrink-0">
+                    VS
+                </div>
+<div class="flex-1 min-w-0">
+<h3 class="font-headline-md text-headline-md text-primary truncate mb-0.5">Vikram Singh</h3>
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 rounded-md bg-surface-container text-text-muted font-label-caps text-[10px] tracking-wider">ROOM 305</span>
+<span class="text-text-muted font-body-md text-xs">• Bal: ₹2k</span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1.5 shrink-0">
+<span class="font-headline-md text-headline-md font-semibold text-primary">₹4,500</span>
+<span class="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary font-label-caps text-[10px]">Partial</span>
+</div>
+</div>
+<!-- Item 4: Paid -->
+<div class="rounded-[20px] bg-glass-fill border border-glass-border p-4 shadow-[0_4px_24px_rgba(0,0,0,0.02)] backdrop-blur-[20px] flex items-center gap-4 opacity-75">
+<div class="w-12 h-12 rounded-full bg-status-sage/20 text-status-sage flex items-center justify-center font-headline-md text-headline-md shrink-0 overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A portrait of a male student in a naturally lit room. The color palette emphasizes soft sage greens and warm ivory. Clean, minimalist liquid glass design system photography style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBGAS65MeyUKlHvsISZADM1-orx50yPDvTaySWUer9DAEsw3NO5ojphq9P2bh4cSpCE0GUbC8Elm3FEF94llb6MAQoKsJ3OIDV3XDpOAlg6NLuhdAujWICQW1C3zVCd8sdaNq_Q5nrxVkBuNZe3bBZLDhrGmYzN8vCOLMoL6m1v9iIdM0dS4UD9GmeSF7sbUFjEzlF7qgu9PB8SYu4wgQh113rlYnQFwOOE71S_qOqlgLYjxU8sq0mimw"/>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-headline-md text-headline-md text-primary truncate mb-0.5">Amit Patel</h3>
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 rounded-md bg-surface-container text-text-muted font-label-caps text-[10px] tracking-wider">ROOM 108</span>
+<span class="text-text-muted font-body-md text-xs">• Paid Jun 28</span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1.5 shrink-0">
+<span class="font-headline-md text-headline-md font-semibold text-primary">₹6,500</span>
+<span class="px-2.5 py-0.5 rounded-full bg-accent-teal/10 text-accent-teal font-label-caps text-[10px]">Paid</span>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 backdrop-blur-2xl rounded-t-xl bg-glass-fill dark:bg-primary-container/90 shadow-[0_-4px_20px_rgba(0,0,0,0.04)] flex justify-around items-center h-20 px-2 pb-safe md:hidden">
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-primary-container hover:text-primary dark:hover:text-primary-fixed transition-transform duration-200 active:scale-90 font-label-caps text-label-caps w-16 h-14">
+<span class="material-symbols-outlined mb-1" data-icon="dashboard">dashboard</span>
+<span>Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-primary-container hover:text-primary dark:hover:text-primary-fixed transition-transform duration-200 active:scale-90 font-label-caps text-label-caps w-16 h-14">
+<span class="material-symbols-outlined mb-1" data-icon="bed">bed</span>
+<span>Rooms</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-primary-container hover:text-primary dark:hover:text-primary-fixed transition-transform duration-200 active:scale-90 font-label-caps text-label-caps w-16 h-14">
+<span class="material-symbols-outlined mb-1" data-icon="person_add">person_add</span>
+<span>Register</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-primary bg-primary dark:bg-primary-fixed dark:text-on-primary-fixed rounded-xl px-3 py-1.5 transition-transform duration-200 active:scale-90 font-label-caps text-label-caps w-16 h-14">
+<span class="material-symbols-outlined mb-1" data-icon="payments" data-weight="fill" style="font-variation-settings: 'FILL' 1;">payments</span>
+<span>Fees</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-primary-container hover:text-primary dark:hover:text-primary-fixed transition-transform duration-200 active:scale-90 font-label-caps text-label-caps w-16 h-14">
+<span class="material-symbols-outlined mb-1" data-icon="event_busy">event_busy</span>
+<span>Leaves</span>
+</button>
+</nav>
+</body></html>

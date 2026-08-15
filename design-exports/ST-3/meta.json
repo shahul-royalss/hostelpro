@@ -1,0 +1,16 @@
+{
+  "id": "ST-3",
+  "title": "Mess Menu",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "4275ee093d9d45e3999368345fbaa72e",
+  "stitchScreenName": "projects/15365392661227774313/screens/4275ee093d9d45e3999368345fbaa72e",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "2000",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 15403,
+  "screenshotBytes": 45429
+}

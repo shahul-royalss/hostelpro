@@ -1,0 +1,1333 @@
+-- ============================================================================
+--  HostelPro — PG / Hostel Management SaaS
+--  db/schema.sql  ·  tables, helper functions, triggers, RPCs
+--  Apply in order:  schema.sql  →  rls-policies.sql  →  (npm run db:seed)
+--  Idempotent-ish: safe to re-run on a fresh database.
+-- ============================================================================
+
+create extension if not exists "pgcrypto";
+
+-- Private helper schema (functions used by RLS + triggers)
+create schema if not exists app;
+grant usage on schema app to authenticated, anon, service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ENUMS
+-- ─────────────────────────────────────────────────────────────────────────────
+do $$ begin
+  create type public.user_role as enum ('super_admin','owner','manager','warden','student');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.user_status as enum ('active','inactive');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.hostel_status as enum ('active','readonly','suspended');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.subscription_status as enum ('active','expiring','expired');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.bed_status as enum ('free','occupied');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.student_status as enum ('active','on_leave','vacated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.fee_status as enum ('paid','partial','unpaid');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.payment_mode as enum ('cash','upi','bank');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.complaint_category as enum ('food','cleaning','maintenance','wifi','roommate','other');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.complaint_status as enum ('open','in_progress','resolved');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.expense_category as enum ('groceries','staff','electricity','water','maintenance','other');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.revenue_source as enum ('fees','mess','other');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.announcement_audience as enum ('all','manager','warden','students');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.task_status as enum ('pending','in_progress','done');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.leave_status as enum ('pending','approved','rejected');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.day_of_week as enum ('mon','tue','wed','thu','fri','sat','sun');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.meal_type as enum ('breakfast','lunch','snacks','dinner');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create type public.notification_type as enum ('announcement','task','complaint','leave','subscription','fee','system');
+exception when duplicate_object then null; end $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- TABLES
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- users: profile row for every auth user (id = auth.users.id)
+create table if not exists public.users (
+  id                   uuid primary key references auth.users(id) on delete cascade,
+  role                 public.user_role not null,
+  full_name            text not null,
+  email                text,
+  phone                text,
+  hostel_id            uuid,                                -- null for super_admin
+  status               public.user_status not null default 'active',
+  must_change_password boolean not null default true,
+  created_by           uuid references public.users(id),
+  created_at           timestamptz not null default now(),
+  updated_at           timestamptz not null default now(),
+  deleted_at           timestamptz
+);
+create index if not exists users_hostel_role_idx on public.users (hostel_id, role, status);
+create unique index if not exists users_email_key on public.users (lower(email)) where email is not null;
+
+create table if not exists public.hostels (
+  id                    uuid primary key default gen_random_uuid(),
+  name                  text not null,
+  owner_user_id         uuid not null references public.users(id),
+  total_floors          int  not null check (total_floors between 1 and 50),
+  total_rooms           int  not null check (total_rooms between 1 and 5000),
+  beds_per_room_default int  not null default 3 check (beds_per_room_default between 1 and 12),
+  address               text,
+  rules                 text,                                -- static hostel rules (owner-editable)
+  status                public.hostel_status not null default 'active',
+  created_by            uuid references public.users(id),
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now()
+);
+create index if not exists hostels_owner_idx on public.hostels (owner_user_id);
+
+-- users.hostel_id → hostels (added after hostels exists; circular FK)
+do $$ begin
+  alter table public.users
+    add constraint users_hostel_id_fkey foreign key (hostel_id) references public.hostels(id);
+exception when duplicate_object then null; end $$;
+
+create table if not exists public.subscriptions (
+  id             uuid primary key default gen_random_uuid(),
+  hostel_id      uuid not null references public.hostels(id) on delete cascade,
+  owner_user_id  uuid not null references public.users(id),
+  start_date     date not null,
+  end_date       date not null check (end_date >= start_date),
+  amount         numeric(12,2) not null default 0 check (amount >= 0),
+  status         public.subscription_status not null default 'active',
+  created_by     uuid references public.users(id),
+  notes          text,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+create index if not exists subscriptions_hostel_idx on public.subscriptions (hostel_id, end_date desc);
+
+create table if not exists public.floors (
+  id            uuid primary key default gen_random_uuid(),
+  hostel_id     uuid not null references public.hostels(id) on delete cascade,
+  floor_number  int  not null,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
+  unique (hostel_id, floor_number)
+);
+
+create table if not exists public.rooms (
+  id           uuid primary key default gen_random_uuid(),
+  hostel_id    uuid not null references public.hostels(id) on delete cascade,
+  floor_id     uuid not null references public.floors(id) on delete cascade,
+  room_number  text not null,
+  capacity     int  not null default 3 check (capacity between 1 and 12),
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  unique (hostel_id, room_number)
+);
+create index if not exists rooms_floor_idx on public.rooms (floor_id);
+
+create table if not exists public.students (
+  id                uuid primary key default gen_random_uuid(),
+  hostel_id         uuid not null references public.hostels(id) on delete cascade,
+  user_id           uuid references public.users(id),
+  full_name         text not null,
+  phone             text not null,
+  email             text,
+  photo_url         text,
+  guardian_name     text,
+  guardian_phone    text,
+  permanent_address text,
+  id_proof_type     text,
+  id_proof_url      text,
+  date_of_joining   date not null default current_date,
+  room_id           uuid references public.rooms(id),
+  bed_id            uuid,                                   -- FK added after beds
+  monthly_fee       numeric(10,2) not null default 0 check (monthly_fee >= 0),
+  status            public.student_status not null default 'active',
+  vacated_at        timestamptz,
+  created_by        uuid references public.users(id),
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now(),
+  deleted_at        timestamptz
+);
+create index if not exists students_hostel_status_idx on public.students (hostel_id, status);
+create index if not exists students_room_idx on public.students (room_id);
+create index if not exists students_user_idx on public.students (user_id);
+-- Hard rule §4.7 — a bed holds at most one active student (race-safe)
+create unique index if not exists students_one_active_per_bed
+  on public.students (bed_id) where bed_id is not null and status <> 'vacated';
+-- phone is the student login → must be unique among non-vacated students
+create unique index if not exists students_phone_active_key
+  on public.students (phone) where status <> 'vacated';
+
+create table if not exists public.beds (
+  id          uuid primary key default gen_random_uuid(),
+  hostel_id   uuid not null references public.hostels(id) on delete cascade,  -- denormalised for RLS
+  room_id     uuid not null references public.rooms(id) on delete cascade,
+  bed_number  int  not null,
+  status      public.bed_status not null default 'free',
+  student_id  uuid references public.students(id) on delete set null,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  unique (room_id, bed_number)
+);
+create index if not exists beds_room_idx on public.beds (room_id);
+create unique index if not exists beds_student_key on public.beds (student_id) where student_id is not null;
+
+do $$ begin
+  alter table public.students
+    add constraint students_bed_id_fkey foreign key (bed_id) references public.beds(id);
+exception when duplicate_object then null; end $$;
+
+create table if not exists public.fee_payments (
+  id            uuid primary key default gen_random_uuid(),
+  hostel_id     uuid not null references public.hostels(id) on delete cascade,
+  student_id    uuid not null references public.students(id) on delete cascade,
+  period_month  text not null check (period_month ~ '^\d{4}-(0[1-9]|1[0-2])$'),
+  amount_due    numeric(10,2) not null default 0 check (amount_due >= 0),
+  amount_paid   numeric(10,2) not null default 0 check (amount_paid >= 0),
+  status        public.fee_status not null default 'unpaid',
+  paid_on       date,
+  mode          public.payment_mode,
+  notes         text,
+  recorded_by   uuid references public.users(id),
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
+  unique (student_id, period_month)
+);
+create index if not exists fee_payments_hostel_period_idx on public.fee_payments (hostel_id, period_month);
+
+create table if not exists public.complaints (
+  id               uuid primary key default gen_random_uuid(),
+  hostel_id        uuid not null references public.hostels(id) on delete cascade,
+  student_id       uuid not null references public.students(id) on delete cascade,
+  category         public.complaint_category not null default 'other',
+  title            text not null,
+  description      text,
+  photo_url        text,
+  status           public.complaint_status not null default 'open',
+  resolved_at      timestamptz,
+  resolution_note  text,
+  updated_by       uuid references public.users(id),
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+create index if not exists complaints_hostel_status_idx on public.complaints (hostel_id, status, created_at desc);
+create index if not exists complaints_student_idx on public.complaints (student_id);
+
+-- Complaint status timeline (auto-populated by trigger)
+create table if not exists public.complaint_events (
+  id             uuid primary key default gen_random_uuid(),
+  hostel_id      uuid not null references public.hostels(id) on delete cascade,
+  complaint_id   uuid not null references public.complaints(id) on delete cascade,
+  status         public.complaint_status not null,
+  note           text,
+  actor_user_id  uuid references public.users(id),
+  created_at     timestamptz not null default now()
+);
+create index if not exists complaint_events_complaint_idx on public.complaint_events (complaint_id, created_at);
+
+create table if not exists public.expenses (
+  id           uuid primary key default gen_random_uuid(),
+  hostel_id    uuid not null references public.hostels(id) on delete cascade,
+  date         date not null default current_date,
+  category     public.expense_category not null default 'other',
+  amount       numeric(12,2) not null check (amount >= 0),
+  note         text,
+  receipt_url  text,
+  uploaded_by  uuid references public.users(id),
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  deleted_at   timestamptz
+);
+create index if not exists expenses_hostel_date_idx on public.expenses (hostel_id, date desc);
+
+create table if not exists public.revenues (
+  id           uuid primary key default gen_random_uuid(),
+  hostel_id    uuid not null references public.hostels(id) on delete cascade,
+  date         date not null default current_date,
+  source       public.revenue_source not null default 'other',
+  amount       numeric(12,2) not null check (amount >= 0),
+  note         text,
+  uploaded_by  uuid references public.users(id),
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  deleted_at   timestamptz
+);
+create index if not exists revenues_hostel_date_idx on public.revenues (hostel_id, date desc);
+
+create table if not exists public.announcements (
+  id              uuid primary key default gen_random_uuid(),
+  hostel_id       uuid not null references public.hostels(id) on delete cascade,
+  author_user_id  uuid not null references public.users(id),
+  title           text not null,
+  body            text not null,
+  audience        public.announcement_audience not null default 'all',
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  deleted_at      timestamptz
+);
+create index if not exists announcements_hostel_idx on public.announcements (hostel_id, created_at desc);
+
+create table if not exists public.tasks (
+  id            uuid primary key default gen_random_uuid(),
+  hostel_id     uuid not null references public.hostels(id) on delete cascade,
+  assigned_to   uuid not null references public.users(id),   -- manager user_id
+  title         text not null,
+  description   text,
+  due_date      date,
+  status        public.task_status not null default 'pending',
+  created_by    uuid not null references public.users(id),   -- owner
+  completed_at  timestamptz,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
+  deleted_at    timestamptz
+);
+create index if not exists tasks_hostel_idx on public.tasks (hostel_id, status, due_date);
+
+create table if not exists public.leaves (
+  id             uuid primary key default gen_random_uuid(),
+  hostel_id      uuid not null references public.hostels(id) on delete cascade,
+  student_id     uuid not null references public.students(id) on delete cascade,
+  from_date      date not null,
+  to_date        date not null check (to_date >= from_date),
+  reason         text,
+  status         public.leave_status not null default 'pending',
+  decided_by     uuid references public.users(id),
+  decided_at     timestamptz,
+  decision_note  text,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+create index if not exists leaves_hostel_status_idx on public.leaves (hostel_id, status, created_at desc);
+create index if not exists leaves_student_idx on public.leaves (student_id);
+
+create table if not exists public.visitors (
+  id             uuid primary key default gen_random_uuid(),
+  hostel_id      uuid not null references public.hostels(id) on delete cascade,
+  student_id     uuid not null references public.students(id) on delete cascade,
+  visitor_name   text not null,
+  visitor_phone  text,
+  relation       text,
+  check_in_at    timestamptz not null default now(),
+  check_out_at   timestamptz,
+  logged_by      uuid references public.users(id),
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+create index if not exists visitors_hostel_idx on public.visitors (hostel_id, check_in_at desc);
+
+create table if not exists public.menus (
+  id           uuid primary key default gen_random_uuid(),
+  hostel_id    uuid not null references public.hostels(id) on delete cascade,
+  day_of_week  public.day_of_week not null,
+  meal         public.meal_type not null,
+  items        text not null default '',
+  updated_by   uuid references public.users(id),
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  unique (hostel_id, day_of_week, meal)
+);
+
+-- In-app notifications (§7). Rows are created by triggers below.
+create table if not exists public.notifications (
+  id          uuid primary key default gen_random_uuid(),
+  hostel_id   uuid references public.hostels(id) on delete cascade,
+  user_id     uuid not null references public.users(id) on delete cascade,
+  type        public.notification_type not null default 'system',
+  title       text not null,
+  body        text,
+  link        text,
+  read_at     timestamptz,
+  created_at  timestamptz not null default now()
+);
+create index if not exists notifications_user_idx on public.notifications (user_id, read_at, created_at desc);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- HELPER FUNCTIONS (schema app) — used by RLS policies and triggers
+-- All are SECURITY DEFINER so they can read public.users regardless of RLS.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create or replace function app.uid() returns uuid
+language sql stable as $$ select auth.uid() $$;
+
+-- JWT-claim based (NOT current_user — inside SECURITY DEFINER functions current_user
+-- would be the function owner and this would wrongly return true for everyone).
+create or replace function app.is_service_role() returns boolean
+language sql stable as $$
+  select coalesce(auth.role() = 'service_role', false)
+$$;
+
+create or replace function app.user_role() returns public.user_role
+language sql stable security definer set search_path = public as $$
+  select role from public.users where id = auth.uid() and status = 'active' and deleted_at is null
+$$;
+
+create or replace function app.user_hostel_id() returns uuid
+language sql stable security definer set search_path = public as $$
+  select hostel_id from public.users where id = auth.uid() and status = 'active' and deleted_at is null
+$$;
+
+create or replace function app.is_super_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce(app.user_role() = 'super_admin', false) or app.is_service_role()
+$$;
+
+create or replace function app.owns_hostel(p_hostel_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.hostels h
+    where h.id = p_hostel_id and h.owner_user_id = auth.uid()
+  ) and coalesce(app.user_role() = 'owner', false)
+$$;
+
+-- Read access to a hostel: super admin, the owner, or staff/students of that hostel
+create or replace function app.can_read_hostel(p_hostel_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select app.is_super_admin()
+      or app.owns_hostel(p_hostel_id)
+      or app.user_hostel_id() = p_hostel_id
+$$;
+
+-- Effective subscription status for a hostel (computed live from end_date)
+create or replace function app.subscription_state(p_hostel_id uuid) returns public.subscription_status
+language sql stable security definer set search_path = public as $$
+  select case
+    when max(end_date) is null then 'expired'::public.subscription_status
+    when max(end_date) < current_date then 'expired'::public.subscription_status
+    when max(end_date) - current_date <= 15 then 'expiring'::public.subscription_status
+    else 'active'::public.subscription_status
+  end
+  from public.subscriptions where hostel_id = p_hostel_id
+$$;
+
+create or replace function app.subscription_days_left(p_hostel_id uuid) returns int
+language sql stable security definer set search_path = public as $$
+  select (max(end_date) - current_date)::int from public.subscriptions where hostel_id = p_hostel_id
+$$;
+
+-- Hard rule §4.4 — writes are blocked when subscription expired or hostel not active
+create or replace function app.hostel_writable(p_hostel_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.hostels h
+    where h.id = p_hostel_id
+      and h.status = 'active'
+      and app.subscription_state(h.id) <> 'expired'
+  )
+$$;
+
+create or replace function app.can_write_hostel(p_hostel_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select app.is_super_admin()
+      or (app.can_read_hostel(p_hostel_id) and app.hostel_writable(p_hostel_id))
+$$;
+
+create or replace function app.is_staff_of(p_hostel_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select app.is_super_admin()
+      or app.owns_hostel(p_hostel_id)
+      or (app.user_hostel_id() = p_hostel_id and app.user_role() in ('manager','warden'))
+$$;
+
+create or replace function app.has_role_in(p_hostel_id uuid, variadic p_roles public.user_role[]) returns boolean
+language sql stable security definer set search_path = public as $$
+  select app.is_super_admin()
+      or (app.user_role() = 'owner' and 'owner' = any(p_roles) and app.owns_hostel(p_hostel_id))
+      or (app.user_hostel_id() = p_hostel_id and app.user_role() = any(p_roles) and app.user_role() <> 'owner')
+$$;
+
+create or replace function app.current_student_id() returns uuid
+language sql stable security definer set search_path = public as $$
+  select id from public.students where user_id = auth.uid() and status <> 'vacated' limit 1
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- GENERIC TRIGGERS
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create or replace function app.set_updated_at() returns trigger
+language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end $$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['users','hostels','subscriptions','floors','rooms','beds','students',
+                           'fee_payments','complaints','expenses','revenues','announcements',
+                           'tasks','leaves','visitors','menus']
+  loop
+    execute format('drop trigger if exists set_updated_at on public.%I', t);
+    execute format('create trigger set_updated_at before update on public.%I
+                    for each row execute function app.set_updated_at()', t);
+  end loop;
+end $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- HARD RULE §4.3 — role limits (1 manager, 1 warden, 10 000 students per hostel)
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function app.enforce_role_limits() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_count int;
+  v_limit int;
+begin
+  if new.status <> 'active' or new.deleted_at is not null then
+    return new;
+  end if;
+  if new.role not in ('manager','warden','student') then
+    return new;
+  end if;
+  if new.hostel_id is null then
+    raise exception 'A % must belong to a hostel.', new.role using errcode = 'P0001';
+  end if;
+
+  v_limit := case new.role when 'manager' then 1 when 'warden' then 1 else 10000 end;
+
+  select count(*) into v_count
+  from public.users u
+  where u.hostel_id = new.hostel_id
+    and u.role = new.role
+    and u.status = 'active'
+    and u.deleted_at is null
+    and u.id <> new.id;
+
+  if v_count >= v_limit then
+    if new.role = 'student' then
+      raise exception 'This hostel has reached the limit of 10,000 active students.' using errcode = 'P0001';
+    else
+      raise exception 'This hostel already has an active %. Deactivate the current % first.', new.role, new.role using errcode = 'P0001';
+    end if;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists enforce_role_limits on public.users;
+create trigger enforce_role_limits
+  before insert or update of role, status, hostel_id, deleted_at on public.users
+  for each row execute function app.enforce_role_limits();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- HARD RULE §4.7 — bed ↔ student integrity  (students.bed_id is source of truth)
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function app.students_bed_guard() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_bed public.beds%rowtype;
+begin
+  -- Vacated students never hold a bed
+  if new.status = 'vacated' then
+    if tg_op = 'UPDATE' and old.status <> 'vacated' then
+      new.vacated_at := coalesce(new.vacated_at, now());
+    end if;
+    new.bed_id := null;
+    new.room_id := null;
+    return new;
+  end if;
+
+  if new.bed_id is not null then
+    select * into v_bed from public.beds where id = new.bed_id;
+    if not found then
+      raise exception 'Selected bed does not exist.' using errcode = 'P0001';
+    end if;
+    if v_bed.hostel_id <> new.hostel_id then
+      raise exception 'Bed belongs to a different hostel.' using errcode = 'P0001';
+    end if;
+    -- another active student already on that bed?
+    if exists (
+      select 1 from public.students s
+      where s.bed_id = new.bed_id and s.id <> new.id and s.status <> 'vacated'
+    ) then
+      raise exception 'Bed % is already occupied. Choose a free bed.', v_bed.bed_number using errcode = 'P0001';
+    end if;
+    new.room_id := v_bed.room_id;
+  else
+    new.room_id := null;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists students_bed_guard on public.students;
+create trigger students_bed_guard
+  before insert or update of bed_id, status, hostel_id on public.students
+  for each row execute function app.students_bed_guard();
+
+-- keep beds.status / beds.student_id in sync
+create or replace function app.students_bed_sync() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'UPDATE' and old.bed_id is not null and old.bed_id is distinct from new.bed_id then
+    update public.beds set status = 'free', student_id = null where id = old.bed_id and student_id = old.id;
+  end if;
+  if new.bed_id is not null and new.status <> 'vacated' then
+    update public.beds set status = 'occupied', student_id = new.id where id = new.bed_id;
+  elsif tg_op = 'UPDATE' and old.bed_id is not null and new.bed_id is null then
+    update public.beds set status = 'free', student_id = null where id = old.bed_id and student_id = old.id;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists students_bed_sync on public.students;
+create trigger students_bed_sync
+  after insert or update of bed_id, status on public.students
+  for each row execute function app.students_bed_sync();
+
+-- Prevent direct edits to beds.student_id (must go through students)
+create or replace function app.beds_guard() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'UPDATE' and new.student_id is distinct from old.student_id
+     and not app.is_service_role() and current_setting('app.bypass_bed_guard', true) is distinct from 'on' then
+    -- allow only when the referenced student actually points at this bed (trigger-driven sync)
+    if new.student_id is not null and not exists (
+      select 1 from public.students s where s.id = new.student_id and s.bed_id = new.id and s.status <> 'vacated'
+    ) then
+      raise exception 'Assign beds by updating the student record, not the bed.' using errcode = 'P0001';
+    end if;
+  end if;
+  new.status := case when new.student_id is null then 'free' else 'occupied' end;
+  return new;
+end $$;
+
+drop trigger if exists beds_guard on public.beds;
+create trigger beds_guard before insert or update on public.beds
+  for each row execute function app.beds_guard();
+
+-- Deleting a bed that has an active student is not allowed (capacity edits)
+create or replace function app.beds_delete_guard() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if exists (select 1 from public.students s where s.bed_id = old.id and s.status <> 'vacated') then
+    raise exception 'Cannot remove bed % — a student is assigned to it.', old.bed_number using errcode = 'P0001';
+  end if;
+  return old;
+end $$;
+drop trigger if exists beds_delete_guard on public.beds;
+create trigger beds_delete_guard before delete on public.beds
+  for each row execute function app.beds_delete_guard();
+
+-- Room capacity ↔ beds: adding capacity creates beds, reducing removes only free beds
+create or replace function app.rooms_capacity_sync() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_current int;
+  v_i int;
+  v_occupied int;
+begin
+  select count(*) into v_current from public.beds where room_id = new.id;
+  if new.capacity > v_current then
+    for v_i in (v_current + 1)..new.capacity loop
+      insert into public.beds (hostel_id, room_id, bed_number)
+      values (new.hostel_id, new.id, v_i)
+      on conflict (room_id, bed_number) do nothing;
+    end loop;
+  elsif new.capacity < v_current then
+    select count(*) into v_occupied from public.beds where room_id = new.id and student_id is not null;
+    if v_occupied > new.capacity then
+      raise exception 'Room % has % occupied beds — capacity cannot be lower than that.', new.room_number, v_occupied using errcode = 'P0001';
+    end if;
+    delete from public.beds b
+    where b.room_id = new.id and b.student_id is null
+      and b.id in (
+        select id from public.beds where room_id = new.id and student_id is null
+        order by bed_number desc limit (v_current - new.capacity)
+      );
+  end if;
+  return new;
+end $$;
+drop trigger if exists rooms_capacity_sync on public.rooms;
+create trigger rooms_capacity_sync after insert or update of capacity on public.rooms
+  for each row execute function app.rooms_capacity_sync();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- FEES — derive status from amounts
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function app.fee_status_compute() returns trigger
+language plpgsql as $$
+begin
+  if new.amount_paid <= 0 then
+    new.status := 'unpaid';
+  elsif new.amount_paid >= new.amount_due then
+    new.status := 'paid';
+  else
+    new.status := 'partial';
+  end if;
+  if new.amount_paid > 0 and new.paid_on is null then
+    new.paid_on := current_date;
+  end if;
+  return new;
+end $$;
+drop trigger if exists fee_status_compute on public.fee_payments;
+create trigger fee_status_compute before insert or update on public.fee_payments
+  for each row execute function app.fee_status_compute();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- SUBSCRIPTIONS — status derived from dates; hostel read-only on expiry
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function app.subscription_status_compute() returns trigger
+language plpgsql as $$
+begin
+  new.status := case
+    when new.end_date < current_date then 'expired'
+    when new.end_date - current_date <= 15 then 'expiring'
+    else 'active'
+  end;
+  return new;
+end $$;
+drop trigger if exists subscription_status_compute on public.subscriptions;
+create trigger subscription_status_compute before insert or update on public.subscriptions
+  for each row execute function app.subscription_status_compute();
+
+-- Recompute all subscription statuses + hostel readonly flags; notify owners entering "expiring".
+-- Called by the Super Admin dashboard load and by the app on owner dashboard load (cheap).
+create or replace function public.refresh_subscription_statuses() returns void
+language plpgsql security definer set search_path = public as $$
+declare r record;
+begin
+  -- notify owners whose latest subscription just flipped to expiring
+  for r in
+    select s.id, s.hostel_id, s.owner_user_id, h.name, s.end_date
+    from public.subscriptions s
+    join public.hostels h on h.id = s.hostel_id
+    where s.status = 'active'
+      and s.end_date >= current_date
+      and s.end_date - current_date <= 15
+      and s.id = (select id from public.subscriptions x where x.hostel_id = s.hostel_id order by end_date desc limit 1)
+  loop
+    insert into public.notifications (hostel_id, user_id, type, title, body, link)
+    values (r.hostel_id, r.owner_user_id, 'subscription',
+            'Subscription expiring soon',
+            format('%s subscription ends on %s. Contact support to renew.', r.name, to_char(r.end_date, 'DD Mon YYYY')),
+            '/owner');
+  end loop;
+
+  update public.subscriptions
+     set status = case
+       when end_date < current_date then 'expired'
+       when end_date - current_date <= 15 then 'expiring'
+       else 'active' end::public.subscription_status
+   where status is distinct from (case
+       when end_date < current_date then 'expired'
+       when end_date - current_date <= 15 then 'expiring'
+       else 'active' end::public.subscription_status);
+
+  -- hostels: readonly when expired, back to active when renewed (never touch suspended)
+  update public.hostels h set status = 'readonly'
+   where h.status = 'active' and app.subscription_state(h.id) = 'expired';
+  update public.hostels h set status = 'active'
+   where h.status = 'readonly' and app.subscription_state(h.id) <> 'expired';
+end $$;
+
+-- After a subscription is inserted/extended, re-evaluate that hostel's flag immediately
+create or replace function app.subscription_after_change() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  update public.hostels h set status = 'active'
+   where h.id = new.hostel_id and h.status = 'readonly' and app.subscription_state(h.id) <> 'expired';
+  update public.hostels h set status = 'readonly'
+   where h.id = new.hostel_id and h.status = 'active' and app.subscription_state(h.id) = 'expired';
+  return new;
+end $$;
+drop trigger if exists subscription_after_change on public.subscriptions;
+create trigger subscription_after_change after insert or update on public.subscriptions
+  for each row execute function app.subscription_after_change();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- COMPLAINTS — timeline + notifications
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function app.complaints_after_change() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_student_user uuid;
+  v_actor uuid := coalesce(auth.uid(), new.updated_by);
+  r record;
+begin
+  if tg_op = 'INSERT' then
+    insert into public.complaint_events (hostel_id, complaint_id, status, note, actor_user_id)
+    values (new.hostel_id, new.id, new.status, 'Complaint raised', v_actor);
+
+    -- notify owner + warden
+    for r in
+      select u.id from public.users u
+      where u.status = 'active' and u.deleted_at is null and (
+        (u.role in ('warden') and u.hostel_id = new.hostel_id)
+        or (u.role = 'owner' and u.id = (select owner_user_id from public.hostels where id = new.hostel_id))
+      )
+    loop
+      insert into public.notifications (hostel_id, user_id, type, title, body, link)
+      values (new.hostel_id, r.id, 'complaint', 'New complaint: ' || new.title,
+              initcap(new.category::text) || ' complaint raised by a student.',
+              case when (select role from public.users where id = r.id) = 'owner' then '/owner/complaints' else '/warden/complaints' end);
+    end loop;
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE' and (new.status is distinct from old.status or new.resolution_note is distinct from old.resolution_note) then
+    if new.status = 'resolved' and new.resolved_at is null then
+      update public.complaints set resolved_at = now() where id = new.id;
+    end if;
+    insert into public.complaint_events (hostel_id, complaint_id, status, note, actor_user_id)
+    values (new.hostel_id, new.id, new.status,
+            case when new.resolution_note is distinct from old.resolution_note then new.resolution_note else null end,
+            v_actor);
+
+    if new.status is distinct from old.status then
+      select user_id into v_student_user from public.students where id = new.student_id;
+      if v_student_user is not null then
+        insert into public.notifications (hostel_id, user_id, type, title, body, link)
+        values (new.hostel_id, v_student_user, 'complaint',
+                'Complaint ' || replace(new.status::text, '_', ' '),
+                '"' || new.title || '" is now ' || replace(new.status::text, '_', ' ') || '.',
+                '/student/complaints');
+      end if;
+    end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists complaints_after_change on public.complaints;
+create trigger complaints_after_change after insert or update on public.complaints
+  for each row execute function app.complaints_after_change();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ANNOUNCEMENTS — fan out notifications to audience
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function app.announcements_after_insert() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.notifications (hostel_id, user_id, type, title, body, link)
+  select new.hostel_id, u.id, 'announcement', new.title, left(new.body, 140),
+         case u.role
+           when 'manager' then '/manager'
+           when 'warden'  then '/warden'
+           when 'student' then '/student'
+           else '/owner/updates' end
+  from public.users u
+  where u.hostel_id = new.hostel_id
+    and u.status = 'active' and u.deleted_at is null
+    and u.id <> new.author_user_id
+    and (
+      new.audience = 'all'
+      or (new.audience = 'manager'  and u.role = 'manager')
+      or (new.audience = 'warden'   and u.role = 'warden')
+      or (new.audience = 'students' and u.role = 'student')
+    );
+  return new;
+end $$;
+drop trigger if exists announcements_after_insert on public.announcements;
+create trigger announcements_after_insert after insert on public.announcements
+  for each row execute function app.announcements_after_insert();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- TASKS — notifications + manager may only change status
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function app.tasks_before_update() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if app.user_role() = 'manager' then
+    if new.title is distinct from old.title or new.description is distinct from old.description
+       or new.due_date is distinct from old.due_date or new.assigned_to is distinct from old.assigned_to
+       or new.created_by is distinct from old.created_by or new.deleted_at is distinct from old.deleted_at then
+      raise exception 'Managers can only update the task status.' using errcode = 'P0001';
+    end if;
+  end if;
+  if new.status = 'done' and old.status <> 'done' then
+    new.completed_at := now();
+  elsif new.status <> 'done' then
+    new.completed_at := null;
+  end if;
+  return new;
+end $$;
+drop trigger if exists tasks_before_update on public.tasks;
+create trigger tasks_before_update before update on public.tasks
+  for each row execute function app.tasks_before_update();
+
+create or replace function app.tasks_after_change() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    insert into public.notifications (hostel_id, user_id, type, title, body, link)
+    values (new.hostel_id, new.assigned_to, 'task', 'New task: ' || new.title,
+            coalesce('Due ' || to_char(new.due_date, 'DD Mon'), 'Assigned by owner'), '/manager/tasks');
+  elsif new.status is distinct from old.status then
+    insert into public.notifications (hostel_id, user_id, type, title, body, link)
+    values (new.hostel_id, new.created_by, 'task', 'Task ' || replace(new.status::text, '_', ' '),
+            '"' || new.title || '" marked ' || replace(new.status::text, '_', ' ') || ' by manager.', '/owner/staff');
+  end if;
+  return new;
+end $$;
+drop trigger if exists tasks_after_change on public.tasks;
+create trigger tasks_after_change after insert or update on public.tasks
+  for each row execute function app.tasks_after_change();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- LEAVES — notifications
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function app.leaves_after_change() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_student_user uuid; v_name text; r record;
+begin
+  select user_id, full_name into v_student_user, v_name from public.students where id = new.student_id;
+  if tg_op = 'INSERT' then
+    for r in select id from public.users where hostel_id = new.hostel_id and role = 'warden' and status = 'active' and deleted_at is null loop
+      insert into public.notifications (hostel_id, user_id, type, title, body, link)
+      values (new.hostel_id, r.id, 'leave', 'Leave request from ' || coalesce(v_name, 'student'),
+              to_char(new.from_date, 'DD Mon') || ' → ' || to_char(new.to_date, 'DD Mon'), '/warden/leaves');
+    end loop;
+  elsif new.status is distinct from old.status and new.status <> 'pending' then
+    if new.decided_at is null then
+      update public.leaves set decided_at = now() where id = new.id;
+    end if;
+    if v_student_user is not null then
+      insert into public.notifications (hostel_id, user_id, type, title, body, link)
+      values (new.hostel_id, v_student_user, 'leave', 'Leave ' || new.status::text,
+              'Your leave (' || to_char(new.from_date, 'DD Mon') || ' → ' || to_char(new.to_date, 'DD Mon') || ') was ' || new.status::text || '.',
+              '/student/leave');
+    end if;
+    -- keep student status in sync while on approved leave
+    if new.status = 'approved' and current_date between new.from_date and new.to_date then
+      update public.students set status = 'on_leave' where id = new.student_id and status = 'active';
+    end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists leaves_after_change on public.leaves;
+create trigger leaves_after_change after insert or update on public.leaves
+  for each row execute function app.leaves_after_change();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- FEE PAYMENTS — notify student when a payment is recorded
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function app.fee_payments_after_change() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_student_user uuid;
+begin
+  if tg_op = 'INSERT' and new.amount_paid <= 0 then return new; end if;
+  if tg_op = 'UPDATE' and new.amount_paid <= old.amount_paid then return new; end if;
+  select user_id into v_student_user from public.students where id = new.student_id;
+  if v_student_user is not null then
+    insert into public.notifications (hostel_id, user_id, type, title, body, link)
+    values (new.hostel_id, v_student_user, 'fee', 'Fee payment recorded',
+            format('₹%s received for %s. Status: %s.', new.amount_paid, new.period_month, new.status), '/student');
+  end if;
+  return new;
+end $$;
+drop trigger if exists fee_payments_after_change on public.fee_payments;
+create trigger fee_payments_after_change after insert or update on public.fee_payments
+  for each row execute function app.fee_payments_after_change();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- HARD RULE §4.2 — scaffold floors → rooms → beds
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function public.scaffold_hostel(p_hostel_id uuid, p_floors int, p_rooms int, p_beds_per_room int default 3)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  v_floor int; v_floor_id uuid; v_base int; v_extra int; v_rooms_here int; v_i int; v_room_id uuid; v_room_no text; v_b int;
+  v_multiplier int;
+begin
+  if p_floors < 1 or p_rooms < 1 then
+    raise exception 'Floors and rooms must be at least 1.' using errcode = 'P0001';
+  end if;
+  v_base  := p_rooms / p_floors;
+  v_extra := p_rooms % p_floors;
+  v_multiplier := case when ceil(p_rooms::numeric / p_floors) > 99 then 1000 else 100 end;
+
+  for v_floor in 1..p_floors loop
+    insert into public.floors (hostel_id, floor_number) values (p_hostel_id, v_floor)
+    on conflict (hostel_id, floor_number) do update set floor_number = excluded.floor_number
+    returning id into v_floor_id;
+
+    v_rooms_here := v_base + case when v_floor <= v_extra then 1 else 0 end;
+    for v_i in 1..v_rooms_here loop
+      v_room_no := (v_floor * v_multiplier + v_i)::text;
+      v_room_id := null;
+      insert into public.rooms (hostel_id, floor_id, room_number, capacity)
+      values (p_hostel_id, v_floor_id, v_room_no, p_beds_per_room)
+      on conflict (hostel_id, room_number) do nothing
+      returning id into v_room_id;
+      -- beds are created by rooms_capacity_sync trigger; ensure numbering if room pre-existed
+      if v_room_id is null then
+        select id into v_room_id from public.rooms where hostel_id = p_hostel_id and room_number = v_room_no;
+      end if;
+      for v_b in 1..p_beds_per_room loop
+        insert into public.beds (hostel_id, room_id, bed_number) values (p_hostel_id, v_room_id, v_b)
+        on conflict (room_id, bed_number) do nothing;
+      end loop;
+    end loop;
+  end loop;
+end $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- HARD RULE §4.1 — one subscription ↔ one hostel; created atomically
+-- Called by the Super Admin wizard AFTER the owner's auth user exists.
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function public.sa_create_hostel_with_subscription(
+  p_owner_user_id uuid,
+  p_hostel_name   text,
+  p_floors        int,
+  p_rooms         int,
+  p_address       text,
+  p_start_date    date,
+  p_end_date      date,
+  p_amount        numeric,
+  p_notes         text default null,
+  p_beds_per_room int default 3
+) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_hostel_id uuid; v_actor uuid := auth.uid();
+begin
+  if not app.is_super_admin() then
+    raise exception 'Only the Super Admin can create hostels.' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.users where id = p_owner_user_id and role = 'owner') then
+    raise exception 'Owner user not found.' using errcode = 'P0001';
+  end if;
+
+  insert into public.hostels (name, owner_user_id, total_floors, total_rooms, beds_per_room_default, address, created_by)
+  values (p_hostel_name, p_owner_user_id, p_floors, p_rooms, p_beds_per_room, p_address, v_actor)
+  returning id into v_hostel_id;
+
+  insert into public.subscriptions (hostel_id, owner_user_id, start_date, end_date, amount, created_by, notes)
+  values (v_hostel_id, p_owner_user_id, p_start_date, p_end_date, p_amount, v_actor, p_notes);
+
+  perform public.scaffold_hostel(v_hostel_id, p_floors, p_rooms, p_beds_per_room);
+
+  -- bind the owner's session to their first hostel
+  update public.users set hostel_id = v_hostel_id where id = p_owner_user_id and hostel_id is null;
+
+  return v_hostel_id;
+end $$;
+
+-- Super Admin: extend / renew subscription (adds a new subscription record = history)
+create or replace function public.sa_renew_subscription(
+  p_hostel_id uuid, p_new_end_date date, p_amount numeric, p_notes text default null
+) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_owner uuid; v_prev_end date;
+begin
+  if not app.is_super_admin() then
+    raise exception 'Only the Super Admin can renew subscriptions.' using errcode = '42501';
+  end if;
+  select owner_user_id into v_owner from public.hostels where id = p_hostel_id;
+  select max(end_date) into v_prev_end from public.subscriptions where hostel_id = p_hostel_id;
+  if p_new_end_date <= coalesce(v_prev_end, current_date - 1) then
+    raise exception 'New end date must be after the current end date (%).', v_prev_end using errcode = 'P0001';
+  end if;
+  insert into public.subscriptions (hostel_id, owner_user_id, start_date, end_date, amount, created_by, notes)
+  values (p_hostel_id, v_owner, greatest(coalesce(v_prev_end, current_date), current_date), p_new_end_date, p_amount, auth.uid(), p_notes)
+  returning id into v_id;
+  -- renewal notification to owner
+  insert into public.notifications (hostel_id, user_id, type, title, body, link)
+  values (p_hostel_id, v_owner, 'subscription', 'Subscription renewed',
+          'Your subscription now runs until ' || to_char(p_new_end_date, 'DD Mon YYYY') || '.', '/owner');
+  return v_id;
+end $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- WARDEN — register student (DB half; auth user is created by the server action first)
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function public.wd_register_student(
+  p_user_id           uuid,          -- freshly created auth user id
+  p_hostel_id         uuid,
+  p_full_name         text,
+  p_phone             text,
+  p_email             text,
+  p_photo_url         text,
+  p_guardian_name     text,
+  p_guardian_phone    text,
+  p_permanent_address text,
+  p_id_proof_type     text,
+  p_id_proof_url      text,
+  p_date_of_joining   date,
+  p_bed_id            uuid,
+  p_monthly_fee       numeric
+) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_student_id uuid; v_actor uuid := auth.uid();
+begin
+  if not (app.has_role_in(p_hostel_id, 'warden') ) then
+    raise exception 'Only the warden can register students.' using errcode = '42501';
+  end if;
+  if not app.hostel_writable(p_hostel_id) then
+    raise exception 'Subscription expired — hostel is read-only.' using errcode = '42501';
+  end if;
+
+  insert into public.users (id, role, full_name, email, phone, hostel_id, status, must_change_password, created_by)
+  values (p_user_id, 'student', p_full_name, p_email, p_phone, p_hostel_id, 'active', true, v_actor);
+
+  insert into public.students (hostel_id, user_id, full_name, phone, email, photo_url, guardian_name, guardian_phone,
+                               permanent_address, id_proof_type, id_proof_url, date_of_joining, bed_id, monthly_fee, created_by)
+  values (p_hostel_id, p_user_id, p_full_name, p_phone, p_email, p_photo_url, p_guardian_name, p_guardian_phone,
+          p_permanent_address, p_id_proof_type, p_id_proof_url, coalesce(p_date_of_joining, current_date), p_bed_id, p_monthly_fee, v_actor)
+  returning id into v_student_id;
+
+  return v_student_id;
+end $$;
+
+-- Warden: vacate (checkout) a student → frees bed, deactivates login
+create or replace function public.wd_vacate_student(p_student_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_hostel uuid; v_user uuid;
+begin
+  select hostel_id, user_id into v_hostel, v_user from public.students where id = p_student_id;
+  if v_hostel is null then raise exception 'Student not found.' using errcode = 'P0001'; end if;
+  if not app.has_role_in(v_hostel, 'warden', 'owner') then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+  if not app.hostel_writable(v_hostel) then
+    raise exception 'Subscription expired — hostel is read-only.' using errcode = '42501';
+  end if;
+  update public.students set status = 'vacated' where id = p_student_id;
+  if v_user is not null then
+    update public.users set status = 'inactive' where id = v_user;
+  end if;
+end $$;
+
+-- Warden: record / top-up a fee payment for a period (upsert)
+create or replace function public.wd_record_payment(
+  p_student_id uuid, p_period_month text, p_amount numeric, p_mode public.payment_mode, p_paid_on date default current_date, p_notes text default null
+) returns public.fee_payments
+language plpgsql security definer set search_path = public as $$
+declare v_hostel uuid; v_fee numeric; v_row public.fee_payments;
+begin
+  select hostel_id, monthly_fee into v_hostel, v_fee from public.students where id = p_student_id;
+  if v_hostel is null then raise exception 'Student not found.' using errcode = 'P0001'; end if;
+  if not app.has_role_in(v_hostel, 'warden', 'manager', 'owner') then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+  if not app.hostel_writable(v_hostel) then
+    raise exception 'Subscription expired — hostel is read-only.' using errcode = '42501';
+  end if;
+  if p_amount <= 0 then raise exception 'Amount must be greater than zero.' using errcode = 'P0001'; end if;
+
+  insert into public.fee_payments (hostel_id, student_id, period_month, amount_due, amount_paid, paid_on, mode, notes, recorded_by)
+  values (v_hostel, p_student_id, p_period_month, v_fee, p_amount, p_paid_on, p_mode, p_notes, auth.uid())
+  on conflict (student_id, period_month) do update
+    set amount_paid = public.fee_payments.amount_paid + excluded.amount_paid,
+        paid_on     = excluded.paid_on,
+        mode        = excluded.mode,
+        notes       = coalesce(excluded.notes, public.fee_payments.notes),
+        recorded_by = excluded.recorded_by
+  returning * into v_row;
+  return v_row;
+end $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- STUDENT — roommates (names + phones only; Hard rule §4.8)
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function public.st_my_roommates()
+returns table (student_id uuid, full_name text, phone text, bed_number int, photo_url text)
+language sql stable security definer set search_path = public as $$
+  select s.id, s.full_name, s.phone, b.bed_number, s.photo_url
+  from public.students me
+  join public.students s on s.room_id = me.room_id and s.id <> me.id and s.status <> 'vacated'
+  left join public.beds b on b.id = s.bed_id
+  where me.user_id = auth.uid() and me.status <> 'vacated' and me.room_id is not null
+  order by b.bed_number
+$$;
+
+-- Owner: update hostel rules text (only field owners may edit on hostels)
+create or replace function public.ow_update_hostel_rules(p_hostel_id uuid, p_rules text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not app.owns_hostel(p_hostel_id) and not app.is_super_admin() then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+  update public.hostels set rules = p_rules where id = p_hostel_id;
+end $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- READ RPCs (SECURITY INVOKER → RLS applies)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Fee ledger for a month: every active student with paid/partial/unpaid state
+create or replace function public.rpc_fee_ledger(p_hostel_id uuid, p_period_month text)
+returns table (
+  student_id uuid, full_name text, phone text, photo_url text, room_number text, bed_number int,
+  monthly_fee numeric, amount_due numeric, amount_paid numeric, status public.fee_status, paid_on date, mode public.payment_mode
+)
+language sql stable security invoker set search_path = public as $$
+  select s.id, s.full_name, s.phone, s.photo_url, r.room_number, b.bed_number,
+         s.monthly_fee,
+         coalesce(fp.amount_due, s.monthly_fee) as amount_due,
+         coalesce(fp.amount_paid, 0) as amount_paid,
+         coalesce(fp.status, 'unpaid'::public.fee_status) as status,
+         fp.paid_on, fp.mode
+  from public.students s
+  left join public.rooms r on r.id = s.room_id
+  left join public.beds  b on b.id = s.bed_id
+  left join public.fee_payments fp on fp.student_id = s.id and fp.period_month = p_period_month
+  where s.hostel_id = p_hostel_id and s.status <> 'vacated'
+  order by r.room_number nulls last, s.full_name
+$$;
+
+-- Room list with occupancy
+create or replace function public.rpc_room_occupancy(p_hostel_id uuid)
+returns table (room_id uuid, floor_id uuid, floor_number int, room_number text, capacity int, occupied int)
+language sql stable security invoker set search_path = public as $$
+  select r.id, f.id, f.floor_number, r.room_number, r.capacity,
+         (select count(*)::int from public.beds b where b.room_id = r.id and b.student_id is not null)
+  from public.rooms r join public.floors f on f.id = r.floor_id
+  where r.hostel_id = p_hostel_id
+  order by f.floor_number, r.room_number
+$$;
+
+-- Hostel headline stats (dashboards)
+create or replace function public.rpc_hostel_stats(p_hostel_id uuid, p_period_month text default to_char(current_date, 'YYYY-MM'))
+returns table (
+  total_beds int, occupied_beds int, active_students int, open_complaints int,
+  fees_collected numeric, fees_pending numeric, students_paid int, students_unpaid int,
+  pending_leaves int, visitors_today int, pending_tasks int,
+  revenue_today numeric, expenses_today numeric, revenue_month numeric, expenses_month numeric,
+  subscription_days_left int, subscription_state public.subscription_status
+)
+language sql stable security invoker set search_path = public as $$
+  with led as (select * from public.rpc_fee_ledger(p_hostel_id, p_period_month))
+  select
+    (select count(*)::int from public.beds where hostel_id = p_hostel_id),
+    (select count(*)::int from public.beds where hostel_id = p_hostel_id and student_id is not null),
+    (select count(*)::int from public.students where hostel_id = p_hostel_id and status <> 'vacated'),
+    (select count(*)::int from public.complaints where hostel_id = p_hostel_id and status <> 'resolved'),
+    coalesce((select sum(amount_paid) from led), 0),
+    coalesce((select sum(greatest(amount_due - amount_paid, 0)) from led), 0),
+    (select count(*)::int from led where status = 'paid'),
+    (select count(*)::int from led where status <> 'paid'),
+    (select count(*)::int from public.leaves where hostel_id = p_hostel_id and status = 'pending'),
+    (select count(*)::int from public.visitors where hostel_id = p_hostel_id and check_in_at::date = current_date),
+    (select count(*)::int from public.tasks where hostel_id = p_hostel_id and status <> 'done' and deleted_at is null),
+    coalesce((select sum(amount) from public.revenues where hostel_id = p_hostel_id and date = current_date and deleted_at is null), 0),
+    coalesce((select sum(amount) from public.expenses where hostel_id = p_hostel_id and date = current_date and deleted_at is null), 0),
+    coalesce((select sum(amount) from public.revenues where hostel_id = p_hostel_id and to_char(date,'YYYY-MM') = p_period_month and deleted_at is null), 0),
+    coalesce((select sum(amount) from public.expenses where hostel_id = p_hostel_id and to_char(date,'YYYY-MM') = p_period_month and deleted_at is null), 0),
+    app.subscription_days_left(p_hostel_id),
+    app.subscription_state(p_hostel_id)
+$$;
+
+-- Daily revenue vs expense series (charts)
+create or replace function public.rpc_daily_finance(p_hostel_id uuid, p_from date, p_to date)
+returns table (day date, revenue numeric, expense numeric)
+language sql stable security invoker set search_path = public as $$
+  select d::date,
+         coalesce((select sum(amount) from public.revenues r where r.hostel_id = p_hostel_id and r.date = d::date and r.deleted_at is null), 0),
+         coalesce((select sum(amount) from public.expenses e where e.hostel_id = p_hostel_id and e.date = d::date and e.deleted_at is null), 0)
+  from generate_series(p_from, p_to, interval '1 day') d
+  order by 1
+$$;
+
+-- Super Admin platform stats
+create or replace function public.rpc_sa_dashboard()
+returns table (
+  total_hostels int, total_owners int, total_students int,
+  active_subs int, expiring_subs int, expired_subs int,
+  monthly_subscription_revenue numeric
+)
+language sql stable security definer set search_path = public as $$
+  select
+    (select count(*)::int from public.hostels),
+    (select count(*)::int from public.users where role = 'owner' and deleted_at is null),
+    (select count(*)::int from public.students where status <> 'vacated'),
+    (select count(*)::int from public.hostels h where app.subscription_state(h.id) = 'active'),
+    (select count(*)::int from public.hostels h where app.subscription_state(h.id) = 'expiring'),
+    (select count(*)::int from public.hostels h where app.subscription_state(h.id) = 'expired'),
+    coalesce((select sum(amount) from public.subscriptions where to_char(created_at,'YYYY-MM') = to_char(current_date,'YYYY-MM')), 0)
+  where app.is_super_admin()
+$$;
+
+-- Hostels onboarded per month (last 12 months) for SA chart
+create or replace function public.rpc_sa_onboarding_series()
+returns table (month text, hostels int)
+language sql stable security definer set search_path = public as $$
+  select to_char(m, 'YYYY-MM'),
+         (select count(*)::int from public.hostels h where to_char(h.created_at, 'YYYY-MM') = to_char(m, 'YYYY-MM'))
+  from generate_series(date_trunc('month', current_date) - interval '11 months', date_trunc('month', current_date), interval '1 month') m
+  where app.is_super_admin()
+  order by 1
+$$;
+
+-- Hostel summary rows for the SA table (owner name, sub end, days left, counts)
+create or replace function public.rpc_sa_hostels()
+returns table (
+  hostel_id uuid, hostel_name text, hostel_status public.hostel_status, address text,
+  owner_id uuid, owner_name text, owner_email text, owner_phone text,
+  sub_start date, sub_end date, sub_amount numeric, sub_state public.subscription_status, days_left int,
+  total_beds int, occupied_beds int, active_students int, open_complaints int, created_at timestamptz
+)
+language sql stable security definer set search_path = public as $$
+  select h.id, h.name, h.status, h.address,
+         u.id, u.full_name, u.email, u.phone,
+         ls.start_date, ls.end_date, ls.amount, app.subscription_state(h.id), app.subscription_days_left(h.id),
+         (select count(*)::int from public.beds b where b.hostel_id = h.id),
+         (select count(*)::int from public.beds b where b.hostel_id = h.id and b.student_id is not null),
+         (select count(*)::int from public.students s where s.hostel_id = h.id and s.status <> 'vacated'),
+         (select count(*)::int from public.complaints c where c.hostel_id = h.id and c.status <> 'resolved'),
+         h.created_at
+  from public.hostels h
+  join public.users u on u.id = h.owner_user_id
+  left join lateral (select * from public.subscriptions s where s.hostel_id = h.id order by end_date desc limit 1) ls on true
+  where app.is_super_admin()
+  order by h.created_at desc
+$$;
+
+-- Weekly complaint counts (SA hostel detail chart)
+create or replace function public.rpc_complaints_per_week(p_hostel_id uuid, p_weeks int default 8)
+returns table (week_start date, complaints int)
+language sql stable security invoker set search_path = public as $$
+  select w::date,
+         (select count(*)::int from public.complaints c where c.hostel_id = p_hostel_id
+            and c.created_at >= w and c.created_at < w + interval '7 days')
+  from generate_series(date_trunc('week', current_date) - ((p_weeks - 1) || ' weeks')::interval, date_trunc('week', current_date), interval '1 week') w
+  order by 1
+$$;
+
+-- Unread notification count (bell)
+create or replace function public.rpc_unread_count() returns int
+language sql stable security invoker set search_path = public as $$
+  select count(*)::int from public.notifications where user_id = auth.uid() and read_at is null
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- STORAGE BUCKETS (private; files served via signed URLs from the server)
+-- ─────────────────────────────────────────────────────────────────────────────
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values
+  ('student-docs',     'student-docs',     false, 8388608, array['image/jpeg','image/png','image/webp','application/pdf']),
+  ('receipts',         'receipts',         false, 8388608, array['image/jpeg','image/png','image/webp','application/pdf']),
+  ('complaint-photos', 'complaint-photos', false, 8388608, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do nothing;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- GRANTS
+-- ─────────────────────────────────────────────────────────────────────────────
+grant usage on schema public to anon, authenticated, service_role;
+grant all on all tables in schema public to authenticated, service_role;
+grant all on all sequences in schema public to authenticated, service_role;
+grant execute on all functions in schema public to authenticated, service_role;
+grant execute on all functions in schema app to authenticated, service_role;
+alter default privileges in schema public grant all on tables to authenticated, service_role;
+alter default privileges in schema public grant execute on functions to authenticated, service_role;

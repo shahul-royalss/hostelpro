@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seedbloom — a garden grown from your name</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #07090f; overflow: hidden; }
+  canvas { display: block; }
+  .veil {
+    position: fixed; inset: 0; display: grid; place-items: center;
+    pointer-events: none; text-align: center;
+    font-family: system-ui, "Segoe UI", sans-serif; color: #e8ecf4;
+  }
+  .veil h1 { margin: 0; font-size: clamp(2.4rem, 7vw, 5.5rem); letter-spacing: 0.42em; font-weight: 200; text-indent: 0.42em; }
+  .veil p { margin: 0.8em 0 0; font-size: 0.95rem; letter-spacing: 0.18em; opacity: 0.55; }
+  .hint { position: fixed; right: 1.2rem; bottom: 1rem; font: 0.72rem system-ui; color: #5a6478; letter-spacing: 0.08em; }
+</style>
+</head>
+<body>
+<canvas id="garden"></canvas>
+<div class="veil"><div><h1 id="word">SEEDBLOOM</h1><p>every seed grows a different garden</p></div></div>
+<div class="hint">add ?seed=YOURNAME to the URL — same seed, same garden, always</div>
+<script>
+"use strict";
+/*
+ * SEEDBLOOM — design rationale (authored for this file, 2026-08-01)
+ *
+ * A hero background that grows a deterministic "garden" from a text seed.
+ * The three rules below are the invention; everything else is bookkeeping.
+ *
+ *  1. Character stalks. Each character of the seed becomes one stalk.
+ *     Its char code — nothing else — fixes the stalk's breath frequency,
+ *     per-segment phase step, sway amplitude, hue, and root position.
+ *     No Math.random anywhere: the same seed always regrows the same
+ *     garden, which is the point (your name IS the artwork's DNA).
+ *
+ *  2. Elastic heading memory. A growing tip does not wander freely:
+ *     each new segment's heading is pulled toward the average heading of
+ *     its last MEMORY segments. Young stalks are supple, long stalks grow
+ *     confident and straight — stiffness emerges from history, it is not
+ *     scripted. (Averaging raw angles is safe here only because growth
+ *     stays in the upward half-plane and never crosses the ±PI seam.)
+ *
+ *  3. Curvature blooms. Every turn deposits |Δheading| into a curvature
+ *     account; when the account crosses a threshold the tip blossoms a
+ *     light pulse, the account resets, and the threshold rises — so
+ *     blooms come easily to young stalks and rarely to old ones.
+ *
+ * The pointer disturbs only *growing* tips, so a finished garden is a
+ * fossil record of how you touched it while it grew.
+ */
+
+const TAU = Math.PI * 2;
+const MEMORY = 8;          // segments of heading history a tip listens to
+const ELASTICITY = 0.16;   // pull toward remembered heading, per segment
+const GROW_MS = 14;        // one growth tick per stalk every N ms
+const REST_MS = 2600;      // pause between a finished garden and regrowth
+
+const params = new URLSearchParams(location.search);
+const SEED = (params.get("seed") || "SEEDBLOOM").toUpperCase().slice(0, 14) || "SEEDBLOOM";
+document.getElementById("word").textContent = SEED;
+
+const canvas = document.getElementById("garden");
+const ctx = canvas.getContext("2d");
+let W = 0, H = 0;
+
+function fit() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + "px"; canvas.style.height = H + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", () => { fit(); replant(); });
+
+const pointer = { x: -1e4, y: -1e4 };
+window.addEventListener("pointermove", e => { pointer.x = e.clientX; pointer.y = e.clientY; });
+window.addEventListener("pointerleave", () => { pointer.x = -1e4; pointer.y = -1e4; });
+
+let stalks = [], pulses = [], cycle = 0, restingSince = 0;
+
+function makeStalk(code, i, n) {
+  const lane = W * (i + 0.5 + (((code % 11) / 11) - 0.5) * 0.35) / n;
+  return {
+    // identity, all derived from the character code
+    omega: 0.6 + (code % 13) * 0.11,             // breath frequency
+    chi: ((code * 31) % 100) / 100 * TAU,        // per-segment phase step
+    amp: 0.055 + (code % 7) * 0.012,             // sway amplitude
+    hue: (code * 47 + cycle * 23) % 360,
+    segLen: 2.2 + (code % 3) * 0.5,
+    maxSeg: Math.floor((H * (0.5 + (code % 5) * 0.045)) / 3),
+    // growth state
+    pts: [[lane, H + 4]],
+    heading: -TAU / 4 + ((code % 9) - 4) * 0.02, // upward, with a lean
+    history: [],
+    curvature: 0,
+    bloomAt: 0.9,
+    blooms: 0,
+    grown: 1,
+    acc: 0,
+  };
+}
+
+function replant() {
+  const codes = [...SEED].map(c => c.charCodeAt(0));
+  stalks = codes.map((code, i) => makeStalk(code, i, codes.length));
+  pulses = []; restingSince = 0;
+}
+
+function growTick(s, t) {
+  const [tx, ty] = s.pts[s.pts.length - 1];
+
+  // rule 2: elastic pull toward the remembered average heading
+  let target = s.heading;
+  if (s.history.length) {
+    const mean = s.history.reduce((a, b) => a + b, 0) / s.history.length;
+    target += (mean - s.heading) * ELASTICITY;
+  }
+
+  // rule 1: the character breathes — sway from code-derived rhythm
+  const breath = Math.sin(t * s.omega + s.grown * s.chi + cycle * 0.61) * s.amp;
+
+  // the pointer bends only living tips (an inverse-square nudge, capped)
+  let nudge = 0;
+  const dx = tx - pointer.x, dy = ty - pointer.y, d2 = dx * dx + dy * dy;
+  if (d2 < 180 * 180) {
+    const away = Math.atan2(dy, dx);
+    let diff = away - s.heading;
+    while (diff > Math.PI) diff -= TAU;
+    while (diff < -Math.PI) diff += TAU;
+    nudge = diff * Math.min(0.09, 2600 / (d2 + 900) * 0.05);
+  }
+
+  const prev = s.heading;
+  s.heading = target + breath + nudge;
+
+  s.history.push(s.heading);
+  if (s.history.length > MEMORY) s.history.shift();
+
+  s.pts.push([tx + Math.cos(s.heading) * s.segLen, ty + Math.sin(s.heading) * s.segLen]);
+  s.grown++;
+
+  // rule 3: curvature account and blooming
+  s.curvature += Math.abs(s.heading - prev);
+  if (s.curvature >= s.bloomAt) {
+    pulses.push({ x: tx, y: ty, r: 2, life: 1, hue: s.hue });
+    s.curvature = 0;
+    s.bloomAt += 0.55;
+    s.blooms++;
+  }
+}
+
+function frame(now) {
+  // a hidden or zero-size window plants nothing: wait for real dimensions
+  if (H < 10) {
+    fit();
+    if (H >= 10) replant();
+    requestAnimationFrame(frame);
+    return;
+  }
+  const t = now / 1000;
+  ctx.clearRect(0, 0, W, H);
+
+  // grow on a fixed cadence so refresh rate never changes the garden
+  let allDone = true;
+  for (const s of stalks) {
+    s.acc += 16.7;
+    while (s.acc >= GROW_MS && s.grown < s.maxSeg) { s.acc -= GROW_MS; growTick(s, t); }
+    if (s.grown < s.maxSeg) allDone = false;
+  }
+  if (allDone) {
+    if (!restingSince) restingSince = now;
+    else if (now - restingSince > REST_MS) { cycle++; replant(); }
+  }
+
+  // two-pass stroke: wide dim halo, then a thin bright core
+  for (const s of stalks) {
+    const done = s.grown / s.maxSeg;
+    for (const pass of [[7, 0.05], [1.4, 0.5]]) {
+      ctx.beginPath();
+      ctx.moveTo(s.pts[0][0], s.pts[0][1]);
+      for (let i = 1; i < s.pts.length; i++) ctx.lineTo(s.pts[i][0], s.pts[i][1]);
+      ctx.strokeStyle = `hsla(${s.hue}, ${70 - done * 30}%, ${58 + done * 10}%, ${pass[1]})`;
+      ctx.lineWidth = pass[0];
+      ctx.lineCap = "round";
+      ctx.stroke();
+    }
+  }
+
+  for (let i = pulses.length - 1; i >= 0; i--) {
+    const p = pulses[i];
+    p.r += 1.6; p.life -= 0.016;
+    if (p.life <= 0) { pulses.splice(i, 1); continue; }
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, TAU);
+    ctx.strokeStyle = `hsla(${p.hue}, 80%, 70%, ${p.life * 0.35})`;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
+
+  requestAnimationFrame(frame);
+}
+
+fit();
+replant();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

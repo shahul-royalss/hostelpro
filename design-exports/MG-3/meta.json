@@ -1,0 +1,16 @@
+{
+  "id": "MG-3",
+  "title": "Daily Revenue",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "d9a79bde9c9f47059a392dc5e9c06346",
+  "stitchScreenName": "projects/15365392661227774313/screens/d9a79bde9c9f47059a392dc5e9c06346",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2370",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 22992,
+  "screenshotBytes": 52802
+}

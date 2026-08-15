@@ -1,0 +1,16 @@
+{
+  "id": "OW-6",
+  "title": "Finance Overview",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "d4aed9bbcc62405d9da1cea9d1dd7c8b",
+  "stitchScreenName": "projects/15365392661227774313/screens/d4aed9bbcc62405d9da1cea9d1dd7c8b",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2754",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 28910,
+  "screenshotBytes": 80694
+}

@@ -1,0 +1,16 @@
+{
+  "id": "MG-4",
+  "title": "Mess Menu Editor",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "839b583a6b1a41d6a0c983e8fd657c65",
+  "stitchScreenName": "projects/15365392661227774313/screens/839b583a6b1a41d6a0c983e8fd657c65",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2734",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 26580,
+  "screenshotBytes": 50970
+}

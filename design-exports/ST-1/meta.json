@@ -1,0 +1,16 @@
+{
+  "id": "ST-1",
+  "title": "Student Home",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "667f7f5052c445f980b9138173d3d611",
+  "stitchScreenName": "projects/15365392661227774313/screens/667f7f5052c445f980b9138173d3d611",
+  "deviceType": "MOBILE",
+  "width": "780",
+  "height": "1956",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 14934,
+  "screenshotBytes": 33362
+}

@@ -1,0 +1,434 @@
+[
+  {
+    "id": "A-1",
+    "title": "Login",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "f4465226c5a741c4906d9f8f3a3a586c",
+    "stitchScreenName": "projects/15365392661227774313/screens/f4465226c5a741c4906d9f8f3a3a586c",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2048",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 12299,
+    "screenshotBytes": 15761
+  },
+  {
+    "id": "MG-4",
+    "title": "Mess Menu Editor",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "839b583a6b1a41d6a0c983e8fd657c65",
+    "stitchScreenName": "projects/15365392661227774313/screens/839b583a6b1a41d6a0c983e8fd657c65",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2734",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 26580,
+    "screenshotBytes": 50970
+  },
+  {
+    "id": "ST-4",
+    "title": "My Complaints",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "a22766766ef24eff9636573aae39d46f",
+    "stitchScreenName": "projects/15365392661227774313/screens/a22766766ef24eff9636573aae39d46f",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "1768",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 14251,
+    "screenshotBytes": 31333
+  },
+  {
+    "id": "MG-2",
+    "title": "Daily Expenses",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "292c0533e606441782d8717833c9e94d",
+    "stitchScreenName": "projects/15365392661227774313/screens/292c0533e606441782d8717833c9e94d",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2250",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 20190,
+    "screenshotBytes": 49043
+  },
+  {
+    "id": "OW-3",
+    "title": "Broadcast Updates",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "abf001b218f2400ab478f6620b2b6647",
+    "stitchScreenName": "projects/15365392661227774313/screens/abf001b218f2400ab478f6620b2b6647",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2048",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 23957,
+    "screenshotBytes": 45069
+  },
+  {
+    "id": "WD-6",
+    "title": "Leaves & Visitors Management",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "f3f74b31d3554ae6b186525372965e74",
+    "stitchScreenName": "projects/15365392661227774313/screens/f3f74b31d3554ae6b186525372965e74",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "1768",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 15260,
+    "screenshotBytes": 42616
+  },
+  {
+    "id": "WD-5",
+    "title": "Fees Tracker",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "b52be6bbcc0343fca277c555eb9896c9",
+    "stitchScreenName": "projects/15365392661227774313/screens/b52be6bbcc0343fca277c555eb9896c9",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "1768",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 18232,
+    "screenshotBytes": 37789
+  },
+  {
+    "id": "MG-1",
+    "title": "Manager Dashboard",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "a8fda86df9c64da286d524b11757256b",
+    "stitchScreenName": "projects/15365392661227774313/screens/a8fda86df9c64da286d524b11757256b",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2048",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 21829,
+    "screenshotBytes": 52003
+  },
+  {
+    "id": "WD-4",
+    "title": "Room Detail View",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "16193162931a4af090072b6d729e8554",
+    "stitchScreenName": "projects/15365392661227774313/screens/16193162931a4af090072b6d729e8554",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "2106",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 16431,
+    "screenshotBytes": 45976
+  },
+  {
+    "id": "WD-2",
+    "title": "Register Student (Form)",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "3f73e3869f0f477e876559dd45a2d58a",
+    "stitchScreenName": "projects/15365392661227774313/screens/3f73e3869f0f477e876559dd45a2d58a",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "1768",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 13322,
+    "screenshotBytes": 36582
+  },
+  {
+    "id": "OW-1",
+    "title": "Owner Dashboard",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "1b1a6e045562401caaae332119c9c467",
+    "stitchScreenName": "projects/15365392661227774313/screens/1b1a6e045562401caaae332119c9c467",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2048",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 19243,
+    "screenshotBytes": 51422
+  },
+  {
+    "id": "SA-3",
+    "title": "Subscriptions Management",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "476b055bec7c4de3a26dfaaf98a1dfe9",
+    "stitchScreenName": "projects/15365392661227774313/screens/476b055bec7c4de3a26dfaaf98a1dfe9",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2048",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.jpg"
+    },
+    "htmlBytes": 22698,
+    "screenshotBytes": 22715
+  },
+  {
+    "id": "SA-4",
+    "title": "Hostel Detail (Monitoring)",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "cd5e6d2bbf344eeebf1fddb14c12dd7e",
+    "stitchScreenName": "projects/15365392661227774313/screens/cd5e6d2bbf344eeebf1fddb14c12dd7e",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2048",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 17794,
+    "screenshotBytes": 38398
+  },
+  {
+    "id": "OW-6",
+    "title": "Finance Overview",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "d4aed9bbcc62405d9da1cea9d1dd7c8b",
+    "stitchScreenName": "projects/15365392661227774313/screens/d4aed9bbcc62405d9da1cea9d1dd7c8b",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2754",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 28910,
+    "screenshotBytes": 80694
+  },
+  {
+    "id": "SA-2",
+    "title": "Create Owner & Hostel Wizard",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "675ece7cbaf4486ebfafd197fcb04c28",
+    "stitchScreenName": "projects/15365392661227774313/screens/675ece7cbaf4486ebfafd197fcb04c28",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2048",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.jpg"
+    },
+    "htmlBytes": 21126,
+    "screenshotBytes": 31120
+  },
+  {
+    "id": "ST-5",
+    "title": "My Room & Roommates",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "cf7779c7a9bb49b295ee7ccd1752f074",
+    "stitchScreenName": "projects/15365392661227774313/screens/cf7779c7a9bb49b295ee7ccd1752f074",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "1768",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 16887,
+    "screenshotBytes": 58691
+  },
+  {
+    "id": "OW-4",
+    "title": "Staff & Tasks",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "b02b6b8789dc4dd2b51cd019c519faa1",
+    "stitchScreenName": "projects/15365392661227774313/screens/b02b6b8789dc4dd2b51cd019c519faa1",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2048",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 19981,
+    "screenshotBytes": 47054
+  },
+  {
+    "id": "ST-1",
+    "title": "Student Home",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "667f7f5052c445f980b9138173d3d611",
+    "stitchScreenName": "projects/15365392661227774313/screens/667f7f5052c445f980b9138173d3d611",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "1956",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 14934,
+    "screenshotBytes": 33362
+  },
+  {
+    "id": "A-2",
+    "title": "Change Password (First Login)",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "e98d00507bef41e68f37c383002b7c24",
+    "stitchScreenName": "projects/15365392661227774313/screens/e98d00507bef41e68f37c383002b7c24",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2048",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 13107,
+    "screenshotBytes": 36717
+  },
+  {
+    "id": "OW-2",
+    "title": "Complaints Inbox",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "b3df07fc809f4b6299d5f1a7736d8c34",
+    "stitchScreenName": "projects/15365392661227774313/screens/b3df07fc809f4b6299d5f1a7736d8c34",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2048",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 25937,
+    "screenshotBytes": 62433
+  },
+  {
+    "id": "MG-3",
+    "title": "Daily Revenue",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "d9a79bde9c9f47059a392dc5e9c06346",
+    "stitchScreenName": "projects/15365392661227774313/screens/d9a79bde9c9f47059a392dc5e9c06346",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2370",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 22992,
+    "screenshotBytes": 52802
+  },
+  {
+    "id": "WD-1",
+    "title": "Warden Home",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "e17f32e4c4de4e229c86c40a1bad737a",
+    "stitchScreenName": "projects/15365392661227774313/screens/e17f32e4c4de4e229c86c40a1bad737a",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "2332",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 15073,
+    "screenshotBytes": 25488
+  },
+  {
+    "id": "ST-2",
+    "title": "Student Profile",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "0b4e14db4ebf4917aea5c2007fb1a6a7",
+    "stitchScreenName": "projects/15365392661227774313/screens/0b4e14db4ebf4917aea5c2007fb1a6a7",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "2634",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 16323,
+    "screenshotBytes": 33164
+  },
+  {
+    "id": "SA-1",
+    "title": "Super Admin Dashboard",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "d09fa12250964ef4877b70f3337aecea",
+    "stitchScreenName": "projects/15365392661227774313/screens/d09fa12250964ef4877b70f3337aecea",
+    "deviceType": "DESKTOP",
+    "width": "2560",
+    "height": "2048",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.jpg"
+    },
+    "htmlBytes": 17481,
+    "screenshotBytes": 31445
+  },
+  {
+    "id": "ST-3",
+    "title": "Mess Menu",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "4275ee093d9d45e3999368345fbaa72e",
+    "stitchScreenName": "projects/15365392661227774313/screens/4275ee093d9d45e3999368345fbaa72e",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "2000",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 15403,
+    "screenshotBytes": 45429
+  },
+  {
+    "id": "WD-3",
+    "title": "Rooms & Beds List",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "7af553efeb9141aab4068c9a73b1e8d8",
+    "stitchScreenName": "projects/15365392661227774313/screens/7af553efeb9141aab4068c9a73b1e8d8",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "2192",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 22817,
+    "screenshotBytes": 27297
+  },
+  {
+    "id": "OW-5",
+    "title": "Students Directory",
+    "stitchProjectId": "15365392661227774313",
+    "stitchScreenId": "efb10a74ad27444e9b9557a2ef8a1cf0",
+    "stitchScreenName": "projects/15365392661227774313/screens/efb10a74ad27444e9b9557a2ef8a1cf0",
+    "deviceType": "DESKTOP",
+    "width": "3360",
+    "height": "2048",
+    "files": {
+      "html": "index.html",
+      "screenshot": "screenshot.png"
+    },
+    "htmlBytes": 26417,
+    "screenshotBytes": 33937
+  }
+]

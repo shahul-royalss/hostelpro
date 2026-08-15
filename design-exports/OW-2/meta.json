@@ -1,0 +1,16 @@
+{
+  "id": "OW-2",
+  "title": "Complaints Inbox",
+  "stitchProjectId": "15365392661227774313",
+  "stitchScreenId": "b3df07fc809f4b6299d5f1a7736d8c34",
+  "stitchScreenName": "projects/15365392661227774313/screens/b3df07fc809f4b6299d5f1a7736d8c34",
+  "deviceType": "DESKTOP",
+  "width": "2560",
+  "height": "2048",
+  "files": {
+    "html": "index.html",
+    "screenshot": "screenshot.png"
+  },
+  "htmlBytes": 25937,
+  "screenshotBytes": 62433
+}
