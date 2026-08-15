@@ -28,6 +28,9 @@ export async function signIn(_prev: ActionResult | null, formData: FormData): Pr
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data.user) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[signIn] failed for", email, "→", error?.status, error?.message);
+    }
     if (error?.message?.toLowerCase().includes("banned")) {
       return fail("This account has been deactivated. Contact your hostel owner.");
     }
