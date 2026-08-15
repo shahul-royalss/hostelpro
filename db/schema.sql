@@ -1152,6 +1152,20 @@ language sql stable security definer set search_path = public as $$
   order by b.bed_number
 $$;
 
+-- Student / staff: hostel contact card (students cannot read users rows — Hard rule §4.8)
+create or replace function public.st_hostel_contacts()
+returns table (hostel_name text, address text, rules text, warden_name text, warden_phone text, manager_name text, manager_phone text, owner_name text)
+language sql stable security definer set search_path = public as $$
+  select h.name, h.address, h.rules,
+         (select u.full_name from public.users u where u.hostel_id = h.id and u.role = 'warden'  and u.status = 'active' and u.deleted_at is null limit 1),
+         (select u.phone     from public.users u where u.hostel_id = h.id and u.role = 'warden'  and u.status = 'active' and u.deleted_at is null limit 1),
+         (select u.full_name from public.users u where u.hostel_id = h.id and u.role = 'manager' and u.status = 'active' and u.deleted_at is null limit 1),
+         (select u.phone     from public.users u where u.hostel_id = h.id and u.role = 'manager' and u.status = 'active' and u.deleted_at is null limit 1),
+         (select u.full_name from public.users u where u.id = h.owner_user_id)
+  from public.hostels h
+  where h.id = coalesce(app.user_hostel_id(), (select hostel_id from public.students where user_id = auth.uid() limit 1))
+$$;
+
 -- Owner: update hostel rules text (only field owners may edit on hostels)
 create or replace function public.ow_update_hostel_rules(p_hostel_id uuid, p_rules text) returns void
 language plpgsql security definer set search_path = public as $$
