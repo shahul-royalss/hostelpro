@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { format, startOfMonth, subMonths } from "date-fns";
 import type {
   ComplaintsPerWeekRow,
+  DailyFinanceRow,
+  HostelRow,
   HostelStats,
   SaDashboardStats,
   SaHostelRow,
@@ -56,6 +58,13 @@ export async function fetchSaHostels(supabase: SupabaseClient): Promise<SaHostel
 export async function fetchSaHostel(supabase: SupabaseClient, hostelId: string): Promise<SaHostelRow | null> {
   const rows = await fetchSaHostels(supabase);
   return rows.find((r) => r.hostel_id === hostelId) ?? null;
+}
+
+/** Raw hostels row (floors / rooms / beds-per-room defaults) — null when not found or not readable. */
+export async function fetchHostelRow(supabase: SupabaseClient, hostelId: string): Promise<HostelRow | null> {
+  const { data, error } = await supabase.from("hostels").select("*").eq("id", hostelId).maybeSingle();
+  if (error) throw error;
+  return (data as HostelRow | null) ?? null;
 }
 
 /** Subscription history for one hostel, newest first. */
@@ -120,17 +129,12 @@ export interface MonthlyFinancePoint {
   expenses: number;
 }
 
-/** Revenue vs expenses per month for the last `months` months (SA-4 grouped bars). */
+/** Revenue vs expenses per month for the last `months` months (SA-4 grouped bars) — rpc_daily_finance aggregated by month. */
 export async function fetchMonthlyFinance(supabase: SupabaseClient, hostelId: string, months = 6): Promise<MonthlyFinancePoint[]> {
-  const first = startOfMonth(subMonths(new Date(), months - 1));
-  const from = toISODate(first);
-
-  const [{ data: rev, error: e1 }, { data: exp, error: e2 }] = await Promise.all([
-    supabase.from("revenues").select("date, amount").eq("hostel_id", hostelId).gte("date", from).is("deleted_at", null),
-    supabase.from("expenses").select("date, amount").eq("hostel_id", hostelId).gte("date", from).is("deleted_at", null),
-  ]);
-  if (e1) throw e1;
-  if (e2) throw e2;
+  const from = toISODate(startOfMonth(subMonths(new Date(), months - 1)));
+  const to = toISODate(new Date());
+  const { data, error } = await supabase.rpc("rpc_daily_finance", { p_hostel_id: hostelId, p_from: from, p_to: to });
+  if (error) throw error;
 
   const buckets = new Map<string, MonthlyFinancePoint>();
   for (let i = 0; i < months; i++) {
@@ -138,13 +142,11 @@ export async function fetchMonthlyFinance(supabase: SupabaseClient, hostelId: st
     const period = format(d, "yyyy-MM");
     buckets.set(period, { period, month: format(d, "MMM"), revenue: 0, expenses: 0 });
   }
-  for (const r of (rev ?? []) as { date: string; amount: number | string }[]) {
-    const b = buckets.get(r.date.slice(0, 7));
-    if (b) b.revenue += Number(r.amount ?? 0);
-  }
-  for (const r of (exp ?? []) as { date: string; amount: number | string }[]) {
-    const b = buckets.get(r.date.slice(0, 7));
-    if (b) b.expenses += Number(r.amount ?? 0);
+  for (const r of (data ?? []) as DailyFinanceRow[]) {
+    const b = buckets.get(String(r.day).slice(0, 7));
+    if (!b) continue;
+    b.revenue += Number(r.revenue ?? 0);
+    b.expenses += Number(r.expense ?? 0);
   }
   return [...buckets.values()];
 }

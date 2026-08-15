@@ -24,7 +24,8 @@ export interface MyStudent extends StudentRow {
 export async function getMyStudent(supabase: SupabaseClient, userId: string): Promise<MyStudent | null> {
   const { data } = await supabase
     .from("students")
-    .select("*, room:rooms(room_number, capacity, floor:floors(floor_number)), bed:beds(bed_number)")
+    // beds↔students have two FKs (beds.student_id and students.bed_id) → disambiguate
+    .select("*, room:rooms(room_number, capacity, floor:floors(floor_number)), bed:beds!students_bed_id_fkey(bed_number)")
     .eq("user_id", userId)
     .neq("status", "vacated")
     .maybeSingle();

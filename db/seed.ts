@@ -9,7 +9,17 @@
  * Runs with the SERVICE ROLE key (auth admin API + RLS bypass). app.is_super_admin()
  * returns true for the service role, so the same RPCs the UI uses
  * (sa_create_hostel_with_subscription, wd_register_student, wd_record_payment) work here.
- * Standalone script: no Next.js / lib imports.
+ * Standalone script: no Next.js / lib imports (tsx only).
+ *
+ * NOTE (project state): the live Supabase project already contains this exact demo data set
+ * (it was created via SQL for QA before SUPABASE_SERVICE_ROLE_KEY was available locally).
+ * The seed refuses to run on top of existing demo accounts, so the FIRST real run against
+ * that project must be `npx tsx db/seed.ts --force`, which wipes the QA-created demo hostels
+ * and accounts (super admin is kept) and recreates everything through this script.
+ *
+ * Idempotency: without --force the script aborts with "Already seeded — rerun with --force"
+ * as soon as it meets an existing demo login; nothing is partially written before that check
+ * for the first account, but a mid-run failure leaves partial data → rerun with --force.
  */
 import path from "node:path";
 import { config as loadEnv } from "dotenv";
@@ -78,24 +88,30 @@ interface StudentSeed {
   bed: number;
 }
 
+/**
+ * Sunrise Residency — 3 floors × 12 rooms (101–104, 201–204, 301–304) × 3 beds.
+ * Bed spread: 101 full, 102 full, 103 two, 104 one, 201 two, 202 one → 12 students / 36 beds.
+ * Index (1-based) = last two digits of the phone; joining dates span the last ~6 months.
+ */
 const SUNRISE_STUDENTS: StudentSeed[] = [
   { name: "Aarav Sharma", phone: "9000000001", guardian: "Rajesh Sharma", guardianPhone: "9811100001", address: "14, Malviya Nagar, Jaipur, Rajasthan 302017", idProof: "Aadhaar", fee: 7000, joinedDaysAgo: 165, room: "101", bed: 1 },
   { name: "Ishaan Verma", phone: "9000000002", guardian: "Sunil Verma", guardianPhone: "9811100002", address: "B-22, Gomti Nagar, Lucknow, UP 226010", idProof: "Aadhaar", fee: 6500, joinedDaysAgo: 150, room: "101", bed: 2 },
   { name: "Kavya Iyer", phone: "9000000003", guardian: "Ramesh Iyer", guardianPhone: "9811100003", address: "7, Besant Nagar 2nd Ave, Chennai, TN 600090", idProof: "PAN", fee: 7500, joinedDaysAgo: 140, room: "102", bed: 1 },
-  { name: "Rohan Deshmukh", phone: "9000000004", guardian: "Prakash Deshmukh", guardianPhone: "9811100004", address: "Flat 302, Kothrud, Pune, MH 411038", idProof: "Driving Licence", fee: 6000, joinedDaysAgo: 120, room: "103", bed: 1 },
-  { name: "Sneha Patil", phone: "9000000005", guardian: "Mahesh Patil", guardianPhone: "9811100005", address: "Rajarampuri 5th Lane, Kolhapur, MH 416008", idProof: "Aadhaar", fee: 8000, joinedDaysAgo: 110, room: "103", bed: 2 },
-  { name: "Arjun Nair", phone: "9000000006", guardian: "Lakshmi Nair", guardianPhone: "9811100006", address: "Panampilly Nagar, Kochi, Kerala 682036", idProof: "Passport", fee: 7200, joinedDaysAgo: 95, room: "104", bed: 1 },
-  { name: "Meera Krishnan", phone: "9000000007", guardian: "Venkat Krishnan", guardianPhone: "9811100007", address: "RS Puram, Coimbatore, TN 641002", idProof: "Aadhaar", fee: 6800, joinedDaysAgo: 80, room: "201", bed: 1 },
-  { name: "Aditya Kulkarni", phone: "9000000008", guardian: "Sanjay Kulkarni", guardianPhone: "9811100008", address: "Dharampeth, Nagpur, MH 440010", idProof: "Voter ID", fee: 7000, joinedDaysAgo: 65, room: "201", bed: 2 },
-  { name: "Priyanka Singh", phone: "9000000009", guardian: "Anil Singh", guardianPhone: "9811100009", address: "Lanka, Varanasi, UP 221005", idProof: "Aadhaar", fee: 6500, joinedDaysAgo: 50, room: "202", bed: 1 },
-  { name: "Karan Malhotra", phone: "9000000010", guardian: "Deepak Malhotra", guardianPhone: "9811100010", address: "Sector 21, Chandigarh 160022", idProof: "PAN", fee: 7800, joinedDaysAgo: 35, room: "301", bed: 1 },
-  { name: "Divya Reddy", phone: "9000000011", guardian: "Srinivas Reddy", guardianPhone: "9811100011", address: "Jubilee Hills, Hyderabad, TS 500033", idProof: "Aadhaar", fee: 7500, joinedDaysAgo: 20, room: "301", bed: 2 },
-  { name: "Siddharth Bose", phone: "9000000012", guardian: "Amit Bose", guardianPhone: "9811100012", address: "Salt Lake Sector V, Kolkata, WB 700091", idProof: "Aadhaar", fee: 6200, joinedDaysAgo: 6, room: "302", bed: 1 },
+  { name: "Rohan Deshmukh", phone: "9000000004", guardian: "Prakash Deshmukh", guardianPhone: "9811100004", address: "Flat 302, Kothrud, Pune, MH 411038", idProof: "Driving Licence", fee: 6000, joinedDaysAgo: 120, room: "101", bed: 3 },
+  { name: "Sneha Patil", phone: "9000000005", guardian: "Mahesh Patil", guardianPhone: "9811100005", address: "Rajarampuri 5th Lane, Kolhapur, MH 416008", idProof: "Aadhaar", fee: 8000, joinedDaysAgo: 110, room: "102", bed: 2 },
+  { name: "Arjun Nair", phone: "9000000006", guardian: "Lakshmi Nair", guardianPhone: "9811100006", address: "Panampilly Nagar, Kochi, Kerala 682036", idProof: "Passport", fee: 7200, joinedDaysAgo: 95, room: "103", bed: 1 },
+  { name: "Meera Krishnan", phone: "9000000007", guardian: "Venkat Krishnan", guardianPhone: "9811100007", address: "RS Puram, Coimbatore, TN 641002", idProof: "Aadhaar", fee: 6800, joinedDaysAgo: 80, room: "102", bed: 3 },
+  { name: "Aditya Kulkarni", phone: "9000000008", guardian: "Sanjay Kulkarni", guardianPhone: "9811100008", address: "Dharampeth, Nagpur, MH 440010", idProof: "Voter ID", fee: 7000, joinedDaysAgo: 65, room: "103", bed: 2 },
+  { name: "Priyanka Singh", phone: "9000000009", guardian: "Anil Singh", guardianPhone: "9811100009", address: "Lanka, Varanasi, UP 221005", idProof: "Aadhaar", fee: 6500, joinedDaysAgo: 50, room: "104", bed: 1 },
+  { name: "Karan Malhotra", phone: "9000000010", guardian: "Deepak Malhotra", guardianPhone: "9811100010", address: "Sector 21, Chandigarh 160022", idProof: "PAN", fee: 7800, joinedDaysAgo: 35, room: "201", bed: 1 },
+  { name: "Divya Reddy", phone: "9000000011", guardian: "Srinivas Reddy", guardianPhone: "9811100011", address: "Jubilee Hills, Hyderabad, TS 500033", idProof: "Aadhaar", fee: 7500, joinedDaysAgo: 20, room: "202", bed: 1 },
+  { name: "Siddharth Bose", phone: "9000000012", guardian: "Amit Bose", guardianPhone: "9811100012", address: "Salt Lake Sector V, Kolkata, WB 700091", idProof: "Aadhaar", fee: 6200, joinedDaysAgo: 6, room: "201", bed: 2 },
 ];
 
+/** Lakeview PG — 2 floors × 6 rooms (101–103, 201–203) × 3 beds; expired subscription. */
 const LAKEVIEW_STUDENTS: StudentSeed[] = [
-  { name: "Nikhil Joshi", phone: "9000000013", guardian: "Mohan Joshi", guardianPhone: "9811100013", address: "Aundh, Pune, MH 411007", idProof: "Aadhaar", fee: 6500, joinedDaysAgo: 200, room: "101", bed: 1 },
-  { name: "Tanvi Menon", phone: "9000000014", guardian: "Suresh Menon", guardianPhone: "9811100014", address: "Kakkanad, Kochi, Kerala 682030", idProof: "PAN", fee: 7000, joinedDaysAgo: 90, room: "102", bed: 1 },
+  { name: "Nikhil Joshi", phone: "9000000101", guardian: "Mohan Joshi", guardianPhone: "9811100101", address: "Aundh, Pune, MH 411007", idProof: "Aadhaar", fee: 6500, joinedDaysAgo: 200, room: "101", bed: 1 },
+  { name: "Tanvi Menon", phone: "9000000102", guardian: "Suresh Menon", guardianPhone: "9811100102", address: "Kakkanad, Kochi, Kerala 682030", idProof: "PAN", fee: 7000, joinedDaysAgo: 90, room: "102", bed: 1 },
 ];
 
 /** Every demo login the seed creates (used by --force cleanup). */
@@ -278,7 +294,12 @@ async function wipeDemoData() {
   }
 
   const ordered = [...toDelete.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id);
-  for (const id of ordered) await deleteAuthUser(id);
+  if (ordered.length) {
+    // users.created_by → users has no cascade; drop the audit links between demo accounts
+    // so deletion cannot trip over an unexpected creator chain (e.g. QA-created extras).
+    check(await sb.from("users").update({ created_by: null }).in("created_by", ordered), "detach created_by links");
+    for (const id of ordered) await deleteAuthUser(id);
+  }
   log(`deleted ${ordered.length} demo auth accounts`);
 
   if (FORCE_ADMIN && process.env.SUPER_ADMIN_EMAIL) {
@@ -531,8 +552,8 @@ async function seedSunriseData(hostelId: string, ids: { owner: string; manager: 
   const complaintSeeds = [
     { s: 3, category: "wifi", title: "Wi-Fi keeps dropping in room 102", description: "Connection drops every evening after 8 pm; can't attend online classes.", daysAgo: 2, final: "open" as const },
     { s: 7, category: "food", title: "Dinner served cold twice this week", description: "Chapatis and dal were cold on Monday and Wednesday.", daysAgo: 4, final: "open" as const },
-    { s: 4, category: "maintenance", title: "Bathroom tap leaking on 1st floor", description: "The tap near room 103 leaks continuously and the floor stays wet.", daysAgo: 9, final: "in_progress" as const },
-    { s: 10, category: "cleaning", title: "Corridor on 3rd floor not cleaned", description: "Dust and litter near the stairs for the last three days.", daysAgo: 16, final: "resolved" as const, note: "Housekeeping schedule updated; corridor cleaned daily at 8 am." },
+    { s: 4, category: "maintenance", title: "Bathroom tap leaking on 1st floor", description: "The tap near room 101 leaks continuously and the floor stays wet.", daysAgo: 9, final: "in_progress" as const },
+    { s: 10, category: "cleaning", title: "Corridor on 2nd floor not cleaned", description: "Dust and litter near the stairs for the last three days.", daysAgo: 16, final: "resolved" as const, note: "Housekeeping schedule updated; corridor cleaned daily at 8 am." },
   ];
   for (const c of complaintSeeds) {
     const st = S(c.s);
@@ -676,12 +697,12 @@ async function seedSunriseData(hostelId: string, ids: { owner: string; manager: 
     "leave 2 → approved",
   );
 
-  /* visitors — 2 today (one checked out), 1 earlier */
+  /* visitors — 2 checked in today (still inside), 1 from yesterday already checked out */
   check(
     await sb.from("visitors").insert([
       { hostel_id: hostelId, student_id: S(1).studentId, visitor_name: "Rajesh Sharma", visitor_phone: "9811100001", relation: "Father", check_in_at: hoursAgo(0.5), logged_by: ids.warden },
-      { hostel_id: hostelId, student_id: S(6).studentId, visitor_name: "Lakshmi Nair", visitor_phone: "9811100006", relation: "Mother", check_in_at: hoursAgo(1.5), check_out_at: hoursAgo(0.3), logged_by: ids.warden },
-      { hostel_id: hostelId, student_id: S(10).studentId, visitor_name: "Rahul Malhotra", visitor_phone: "9811100020", relation: "Brother", check_in_at: hoursAgo(72 + 6), check_out_at: hoursAgo(72 + 3.5), logged_by: ids.warden },
+      { hostel_id: hostelId, student_id: S(6).studentId, visitor_name: "Lakshmi Nair", visitor_phone: "9811100006", relation: "Mother", check_in_at: hoursAgo(1.5), logged_by: ids.warden },
+      { hostel_id: hostelId, student_id: S(10).studentId, visitor_name: "Rahul Malhotra", visitor_phone: "9811100020", relation: "Brother", check_in_at: hoursAgo(24 + 6), check_out_at: hoursAgo(24 + 3.5), logged_by: ids.warden },
     ]),
     "visitors",
   );

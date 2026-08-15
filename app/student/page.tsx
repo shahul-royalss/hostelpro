@@ -57,16 +57,14 @@ export default async function StudentHomePage() {
                   ? "Not linked to a student record"
                   : fee.status === "paid"
                     ? `${formatINR(fee.paid)} received — thank you`
-                    : fee.status === "partial"
-                      ? `Partial · ${formatINR(fee.remaining)} remaining · Pay at warden desk`
-                      : "Pay at warden desk"}
+                    : "Pay at warden desk"}
               </div>
             </div>
             {fee ? (
               fee.status === "paid" ? (
                 <StatusPill status="paid" label="Paid" />
               ) : fee.status === "partial" ? (
-                <StatusPill status="partial" label={`Due ${formatINR(fee.remaining)}`} />
+                <StatusPill status="partial" label={`Partial · ${formatINR(fee.remaining)} remaining`} />
               ) : (
                 <StatusPill status="unpaid" label={`Due ${formatINR(fee.remaining)}`} />
               )

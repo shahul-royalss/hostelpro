@@ -13,6 +13,13 @@ import type {
 import { EXPENSE_CATEGORIES } from "@/lib/types";
 import { titleCase } from "@/lib/utils";
 
+/** Validate a `?month=YYYY-MM` search param; falls back to the current month. */
+export function resolvePeriod(raw: string | string[] | undefined): string {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return value;
+  return format(new Date(), "yyyy-MM");
+}
+
 /** First and last ISO dates of a "YYYY-MM" period. */
 export function monthRange(period: string): { from: string; to: string } {
   const start = parse(`${period}-01`, "yyyy-MM-dd", new Date());
