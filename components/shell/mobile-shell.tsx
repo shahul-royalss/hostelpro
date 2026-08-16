@@ -3,12 +3,21 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, KeyRound, LogOut, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/roles";
 import { NAV, isActive } from "./nav-config";
 import { NotificationBell } from "@/components/shared/notification-bell";
 import { UserAvatar } from "@/components/ui/avatar";
+import { signOut } from "@/lib/actions/session";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 /**
  * Mobile shell — Warden / Student (mobile-first, PWA-installable).
@@ -62,7 +71,33 @@ export function MobileShell({
               <ArrowLeft className="h-5 w-5" />
             </button>
           ) : (
-            <UserAvatar name={avatarName} size="sm" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" aria-label="Account menu" className="rounded-full active:scale-95">
+                  <UserAvatar name={avatarName} size="sm" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuLabel className="font-normal">
+                  <div className="text-sm font-semibold text-navy">{avatarName}</div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/change-password">
+                    <KeyRound /> Change password
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/security/mfa">
+                    <ShieldCheck /> Two-factor authentication
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => signOut()} className="text-red focus:text-red">
+                  <LogOut /> Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           <div className="min-w-0">
             <div className="truncate text-[16px] font-bold text-navy leading-tight">{title}</div>

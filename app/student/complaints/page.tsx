@@ -22,7 +22,7 @@ export default async function StudentComplaintsPage({ searchParams }: { searchPa
         supabase,
         rows.map((r) => r.id),
       ),
-      Promise.all(rows.map((r) => signedUrl("complaint-photos", r.photo_url))),
+      Promise.all(rows.map((r) => signedUrl("complaint-photos", r.photo_url, ctx.hostel.id))),
     ]);
     complaints = rows.map((r, i) => ({
       ...r,

@@ -470,7 +470,7 @@ export async function getStudentsDirectory(supabase: SupabaseClient, hostelId: s
   const raw = (rows ?? []) as Raw[];
 
   // Signed photo URLs for just this page (private bucket, DECISIONS #15).
-  const photoUrls = await Promise.all(raw.map((r) => signedUrl("student-docs", r.photo_url)));
+  const photoUrls = await Promise.all(raw.map((r) => signedUrl("student-docs", r.photo_url, hostelId)));
 
   const students: StudentListRow[] = raw.map((r, i) => {
     const room = firstOf(r.room);

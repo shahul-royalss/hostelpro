@@ -18,7 +18,7 @@ export default async function WardenFeesPage({ searchParams }: { searchParams: P
 
   const supabase = await createClient();
   const ledger = await getFeeLedger(supabase, ctx.hostel.id, period);
-  const photoUrls = await Promise.all(ledger.map((r) => (r.photo_url ? signedUrl("student-docs", r.photo_url) : Promise.resolve(null))));
+  const photoUrls = await Promise.all(ledger.map((r) => (r.photo_url ? signedUrl("student-docs", r.photo_url, ctx.hostel.id) : Promise.resolve(null))));
   const rows = ledger.map((r, i) => ({ ...r, photoUrl: photoUrls[i] }));
 
   return (

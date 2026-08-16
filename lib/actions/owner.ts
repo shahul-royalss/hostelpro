@@ -7,6 +7,8 @@ import { createStaffAccount, regeneratePassword, setAccountStatus } from "@/lib/
 import { signedUrl } from "@/lib/storage";
 import { fail, ok, type ActionResult, type AnnouncementAudience } from "@/lib/types";
 import { ROLE_LABEL } from "@/lib/roles";
+import { audit } from "@/lib/audit";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 import { getActiveManager, getStudentById, type StudentProfileRow } from "@/lib/queries/owner";
 import {
   announcementIdSchema,
@@ -109,6 +111,8 @@ export async function createStaff(input: { role: "manager" | "warden"; fullName:
   }
   try {
     const { user, ctx } = await assertWritableContext("owner");
+    const rl = await rateLimit(`owner:staff:${user.id}`, LIMITS.accountCreatePerUser.max, LIMITS.accountCreatePerUser.windowSeconds);
+    if (!rl.allowed) return fail("Too many account operations in a short time. Please wait a bit and try again.");
     const supabase = await createClient();
 
     // Friendly pre-check (the trigger is the real guard)
@@ -132,6 +136,7 @@ export async function createStaff(input: { role: "manager" | "warden"; fullName:
       createdBy: user.id,
     });
 
+    await audit("owner.staff.create", { targetType: "user", targetId: created.userId, hostelId: ctx.hostel.id, meta: { role: parsed.data.role } });
     revalidatePath("/owner/staff");
     revalidatePath("/owner");
     return ok(
@@ -167,10 +172,13 @@ export async function resetStaffPassword(input: { userId: string }): Promise<Act
   const parsed = staffIdSchema.safeParse(input);
   if (!parsed.success) return fail("Invalid request.");
   try {
-    const { ctx } = await assertWritableContext("owner");
+    const { user, ctx } = await assertWritableContext("owner");
+    const rl = await rateLimit(`owner:staff:${user.id}`, LIMITS.accountCreatePerUser.max, LIMITS.accountCreatePerUser.windowSeconds);
+    if (!rl.allowed) return fail("Too many account operations in a short time. Please wait a bit and try again.");
     const staff = await loadStaffUser(parsed.data.userId, ctx.hostel.id);
     if (!staff) return fail("Staff member not found in this hostel.");
     const password = await regeneratePassword(staff.id);
+    await audit("owner.staff.password_reset", { targetType: "user", targetId: staff.id, hostelId: ctx.hostel.id, meta: { role: staff.role } });
     return ok(
       { userId: staff.id, name: staff.full_name, role: ROLE_LABEL[staff.role], loginId: staff.email ?? "", password },
       "Temporary password generated",
@@ -190,6 +198,7 @@ export async function setStaffStatus(input: { userId: string; status: "active" |
     if (staff.status === parsed.data.status) return ok(undefined);
     // Role-limit trigger fires on reactivation and returns a friendly error if the slot is taken.
     await setAccountStatus(staff.id, parsed.data.status);
+    await audit("owner.staff.status", { targetType: "user", targetId: staff.id, hostelId: ctx.hostel.id, meta: { role: staff.role, status: parsed.data.status } });
     revalidatePath("/owner/staff");
     revalidatePath("/owner");
     return ok(undefined, parsed.data.status === "inactive" ? `${ROLE_LABEL[staff.role]} deactivated` : `${ROLE_LABEL[staff.role]} reactivated`);
@@ -325,7 +334,10 @@ export async function getStudentProfile(input: { studentId: string }): Promise<A
     const supabase = await createClient();
     const student = await getStudentById(supabase, ctx.hostel.id, parsed.data.studentId);
     if (!student) return fail("Student not found.");
-    const [photoUrl, idProofUrl] = await Promise.all([signedUrl("student-docs", student.photo_url), signedUrl("student-docs", student.id_proof_url)]);
+    const [photoUrl, idProofUrl] = await Promise.all([
+      signedUrl("student-docs", student.photo_url, ctx.hostel.id),
+      signedUrl("student-docs", student.id_proof_url, ctx.hostel.id),
+    ]);
     return ok({ student, photoUrl, idProofUrl });
   } catch (e) {
     return fail(errorMessage(e));

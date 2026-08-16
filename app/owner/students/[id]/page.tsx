@@ -25,7 +25,7 @@ export default async function OwnerStudentDetailPage({ params }: { params: Promi
   const student = await getStudentById(supabase, ctx.hostel.id, id);
   if (!student) notFound();
 
-  const [photoUrl, idProofUrl] = await Promise.all([signedUrl("student-docs", student.photo_url), signedUrl("student-docs", student.id_proof_url)]);
+  const [photoUrl, idProofUrl] = await Promise.all([signedUrl("student-docs", student.photo_url, ctx.hostel.id), signedUrl("student-docs", student.id_proof_url, ctx.hostel.id)]);
 
   return (
     <>

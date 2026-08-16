@@ -180,28 +180,52 @@ export async function assertWritableContext(...roles: UserRole[]) {
 }
 
 /**
- * Turn any thrown error into a user-facing message.
- * Postgres trigger messages (errcode P0001) are already friendly — pass them through.
+ * Turn any thrown error into a user-facing message WITHOUT leaking internals
+ * (checklist §18). Only allow-listed sources are shown verbatim:
+ *   • PermissionError (ours)
+ *   • Postgres `raise exception` from our triggers/RPCs (SQLSTATE P0001) — written to be friendly
+ *   • our own thrown Error()s from lib/auth, lib/storage (plain-language messages)
+ * Everything else (driver/PostgREST/network errors) maps to a generic message; the raw
+ * error is logged server-side so it can still be investigated.
  */
 export function errorMessage(err: unknown, fallback = "Something went wrong. Please try again."): string {
   if (err instanceof PermissionError) return err.message;
+
   if (err && typeof err === "object") {
-    const e = err as { message?: string; code?: string; details?: string; hint?: string };
+    const e = err as { message?: string; code?: string; details?: string; hint?: string; name?: string };
     const msg = e.message ?? "";
-    // RLS violation
-    if (e.code === "42501" || /row-level security/i.test(msg)) {
-      if (/expired|read-only/i.test(msg)) return msg;
+    const code = e.code ?? "";
+
+    // RLS / privilege violation (also our RPC 'Not allowed.' / read-only raises use 42501)
+    if (code === "42501" || /row-level security/i.test(msg)) {
+      if (/expired|read-only|Only the Super Admin|Only the warden|Not allowed/i.test(msg)) return msg;
       return "You don't have permission to do that (or the subscription has expired).";
     }
-    if (e.code === "23505") {
+    if (code === "23505") {
       if (/students_phone_active_key/.test(msg)) return "A student with this phone number is already registered.";
       if (/users_email_key/.test(msg)) return "An account with this email already exists.";
       if (/students_one_active_per_bed|beds_student_key/.test(msg)) return "That bed is already occupied. Choose a free bed.";
       return "This record already exists.";
     }
-    if (e.code === "P0001" && msg) return msg;
-    if (msg) return msg;
+    if (code === "23503") return "That record is linked to something that no longer exists.";
+    if (code === "23514" || code === "22003") return "One of the values is out of the allowed range.";
+    if (code === "22P02" || code === "22007" || code === "22008") return "One of the values has an invalid format.";
+    if (code === "P0001" && msg) return msg; // our own friendly raises
+    if (code === "PGRST116") return "Not found.";
+    if (/^(P0|42|22|23|08|53|57|PGRST)/.test(code)) {
+      logServerError(err);
+      return fallback;
+    }
+    // Plain Error thrown by our own server code (accounts.ts, storage.ts, validators): safe to show
+    if (err instanceof Error && !code && msg && msg.length <= 200 && !/at .*\.(ts|js):\d+|ECONN|ENOTFOUND|fetch failed|TypeError|ReferenceError/i.test(msg)) {
+      return msg;
+    }
+    if (msg) logServerError(err);
   }
-  if (err instanceof Error && err.message) return err.message;
   return fallback;
+}
+
+function logServerError(err: unknown) {
+  // Never log request bodies/credentials here — only the error itself.
+  console.error("[hostelpro] server error:", err instanceof Error ? `${err.name}: ${err.message}` : JSON.stringify(err).slice(0, 500));
 }

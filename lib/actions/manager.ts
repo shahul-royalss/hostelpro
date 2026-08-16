@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { audit } from "@/lib/audit";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { assertHostelContext, assertWritableContext, errorMessage } from "@/lib/permissions";
 import { signedUrl, uploadToBucket } from "@/lib/storage";
@@ -62,6 +64,8 @@ export async function createExpense(formData: FormData): Promise<ActionResult<{ 
 
   try {
     const { user, ctx } = await assertWritableContext("manager");
+    const rl = await rateLimit(`manager:write:${user.id}`, LIMITS.writePerUser.max, LIMITS.writePerUser.windowSeconds);
+    if (!rl.allowed) return fail("Too many entries in a short time. Please slow down and try again.");
     const { path, warning } = await tryUploadReceipt(ctx.hostel.id, formFile(formData, "receipt"));
 
     const supabase = await createClient();
@@ -143,6 +147,7 @@ export async function deleteExpense(input: { id: string }): Promise<ActionResult
       .is("deleted_at", null);
     if (error) return fail(errorMessage(error));
     if (!count) return fail("That expense no longer exists.");
+    await audit("manager.expense.delete", { targetType: "expense", targetId: parsed.data.id, hostelId: ctx.hostel.id });
     revalidateFinance();
     return ok(undefined, "Expense deleted");
   } catch (e) {
@@ -166,7 +171,7 @@ export async function getReceiptUrl(input: { id: string }): Promise<ActionResult
     if (error) return fail(errorMessage(error));
     const path = (data as { receipt_url: string | null } | null)?.receipt_url;
     if (!path) return fail("No receipt attached to this expense.");
-    const url = await signedUrl("receipts", path);
+    const url = await signedUrl("receipts", path, ctx.hostel.id);
     if (!url) return fail("Receipt can't be opened right now — file storage isn't configured.");
     return ok({ url, isPdf: /\.pdf(\?|$)/i.test(path) });
   } catch (e) {
@@ -240,6 +245,7 @@ export async function deleteRevenue(input: { id: string }): Promise<ActionResult
       .is("deleted_at", null);
     if (error) return fail(errorMessage(error));
     if (!count) return fail("That revenue entry no longer exists.");
+    await audit("manager.revenue.delete", { targetType: "revenue", targetId: parsed.data.id, hostelId: ctx.hostel.id });
     revalidateFinance();
     return ok(undefined, "Revenue entry deleted");
   } catch (e) {

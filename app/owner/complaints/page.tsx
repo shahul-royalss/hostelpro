@@ -32,7 +32,7 @@ export default async function OwnerComplaintsPage({ searchParams }: { searchPara
 
   let selected: SelectedComplaint | null = null;
   if (target) {
-    const [events, photoUrl] = await Promise.all([getComplaintEvents(supabase, target.id), signedUrl("complaint-photos", target.photo_url)]);
+    const [events, photoUrl] = await Promise.all([getComplaintEvents(supabase, target.id), signedUrl("complaint-photos", target.photo_url, ctx.hostel.id)]);
     selected = { complaint: target, events, photoUrl };
   }
 

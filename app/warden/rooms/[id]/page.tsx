@@ -22,7 +22,7 @@ export default async function WardenRoomDetailPage({ params }: { params: Promise
   if (!detail) notFound();
 
   // Signed photo URLs (null when the storage key is not configured → initials avatar)
-  const photoUrls = await Promise.all(detail.beds.map((b) => (b.student?.photo_url ? signedUrl("student-docs", b.student.photo_url) : Promise.resolve(null))));
+  const photoUrls = await Promise.all(detail.beds.map((b) => (b.student?.photo_url ? signedUrl("student-docs", b.student.photo_url, ctx.hostel.id) : Promise.resolve(null))));
   const beds = detail.beds.map((b, i) => ({ ...b, photoUrl: photoUrls[i] }));
 
   return (

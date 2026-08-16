@@ -8,10 +8,24 @@ import { changePasswordSchema, loginSchema } from "@/lib/validators/auth";
 import { fail, type ActionResult } from "@/lib/types";
 import { getSessionUser, errorMessage } from "@/lib/permissions";
 import { clearMustChangePassword } from "@/lib/auth/accounts";
+import { LIMITS, getClientIp, rateLimit } from "@/lib/rate-limit";
+import { audit, auditSystem, hashIdentifier } from "@/lib/audit";
+
+const GENERIC_LOGIN_ERROR = "Incorrect email/phone or password.";
+
+/** Only same-origin relative paths under the user's own role home are honoured as a post-login target. */
+function safeNext(next: string | undefined, role: UserRole): string {
+  const home = ROLE_HOME[role];
+  if (!next) return home;
+  if (!next.startsWith("/") || next.startsWith("//") || /[\\\r\n]/.test(next)) return home;
+  return next === home || next.startsWith(home + "/") ? next : home;
+}
 
 /**
  * Single login for all roles (§3). Accepts email OR phone (students).
- * On success redirects to the role home (or /change-password on first login).
+ * Brute-force protection: durable limits per IP and per identifier (fail-closed),
+ * on top of Supabase Auth's own limits. Failures/successes are audited (identifier hashed).
+ * On success redirects to the role home, /change-password (first login) or /mfa (step-up).
  */
 export async function signIn(_prev: ActionResult | null, formData: FormData): Promise<ActionResult> {
   const parsed = loginSchema.safeParse({
@@ -24,17 +38,32 @@ export async function signIn(_prev: ActionResult | null, formData: FormData): Pr
   }
   const { identifier, password, next } = parsed.data;
   const email = resolveLoginEmail(identifier);
+  const idHash = hashIdentifier(email);
+  const ip = await getClientIp();
+
+  // Rate limits (checklist §3/§19): per IP and per identifier
+  const [byIp, byId] = await Promise.all([
+    rateLimit(`login:ip:${ip}`, LIMITS.loginPerIp.max, LIMITS.loginPerIp.windowSeconds, true),
+    rateLimit(`login:id:${idHash}`, LIMITS.loginPerIdentifier.max, LIMITS.loginPerIdentifier.windowSeconds, true),
+  ]);
+  if (!byIp.allowed || !byId.allowed) {
+    const wait = Math.max(byIp.retryAfterSeconds, byId.retryAfterSeconds);
+    await auditSystem("auth.login.rate_limited", { targetType: "identifier", targetId: idHash });
+    return fail(`Too many sign-in attempts. Please wait ${Math.ceil(wait / 60)} minute${wait > 60 ? "s" : ""} and try again.`);
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data.user) {
     if (process.env.NODE_ENV !== "production") {
-      console.error("[signIn] failed for", email, "→", error?.status, error?.message);
+      console.error("[signIn] failed:", error?.status, error?.message);
     }
-    if (error?.message?.toLowerCase().includes("banned")) {
-      return fail("This account has been deactivated. Contact your hostel owner.");
+    await auditSystem("auth.login.failed", { targetType: "identifier", targetId: idHash, meta: { status: error?.status ?? 0 } });
+    if (error?.status === 429) {
+      return fail("Too many sign-in attempts. Please wait a few minutes and try again.");
     }
-    return fail("Incorrect email/phone or password.");
+    // Same message whether the account exists or not (no user enumeration)
+    return fail(GENERIC_LOGIN_ERROR);
   }
 
   // Profile row → role, status, must_change_password
@@ -44,21 +73,23 @@ export async function signIn(_prev: ActionResult | null, formData: FormData): Pr
     .eq("id", data.user.id)
     .maybeSingle();
 
-  if (!profile || profile.deleted_at) {
+  if (!profile || profile.deleted_at || profile.status !== "active") {
     await supabase.auth.signOut();
-    return fail("Your account isn't set up yet. Contact your administrator.");
-  }
-  if (profile.status !== "active") {
-    await supabase.auth.signOut();
-    return fail("This account has been deactivated. Contact your hostel owner.");
+    await auditSystem("auth.login.failed", { targetType: "identifier", targetId: idHash, meta: { reason: profile ? "inactive" : "no-profile" } });
+    // Password was correct, so telling the user the account is disabled leaks nothing new
+    return fail(profile ? "This account has been deactivated. Contact your hostel owner." : "Your account isn't set up yet. Contact your administrator.");
   }
 
   const role = profile.role as UserRole;
-  const meta = data.user.app_metadata as { must_change_password?: boolean } | undefined;
-  const mustChange = profile.must_change_password || meta?.must_change_password === true;
+  await audit("auth.login.success", { targetType: "user", targetId: data.user.id, meta: { role } });
 
-  if (mustChange) redirect("/change-password");
-  const target = next && next.startsWith(ROLE_HOME[role]) ? next : ROLE_HOME[role];
+  // MFA step-up: a verified factor exists → the middleware sends them to /mfa; go there directly
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const target = safeNext(next, role);
+  if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+    redirect(`/mfa?next=${encodeURIComponent(target)}`);
+  }
+  if (profile.must_change_password) redirect("/change-password");
   redirect(target);
 }
 
@@ -74,23 +105,29 @@ export async function changePassword(_prev: ActionResult | null, formData: FormD
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
+  const rl = await rateLimit(`pwchange:${user.id}`, LIMITS.passwordChangePerUser.max, LIMITS.passwordChangePerUser.windowSeconds, true);
+  if (!rl.allowed) return fail("Too many attempts. Please wait a few minutes and try again.");
+
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
   if (error) {
     return fail(
       /same password|different from the old/i.test(error.message)
         ? "Choose a password different from your temporary one."
-        : errorMessage(error),
+        : /weak|pwned|leaked|compromised/i.test(error.message)
+          ? "That password is too weak or has appeared in a data breach — choose another."
+          : errorMessage(error),
     );
   }
 
-  // Clear the flag in DB (RLS allows self-update) and in app_metadata (admin API, if configured)
+  // Clear the flag in DB (RLS allows self-update) and in app_metadata (admin API)
   await supabase.from("users").update({ must_change_password: false }).eq("id", user.id);
   try {
     await clearMustChangePassword(user.id);
   } catch {
     // Service role key not configured — DB flag is cleared; middleware falls back to it.
   }
+  await audit("auth.password.changed", { targetType: "user", targetId: user.id, meta: { forced: user.must_change_password } });
 
   redirect(ROLE_HOME[user.role]);
 }

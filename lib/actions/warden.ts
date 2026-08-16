@@ -2,10 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { assertHostelContext, assertWritableContext, errorMessage } from "@/lib/permissions";
 import { createStudentAuthUser, deleteAuthUser } from "@/lib/auth/accounts";
-import { uploadToBucket } from "@/lib/storage";
+import { removeFromBucket, uploadToBucket } from "@/lib/storage";
+import { audit } from "@/lib/audit";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 import { fail, ok, type ActionResult } from "@/lib/types";
 import { getFreeBeds, searchActiveStudents, type FreeBed, type StudentOption } from "@/lib/queries/warden";
 import {
@@ -28,13 +29,7 @@ function flatten(err: { flatten: () => { fieldErrors: Record<string, string[] | 
 
 /** Best-effort cleanup of uploaded objects when the DB half of a flow fails (no orphans in the private bucket). */
 async function removeUploads(paths: (string | null | undefined)[]) {
-  const keep = paths.filter((p): p is string => !!p);
-  if (keep.length === 0) return;
-  try {
-    await createAdminClient().storage.from("student-docs").remove(keep);
-  } catch {
-    // never mask the original error
-  }
+  await removeFromBucket("student-docs", paths);
 }
 
 /* ───────────────────────── register student (WD-2) ───────────────────────── */
@@ -78,8 +73,10 @@ export async function registerStudent(formData: FormData): Promise<ActionResult<
   let photoPath: string | null = null;
   let idProofPath: string | null = null;
   try {
-    const { ctx } = await assertWritableContext("warden");
+    const { user, ctx } = await assertWritableContext("warden");
     const hostelId = ctx.hostel.id;
+    const rl = await rateLimit(`warden:register:${user.id}`, LIMITS.accountCreatePerUser.max, LIMITS.accountCreatePerUser.windowSeconds);
+    if (!rl.allowed) return fail("Too many registrations in a short time. Please wait a bit and try again.");
 
     let account: Awaited<ReturnType<typeof createStudentAuthUser>>;
     try {
@@ -121,6 +118,7 @@ export async function registerStudent(formData: FormData): Promise<ActionResult<
     }
 
     const { data: bed } = await supabase.from("beds").select("room_id").eq("id", input.bedId).maybeSingle();
+    await audit("warden.student.register", { targetType: "student", targetId: String(studentId), hostelId, meta: { bedId: input.bedId } });
 
     revalidatePath("/warden");
     revalidatePath("/warden/rooms");
@@ -185,6 +183,7 @@ export async function updateRoom(input: { roomId: string; roomNumber: string; ca
       if (error.code === "23505") return fail(`Room ${parsed.data.roomNumber} already exists on this hostel.`);
       return fail(errorMessage(error));
     }
+    await audit("warden.room.update", { targetType: "room", targetId: parsed.data.roomId, hostelId: ctx.hostel.id, meta: { roomNumber: parsed.data.roomNumber, capacity: parsed.data.capacity } });
     revalidatePath("/warden/rooms");
     revalidatePath(`/warden/rooms/${parsed.data.roomId}`);
     revalidatePath("/warden");
@@ -210,6 +209,7 @@ export async function reassignBed(input: { studentId: string; bedId: string }): 
       .maybeSingle();
     if (error) return fail(errorMessage(error));
     if (!data) return fail("Student not found.");
+    await audit("warden.student.reassign", { targetType: "student", targetId: parsed.data.studentId, hostelId: ctx.hostel.id, meta: { bedId: parsed.data.bedId } });
     revalidatePath("/warden/rooms", "layout");
     revalidatePath("/warden");
     revalidatePath("/warden/fees");
@@ -223,10 +223,11 @@ export async function vacateStudent(input: { studentId: string }): Promise<Actio
   const parsed = vacateStudentSchema.safeParse(input);
   if (!parsed.success) return fail("Invalid student.");
   try {
-    await assertWritableContext("warden");
+    const { ctx } = await assertWritableContext("warden");
     const supabase = await createClient();
     const { error } = await supabase.rpc("wd_vacate_student", { p_student_id: parsed.data.studentId });
     if (error) return fail(errorMessage(error));
+    await audit("warden.student.vacate", { targetType: "student", targetId: parsed.data.studentId, hostelId: ctx.hostel.id });
     revalidatePath("/warden/rooms", "layout");
     revalidatePath("/warden");
     revalidatePath("/warden/fees");
@@ -250,7 +251,9 @@ export async function recordPayment(input: {
   const parsed = recordPaymentSchema.safeParse(input);
   if (!parsed.success) return fail("Please check the payment details.", flatten(parsed.error));
   try {
-    await assertWritableContext("warden");
+    const { user, ctx } = await assertWritableContext("warden");
+    const rl = await rateLimit(`warden:write:${user.id}`, LIMITS.writePerUser.max, LIMITS.writePerUser.windowSeconds);
+    if (!rl.allowed) return fail("Too many operations in a short time. Please slow down and try again.");
     const supabase = await createClient();
     const { error } = await supabase.rpc("wd_record_payment", {
       p_student_id: parsed.data.studentId,
@@ -261,6 +264,7 @@ export async function recordPayment(input: {
       p_notes: parsed.data.notes || null,
     });
     if (error) return fail(errorMessage(error));
+    await audit("warden.payment.record", { targetType: "student", targetId: parsed.data.studentId, hostelId: ctx.hostel.id, meta: { period: parsed.data.periodMonth, amount: parsed.data.amount, mode: parsed.data.mode } });
     revalidatePath("/warden/fees");
     revalidatePath("/warden");
     revalidatePath("/warden/rooms", "layout");

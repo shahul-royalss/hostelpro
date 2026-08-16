@@ -12,7 +12,7 @@ export default async function WardenComplaintsPage() {
   const { ctx } = await requireHostelContext("warden");
   const supabase = await createClient();
   const complaints = await getComplaints(supabase, ctx.hostel.id, 100);
-  const photoUrls = await Promise.all(complaints.map((c) => (c.photo_url ? signedUrl("complaint-photos", c.photo_url) : Promise.resolve(null))));
+  const photoUrls = await Promise.all(complaints.map((c) => (c.photo_url ? signedUrl("complaint-photos", c.photo_url, ctx.hostel.id) : Promise.resolve(null))));
   const rows = complaints.map((c, i) => ({ ...c, photoUrl: photoUrls[i] }));
   const open = rows.filter((c) => c.status !== "resolved").length;
 

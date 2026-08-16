@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { assertWritableContext, errorMessage, PermissionError } from "@/lib/permissions";
 import { uploadToBucket } from "@/lib/storage";
@@ -34,6 +35,8 @@ export async function createComplaint(formData: FormData): Promise<ActionResult<
 
   try {
     const { user, ctx } = await assertWritableContext("student");
+    const rl = await rateLimit(`student:write:${user.id}`, LIMITS.uploadPerUser.max, LIMITS.uploadPerUser.windowSeconds);
+    if (!rl.allowed) return fail("You're doing that too often. Please wait a while and try again.");
     const supabase = await createClient();
     const studentId = await myStudentId(supabase, user.id);
 
@@ -82,6 +85,8 @@ export async function applyLeave(input: { fromDate: string; toDate: string; reas
 
   try {
     const { user, ctx } = await assertWritableContext("student");
+    const rl = await rateLimit(`student:write:${user.id}`, LIMITS.uploadPerUser.max, LIMITS.uploadPerUser.windowSeconds);
+    if (!rl.allowed) return fail("You're doing that too often. Please wait a while and try again.");
     const supabase = await createClient();
     const studentId = await myStudentId(supabase, user.id);
 

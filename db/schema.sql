@@ -1353,6 +1353,83 @@ language sql stable security invoker set search_path = public as $$
 $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- RATE LIMITING (checklist §19) — durable fixed-window counters usable from any
+-- serverless instance. Called ONLY through the service-role client (lib/rate-limit.ts);
+-- the table lives in the private `app` schema and the RPC is not executable by users.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists app.rate_limits (
+  key           text primary key,
+  window_start  timestamptz not null default now(),
+  count         int not null default 0
+);
+
+create or replace function public.rate_limit(p_key text, p_max int, p_window_seconds int)
+returns table (allowed boolean, remaining int, retry_after_seconds int)
+language plpgsql security definer set search_path = app, public as $$
+declare v_row app.rate_limits%rowtype; v_now timestamptz := now(); v_win interval := make_interval(secs => greatest(p_window_seconds, 1));
+begin
+  -- opportunistic garbage collection of stale windows
+  if random() < 0.005 then
+    delete from app.rate_limits where window_start < v_now - interval '1 day';
+  end if;
+  insert into app.rate_limits (key, window_start, count) values (left(p_key, 200), v_now, 1)
+  on conflict (key) do update set
+    count        = case when app.rate_limits.window_start < v_now - v_win then 1 else app.rate_limits.count + 1 end,
+    window_start = case when app.rate_limits.window_start < v_now - v_win then v_now else app.rate_limits.window_start end
+  returning * into v_row;
+  allowed := v_row.count <= p_max;
+  remaining := greatest(p_max - v_row.count, 0);
+  retry_after_seconds := case when allowed then 0
+    else greatest(0, ceil(extract(epoch from (v_row.window_start + v_win - v_now)))::int) end;
+  return next;
+end $$;
+revoke all on function public.rate_limit(text, int, int) from public, anon, authenticated;
+grant execute on function public.rate_limit(text, int, int) to service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- AUDIT LOG (checklist §27) — privileged/security-relevant events. Rows are written
+-- only through audit_event() (actor = auth.uid(), cannot be spoofed) or the service
+-- role (unauthenticated events such as failed logins). Readable by the Super Admin
+-- and, for their own hostel, the owner.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists public.audit_log (
+  id             bigserial primary key,
+  at             timestamptz not null default now(),
+  actor_user_id  uuid,
+  actor_role     public.user_role,
+  action         text not null,
+  target_type    text,
+  target_id      text,
+  hostel_id      uuid,
+  ip             text,
+  user_agent     text,
+  meta           jsonb not null default '{}'::jsonb
+);
+create index if not exists audit_log_hostel_idx on public.audit_log (hostel_id, at desc);
+create index if not exists audit_log_actor_idx  on public.audit_log (actor_user_id, at desc);
+create index if not exists audit_log_action_idx on public.audit_log (action, at desc);
+alter table public.audit_log enable row level security;
+drop policy if exists audit_log_select on public.audit_log;
+create policy audit_log_select on public.audit_log for select
+  using (app.is_super_admin() or (hostel_id is not null and app.owns_hostel(hostel_id)));
+-- no insert/update/delete policies for users: writes go through audit_event() / service role only
+
+create or replace function public.audit_event(
+  p_action text, p_target_type text default null, p_target_id text default null,
+  p_hostel_id uuid default null, p_meta jsonb default '{}'::jsonb, p_ip text default null, p_user_agent text default null
+) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.audit_log (actor_user_id, actor_role, action, target_type, target_id, hostel_id, ip, user_agent, meta)
+  values (auth.uid(), app.user_role(), left(p_action, 80), left(p_target_type, 40), left(p_target_id, 80),
+          p_hostel_id, left(p_ip, 64), left(p_user_agent, 300), coalesce(p_meta, '{}'::jsonb));
+exception when others then
+  null; -- auditing must never break the primary action
+end $$;
+revoke all on function public.audit_event(text, text, text, uuid, jsonb, text, text) from public, anon;
+grant execute on function public.audit_event(text, text, text, uuid, jsonb, text, text) to authenticated, service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- STORAGE BUCKETS (private; files served via signed URLs from the server)
 -- ─────────────────────────────────────────────────────────────────────────────
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

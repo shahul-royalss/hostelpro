@@ -14,12 +14,12 @@ import { getMyStudent } from "@/lib/queries/student";
 import { formatDate, formatINR } from "@/lib/utils";
 
 export default async function StudentProfilePage() {
-  const { user } = await requireHostelContext("student");
+  const { user, ctx } = await requireHostelContext("student");
   const supabase = await createClient();
   const student = await getMyStudent(supabase, user.id);
 
   const [photoSrc, idProofHref] = student
-    ? await Promise.all([signedUrl("student-docs", student.photo_url), signedUrl("student-docs", student.id_proof_url)])
+    ? await Promise.all([signedUrl("student-docs", student.photo_url, ctx.hostel.id), signedUrl("student-docs", student.id_proof_url, ctx.hostel.id)])
     : [null, null];
 
   return (

@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, ChevronsUpDown, LogOut, Menu, X } from "lucide-react";
+import { Building2, ChevronsUpDown, LogOut, Menu, ShieldCheck, X } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { ROLE_LABEL, type UserRole } from "@/lib/roles";
 import { NAV, isActive } from "./nav-config";
@@ -192,6 +192,11 @@ function UserMenu({ user, hostel, hostels }: { user: ShellUser; hostel?: ShellHo
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link href="/change-password">Change password</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/security/mfa">
+            <ShieldCheck /> Two-factor authentication
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => signOut()} className="text-red focus:text-red">
           <LogOut /> Log out

@@ -6,10 +6,14 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { ACTIVE_HOSTEL_COOKIE, assertRole, errorMessage, getSessionUser } from "@/lib/permissions";
 import { fail, ok, type ActionResult, type NotificationRow } from "@/lib/types";
+import { audit } from "@/lib/audit";
 
 export async function signOut() {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  const user = await getSessionUser();
+  if (user) await audit("auth.logout", { targetType: "user", targetId: user.id });
+  // scope 'global' revokes every refresh token for this user (all devices), not just this cookie
+  await supabase.auth.signOut({ scope: "global" });
   const cookieStore = await cookies();
   cookieStore.delete(ACTIVE_HOSTEL_COOKIE);
   redirect("/login");

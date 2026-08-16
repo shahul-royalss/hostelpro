@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { assertRole, errorMessage } from "@/lib/permissions";
 import { createStaffAccount, deleteAuthUser, regeneratePassword, syncHostelMetadata } from "@/lib/auth/accounts";
 import { fail, ok, type ActionResult } from "@/lib/types";
+import { audit } from "@/lib/audit";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 import {
   createOwnerHostelSchema,
   regenerateOwnerPasswordSchema,
@@ -50,6 +52,8 @@ export async function createOwnerAndHostel(
 
   try {
     const user = await assertRole("super_admin");
+    const rl = await rateLimit(`sa:create:${user.id}`, LIMITS.accountCreatePerUser.max, LIMITS.accountCreatePerUser.windowSeconds);
+    if (!rl.allowed) return fail("Too many hostels created in a short time. Please wait a bit and try again.");
     const supabase = await createClient();
 
     const rpcArgs = {
@@ -81,6 +85,7 @@ export async function createOwnerAndHostel(
       const hostelId = typeof data === "string" ? data : null;
       if (error || !hostelId) return fail(errorMessage(error ?? new Error("Could not create the hostel.")));
 
+      await audit("sa.owner_hostel.create", { targetType: "hostel", targetId: hostelId, hostelId, meta: { ownerUserId: owner.ownerUserId, mode: "existing", floors: hostel.floors, rooms: hostel.rooms } });
       revalidateSuperAdmin(hostelId);
       return ok({ hostelId, credentials: null }, `${hostel.name} created`);
     }
@@ -110,6 +115,7 @@ export async function createOwnerAndHostel(
       // metadata is a convenience mirror; users.hostel_id (set by the RPC) is the source of truth
     }
 
+    await audit("sa.owner_hostel.create", { targetType: "hostel", targetId: hostelId, hostelId, meta: { ownerUserId: account.userId, mode: "new", floors: hostel.floors, rooms: hostel.rooms } });
     revalidateSuperAdmin(hostelId);
     return ok(
       { hostelId, credentials: { name: owner.name, loginId: account.loginId, password: account.password } },
@@ -134,6 +140,7 @@ export async function renewSubscription(input: RenewSubscriptionInput): Promise<
       p_notes: parsed.data.notes?.trim() || null,
     });
     if (error) return fail(errorMessage(error));
+    await audit("sa.subscription.renew", { targetType: "hostel", targetId: parsed.data.hostelId, hostelId: parsed.data.hostelId, meta: { newEndDate: parsed.data.newEndDate, amount: parsed.data.amount } });
     revalidateSuperAdmin(parsed.data.hostelId);
     return ok({ subscriptionId: String(data ?? "") }, "Subscription renewed");
   } catch (e) {
@@ -154,6 +161,7 @@ export async function setHostelStatus(input: SetHostelStatusInput): Promise<Acti
       // if the subscription is still expired this flips it straight back to read-only
       await supabase.rpc("refresh_subscription_statuses");
     }
+    await audit("sa.hostel.status", { targetType: "hostel", targetId: parsed.data.hostelId, hostelId: parsed.data.hostelId, meta: { status: parsed.data.status } });
     revalidateSuperAdmin(parsed.data.hostelId);
     return ok(undefined, parsed.data.status === "suspended" ? "Hostel suspended" : "Hostel reactivated");
   } catch (e) {
@@ -181,6 +189,7 @@ export async function regenerateOwnerPassword(input: RegenerateOwnerPasswordInpu
     if (!o.email) return fail("This owner has no email on file.");
 
     const password = await regeneratePassword(o.id);
+    await audit("sa.owner.password_reset", { targetType: "user", targetId: o.id });
     return ok({ name: o.full_name, loginId: o.email, password }, "New password issued");
   } catch (e) {
     return fail(errorMessage(e));
@@ -209,6 +218,7 @@ export async function updateHostelStructure(input: UpdateHostelStructureInput): 
     });
     if (error) return fail(errorMessage(error));
 
+    await audit("sa.hostel.structure", { targetType: "hostel", targetId: hostelId, hostelId, meta: { floors, rooms } });
     revalidateSuperAdmin(hostelId);
     return ok({ floors, rooms }, "Hostel structure updated");
   } catch (e) {
