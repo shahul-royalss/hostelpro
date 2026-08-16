@@ -29,6 +29,8 @@ function toCsv(header: string[], rows: (string | number | null | undefined)[][])
 export async function GET(req: NextRequest) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  // Mirror requireRole/assertRole: deactivated or soft-deleted accounts get nothing (not just an empty CSV via RLS).
+  if (user.status !== "active" || user.deleted_at) return NextResponse.json({ error: "Your account is inactive." }, { status: 403 });
   if (user.role !== "manager" && user.role !== "owner") return NextResponse.json({ error: "Forbidden." }, { status: 403 });
 
   const ctx = await getHostelContext();

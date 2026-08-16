@@ -48,3 +48,10 @@ Each entry: what was decided, why, and where it lives. Newest at the bottom.
 
 16. **Service-role key** is required for account creation / password regeneration / uploads / seeding and must be added to `.env.local` from the Supabase dashboard (not retrievable via the MCP). Everything else (all reads, RLS-gated writes, triggers) works with the anon key.
 17. **Seeding**: `npm run db:seed` (full demo, §13) and `npm run db:seed:admin` (super admin only, §8.1). The seed uses the auth admin API and prints all demo credentials.
+
+## Super Admin review follow-ups
+
+18. **Second hostel for an existing owner (§4.1)** — the SA-2 wizard's Owner step has a "New owner / Existing owner" toggle. `owner` in `createOwnerHostelSchema` is a discriminated union (`{mode:'new', name,email,phone}` | `{mode:'existing', ownerUserId}`); in existing mode `createOwnerAndHostel` skips account creation and calls `sa_create_hostel_with_subscription` with the chosen `p_owner_user_id`, returning `credentials: null` (no dialog). Inactive owners are listed but not selectable.
+19. **Structure edits are grow-only (§4.2)** — `updateHostelStructure` (SA only) updates `hostels.total_floors/total_rooms` and re-runs `scaffold_hostel` (idempotent, `ON CONFLICT DO NOTHING`), so only new rooms/beds are added. Shrinking is rejected server-side because it would orphan occupied rooms/beds; the "Edit structure" dialog on SA-4 clamps to the current counts.
+20. **SA-4 header** — DESIGN.md says "no edit buttons except Renew"; the §6.1 row actions (suspend, regenerate owner password) are kept on the detail page but tucked behind a single ghost "⋯" menu (`HostelHeaderMenu`) so Renew stays the only prominent control.
+21. **7 / 15 / 30-day flags (§4.4)** — `DaysLeftPill` tiers its tone (≤7 red · ≤15 sand · ≤30 navy · >30 teal) and the dashboard "Expiring soon" card shows three window counters + filter pills (`ExpiringSoonTable`) instead of a single ≤30-day list.

@@ -5,7 +5,7 @@ import { requireHostelContext } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { signedUrl } from "@/lib/storage";
 import { getStudentById } from "@/lib/queries/owner";
-import { formatPeriodMonth, toPeriodMonth } from "@/lib/utils";
+import { formatDate, formatPeriodMonth, toPeriodMonth } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
 import { GlassCard } from "@/components/shared/glass-card";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,11 @@ export default async function OwnerStudentDetailPage({ params }: { params: Promi
       <PageHeader
         eyebrow="Student profile"
         title={student.full_name}
-        description={`Read-only · fee status for ${formatPeriodMonth(toPeriodMonth())}. Contact your warden to correct details.`}
+        description={
+          student.status === "vacated"
+            ? `Read-only · this student has vacated${student.vacated_at ? ` (${formatDate(student.vacated_at)})` : ""}. Historical record only.`
+            : `Read-only · fee status for ${formatPeriodMonth(toPeriodMonth())}. Contact your warden to correct details.`
+        }
         actions={
           <Button asChild variant="secondary" size="sm">
             <Link href="/owner/students">

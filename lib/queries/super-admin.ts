@@ -157,6 +157,37 @@ export async function fetchComplaintsPerWeek(supabase: SupabaseClient, hostelId:
   return ((data ?? []) as ComplaintsPerWeekRow[]).map((r) => ({ week_start: r.week_start, complaints: Number(r.complaints ?? 0) }));
 }
 
+export interface SaOwnerOption {
+  id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  status: UserRow["status"];
+  /** hostels currently under this owner account */
+  hostel_count: number;
+}
+
+/**
+ * Existing owner accounts (for the SA-2 wizard "Existing owner" mode — Hard rule §4.1:
+ * a second hostel + subscription may sit under the same owner account).
+ */
+export async function fetchOwners(supabase: SupabaseClient): Promise<SaOwnerOption[]> {
+  const [{ data: users, error }, { data: hostels, error: hErr }] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, full_name, email, phone, status")
+      .eq("role", "owner")
+      .is("deleted_at", null)
+      .order("full_name", { ascending: true }),
+    supabase.from("hostels").select("owner_user_id"),
+  ]);
+  if (error) throw error;
+  if (hErr) throw hErr;
+  const counts = new Map<string, number>();
+  for (const h of (hostels ?? []) as { owner_user_id: string }[]) counts.set(h.owner_user_id, (counts.get(h.owner_user_id) ?? 0) + 1);
+  return ((users ?? []) as Omit<SaOwnerOption, "hostel_count">[]).map((u) => ({ ...u, hostel_count: counts.get(u.id) ?? 0 }));
+}
+
 /** Manager + warden accounts of a hostel (active first). */
 export async function fetchHostelStaff(supabase: SupabaseClient, hostelId: string): Promise<UserRow[]> {
   const { data, error } = await supabase

@@ -1,3 +1,4 @@
+import { Lock } from "lucide-react";
 import { requireHostelContext } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { getMyTasks } from "@/lib/queries/manager";
@@ -17,6 +18,13 @@ export default async function ManagerTasksPage() {
       <PageHeader
         title="My tasks"
         description={open > 0 ? `${open} open ${open === 1 ? "task" : "tasks"} assigned by your owner. Move them from pending to in progress to done.` : "Tasks assigned by your owner. Move them from pending to in progress to done."}
+        actions={
+          !ctx.writable ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-sand-soft px-2.5 py-1 text-xs font-semibold text-sand-deep" title="Subscription expired — status changes are paused until it is renewed.">
+              <Lock className="h-3.5 w-3.5" /> Read-only
+            </span>
+          ) : undefined
+        }
       />
       <TaskList tasks={tasks} writable={ctx.writable} />
     </>

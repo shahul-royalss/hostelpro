@@ -8,7 +8,6 @@ import type {
   ComplaintStatus,
   DailyFinanceRow,
   ExpenseRow,
-  FeeLedgerRow,
   FeeStatus,
   FloorRow,
   HostelStats,
@@ -17,6 +16,7 @@ import type {
   TaskRow,
   UserRow,
 } from "@/lib/types";
+import { signedUrl } from "@/lib/storage";
 import { toISODate, toPeriodMonth } from "@/lib/utils";
 
 /**
@@ -122,6 +122,102 @@ export async function getRecentComplaints(supabase: SupabaseClient, hostelId: st
   return getComplaints(supabase, hostelId, limit);
 }
 
+export type ComplaintFilter = "all" | ComplaintStatus;
+export const COMPLAINT_PAGE_SIZE = 50;
+
+export interface ComplaintsInboxParams {
+  status?: ComplaintFilter;
+  /** search: title / description / category / student name / phone / room number */
+  q?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ComplaintsInboxResult {
+  complaints: ComplaintListItem[];
+  /** rows matching the current status filter + search */
+  total: number;
+  page: number;
+  pageSize: number;
+  /** true hostel-wide counts (independent of search / paging) */
+  counts: { all: number; open: number; in_progress: number; resolved: number };
+}
+
+/**
+ * Inbox listing (OW-2) — status filter, search and paging all run in Postgres so the header,
+ * filter pills and results are correct beyond any client-side cap.
+ */
+export async function getComplaintsInbox(supabase: SupabaseClient, hostelId: string, params: ComplaintsInboxParams = {}): Promise<ComplaintsInboxResult> {
+  const status: ComplaintFilter = params.status && ["all", "open", "in_progress", "resolved"].includes(params.status) ? params.status : "all";
+  const q = sanitizeSearch(params.q);
+  const pageSize = Math.min(Math.max(1, params.pageSize ?? COMPLAINT_PAGE_SIZE), 200);
+  const requestedPage = Math.max(1, params.page ?? 1);
+
+  // Search terms that hit the embedded student (name / phone / room) are resolved to student ids first.
+  let studentIds: string[] = [];
+  if (q) {
+    const { data: rooms } = await supabase.from("rooms").select("id").eq("hostel_id", hostelId).ilike("room_number", `%${q}%`).limit(50);
+    const roomIds = ((rooms ?? []) as { id: string }[]).map((r) => r.id);
+    const parts = [`full_name.ilike.%${q}%`, `phone.ilike.%${q}%`];
+    if (roomIds.length) parts.push(`room_id.in.(${roomIds.join(",")})`);
+    const { data: students } = await supabase.from("students").select("id").eq("hostel_id", hostelId).or(parts.join(",")).limit(200);
+    studentIds = ((students ?? []) as { id: string }[]).map((s) => s.id);
+  }
+
+  const build = (head = false) => {
+    let query = supabase.from("complaints").select(COMPLAINT_SELECT, { count: "exact", head }).eq("hostel_id", hostelId);
+    if (status !== "all") query = query.eq("status", status);
+    if (q) {
+      const parts = [`title.ilike.%${q}%`, `description.ilike.%${q}%`];
+      const cat = q.toLowerCase().replace(/\s+/g, "");
+      if (["food", "cleaning", "maintenance", "wifi", "roommate", "other"].includes(cat)) parts.push(`category.eq.${cat}`);
+      if (studentIds.length) parts.push(`student_id.in.(${studentIds.join(",")})`);
+      query = query.or(parts.join(","));
+    }
+    return query.order("created_at", { ascending: false }).order("id", { ascending: true });
+  };
+  const countFor = (s: ComplaintStatus | null) => {
+    let query = supabase.from("complaints").select("id", { count: "exact", head: true }).eq("hostel_id", hostelId);
+    if (s) query = query.eq("status", s);
+    return query;
+  };
+
+  const from = (requestedPage - 1) * pageSize;
+  const [pageRes, { count: all }, { count: open }, { count: inProgress }, { count: resolved }] = await Promise.all([
+    build().range(from, from + pageSize - 1),
+    countFor(null),
+    countFor("open"),
+    countFor("in_progress"),
+    countFor("resolved"),
+  ]);
+
+  let rows = pageRes.data;
+  let total = pageRes.count ?? 0;
+  // 416 from PostgREST when ?page= is past the end → recover the total, clamp, refetch.
+  if (pageRes.error || pageRes.count == null) total = (await build(true)).count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  let page = requestedPage;
+  if (page > totalPages) {
+    page = totalPages;
+    const start = (page - 1) * pageSize;
+    rows = (await build().range(start, start + pageSize - 1)).data;
+  }
+
+  return {
+    complaints: ((rows ?? []) as Record<string, unknown>[]).map(normalizeComplaint),
+    total,
+    page,
+    pageSize,
+    counts: { all: all ?? 0, open: open ?? 0, in_progress: inProgress ?? 0, resolved: resolved ?? 0 },
+  };
+}
+
+/** One complaint by id (for ?id= deep links that fall outside the current page/filter). */
+export async function getComplaintById(supabase: SupabaseClient, hostelId: string, complaintId: string): Promise<ComplaintListItem | null> {
+  const { data } = await supabase.from("complaints").select(COMPLAINT_SELECT).eq("hostel_id", hostelId).eq("id", complaintId).maybeSingle();
+  return data ? normalizeComplaint(data as Record<string, unknown>) : null;
+}
+
 export async function getComplaintEvents(supabase: SupabaseClient, complaintId: string): Promise<ComplaintEventRow[]> {
   const { data } = await supabase
     .from("complaint_events")
@@ -214,7 +310,8 @@ export async function getTasks(supabase: SupabaseClient, hostelId: string): Prom
 
 /* ───────────────────────── Students (OW-5) ───────────────────────── */
 
-export interface StudentDirectoryRow extends StudentRow {
+/** Full student profile (slide-over / detail page). Loaded one at a time — never in bulk. */
+export interface StudentProfileRow extends StudentRow {
   room_number: string | null;
   floor_number: number | null;
   fee_status: FeeStatus;
@@ -222,73 +319,227 @@ export interface StudentDirectoryRow extends StudentRow {
   amount_paid: number;
 }
 
+/** Directory list row — list columns only (no guardian / address / ID-proof PII). */
+export interface StudentListRow {
+  id: string;
+  full_name: string;
+  phone: string;
+  email: string | null;
+  /** short-lived signed URL (or null) — resolved server-side for the visible page only */
+  photo_signed_url: string | null;
+  date_of_joining: string;
+  monthly_fee: number;
+  status: StudentRow["status"];
+  room_number: string | null;
+  floor_number: number | null;
+  fee_status: FeeStatus;
+  amount_due: number;
+  amount_paid: number;
+}
+
+export type StudentFeeFilter = "all" | FeeStatus;
+
+export interface StudentsDirectoryParams {
+  /** free-text search: name / phone / email / room number */
+  q?: string;
+  /** floor_number filter (null = all floors) */
+  floor?: number | null;
+  fee?: StudentFeeFilter;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface StudentsDirectoryResult {
+  students: StudentListRow[];
+  /** total rows matching the current search + filters (for pagination) */
+  total: number;
+  page: number;
+  pageSize: number;
+  floors: FloorRow[];
+  /** hostel-wide fee counts for the period (independent of search/filters) */
+  counts: { all: number; paid: number; partial: number; unpaid: number };
+  period: string;
+}
+
+export const STUDENT_PAGE_SIZE = 20;
+const STUDENT_MAX_PAGE_SIZE = 100;
+
+const STUDENT_LIST_COLUMNS = "id, full_name, phone, email, photo_url, date_of_joining, monthly_fee, status, room_id";
+const FEE_EMBED_COLUMNS = "status, amount_due, amount_paid";
+
+type FeeEmbed = { status: FeeStatus; amount_due: number | string; amount_paid: number | string };
+type RoomEmbed = { room_number: string; floor: { floor_number: number } | { floor_number: number }[] | null };
+
 function firstOf<T>(v: T | T[] | null | undefined): T | null {
   if (!v) return null;
   return Array.isArray(v) ? (v[0] ?? null) : v;
 }
 
-export async function getStudentsDirectory(supabase: SupabaseClient, hostelId: string): Promise<{ students: StudentDirectoryRow[]; floors: FloorRow[] }> {
+/** Strip PostgREST filter syntax characters from a user search term. */
+function sanitizeSearch(q: string | undefined): string {
+  return (q ?? "").replace(/[,()"'\\%*]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+}
+
+/**
+ * Paginated, server-filtered students directory. Search / floor / fee filters and paging all run in
+ * Postgres (`.ilike()` / embedded filters / `.range()`), so only one page of list columns reaches the client.
+ * Fee status for the period comes from a left join on fee_payments (same semantics as rpc_fee_ledger:
+ * no row → unpaid, amount_due = monthly_fee).
+ */
+export async function getStudentsDirectory(supabase: SupabaseClient, hostelId: string, params: StudentsDirectoryParams = {}): Promise<StudentsDirectoryResult> {
   const period = toPeriodMonth();
-  const [{ data: rows }, { data: floors }, { data: ledger }] = await Promise.all([
-    supabase
+  const q = sanitizeSearch(params.q);
+  const floor = Number.isInteger(params.floor) ? (params.floor as number) : null;
+  const fee: StudentFeeFilter = params.fee && ["all", "paid", "partial", "unpaid"].includes(params.fee) ? params.fee : "all";
+  const pageSize = Math.min(Math.max(1, params.pageSize ?? STUDENT_PAGE_SIZE), STUDENT_MAX_PAGE_SIZE);
+  const requestedPage = Math.max(1, params.page ?? 1);
+
+  // Search across the embedded room number: resolve matching room ids first (rooms are few; students are many).
+  let roomIds: string[] = [];
+  if (q) {
+    const { data: rooms } = await supabase.from("rooms").select("id").eq("hostel_id", hostelId).ilike("room_number", `%${q}%`).limit(50);
+    roomIds = ((rooms ?? []) as { id: string }[]).map((r) => r.id);
+  }
+
+  const buildBase = (head = false) => {
+    // !inner on rooms/floors only when filtering by floor, so unassigned students still list otherwise.
+    const roomEmbed = floor != null ? "room:rooms!inner(room_number, floor:floors!inner(floor_number))" : "room:rooms(room_number, floor:floors(floor_number))";
+    const feeEmbed = fee === "paid" || fee === "partial" ? `fee:fee_payments!inner(${FEE_EMBED_COLUMNS})` : `fee:fee_payments!left(${FEE_EMBED_COLUMNS})`;
+    let query = supabase
       .from("students")
-      .select("*, room:rooms(room_number, floor:floors(floor_number))")
+      .select(`${STUDENT_LIST_COLUMNS}, ${roomEmbed}, ${feeEmbed}`, { count: "exact", head })
       .eq("hostel_id", hostelId)
       .neq("status", "vacated")
       .is("deleted_at", null)
-      .order("full_name", { ascending: true }),
+      .eq("fee.period_month", period);
+    if (fee === "paid" || fee === "partial") {
+      query = query.eq("fee.status", fee);
+    } else if (fee === "unpaid") {
+      // unpaid = no paid/partial row for the period (covers "no row" and stored status='unpaid')
+      query = query.in("fee.status", ["paid", "partial"]).is("fee", null);
+    }
+    if (floor != null) query = query.eq("room.floor.floor_number", floor);
+    if (q) {
+      const parts = [`full_name.ilike.%${q}%`, `phone.ilike.%${q}%`, `email.ilike.%${q}%`];
+      if (roomIds.length) parts.push(`room_id.in.(${roomIds.join(",")})`);
+      query = query.or(parts.join(","));
+    }
+    return query;
+  };
+
+  const activeBase = () => supabase.from("students").select("id", { count: "exact", head: true }).eq("hostel_id", hostelId).neq("status", "vacated").is("deleted_at", null);
+  const feeCount = (status: "paid" | "partial") =>
+    supabase
+      .from("students")
+      .select("id, fee:fee_payments!inner(status)", { count: "exact", head: true })
+      .eq("hostel_id", hostelId)
+      .neq("status", "vacated")
+      .is("deleted_at", null)
+      .eq("fee.period_month", period)
+      .eq("fee.status", status);
+
+  const from = (requestedPage - 1) * pageSize;
+  const [pageRes, { data: floors }, { count: allCount }, { count: paidCount }, { count: partialCount }] = await Promise.all([
+    buildBase().order("full_name", { ascending: true }).order("id", { ascending: true }).range(from, from + pageSize - 1),
     supabase.from("floors").select("id, hostel_id, floor_number").eq("hostel_id", hostelId).order("floor_number"),
-    supabase.rpc("rpc_fee_ledger", { p_hostel_id: hostelId, p_period_month: period }),
+    activeBase(),
+    feeCount("paid"),
+    feeCount("partial"),
   ]);
 
-  const feeById = new Map<string, FeeLedgerRow>();
-  for (const l of (ledger ?? []) as FeeLedgerRow[]) feeById.set(l.student_id, l);
+  let rows = pageRes.data;
+  let total = pageRes.count ?? 0;
+  // PostgREST answers 416 (no data, no count) when the offset is past the last row — e.g. a stale ?page= after a
+  // filter change. Recover the true total with a head count, clamp to the last page and refetch.
+  if (pageRes.error || pageRes.count == null) {
+    total = (await buildBase(true)).count ?? 0;
+  }
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  let page = requestedPage;
+  if (page > totalPages) {
+    page = totalPages;
+    const start = (page - 1) * pageSize;
+    const res = await buildBase().order("full_name", { ascending: true }).order("id", { ascending: true }).range(start, start + pageSize - 1);
+    rows = res.data;
+  }
 
-  const students = ((rows ?? []) as Array<StudentRow & { room?: unknown }>).map((r) => {
-    const room = firstOf(r.room as { room_number: string; floor: unknown } | { room_number: string; floor: unknown }[] | null);
-    const floor = room ? firstOf(room.floor as { floor_number: number } | { floor_number: number }[] | null) : null;
-    const fee = feeById.get(r.id);
-    const { room: _room, ...student } = r;
-    void _room;
+  type Raw = Pick<StudentRow, "id" | "full_name" | "phone" | "email" | "photo_url" | "date_of_joining" | "monthly_fee" | "status" | "room_id"> & {
+    room?: RoomEmbed | RoomEmbed[] | null;
+    fee?: FeeEmbed | FeeEmbed[] | null;
+  };
+  const raw = (rows ?? []) as Raw[];
+
+  // Signed photo URLs for just this page (private bucket, DECISIONS #15).
+  const photoUrls = await Promise.all(raw.map((r) => signedUrl("student-docs", r.photo_url)));
+
+  const students: StudentListRow[] = raw.map((r, i) => {
+    const room = firstOf(r.room);
+    const floorRow = room ? firstOf(room.floor) : null;
+    const f = firstOf(r.fee);
+    const monthlyFee = Number(r.monthly_fee);
     return {
-      ...(student as StudentRow),
-      monthly_fee: Number(student.monthly_fee),
+      id: r.id,
+      full_name: r.full_name,
+      phone: r.phone,
+      email: r.email,
+      photo_signed_url: photoUrls[i] ?? null,
+      date_of_joining: r.date_of_joining,
+      monthly_fee: monthlyFee,
+      status: r.status,
       room_number: room?.room_number ?? null,
-      floor_number: floor?.floor_number ?? null,
-      fee_status: fee?.status ?? "unpaid",
-      amount_due: Number(fee?.amount_due ?? student.monthly_fee ?? 0),
-      amount_paid: Number(fee?.amount_paid ?? 0),
-    } satisfies StudentDirectoryRow;
+      floor_number: floorRow?.floor_number ?? null,
+      fee_status: f?.status ?? "unpaid",
+      amount_due: Number(f?.amount_due ?? monthlyFee),
+      amount_paid: Number(f?.amount_paid ?? 0),
+    };
   });
 
-  return { students, floors: (floors ?? []) as FloorRow[] };
+  const all = allCount ?? 0;
+  const paid = paidCount ?? 0;
+  const partial = partialCount ?? 0;
+
+  return {
+    students,
+    total,
+    page,
+    pageSize,
+    floors: (floors ?? []) as FloorRow[],
+    counts: { all, paid, partial, unpaid: Math.max(all - paid - partial, 0) },
+    period,
+  };
 }
 
-export async function getStudentById(supabase: SupabaseClient, hostelId: string, studentId: string): Promise<StudentDirectoryRow | null> {
-  const [{ data: row }, { data: ledger }] = await Promise.all([
+/** One student's full profile (excludes soft-deleted rows; vacated students render with a neutral fee tile). */
+export async function getStudentById(supabase: SupabaseClient, hostelId: string, studentId: string): Promise<StudentProfileRow | null> {
+  const period = toPeriodMonth();
+  const [{ data: row }, { data: fee }] = await Promise.all([
     supabase
       .from("students")
       .select("*, room:rooms(room_number, floor:floors(floor_number))")
       .eq("hostel_id", hostelId)
       .eq("id", studentId)
+      .is("deleted_at", null)
       .maybeSingle(),
-    supabase.rpc("rpc_fee_ledger", { p_hostel_id: hostelId, p_period_month: toPeriodMonth() }),
+    supabase.from("fee_payments").select(FEE_EMBED_COLUMNS).eq("hostel_id", hostelId).eq("student_id", studentId).eq("period_month", period).maybeSingle(),
   ]);
   if (!row) return null;
-  const r = row as StudentRow & { room?: unknown };
-  const room = firstOf(r.room as { room_number: string; floor: unknown } | null);
-  const floor = room ? firstOf(room.floor as { floor_number: number } | null) : null;
-  const fee = ((ledger ?? []) as FeeLedgerRow[]).find((l) => l.student_id === studentId);
+  const r = row as StudentRow & { room?: RoomEmbed | RoomEmbed[] | null };
+  const room = firstOf(r.room);
+  const floor = room ? firstOf(room.floor) : null;
+  const f = (fee ?? null) as FeeEmbed | null;
   const { room: _room, ...student } = r;
   void _room;
+  const monthlyFee = Number(student.monthly_fee);
+  const vacated = student.status === "vacated";
   return {
     ...(student as StudentRow),
-    monthly_fee: Number(student.monthly_fee),
+    monthly_fee: monthlyFee,
     room_number: room?.room_number ?? null,
     floor_number: floor?.floor_number ?? null,
-    fee_status: fee?.status ?? "unpaid",
-    amount_due: Number(fee?.amount_due ?? student.monthly_fee ?? 0),
-    amount_paid: Number(fee?.amount_paid ?? 0),
+    // Vacated students are outside the fee ledger — nothing is due.
+    fee_status: vacated ? "paid" : f?.status ?? "unpaid",
+    amount_due: vacated ? 0 : Number(f?.amount_due ?? monthlyFee),
+    amount_paid: Number(f?.amount_paid ?? 0),
   };
 }
 

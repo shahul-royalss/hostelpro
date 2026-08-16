@@ -17,7 +17,7 @@ import { GlassCard } from "@/components/shared/glass-card";
 import { SegmentedPills } from "@/components/shared/segmented";
 import { StatusPill } from "@/components/shared/status-pill";
 import { CredentialsDialog, type Credentials } from "@/components/shared/credentials-dialog";
-import { registerStudent } from "@/lib/actions/warden";
+import { fetchFreeBeds, registerStudent } from "@/lib/actions/warden";
 import { ID_PROOF_TYPES, registerFormSchema, type RegisterFormValues } from "@/lib/validators/warden";
 import type { FreeBed } from "@/lib/queries/warden";
 import type { FloorRow, RoomOccupancyRow } from "@/lib/types";
@@ -35,25 +35,40 @@ const STEP_FIELDS: FieldPath<RegisterFormValues>[][] = [
 
 const ACCEPT_IMAGE = "image/jpeg,image/png,image/webp";
 const ACCEPT_DOC = "image/jpeg,image/png,image/webp,application/pdf";
-const MAX_BYTES = 8 * 1024 * 1024;
+/**
+ * Both files travel in ONE server-action request, and Next's
+ * serverActions.bodySizeLimit is 8 MB — so cap each file at 3.5 MB and the pair
+ * at 7.5 MB (leaving headroom for the text fields + multipart framing).
+ */
+const MAX_FILE_BYTES = 3.5 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 7.5 * 1024 * 1024;
+const MAX_FILE_LABEL = "3.5 MB";
 
 export function RegisterStudentForm({
   floors,
   rooms,
-  freeBeds,
+  initialFreeBeds,
   initialBedId,
   defaultFee,
   writable,
 }: {
   floors: FloorRow[];
   rooms: RoomOccupancyRow[];
-  freeBeds: FreeBed[];
+  /** Free beds of the deep-linked (?bed=) room only; every other room loads on tap. */
+  initialFreeBeds: FreeBed[];
   initialBedId?: string;
   defaultFee?: number;
   writable: boolean;
 }) {
   const router = useRouter();
-  const preselected = React.useMemo(() => freeBeds.find((b) => b.bed_id === initialBedId) ?? null, [freeBeds, initialBedId]);
+  const preselected = React.useMemo(() => initialFreeBeds.find((b) => b.bed_id === initialBedId) ?? null, [initialFreeBeds, initialBedId]);
+  // room_id → free beds (fetched lazily per room so a 10,000-bed hostel never ships its whole bed list)
+  const [freeByRoom, setFreeByRoom] = React.useState<Map<string, FreeBed[]>>(() => {
+    const m = new Map<string, FreeBed[]>();
+    for (const b of initialFreeBeds) (m.get(b.room_id) ?? m.set(b.room_id, []).get(b.room_id)!).push(b);
+    return m;
+  });
+  const [bedsLoading, setBedsLoading] = React.useState<string | null>(null);
 
   const [step, setStep] = React.useState(0);
   const [pending, startTransition] = React.useTransition();
@@ -85,13 +100,30 @@ export function RegisterStudentForm({
   const values = watch();
 
   const roomsOnFloor = React.useMemo(() => rooms.filter((r) => floor === null || r.floor_number === floor), [rooms, floor]);
-  const freeByRoom = React.useMemo(() => {
-    const m = new Map<string, FreeBed[]>();
-    for (const b of freeBeds) (m.get(b.room_id) ?? m.set(b.room_id, []).get(b.room_id)!).push(b);
-    return m;
-  }, [freeBeds]);
   const selectedRoom = rooms.find((r) => r.room_id === roomId) ?? null;
-  const selectedBed = freeBeds.find((b) => b.bed_id === values.bedId) ?? null;
+  const roomBeds = roomId ? freeByRoom.get(roomId) : undefined;
+  const selectedBed = React.useMemo(() => {
+    for (const beds of freeByRoom.values()) {
+      const hit = beds.find((b) => b.bed_id === values.bedId);
+      if (hit) return hit;
+    }
+    return null;
+  }, [freeByRoom, values.bedId]);
+
+  const loadRoomBeds = React.useCallback(
+    async (id: string, force = false) => {
+      if (!force && freeByRoom.has(id)) return;
+      setBedsLoading(id);
+      const res = await fetchFreeBeds({ roomId: id });
+      setBedsLoading((cur) => (cur === id ? null : cur));
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setFreeByRoom((m) => new Map(m).set(id, res.data));
+    },
+    [freeByRoom],
+  );
 
   const progress = ((step + 1) / STEPS.length) * 100;
 
@@ -114,6 +146,11 @@ export function RegisterStudentForm({
   const submit = handleSubmit((data) => {
     if (!idProof) {
       toast.error("Upload the ID proof to continue.");
+      setStep(2);
+      return;
+    }
+    if ((photo?.size ?? 0) + idProof.size > MAX_TOTAL_BYTES) {
+      toast.error(`Photo and ID proof together must be under ${Math.floor(MAX_TOTAL_BYTES / (1024 * 1024))} MB. Use smaller files.`);
       setStep(2);
       return;
     }
@@ -202,7 +239,7 @@ export function RegisterStudentForm({
         )}
 
         {step === 2 && (
-          <StepCard title="ID proof & photo" description="Upload a clear image or PDF of the ID (max 8 MB).">
+          <StepCard title="ID proof & photo" description={`Upload a clear image or PDF of the ID (max ${MAX_FILE_LABEL} per file).`}>
             <Field label="ID proof type" htmlFor="idProofType" required error={errors.idProofType?.message}>
               <Select value={values.idProofType ?? ""} onValueChange={(v) => setValue("idProofType", v as RegisterFormValues["idProofType"], { shouldValidate: true })}>
                 <SelectTrigger id="idProofType" aria-invalid={!!errors.idProofType}>
@@ -255,7 +292,8 @@ export function RegisterStudentForm({
               ) : (
                 <div className="grid grid-cols-3 gap-2">
                   {roomsOnFloor.map((r) => {
-                    const free = freeByRoom.get(r.room_id)?.length ?? 0;
+                    // Occupancy comes from rpc_room_occupancy (whole hostel, paged) — no bed list needed to show "Full".
+                    const free = freeByRoom.get(r.room_id)?.length ?? Math.max(0, r.capacity - r.occupied);
                     const active = r.room_id === roomId;
                     return (
                       <button
@@ -265,6 +303,7 @@ export function RegisterStudentForm({
                         onClick={() => {
                           setRoomId(r.room_id);
                           setValue("bedId", "", { shouldValidate: false });
+                          void loadRoomBeds(r.room_id);
                         }}
                         aria-pressed={active}
                         className={cn(
@@ -287,9 +326,19 @@ export function RegisterStudentForm({
             <Field label="Bed" required error={errors.bedId?.message}>
               {!selectedRoom ? (
                 <p className="text-sm text-muted">Pick a room to see its free beds.</p>
+              ) : bedsLoading === selectedRoom.room_id && !roomBeds ? (
+                <p className="text-sm text-muted" role="status">
+                  Loading free beds…
+                </p>
+              ) : !roomBeds ? (
+                <button type="button" onClick={() => void loadRoomBeds(selectedRoom.room_id, true)} className="text-sm font-medium text-navy hover:underline">
+                  Couldn&apos;t load beds — tap to retry
+                </button>
+              ) : roomBeds.length === 0 ? (
+                <p className="text-sm text-muted">No free beds in this room any more — pick another room.</p>
               ) : (
                 <div className="grid grid-cols-4 gap-2">
-                  {(freeByRoom.get(selectedRoom.room_id) ?? []).map((b) => {
+                  {roomBeds.map((b) => {
                     const active = b.bed_id === values.bedId;
                     return (
                       <button
@@ -487,8 +536,8 @@ function FilePicker({
         className="sr-only"
         onChange={(e) => {
           const f = e.target.files?.[0] ?? null;
-          if (f && f.size > MAX_BYTES) {
-            toast.error("File is larger than 8 MB.");
+          if (f && f.size > MAX_FILE_BYTES) {
+            toast.error(`File is larger than ${MAX_FILE_LABEL}. Please use a smaller file.`);
             e.target.value = "";
             return;
           }

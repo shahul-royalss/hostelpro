@@ -22,6 +22,55 @@ import { toPeriodMonth } from "@/lib/utils";
 
 type Db = SupabaseClient;
 
+/**
+ * PostgREST caps a single response at 1000 rows (Supabase `db-max-rows`), so
+ * hostel-wide reads (10,000 students) page through with `.range()` until a
+ * short page comes back. `build` must return a fresh builder each call.
+ */
+const PAGE = 1000;
+export async function fetchAllRows<T>(build: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data } = await build(from, from + PAGE - 1);
+    const rows = (data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
+/** Hostel timezone (v1: every hostel is in India). Used for "today" boundaries. */
+export const HOSTEL_TIME_ZONE = "Asia/Kolkata";
+
+/**
+ * Start of the current calendar day in the hostel timezone, as an ISO string
+ * (independent of the Node process's local timezone).
+ */
+export function hostelDayStart(now = new Date(), daysAgo = 0, timeZone = HOSTEL_TIME_ZONE): Date {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  // Midnight of that civil date in the zone: use the zone's UTC offset at `now`.
+  const utcMidnight = Date.UTC(get("year"), get("month") - 1, get("day") - daysAgo);
+  const offsetMs = zoneOffsetMs(now, timeZone);
+  return new Date(utcMidnight - offsetMs);
+}
+
+function zoneOffsetMs(at: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(at);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  const asUTC = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  return asUTC - Math.floor(at.getTime() / 1000) * 1000;
+}
+
 /* ───────────────────────── home ───────────────────────── */
 
 export async function getHostelStats(db: Db, hostelId: string, period = toPeriodMonth()): Promise<HostelStats | null> {
@@ -48,8 +97,7 @@ export async function getFloors(db: Db, hostelId: string): Promise<FloorRow[]> {
 }
 
 export async function getRoomOccupancy(db: Db, hostelId: string): Promise<RoomOccupancyRow[]> {
-  const { data } = await db.rpc("rpc_room_occupancy", { p_hostel_id: hostelId });
-  return (data ?? []) as RoomOccupancyRow[];
+  return fetchAllRows<RoomOccupancyRow>((from, to) => db.rpc("rpc_room_occupancy", { p_hostel_id: hostelId }).range(from, to));
 }
 
 export interface FreeBed {
@@ -60,20 +108,26 @@ export interface FreeBed {
   floor_number: number;
 }
 
-/** Every free bed in the hostel (for the register form + reassign sheet). */
-export async function getFreeBeds(db: Db, hostelId: string): Promise<FreeBed[]> {
-  const { data } = await db
-    .from("beds")
-    .select("id, bed_number, room_id, rooms!inner(room_number, floors!inner(floor_number))")
-    .eq("hostel_id", hostelId)
-    .is("student_id", null);
+/**
+ * Free beds — for one room (`roomId`, register form step 4) or the whole
+ * hostel (reassign sheet; paged past the 1000-row cap).
+ */
+export async function getFreeBeds(db: Db, hostelId: string, roomId?: string): Promise<FreeBed[]> {
   type Raw = {
     id: string;
     bed_number: number;
     room_id: string;
     rooms: { room_number: string; floors: { floor_number: number } | { floor_number: number }[] } | null;
   };
-  const rows = (data ?? []) as unknown as Raw[];
+  const rows = await fetchAllRows<Raw>((from, to) => {
+    let q = db
+      .from("beds")
+      .select("id, bed_number, room_id, rooms!inner(room_number, floors!inner(floor_number))")
+      .eq("hostel_id", hostelId)
+      .is("student_id", null);
+    if (roomId) q = q.eq("room_id", roomId);
+    return q.order("id").range(from, to);
+  });
   return rows
     .map((b) => {
       const floors = b.rooms?.floors;
@@ -113,7 +167,7 @@ export async function getRoomDetail(db: Db, hostelId: string, roomId: string, pe
   const r = room as unknown as RoomRow & { floors: { floor_number: number } | { floor_number: number }[] };
   const floor = Array.isArray(r.floors) ? r.floors[0] : r.floors;
 
-  const [{ data: beds }, { data: students }, { data: fees }] = await Promise.all([
+  const [{ data: beds }, { data: students }] = await Promise.all([
     db.from("beds").select("id, bed_number, student_id").eq("room_id", roomId).order("bed_number"),
     db
       .from("students")
@@ -121,12 +175,24 @@ export async function getRoomDetail(db: Db, hostelId: string, roomId: string, pe
       .eq("hostel_id", hostelId)
       .eq("room_id", roomId)
       .neq("status", "vacated"),
-    db.from("fee_payments").select("student_id, status, amount_due, amount_paid").eq("hostel_id", hostelId).eq("period_month", period),
   ]);
 
   type S = Pick<StudentRow, "id" | "full_name" | "phone" | "photo_url" | "date_of_joining" | "monthly_fee" | "status" | "bed_id">;
   const byBed = new Map<string, S>();
-  for (const s of (students ?? []) as S[]) if (s.bed_id) byBed.set(s.bed_id, s);
+  const studentIds: string[] = [];
+  for (const s of (students ?? []) as S[]) {
+    studentIds.push(s.id);
+    if (s.bed_id) byBed.set(s.bed_id, s);
+  }
+  // Only this room's occupants (≤ capacity rows) — never the whole hostel's ledger.
+  const { data: fees } = studentIds.length
+    ? await db
+        .from("fee_payments")
+        .select("student_id, status, amount_due, amount_paid")
+        .eq("hostel_id", hostelId)
+        .eq("period_month", period)
+        .in("student_id", studentIds)
+    : { data: [] as unknown[] };
   const feeByStudent = new Map<string, { status: FeeStatus; amount_due: number; amount_paid: number }>();
   for (const f of (fees ?? []) as { student_id: string; status: FeeStatus; amount_due: number; amount_paid: number }[]) {
     feeByStudent.set(f.student_id, f);
@@ -161,8 +227,8 @@ export async function getRoomDetail(db: Db, hostelId: string, roomId: string, pe
 /* ───────────────────────── fees ───────────────────────── */
 
 export async function getFeeLedger(db: Db, hostelId: string, period: string): Promise<FeeLedgerRow[]> {
-  const { data } = await db.rpc("rpc_fee_ledger", { p_hostel_id: hostelId, p_period_month: period });
-  return ((data ?? []) as FeeLedgerRow[]).map((r) => ({
+  const rows = await fetchAllRows<FeeLedgerRow>((from, to) => db.rpc("rpc_fee_ledger", { p_hostel_id: hostelId, p_period_month: period }).range(from, to));
+  return rows.map((r) => ({
     ...r,
     monthly_fee: Number(r.monthly_fee),
     amount_due: Number(r.amount_due),
@@ -176,17 +242,27 @@ export type LeaveWithStudent = LeaveRow & {
   student: { id: string; full_name: string; phone: string; photo_url: string | null; room_number: string | null } | null;
 };
 
-export async function getLeaves(db: Db, hostelId: string, limit = 60): Promise<LeaveWithStudent[]> {
-  const { data } = await db
-    .from("leaves")
-    .select("*, students!inner(id, full_name, phone, photo_url, rooms(room_number))")
-    .eq("hostel_id", hostelId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
+/**
+ * Leaves for the hostel. `status: "pending"` returns every open request
+ * (paged, no cap — a pending request must never fall off the list);
+ * `status: "decided"` returns the most recent `limit` approved/rejected rows.
+ */
+export async function getLeaves(db: Db, hostelId: string, opts: { status?: "pending" | "decided" | "all"; limit?: number } = {}): Promise<LeaveWithStudent[]> {
+  const { status = "all", limit = 60 } = opts;
   type Raw = LeaveRow & {
     students: { id: string; full_name: string; phone: string; photo_url: string | null; rooms: { room_number: string } | { room_number: string }[] | null } | null;
   };
-  return ((data ?? []) as unknown as Raw[]).map(({ students, ...l }) => {
+  const base = () => {
+    let q = db.from("leaves").select("*, students!inner(id, full_name, phone, photo_url, rooms(room_number))").eq("hostel_id", hostelId);
+    if (status === "pending") q = q.eq("status", "pending");
+    if (status === "decided") q = q.neq("status", "pending");
+    return q.order("created_at", { ascending: false });
+  };
+  const rows: Raw[] =
+    status === "pending"
+      ? await fetchAllRows<Raw>((from, to) => base().range(from, to))
+      : (((await base().limit(limit)).data ?? []) as unknown as Raw[]);
+  return rows.map(({ students, ...l }) => {
     const rooms = students?.rooms;
     const room = Array.isArray(rooms) ? rooms[0] : rooms;
     return {
@@ -202,16 +278,27 @@ export type VisitorWithStudent = VisitorRow & {
   student: { id: string; full_name: string; room_number: string | null } | null;
 };
 
+/**
+ * Visitors since `sinceISO` (most recent first, capped at `limit`) **plus every
+ * visitor still inside** regardless of check-in date, so an un-checked-out visit
+ * older than the window can still be checked out. De-duplicated by id.
+ */
 export async function getVisitors(db: Db, hostelId: string, sinceISO: string, limit = 200): Promise<VisitorWithStudent[]> {
-  const { data } = await db
-    .from("visitors")
-    .select("*, students!inner(id, full_name, rooms(room_number))")
-    .eq("hostel_id", hostelId)
-    .gte("check_in_at", sinceISO)
-    .order("check_in_at", { ascending: false })
-    .limit(limit);
   type Raw = VisitorRow & { students: { id: string; full_name: string; rooms: { room_number: string } | { room_number: string }[] | null } | null };
-  return ((data ?? []) as unknown as Raw[]).map(({ students, ...v }) => {
+  const select = () => db.from("visitors").select("*, students!inner(id, full_name, rooms(room_number))").eq("hostel_id", hostelId);
+  const [{ data: recent }, open] = await Promise.all([
+    select().gte("check_in_at", sinceISO).order("check_in_at", { ascending: false }).limit(limit),
+    fetchAllRows<Raw>((from, to) => select().is("check_out_at", null).order("check_in_at", { ascending: false }).range(from, to)),
+  ]);
+  const seen = new Set<string>();
+  const merged: Raw[] = [];
+  for (const v of [...((recent ?? []) as unknown as Raw[]), ...open]) {
+    if (seen.has(v.id)) continue;
+    seen.add(v.id);
+    merged.push(v);
+  }
+  merged.sort((a, b) => b.check_in_at.localeCompare(a.check_in_at));
+  return merged.map(({ students, ...v }) => {
     const rooms = students?.rooms;
     const room = Array.isArray(rooms) ? rooms[0] : rooms;
     return { ...v, student: students ? { id: students.id, full_name: students.full_name, room_number: room?.room_number ?? null } : null };
@@ -225,14 +312,16 @@ export interface StudentOption {
   room_number: string | null;
 }
 
-/** Active students for pickers (visitor log). */
-export async function getActiveStudents(db: Db, hostelId: string): Promise<StudentOption[]> {
-  const { data } = await db
-    .from("students")
-    .select("id, full_name, phone, rooms(room_number)")
-    .eq("hostel_id", hostelId)
-    .neq("status", "vacated")
-    .order("full_name");
+/**
+ * Server-side student search for pickers (visitor log): name/phone `ilike`,
+ * capped at `limit` — never the whole hostel roster (10,000 students).
+ * Empty query → first `limit` active students by name.
+ */
+export async function searchActiveStudents(db: Db, hostelId: string, query: string, limit = 20): Promise<StudentOption[]> {
+  const q = query.trim().replace(/[%_,()\\]/g, " ").trim();
+  let req = db.from("students").select("id, full_name, phone, rooms(room_number)").eq("hostel_id", hostelId).neq("status", "vacated");
+  if (q) req = req.or(`full_name.ilike.%${q}%,phone.ilike.%${q.replace(/\D/g, "") || q}%`);
+  const { data } = await req.order("full_name").limit(limit);
   type Raw = { id: string; full_name: string; phone: string; rooms: { room_number: string } | { room_number: string }[] | null };
   return ((data ?? []) as unknown as Raw[]).map((s) => {
     const room = Array.isArray(s.rooms) ? s.rooms[0] : s.rooms;

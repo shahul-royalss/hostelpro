@@ -12,7 +12,7 @@ import { GlassCard } from "@/components/shared/glass-card";
 import { StatusPill } from "@/components/shared/status-pill";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useAction } from "@/hooks/use-action";
-import { reassignBed, vacateStudent } from "@/lib/actions/warden";
+import { fetchFreeBeds, reassignBed, vacateStudent } from "@/lib/actions/warden";
 import type { FreeBed, RoomDetail } from "@/lib/queries/warden";
 import type { RoomOccupancyRow } from "@/lib/types";
 import { cn, formatDate, formatINR } from "@/lib/utils";
@@ -24,12 +24,10 @@ type Occupant = NonNullable<BedCard["student"]>;
 export function RoomDetailView({
   room,
   beds,
-  freeBeds,
   writable,
 }: {
   room: RoomDetail["room"];
   beds: BedCard[];
-  freeBeds: FreeBed[];
   writable: boolean;
 }) {
   const occupants = beds.filter((b): b is BedCard & { student: Occupant } => !!b.student);
@@ -120,12 +118,7 @@ export function RoomDetailView({
         </ul>
       )}
 
-      <ReassignSheet
-        target={reassign}
-        currentRoomId={room.id}
-        freeBeds={freeBeds}
-        onOpenChange={(o) => !o && setReassign(null)}
-      />
+      <ReassignSheet target={reassign} currentRoomId={room.id} onOpenChange={(o) => !o && setReassign(null)} />
       <VacateDialog target={vacate} roomNumber={room.room_number} onOpenChange={(o) => !o && setVacate(null)} />
       <EditRoomSheet room={editing ? editRow : null} onOpenChange={(o) => !o && setEditing(false)} />
     </div>
@@ -228,24 +221,38 @@ function FreeBedCard({ bedId, bedNumber, writable }: { bedId: string; bedNumber:
 function ReassignSheet({
   target,
   currentRoomId,
-  freeBeds,
   onOpenChange,
 }: {
   target: { bedNumber: number; student: Occupant } | null;
   currentRoomId: string;
-  freeBeds: FreeBed[];
   onOpenChange: (open: boolean) => void;
 }) {
   const [bedId, setBedId] = React.useState<string | null>(null);
+  // Free beds are fetched when the sheet opens (fresh, paged past the 1000-row cap) — not shipped with the page.
+  const [freeBeds, setFreeBeds] = React.useState<FreeBed[] | null>(null);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [reloadKey, setReloadKey] = React.useState(0);
   const { run, pending } = useAction(reassignBed, { onSuccess: () => onOpenChange(false) });
 
   React.useEffect(() => {
-    if (target) setBedId(null);
-  }, [target]);
+    if (!target) return;
+    let cancelled = false;
+    setBedId(null);
+    setFreeBeds(null);
+    setLoadError(null);
+    fetchFreeBeds().then((res) => {
+      if (cancelled) return;
+      if (res.ok) setFreeBeds(res.data);
+      else setLoadError(res.error);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [target, reloadKey]);
 
   const groups = React.useMemo(() => {
     const m = new Map<string, { room_number: string; floor_number: number; beds: FreeBed[] }>();
-    for (const b of freeBeds) {
+    for (const b of freeBeds ?? []) {
       const g = m.get(b.room_id) ?? { room_number: b.room_number, floor_number: b.floor_number, beds: [] };
       g.beds.push(b);
       m.set(b.room_id, g);
@@ -264,7 +271,23 @@ function ReassignSheet({
         </SheetHeader>
 
         <div className="mt-4 max-h-[48dvh] overflow-y-auto pr-1">
-          {groups.length === 0 ? (
+          {loadError ? (
+            <EmptyState
+              icon={BedDouble}
+              title="Couldn't load free beds"
+              description={loadError}
+              compact
+              action={
+                <Button variant="ghost" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
+                  Try again
+                </Button>
+              }
+            />
+          ) : freeBeds === null ? (
+            <p className="py-6 text-center text-sm text-muted" role="status">
+              Loading free beds…
+            </p>
+          ) : groups.length === 0 ? (
             <EmptyState icon={BedDouble} title="No free beds available" description="Every bed in the hostel is occupied." compact />
           ) : (
             <div className="flex flex-col gap-4">

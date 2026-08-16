@@ -24,7 +24,8 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/misc";
 import { RenewButton } from "@/components/super-admin/renew-dialog";
-import { HostelStatusButton, RegeneratePasswordButton } from "@/components/super-admin/hostel-actions";
+import { HostelHeaderMenu } from "@/components/super-admin/hostel-actions";
+import { EditStructureButton } from "@/components/super-admin/edit-structure-dialog";
 import { DaysLeftPill } from "@/components/super-admin/days-left-pill";
 import { SubscriptionTimeline } from "@/components/super-admin/subscription-timeline";
 
@@ -32,7 +33,7 @@ export const dynamic = "force-dynamic";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** SA-4 — Hostel detail (monitoring, read-only except Renew / Suspend) */
+/** SA-4 — Hostel detail (monitoring, read-only except Renew in the header card; Suspend / Regenerate live behind the ⋯ menu) */
 export default async function HostelDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireRole("super_admin");
   const { id } = await params;
@@ -80,12 +81,7 @@ export default async function HostelDetailPage({ params }: { params: Promise<{ i
         }
         title="Hostel detail"
         description="Monitoring view — tenant data is read-only for the Super Admin."
-        actions={
-          <>
-            <RegeneratePasswordButton ownerUserId={hostel.owner_id} />
-            <HostelStatusButton hostelId={hostel.hostel_id} hostelName={hostel.hostel_name} status={hostel.hostel_status} size="default" />
-          </>
-        }
+        actions={<HostelHeaderMenu hostelId={hostel.hostel_id} hostelName={hostel.hostel_name} status={hostel.hostel_status} ownerUserId={hostel.owner_id} />}
       />
 
       {/* Header card */}
@@ -211,7 +207,21 @@ export default async function HostelDetailPage({ params }: { params: Promise<{ i
             </div>
           </GlassCard>
           <GlassCard>
-            <GlassCardHeader title="Structure" />
+            <GlassCardHeader
+              title="Structure"
+              description="Only the Super Admin can change floor / room counts"
+              action={
+                row ? (
+                  <EditStructureButton
+                    hostelId={row.id}
+                    hostelName={hostel.hostel_name}
+                    floors={row.total_floors}
+                    rooms={row.total_rooms}
+                    bedsPerRoom={row.beds_per_room_default}
+                  />
+                ) : null
+              }
+            />
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <StructRow label="Floors" value={formatNumber(row?.total_floors ?? 0)} />
               <StructRow label="Rooms" value={formatNumber(row?.total_rooms ?? 0)} />

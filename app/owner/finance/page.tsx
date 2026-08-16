@@ -82,7 +82,7 @@ export default async function OwnerFinancePage({ searchParams }: { searchParams:
       {/* Charts */}
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
         <GlassCard className="lg:col-span-2">
-          <GlassCardHeader title="Expenses by category" description={formatPeriodMonth(period)} action={<Chip>{percent(fin.totalExpense, fin.totalRevenue || fin.totalExpense || 1)}% of revenue</Chip>} />
+          <GlassCardHeader title="Expenses by category" description={formatPeriodMonth(period)} action={fin.totalRevenue > 0 ? <Chip>{percent(fin.totalExpense, fin.totalRevenue)}% of revenue</Chip> : undefined} />
           {byCategory.length === 0 ? (
             <EmptyState compact icon={PieChart} title="No expenses recorded" description="Expense entries from your manager will break down here by category." />
           ) : (

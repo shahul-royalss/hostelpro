@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import { ChevronDown, Clock, LogOut, Phone, Plus, Search, UserCheck, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,7 @@ import { GlassCard } from "@/components/shared/glass-card";
 import { Chip, StatusPill } from "@/components/shared/status-pill";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useAction } from "@/hooks/use-action";
-import { checkOutVisitor, logVisitor } from "@/lib/actions/warden";
+import { checkOutVisitor, logVisitor, searchStudents } from "@/lib/actions/warden";
 import type { StudentOption, VisitorWithStudent } from "@/lib/queries/warden";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -25,12 +26,10 @@ function timeOf(iso: string) {
 export function VisitorsView({
   today,
   history,
-  students,
   writable,
 }: {
   today: VisitorWithStudent[];
   history: VisitorWithStudent[];
-  students: StudentOption[];
   writable: boolean;
 }) {
   const [logOpen, setLogOpen] = React.useState(false);
@@ -118,7 +117,7 @@ export function VisitorsView({
         ) : null}
       </section>
 
-      <LogVisitorSheet open={logOpen} onOpenChange={setLogOpen} students={students} />
+      <LogVisitorSheet open={logOpen} onOpenChange={setLogOpen} />
     </div>
   );
 }
@@ -170,9 +169,13 @@ function localNow() {
   return format(new Date(), "yyyy-MM-dd'T'HH:mm");
 }
 
-function LogVisitorSheet({ open, onOpenChange, students }: { open: boolean; onOpenChange: (open: boolean) => void; students: StudentOption[] }) {
+function LogVisitorSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [studentId, setStudentId] = React.useState<string>("");
+  const [selected, setSelected] = React.useState<StudentOption | null>(null);
   const [studentQuery, setStudentQuery] = React.useState("");
+  // Server-side search (name / phone, max 20) — the roster is never shipped to the client (10,000 students).
+  const [matches, setMatches] = React.useState<StudentOption[] | null>(null);
+  const [searching, setSearching] = React.useState(false);
   const [name, setName] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [relation, setRelation] = React.useState<string>("");
@@ -183,7 +186,9 @@ function LogVisitorSheet({ open, onOpenChange, students }: { open: boolean; onOp
   React.useEffect(() => {
     if (open) {
       setStudentId("");
+      setSelected(null);
       setStudentQuery("");
+      setMatches(null);
       setName("");
       setPhone("");
       setRelation("");
@@ -192,9 +197,24 @@ function LogVisitorSheet({ open, onOpenChange, students }: { open: boolean; onOp
     }
   }, [open]);
 
-  const selected = students.find((s) => s.id === studentId) ?? null;
-  const q = studentQuery.trim().toLowerCase();
-  const matches = q ? students.filter((s) => s.full_name.toLowerCase().includes(q) || s.phone.includes(q) || (s.room_number ?? "").toLowerCase().includes(q)).slice(0, 8) : students.slice(0, 8);
+  // Debounced server search while the picker is open and no student is chosen yet.
+  React.useEffect(() => {
+    if (!open || selected) return;
+    let cancelled = false;
+    setSearching(true);
+    const t = setTimeout(() => {
+      searchStudents({ query: studentQuery }).then((res) => {
+        if (cancelled) return;
+        setSearching(false);
+        setMatches(res.ok ? res.data : []);
+        if (!res.ok) toast.error(res.error);
+      });
+    }, studentQuery ? 250 : 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [open, selected, studentQuery]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -228,7 +248,15 @@ function LogVisitorSheet({ open, onOpenChange, students }: { open: boolean; onOp
                     {selected.phone}
                   </p>
                 </div>
-                <button type="button" aria-label="Change student" onClick={() => setStudentId("")} className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-navy/5 hover:text-navy">
+                <button
+                  type="button"
+                  aria-label="Change student"
+                  onClick={() => {
+                    setStudentId("");
+                    setSelected(null);
+                  }}
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-navy/5 hover:text-navy"
+                >
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -236,17 +264,26 @@ function LogVisitorSheet({ open, onOpenChange, students }: { open: boolean; onOp
               <div className="flex flex-col gap-2">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                  <Input type="search" placeholder="Search by name, room or phone" value={studentQuery} onChange={(e) => setStudentQuery(e.target.value)} className="pl-9" aria-label="Search students" />
+                  <Input type="search" placeholder="Search by name or phone" value={studentQuery} onChange={(e) => setStudentQuery(e.target.value)} className="pl-9" aria-label="Search students" />
                 </div>
-                {students.length === 0 ? (
-                  <p className="text-[12px] text-muted">No active students yet.</p>
+                {matches === null || (searching && matches.length === 0) ? (
+                  <p className="text-[12px] text-muted" role="status">
+                    Searching…
+                  </p>
                 ) : matches.length === 0 ? (
-                  <p className="text-[12px] text-muted">No students match.</p>
+                  <p className="text-[12px] text-muted">{studentQuery.trim() ? "No students match." : "No active students yet."}</p>
                 ) : (
-                  <ul className="max-h-44 overflow-y-auto rounded-control border border-line bg-white/60">
+                  <ul className="max-h-44 overflow-y-auto rounded-control border border-line bg-white/60" aria-busy={searching}>
                     {matches.map((s) => (
                       <li key={s.id}>
-                        <button type="button" onClick={() => setStudentId(s.id)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-white/80">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStudentId(s.id);
+                            setSelected(s);
+                          }}
+                          className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-white/80"
+                        >
                           <UserAvatar name={s.full_name} size="xs" />
                           <span className="min-w-0 flex-1 truncate text-sm font-medium text-navy">{s.full_name}</span>
                           <span className="shrink-0 text-[11px] text-muted">{s.room_number ? `Room ${s.room_number}` : "No room"}</span>

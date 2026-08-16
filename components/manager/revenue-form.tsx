@@ -54,7 +54,8 @@ export function RevenueForm({
     const payload = {
       date: String(fd.get("date") ?? ""),
       source,
-      amount: Number(fd.get("amount") ?? NaN),
+      // Raw string so an empty field reaches the validator's "required" branch instead of becoming 0.
+      amount: String(fd.get("amount") ?? ""),
       note: String(fd.get("note") ?? ""),
     };
     const res = mode === "create" ? await create.run(payload) : await update.run({ ...payload, id: initial?.id ?? "" });

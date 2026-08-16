@@ -50,6 +50,11 @@ export default async function StudentProfilePage() {
             </div>
           </GlassCard>
 
+          <DetailSection title="Personal">
+            <DetailRow label="Email" value={student.email} />
+            <DetailRow label="Joined" value={formatDate(student.date_of_joining)} />
+          </DetailSection>
+
           <DetailSection title="Guardian">
             <DetailRow label="Name" value={student.guardian_name} />
             <DetailRow

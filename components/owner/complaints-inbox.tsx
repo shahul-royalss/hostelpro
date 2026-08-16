@@ -2,14 +2,14 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { formatDistanceToNowStrict } from "date-fns";
-import { ArrowLeft, Check, Loader2, MessageSquareWarning, Phone, Search } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Loader2, MessageSquareWarning, Phone, Search } from "lucide-react";
 import type { ComplaintEventRow, ComplaintStatus } from "@/lib/types";
-import type { ComplaintListItem } from "@/lib/queries/owner";
+import type { ComplaintFilter, ComplaintListItem, ComplaintsInboxResult } from "@/lib/queries/owner";
 import { updateComplaintStatus } from "@/lib/actions/complaints";
 import { useAction } from "@/hooks/use-action";
-import { cn, formatDateTime, titleCase } from "@/lib/utils";
+import { cn, formatDateTime, formatNumber, titleCase } from "@/lib/utils";
 import { GlassCard } from "@/components/shared/glass-card";
 import { SegmentedPills } from "@/components/shared/segmented";
 import { StatusPill, Chip } from "@/components/shared/status-pill";
@@ -21,7 +21,10 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ComplaintCategoryIcon } from "./complaint-icon";
 
-type Filter = "all" | ComplaintStatus;
+export interface ComplaintsInboxParams {
+  status: ComplaintFilter;
+  q: string;
+}
 
 export interface SelectedComplaint {
   complaint: ComplaintListItem;
@@ -37,43 +40,66 @@ function relative(iso: string) {
   }
 }
 
-/** OW-2 — two-pane complaints inbox. List filtering is client-side; the selected id lives in the URL. */
+/**
+ * OW-2 — two-pane complaints inbox. Status filter, search and page are URL params applied server-side
+ * (true counts, no client-side cap); the selected id also lives in the URL.
+ */
 export function ComplaintsInbox({
-  complaints,
+  inbox,
+  params,
   selected,
   writable,
 }: {
-  complaints: ComplaintListItem[];
+  inbox: ComplaintsInboxResult;
+  params: ComplaintsInboxParams;
   selected: SelectedComplaint | null;
   writable: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const [pending, startTransition] = React.useTransition();
   // On small screens the list hides only when the user explicitly opened a complaint (?id=…),
   // not when the server auto-selected the first one for the desktop layout.
   const explicitId = useSearchParams().get("id");
-  const [filter, setFilter] = React.useState<Filter>("all");
-  const [query, setQuery] = React.useState("");
+  const [query, setQuery] = React.useState(params.q);
 
-  const counts = React.useMemo(() => {
-    const c = { open: 0, in_progress: 0, resolved: 0 };
-    for (const x of complaints) c[x.status] += 1;
-    return c;
-  }, [complaints]);
-
-  const visible = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return complaints.filter((c) => {
-      if (filter !== "all" && c.status !== filter) return false;
-      if (!q) return true;
-      const hay = `${c.title} ${c.student?.full_name ?? ""} ${c.student?.room?.room_number ?? ""} ${c.category}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }, [complaints, filter, query]);
-
+  const { complaints, counts, total, page, pageSize } = inbox;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const filtered = params.status !== "all" || !!params.q;
   const selectedId = selected?.complaint.id ?? null;
 
+  // Sync the input from the URL only for external changes (never overwrite in-flight typing).
+  const lastPushedQ = React.useRef(params.q.trim());
+  React.useEffect(() => {
+    if (params.q.trim() !== lastPushedQ.current) {
+      lastPushedQ.current = params.q.trim();
+      setQuery(params.q);
+    }
+  }, [params.q]);
+
+  const navigate = React.useCallback(
+    (next: { status?: ComplaintFilter; q?: string; page?: number; id?: string | null }) => {
+      const merged = { status: params.status, q: params.q, page, id: explicitId, ...next };
+      const sp = new URLSearchParams();
+      lastPushedQ.current = merged.q.trim();
+      if (merged.status !== "all") sp.set("status", merged.status);
+      if (merged.q.trim()) sp.set("q", merged.q.trim());
+      if (merged.page > 1) sp.set("page", String(merged.page));
+      if (merged.id) sp.set("id", merged.id);
+      const qs = sp.toString();
+      startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
+    },
+    [params.status, params.q, page, explicitId, pathname, router],
+  );
+
+  React.useEffect(() => {
+    if (query.trim() === lastPushedQ.current) return;
+    const t = setTimeout(() => navigate({ q: query, page: 1, id: null }), 350);
+    return () => clearTimeout(t);
+  }, [query, navigate]);
+
   function select(id: string) {
-    router.replace(`/owner/complaints?id=${id}`, { scroll: false });
+    navigate({ id });
   }
 
   return (
@@ -91,25 +117,25 @@ export function ComplaintsInbox({
               aria-label="Search complaints"
             />
           </div>
-          <SegmentedPills<Filter>
+          <SegmentedPills<ComplaintFilter>
             size="sm"
-            value={filter}
-            onChange={setFilter}
+            value={params.status}
+            onChange={(v) => navigate({ status: v, page: 1, id: null })}
             ariaLabel="Filter by status"
             options={[
-              { value: "all", label: "All", count: complaints.length },
+              { value: "all", label: "All", count: counts.all },
               { value: "open", label: "Open", count: counts.open, tone: "red" },
               { value: "in_progress", label: "In progress", count: counts.in_progress, tone: "sand" },
               { value: "resolved", label: "Resolved", count: counts.resolved, tone: "teal" },
             ]}
           />
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {visible.length === 0 ? (
-            <EmptyState compact icon={MessageSquareWarning} title={complaints.length ? "No complaints match" : "No complaints yet"} description={complaints.length ? "Try another filter or search." : "Students haven't raised anything."} />
+        <div className={cn("min-h-0 flex-1 overflow-y-auto transition-opacity", pending && "opacity-60")} aria-busy={pending}>
+          {complaints.length === 0 ? (
+            <EmptyState compact icon={MessageSquareWarning} title={filtered ? "No complaints match" : "No complaints yet"} description={filtered ? "Try another filter or search." : "Students haven't raised anything."} />
           ) : (
             <ul className="divide-y divide-line/60">
-              {visible.map((c) => {
+              {complaints.map((c) => {
                 const active = c.id === selectedId;
                 return (
                   <li key={c.id}>
@@ -143,6 +169,24 @@ export function ComplaintsInbox({
             </ul>
           )}
         </div>
+        {total > pageSize ? (
+          <div className="flex items-center justify-between gap-2 border-t border-line/70 px-4 py-2.5 text-[12px] text-muted">
+            <span className="tabular">
+              {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {formatNumber(total)}
+            </span>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon-sm" aria-label="Previous page" disabled={page <= 1 || pending} onClick={() => navigate({ page: page - 1, id: null })}>
+                <ChevronLeft />
+              </Button>
+              <span className="tabular">
+                {page} / {totalPages}
+              </span>
+              <Button variant="ghost" size="icon-sm" aria-label="Next page" disabled={page >= totalPages || pending} onClick={() => navigate({ page: page + 1, id: null })}>
+                <ChevronRight />
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </GlassCard>
 
       {/* Right: detail */}
@@ -237,7 +281,7 @@ function ComplaintDetail({ selected, writable }: { selected: SelectedComplaint; 
           rows={3}
         />
         <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
-          {noteDirty && c.status !== "open" && (
+          {noteDirty && (
             <Button variant="ghost" size="sm" disabled={!writable || pending} onClick={() => submit(c.status)}>
               Save note
             </Button>

@@ -6,18 +6,23 @@ import { useRouter } from "next/navigation";
 import { Controller, useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { addYears } from "date-fns";
-import { ArrowLeft, ArrowRight, BedDouble, Building2, Check, CreditCard, Info, Lightbulb, Minus, Pencil, Plus, Sparkles, UserRound } from "lucide-react";
+import { toast } from "sonner";
+import { ArrowLeft, ArrowRight, BedDouble, Building2, Check, CreditCard, Info, Lightbulb, Pencil, Search, Sparkles, UserRound, UserRoundPlus, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { UserAvatar } from "@/components/ui/avatar";
 import { Field, FormGrid } from "@/components/shared/field";
 import { GlassCard } from "@/components/shared/glass-card";
-import { StatusPill } from "@/components/shared/status-pill";
+import { SegmentedPills } from "@/components/shared/segmented";
+import { Chip, StatusPill } from "@/components/shared/status-pill";
 import { CredentialsDialog } from "@/components/shared/credentials-dialog";
 import { useAction } from "@/hooks/use-action";
-import { createOwnerAndHostel } from "@/lib/actions/super-admin";
+import { createOwnerAndHostel, type IssuedCredentials } from "@/lib/actions/super-admin";
+import type { SaOwnerOption } from "@/lib/queries/super-admin";
 import { createOwnerHostelSchema, type CreateOwnerHostelInput } from "@/lib/validators/super-admin";
 import { cn, formatDate, formatINR, formatNumber, toISODate } from "@/lib/utils";
+import { NumberStepper } from "./number-stepper";
 
 const STEPS = [
   { key: "owner", label: "Owner", icon: UserRound },
@@ -26,8 +31,19 @@ const STEPS = [
   { key: "review", label: "Review", icon: Check },
 ] as const;
 
+type OwnerMode = "new" | "existing";
+
+/** Flat view of the owner step (the zod schema is a discriminated union on `mode`). */
+type OwnerFields = { mode: OwnerMode; name?: string; email?: string; phone?: string; ownerUserId?: string };
+type OwnerErrors = Partial<Record<keyof OwnerFields, { message?: string }>>;
+
+const OWNER_FIELDS: Record<OwnerMode, FieldPath<CreateOwnerHostelInput>[]> = {
+  new: ["owner.name", "owner.email", "owner.phone"],
+  existing: ["owner.ownerUserId"],
+};
+
 const STEP_FIELDS: FieldPath<CreateOwnerHostelInput>[][] = [
-  ["owner.name", "owner.email", "owner.phone"],
+  [], // owner — depends on mode, see stepFields()
   ["hostel.name", "hostel.floors", "hostel.rooms", "hostel.bedsPerRoom", "hostel.address"],
   ["subscription.startDate", "subscription.endDate", "subscription.amount", "subscription.notes"],
   [],
@@ -36,18 +52,21 @@ const STEP_FIELDS: FieldPath<CreateOwnerHostelInput>[][] = [
 function defaults(): CreateOwnerHostelInput {
   const today = new Date();
   return {
-    owner: { name: "", email: "", phone: "" },
+    // all owner fields are kept in the form so switching modes doesn't lose typed values; zod strips the unused ones
+    owner: { mode: "new", name: "", email: "", phone: "", ownerUserId: "" } as unknown as CreateOwnerHostelInput["owner"],
     hostel: { name: "", floors: 1, rooms: 10, bedsPerRoom: 3, address: "" },
     subscription: { startDate: toISODate(today), endDate: toISODate(addYears(today, 1)), amount: Number.NaN, notes: "" },
   };
 }
 
-/** SA-2 — 4-step "Create Owner & Hostel" wizard. */
-export function CreateWizard() {
+type WizardResult = { hostelId: string; credentials: IssuedCredentials | null };
+
+/** SA-2 — 4-step "Create Owner & Hostel" wizard (new owner, or a second hostel for an existing owner — §4.1). */
+export function CreateWizard({ owners }: { owners: SaOwnerOption[] }) {
   const router = useRouter();
   const [step, setStep] = React.useState(0);
   const [visited, setVisited] = React.useState(0); // furthest step reached
-  const [result, setResult] = React.useState<{ hostelId: string; credentials: { name: string; loginId: string; password: string } } | null>(null);
+  const [result, setResult] = React.useState<WizardResult | null>(null);
   const [credsOpen, setCredsOpen] = React.useState(false);
 
   const form = useForm<CreateOwnerHostelInput>({
@@ -55,30 +74,62 @@ export function CreateWizard() {
     defaultValues: defaults(),
     mode: "onTouched",
   });
-  const { register, control, trigger, handleSubmit, watch, formState, reset } = form;
+  const { register, control, trigger, handleSubmit, watch, formState, reset, setValue, clearErrors } = form;
   const values = watch();
+  const owner = values.owner as OwnerFields;
+  const ownerMode: OwnerMode = owner.mode ?? "new";
+  const ownerErrors = (formState.errors.owner ?? undefined) as unknown as OwnerErrors | undefined;
+  const selectedOwner = ownerMode === "existing" ? owners.find((o) => o.id === owner.ownerUserId) ?? null : null;
+  const ownerDisplayName = ownerMode === "existing" ? selectedOwner?.full_name ?? "" : owner.name ?? "";
+
+  const stepFields = React.useCallback((i: number) => (i === 0 ? OWNER_FIELDS[ownerMode] : STEP_FIELDS[i]), [ownerMode]);
 
   const { run, pending } = useAction(createOwnerAndHostel, {
     refresh: false,
     onSuccess: (data) => {
       setResult(data);
-      setCredsOpen(true);
+      if (data.credentials) setCredsOpen(true);
     },
   });
 
   const goNext = async () => {
-    const valid = await trigger(STEP_FIELDS[step], { shouldFocus: true });
+    const valid = await trigger(stepFields(step), { shouldFocus: true });
     if (!valid) return;
     const next = Math.min(step + 1, STEPS.length - 1);
     setStep(next);
     setVisited((v) => Math.max(v, next));
   };
   const goBack = () => setStep((s) => Math.max(0, s - 1));
-  const jumpTo = (i: number) => {
-    if (i <= visited) setStep(i);
+  /** Stepper / summary jumps: backwards is free; forwards re-validates every step in between. */
+  const jumpTo = async (i: number) => {
+    if (i > visited) return;
+    if (i <= step) {
+      setStep(i);
+      return;
+    }
+    for (let k = step; k < i; k++) {
+      const valid = await trigger(stepFields(k), { shouldFocus: true });
+      if (!valid) {
+        setStep(k);
+        return;
+      }
+    }
+    setStep(i);
   };
 
-  const onSubmit = handleSubmit((data) => void run(data));
+  const onSubmit = handleSubmit(
+    (data) => void run(data),
+    (errors) => {
+      const firstBad = (["owner", "hostel", "subscription"] as const).findIndex((k) => errors[k]);
+      if (firstBad >= 0) setStep(firstBad);
+      toast.error("Please fix the highlighted fields");
+    },
+  );
+
+  const switchOwnerMode = (mode: OwnerMode) => {
+    setValue("owner.mode" as FieldPath<CreateOwnerHostelInput>, mode, { shouldDirty: true });
+    clearErrors("owner");
+  };
 
   const totalBeds = (Number(values.hostel.rooms) || 0) * (Number(values.hostel.bedsPerRoom) || 0);
 
@@ -95,27 +146,82 @@ export function CreateWizard() {
         {/* ── Main wizard card ── */}
         <GlassCard className="flex flex-col p-0" padded={false}>
           <div className="border-b border-line/70 px-6 pt-6 pb-5 md:px-8">
-            <Stepper current={step} visited={visited} onJump={jumpTo} done={!!result} />
+            <Stepper current={step} visited={visited} onJump={(i) => void jumpTo(i)} done={!!result} />
           </div>
 
           {result ? (
-            <SuccessPanel hostelId={result.hostelId} hostelName={values.hostel.name} ownerName={values.owner.name} onAnother={startOver} onShowCreds={() => setCredsOpen(true)} />
+            <SuccessPanel
+              hostelId={result.hostelId}
+              hostelName={values.hostel.name}
+              ownerName={ownerDisplayName}
+              existingOwner={!result.credentials}
+              onAnother={startOver}
+              onShowCreds={result.credentials ? () => setCredsOpen(true) : undefined}
+            />
           ) : (
             <form onSubmit={onSubmit} noValidate className="flex flex-1 flex-col">
               <div className="flex-1 px-6 py-6 md:px-8">
                 {step === 0 && (
-                  <StepShell title="Owner details" description="The person who owns this hostel. They'll receive a login and set their own password on first sign-in.">
-                    <FormGrid>
-                      <Field label="Full name" htmlFor="owner-name" required error={formState.errors.owner?.name?.message} className="md:col-span-2">
-                        <Input id="owner-name" placeholder="e.g. Priya Sharma" autoComplete="off" {...register("owner.name")} aria-invalid={!!formState.errors.owner?.name} />
-                      </Field>
-                      <Field label="Email address" htmlFor="owner-email" required error={formState.errors.owner?.email?.message} hint="Used as the owner's login ID">
-                        <Input id="owner-email" type="email" placeholder="owner@example.com" autoComplete="off" {...register("owner.email")} aria-invalid={!!formState.errors.owner?.email} />
-                      </Field>
-                      <Field label="Phone number" htmlFor="owner-phone" required error={formState.errors.owner?.phone?.message}>
-                        <Input id="owner-phone" type="tel" inputMode="tel" placeholder="98765 43210" autoComplete="off" {...register("owner.phone")} aria-invalid={!!formState.errors.owner?.phone} />
-                      </Field>
-                    </FormGrid>
+                  <StepShell
+                    title="Owner details"
+                    description={
+                      ownerMode === "new"
+                        ? "The person who owns this hostel. They'll receive a login and set their own password on first sign-in."
+                        : "Add a second hostel (with its own subscription) under an owner account that already exists. No new login is created — the owner switches hostels from their dashboard."
+                    }
+                  >
+                    <div className="mb-5">
+                      <SegmentedPills<OwnerMode>
+                        ariaLabel="Owner account"
+                        value={ownerMode}
+                        onChange={switchOwnerMode}
+                        options={[
+                          {
+                            value: "new",
+                            label: (
+                              <span className="inline-flex items-center gap-1.5">
+                                <UserRoundPlus className="h-3.5 w-3.5" />
+                                New owner
+                              </span>
+                            ),
+                          },
+                          {
+                            value: "existing",
+                            label: (
+                              <span className="inline-flex items-center gap-1.5">
+                                <Users className="h-3.5 w-3.5" />
+                                Existing owner
+                              </span>
+                            ),
+                            count: owners.length,
+                          },
+                        ]}
+                      />
+                    </div>
+
+                    {ownerMode === "new" ? (
+                      <FormGrid>
+                        <Field label="Full name" htmlFor="owner-name" required error={ownerErrors?.name?.message} className="md:col-span-2">
+                          <Input id="owner-name" placeholder="e.g. Priya Sharma" autoComplete="off" {...register("owner.name" as FieldPath<CreateOwnerHostelInput>)} aria-invalid={!!ownerErrors?.name} />
+                        </Field>
+                        <Field label="Email address" htmlFor="owner-email" required error={ownerErrors?.email?.message} hint="Used as the owner's login ID">
+                          <Input id="owner-email" type="email" placeholder="owner@example.com" autoComplete="off" {...register("owner.email" as FieldPath<CreateOwnerHostelInput>)} aria-invalid={!!ownerErrors?.email} />
+                        </Field>
+                        <Field label="Phone number" htmlFor="owner-phone" required error={ownerErrors?.phone?.message}>
+                          <Input id="owner-phone" type="tel" inputMode="tel" placeholder="98765 43210" autoComplete="off" {...register("owner.phone" as FieldPath<CreateOwnerHostelInput>)} aria-invalid={!!ownerErrors?.phone} />
+                        </Field>
+                      </FormGrid>
+                    ) : (
+                      <Controller
+                        control={control}
+                        name={"owner.ownerUserId" as FieldPath<CreateOwnerHostelInput>}
+                        render={({ field, fieldState }) => (
+                          <Field label="Owner account" htmlFor="owner-search" required error={fieldState.error?.message}>
+                            <OwnerPicker owners={owners} value={typeof field.value === "string" ? field.value : ""} onChange={field.onChange} onBlur={field.onBlur} />
+                          </Field>
+                        )}
+                      />
+                    )}
                   </StepShell>
                 )}
 
@@ -189,12 +295,30 @@ export function CreateWizard() {
                 )}
 
                 {step === 3 && (
-                  <StepShell title="Review & create" description="Double-check everything. On submit we create the owner login, the hostel, its floors, rooms and beds, and the subscription.">
+                  <StepShell
+                    title="Review & create"
+                    description={
+                      ownerMode === "new"
+                        ? "Double-check everything. On submit we create the owner login, the hostel, its floors, rooms and beds, and the subscription."
+                        : "Double-check everything. On submit we create the hostel, its floors, rooms and beds, and the subscription under the selected owner."
+                    }
+                  >
                     <div className="space-y-4">
                       <ReviewSection title="Owner" onEdit={() => setStep(0)}>
-                        <ReviewRow label="Name" value={values.owner.name} />
-                        <ReviewRow label="Email (login)" value={values.owner.email} />
-                        <ReviewRow label="Phone" value={values.owner.phone} />
+                        {ownerMode === "existing" ? (
+                          <>
+                            <ReviewRow label="Account" value={selectedOwner ? <span className="inline-flex items-center gap-2">{selectedOwner.full_name}<Chip tone="navy">Existing</Chip></span> : "—"} />
+                            <ReviewRow label="Email (login)" value={selectedOwner?.email ?? "—"} />
+                            <ReviewRow label="Phone" value={selectedOwner?.phone ?? "—"} />
+                            <ReviewRow label="Hostels today" value={selectedOwner ? `${formatNumber(selectedOwner.hostel_count)} → ${formatNumber(selectedOwner.hostel_count + 1)} after this` : "—"} />
+                          </>
+                        ) : (
+                          <>
+                            <ReviewRow label="Name" value={owner.name} />
+                            <ReviewRow label="Email (login)" value={owner.email} />
+                            <ReviewRow label="Phone" value={owner.phone} />
+                          </>
+                        )}
                       </ReviewSection>
                       <ReviewSection title="Hostel" onEdit={() => setStep(1)}>
                         <ReviewRow label="Name" value={values.hostel.name} />
@@ -207,10 +331,17 @@ export function CreateWizard() {
                         <ReviewRow label="Amount" value={Number.isFinite(values.subscription.amount) ? formatINR(values.subscription.amount) : "—"} />
                         <ReviewRow label="Notes" value={values.subscription.notes || "—"} />
                       </ReviewSection>
-                      <div className="flex items-start gap-2.5 rounded-control bg-sand-soft px-3.5 py-3 text-[13px] text-sand-deep">
-                        <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
-                        <p>A temporary password will be generated and shown <span className="font-semibold">once</span> after creation. Copy it before closing the dialog.</p>
-                      </div>
+                      {ownerMode === "new" ? (
+                        <div className="flex items-start gap-2.5 rounded-control bg-sand-soft px-3.5 py-3 text-[13px] text-sand-deep">
+                          <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
+                          <p>A temporary password will be generated and shown <span className="font-semibold">once</span> after creation. Copy it before closing the dialog.</p>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-2.5 rounded-control bg-navy/5 px-3.5 py-3 text-[13px] text-charcoal">
+                          <Info className="mt-0.5 h-4 w-4 shrink-0 text-navy/70" />
+                          <p>No new login is created. The owner keeps their existing password and will see a hostel switcher in their dashboard header.</p>
+                        </div>
+                      )}
                     </div>
                   </StepShell>
                 )}
@@ -229,7 +360,7 @@ export function CreateWizard() {
                 ) : (
                   <Button type="submit" loading={pending}>
                     <Check />
-                    Create owner &amp; hostel
+                    {ownerMode === "new" ? "Create owner & hostel" : "Create hostel"}
                   </Button>
                 )}
               </div>
@@ -239,17 +370,27 @@ export function CreateWizard() {
 
         {/* ── Summary panel ── */}
         <div className="space-y-4">
-          <SummaryCard title="Owner details" icon={UserRound} saved={visited > 0 || !!result} active={step === 0 && !result} onEdit={!result && visited > 0 ? () => setStep(0) : undefined}>
-            <SummaryRow label="Full name" value={values.owner.name} />
-            <SummaryRow label="Email" value={values.owner.email} />
-            <SummaryRow label="Phone" value={values.owner.phone} />
+          <SummaryCard title="Owner details" icon={UserRound} saved={visited > 0 || !!result} active={step === 0 && !result} onEdit={!result && visited > 0 ? () => void jumpTo(0) : undefined}>
+            {ownerMode === "existing" ? (
+              <>
+                <SummaryRow label="Account" value={selectedOwner ? `${selectedOwner.full_name} (existing)` : ""} />
+                <SummaryRow label="Email" value={selectedOwner?.email ?? ""} />
+                <SummaryRow label="Phone" value={selectedOwner?.phone ?? ""} />
+              </>
+            ) : (
+              <>
+                <SummaryRow label="Full name" value={owner.name ?? ""} />
+                <SummaryRow label="Email" value={owner.email ?? ""} />
+                <SummaryRow label="Phone" value={owner.phone ?? ""} />
+              </>
+            )}
           </SummaryCard>
-          <SummaryCard title="Hostel details" icon={Building2} saved={visited > 1 || !!result} active={step === 1 && !result} onEdit={!result && visited > 1 ? () => setStep(1) : undefined}>
+          <SummaryCard title="Hostel details" icon={Building2} saved={visited > 1 || !!result} active={step === 1 && !result} onEdit={!result && visited > 1 ? () => void jumpTo(1) : undefined}>
             <SummaryRow label="Name" value={values.hostel.name} />
             <SummaryRow label="Layout" value={values.hostel.name ? `${values.hostel.floors} fl · ${values.hostel.rooms} rooms · ${values.hostel.bedsPerRoom} beds/room` : ""} />
             <SummaryRow label="Beds" value={values.hostel.name ? formatNumber(totalBeds) : ""} />
           </SummaryCard>
-          <SummaryCard title="Subscription" icon={CreditCard} saved={visited > 2 || !!result} active={step === 2 && !result} onEdit={!result && visited > 2 ? () => setStep(2) : undefined}>
+          <SummaryCard title="Subscription" icon={CreditCard} saved={visited > 2 || !!result} active={step === 2 && !result} onEdit={!result && visited > 2 ? () => void jumpTo(2) : undefined}>
             <SummaryRow label="Period" value={visited > 1 || step >= 2 ? `${formatDate(values.subscription.startDate)} → ${formatDate(values.subscription.endDate)}` : ""} />
             <SummaryRow label="Amount" value={Number.isFinite(values.subscription.amount) ? formatINR(values.subscription.amount) : ""} />
           </SummaryCard>
@@ -273,7 +414,7 @@ export function CreateWizard() {
           if (!v && result) router.prefetch(`/super-admin/hostels/${result.hostelId}`);
         }}
         credentials={
-          result
+          result?.credentials
             ? { title: "Owner account created", name: result.credentials.name, loginId: result.credentials.loginId, password: result.credentials.password, role: "Owner" }
             : null
         }
@@ -283,6 +424,103 @@ export function CreateWizard() {
 }
 
 /* ───────────────────────── pieces ───────────────────────── */
+
+/** Searchable owner list (existing-owner mode) — filter box + radio-style rows. */
+function OwnerPicker({
+  owners,
+  value,
+  onChange,
+  onBlur,
+}: {
+  owners: SaOwnerOption[];
+  value: string;
+  onChange: (id: string) => void;
+  onBlur?: () => void;
+}) {
+  const [query, setQuery] = React.useState("");
+  const q = query.trim().toLowerCase();
+  const filtered = React.useMemo(
+    () => (q ? owners.filter((o) => [o.full_name, o.email ?? "", o.phone ?? ""].some((v) => v.toLowerCase().includes(q))) : owners),
+    [owners, q],
+  );
+  const selected = owners.find((o) => o.id === value) ?? null;
+
+  if (owners.length === 0) {
+    return (
+      <div className="rounded-control border border-dashed border-line bg-white/40 px-4 py-6 text-center text-sm text-muted">
+        No owner accounts yet — switch to <span className="font-medium text-navy">New owner</span> to create the first one.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+        <Input
+          id="owner-search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onBlur={onBlur}
+          placeholder="Search owners by name, email or phone…"
+          className="pl-9 pr-9"
+          autoComplete="off"
+        />
+        {query ? (
+          <button type="button" aria-label="Clear search" onClick={() => setQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:bg-navy/5 hover:text-navy">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </div>
+      <div role="radiogroup" aria-label="Owner accounts" className="max-h-72 overflow-y-auto rounded-control border border-line/80 bg-white/50">
+        {filtered.length === 0 ? (
+          <div className="px-4 py-6 text-center text-sm text-muted">No owners match “{query}”.</div>
+        ) : (
+          filtered.map((o) => {
+            const active = o.id === value;
+            const inactive = o.status !== "active";
+            return (
+              <button
+                key={o.id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                disabled={inactive}
+                onClick={() => onChange(o.id)}
+                className={cn(
+                  "flex w-full items-center gap-3 border-b border-line/60 px-3.5 py-2.5 text-left transition-colors last:border-b-0",
+                  active ? "bg-navy/5" : "hover:bg-white/80",
+                  inactive && "cursor-not-allowed opacity-50",
+                )}
+              >
+                <UserAvatar name={o.full_name} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium text-navy">{o.full_name}</span>
+                    {inactive ? <StatusPill status={o.status} size="sm" /> : null}
+                  </div>
+                  <div className="truncate text-xs text-muted">{[o.email, o.phone].filter(Boolean).join(" · ") || "—"}</div>
+                </div>
+                <Chip tone={o.hostel_count > 0 ? "teal" : "muted"}>
+                  {formatNumber(o.hostel_count)} hostel{o.hostel_count === 1 ? "" : "s"}
+                </Chip>
+                <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full border", active ? "border-navy bg-navy text-white" : "border-line bg-white")}>
+                  {active ? <Check className="h-3 w-3" /> : null}
+                </span>
+              </button>
+            );
+          })
+        )}
+      </div>
+      {selected ? (
+        <p className="text-xs text-muted">
+          Selected <span className="font-medium text-charcoal">{selected.full_name}</span>
+          {selected.email ? ` (${selected.email})` : ""} — currently {formatNumber(selected.hostel_count)} hostel{selected.hostel_count === 1 ? "" : "s"}.
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 function Stepper({ current, visited, onJump, done }: { current: number; visited: number; onJump: (i: number) => void; done: boolean }) {
   return (
@@ -326,63 +564,6 @@ function StepShell({ title, description, children }: { title: string; descriptio
       <h2 className="text-[18px] font-semibold text-navy">{title}</h2>
       <p className="mb-6 mt-1 text-sm text-muted">{description}</p>
       {children}
-    </div>
-  );
-}
-
-/** −/+ stepper input (SA-2 "Number of floors / rooms"). */
-function NumberStepper({
-  id,
-  value,
-  onChange,
-  onBlur,
-  min,
-  max,
-}: {
-  id: string;
-  value: number;
-  onChange: (v: number) => void;
-  onBlur?: () => void;
-  min: number;
-  max: number;
-}) {
-  const n = Number.isFinite(value) ? value : min;
-  const clamp = (v: number) => Math.min(max, Math.max(min, v));
-  return (
-    <div className="flex h-10 items-stretch overflow-hidden rounded-control border border-input bg-white/70 focus-within:border-navy focus-within:ring-1 focus-within:ring-navy">
-      <button
-        type="button"
-        aria-label="Decrease"
-        className="flex w-10 shrink-0 items-center justify-center text-navy transition-colors hover:bg-navy/5 disabled:opacity-40"
-        onClick={() => onChange(clamp(n - 1))}
-        disabled={n <= min}
-      >
-        <Minus className="h-4 w-4" />
-      </button>
-      <input
-        id={id}
-        type="number"
-        inputMode="numeric"
-        min={min}
-        max={max}
-        value={Number.isFinite(value) ? value : ""}
-        onChange={(e) => onChange(e.target.value === "" ? Number.NaN : Number(e.target.value))}
-        onBlur={() => {
-          if (!Number.isFinite(value)) onChange(min);
-          else onChange(clamp(Math.round(value)));
-          onBlur?.();
-        }}
-        className="w-full min-w-0 border-x border-input bg-transparent text-center text-sm font-semibold text-navy tabular outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-      />
-      <button
-        type="button"
-        aria-label="Increase"
-        className="flex w-10 shrink-0 items-center justify-center text-navy transition-colors hover:bg-navy/5 disabled:opacity-40"
-        onClick={() => onChange(clamp(n + 1))}
-        disabled={n >= max}
-      >
-        <Plus className="h-4 w-4" />
-      </button>
     </div>
   );
 }
@@ -459,14 +640,16 @@ function SuccessPanel({
   hostelId,
   hostelName,
   ownerName,
+  existingOwner,
   onAnother,
   onShowCreds,
 }: {
   hostelId: string;
   hostelName: string;
   ownerName: string;
+  existingOwner: boolean;
   onAnother: () => void;
-  onShowCreds: () => void;
+  onShowCreds?: () => void;
 }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-14 text-center md:px-8">
@@ -475,21 +658,32 @@ function SuccessPanel({
       </div>
       <h2 className="text-[20px] font-semibold text-navy">{hostelName} is ready</h2>
       <p className="mt-1 max-w-md text-sm text-muted">
-        The owner account for <span className="font-medium text-charcoal">{ownerName}</span> was created along with the hostel, its floors, rooms, beds and the first
-        subscription period.
+        {existingOwner ? (
+          <>
+            The hostel, its floors, rooms, beds and the first subscription period were created under{" "}
+            <span className="font-medium text-charcoal">{ownerName}</span>&apos;s existing account. They can switch to it from their dashboard header.
+          </>
+        ) : (
+          <>
+            The owner account for <span className="font-medium text-charcoal">{ownerName}</span> was created along with the hostel, its floors, rooms, beds and the first
+            subscription period.
+          </>
+        )}
       </p>
       <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
         <Button asChild>
           <Link href={`/super-admin/hostels/${hostelId}`}>View hostel</Link>
         </Button>
-        <Button variant="secondary" onClick={onShowCreds}>
-          Show credentials again
-        </Button>
+        {onShowCreds ? (
+          <Button variant="secondary" onClick={onShowCreds}>
+            Show credentials again
+          </Button>
+        ) : null}
         <Button variant="ghost" onClick={onAnother}>
           Create another
         </Button>
       </div>
-      <p className="mt-4 text-xs text-muted">Credentials are only available in this session — once you leave this page they cannot be viewed again.</p>
+      {onShowCreds ? <p className="mt-4 text-xs text-muted">Credentials are only available in this session — once you leave this page they cannot be viewed again.</p> : null}
     </div>
   );
 }

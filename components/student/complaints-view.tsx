@@ -8,10 +8,14 @@ import { StatusPill } from "@/components/shared/status-pill";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ComplaintTimeline } from "@/components/shared/complaint-timeline";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import type { ComplaintEventRow, ComplaintRow } from "@/lib/types";
 import { cn, formatDate } from "@/lib/utils";
 import { COMPLAINT_CATEGORY_LABEL, COMPLAINT_ICON } from "./complaint-icons";
 import { NewComplaintSheet } from "./new-complaint-sheet";
+
+const READ_ONLY_MESSAGE = "Subscription expired — the hostel is read-only";
+const notifyReadOnly = () => toast.error(READ_ONLY_MESSAGE);
 
 export interface ComplaintWithEvents extends ComplaintRow {
   events: ComplaintEventRow[];
@@ -35,10 +39,9 @@ export function ComplaintsView({
 
   // ?new=1 opens the sheet once, then the query is dropped so a refresh doesn't reopen it.
   React.useEffect(() => {
-    if (openNew && writable) {
-      setOpen(true);
-      router.replace(pathname, { scroll: false });
-    }
+    if (!openNew) return;
+    if (writable) setOpen(true);
+    router.replace(pathname, { scroll: false });
   }, [openNew, pathname, router, writable]);
 
   return (
@@ -50,11 +53,12 @@ export function ComplaintsView({
             title="No complaints yet"
             description="Something not right? Raise a complaint and track it here."
             action={
-              writable ? (
-                <Button onClick={() => setOpen(true)}>
+              <div className="flex flex-col items-center gap-2">
+                <Button onClick={() => setOpen(true)} disabled={!writable} title={writable ? undefined : READ_ONLY_MESSAGE}>
                   <Plus /> Raise complaint
                 </Button>
-              ) : null
+                {!writable ? <p className="text-[12px] text-muted">{READ_ONLY_MESSAGE}.</p> : null}
+              </div>
             }
           />
         </GlassCard>
@@ -112,16 +116,19 @@ export function ComplaintsView({
         </ul>
       )}
 
-      {writable ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label="Raise a complaint"
-          className="fixed bottom-[96px] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-navy text-white shadow-lg transition-transform active:scale-90 md:right-[calc(50%-240px+16px)]"
-        >
-          <Plus className="h-6 w-6" strokeWidth={2.25} />
-        </button>
-      ) : null}
+      <button
+        type="button"
+        onClick={() => (writable ? setOpen(true) : notifyReadOnly())}
+        aria-label="Raise a complaint"
+        aria-disabled={!writable}
+        title={writable ? undefined : READ_ONLY_MESSAGE}
+        className={cn(
+          "fixed bottom-[calc(96px+env(safe-area-inset-bottom,0px))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-navy text-white shadow-lg transition-transform active:scale-90 md:right-[calc(50%-240px+16px)]",
+          !writable && "cursor-not-allowed opacity-50 active:scale-100",
+        )}
+      >
+        <Plus className="h-6 w-6" strokeWidth={2.25} />
+      </button>
 
       <NewComplaintSheet open={open} onOpenChange={setOpen} />
     </>

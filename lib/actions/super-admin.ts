@@ -10,10 +10,12 @@ import {
   regenerateOwnerPasswordSchema,
   renewSubscriptionSchema,
   setHostelStatusSchema,
+  updateHostelStructureSchema,
   type CreateOwnerHostelInput,
   type RegenerateOwnerPasswordInput,
   type RenewSubscriptionInput,
   type SetHostelStatusInput,
+  type UpdateHostelStructureInput,
 } from "@/lib/validators/super-admin";
 
 const SERVICE_KEY_MISSING = "Service role key not configured — add SUPABASE_SERVICE_ROLE_KEY to .env.local";
@@ -33,19 +35,57 @@ function revalidateSuperAdmin(hostelId?: string) {
 
 /**
  * SA-2 wizard submit (Hard rules §4.1, §4.2, §4.9):
- *  1. create the owner auth user + users row (service role, via lib/auth/accounts)
- *  2. sa_create_hostel_with_subscription → hostel + subscription + scaffold, atomically
- *  3. on RPC failure roll the auth user back (users row cascade-deletes)
+ *  • owner.mode = "new"      → 1. create the owner auth user + users row (service role, via lib/auth/accounts)
+ *                              2. sa_create_hostel_with_subscription → hostel + subscription + scaffold, atomically
+ *                              3. on RPC failure roll the auth user back (users row cascade-deletes)
+ *  • owner.mode = "existing" → a second hostel + subscription under an owner account that already exists
+ *                              (§4.1) — no new login, so no credentials are issued.
  */
 export async function createOwnerAndHostel(
   input: CreateOwnerHostelInput,
-): Promise<ActionResult<{ hostelId: string; credentials: IssuedCredentials }>> {
+): Promise<ActionResult<{ hostelId: string; credentials: IssuedCredentials | null }>> {
   const parsed = createOwnerHostelSchema.safeParse(input);
   if (!parsed.success) return fail("Please check the highlighted fields.", parsed.error.flatten().fieldErrors);
   const { owner, hostel, subscription } = parsed.data;
 
   try {
     const user = await assertRole("super_admin");
+    const supabase = await createClient();
+
+    const rpcArgs = {
+      p_hostel_name: hostel.name,
+      p_floors: hostel.floors,
+      p_rooms: hostel.rooms,
+      p_address: hostel.address?.trim() || null,
+      p_start_date: subscription.startDate,
+      p_end_date: subscription.endDate,
+      p_amount: subscription.amount,
+      p_notes: subscription.notes?.trim() || null,
+      p_beds_per_room: hostel.bedsPerRoom,
+    };
+
+    /* ── Existing owner: just the hostel + subscription ── */
+    if (owner.mode === "existing") {
+      const { data: existing, error: ownerErr } = await supabase
+        .from("users")
+        .select("id, full_name, status")
+        .eq("id", owner.ownerUserId)
+        .eq("role", "owner")
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (ownerErr) return fail(errorMessage(ownerErr));
+      if (!existing) return fail("Owner account not found.");
+      if ((existing as { status: string }).status !== "active") return fail("This owner account is inactive — reactivate it before adding a hostel.");
+
+      const { data, error } = await supabase.rpc("sa_create_hostel_with_subscription", { p_owner_user_id: owner.ownerUserId, ...rpcArgs });
+      const hostelId = typeof data === "string" ? data : null;
+      if (error || !hostelId) return fail(errorMessage(error ?? new Error("Could not create the hostel.")));
+
+      revalidateSuperAdmin(hostelId);
+      return ok({ hostelId, credentials: null }, `${hostel.name} created`);
+    }
+
+    /* ── New owner: auth user first, then hostel + subscription ── */
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return fail(SERVICE_KEY_MISSING);
 
     const account = await createStaffAccount({
@@ -57,19 +97,7 @@ export async function createOwnerAndHostel(
       createdBy: user.id,
     });
 
-    const supabase = await createClient();
-    const { data, error } = await supabase.rpc("sa_create_hostel_with_subscription", {
-      p_owner_user_id: account.userId,
-      p_hostel_name: hostel.name,
-      p_floors: hostel.floors,
-      p_rooms: hostel.rooms,
-      p_address: hostel.address?.trim() || null,
-      p_start_date: subscription.startDate,
-      p_end_date: subscription.endDate,
-      p_amount: subscription.amount,
-      p_notes: subscription.notes?.trim() || null,
-      p_beds_per_room: hostel.bedsPerRoom,
-    });
+    const { data, error } = await supabase.rpc("sa_create_hostel_with_subscription", { p_owner_user_id: account.userId, ...rpcArgs });
     const hostelId = typeof data === "string" ? data : null;
     if (error || !hostelId) {
       await deleteAuthUser(account.userId);
@@ -154,6 +182,50 @@ export async function regenerateOwnerPassword(input: RegenerateOwnerPasswordInpu
 
     const password = await regeneratePassword(o.id);
     return ok({ name: o.full_name, loginId: o.email, password }, "New password issued");
+  } catch (e) {
+    return fail(errorMessage(e));
+  }
+}
+
+/**
+ * Hard rule §4.2 — only the Super Admin can change floor / room counts after creation.
+ * Grow-only: floors and rooms may only increase (shrinking would orphan occupied rooms/beds).
+ * Updates hostels.total_floors / total_rooms, then re-runs scaffold_hostel, which is idempotent
+ * (ON CONFLICT DO NOTHING) — existing floors/rooms/beds are untouched, only the new ones are added.
+ */
+export async function updateHostelStructure(input: UpdateHostelStructureInput): Promise<ActionResult<{ floors: number; rooms: number }>> {
+  const parsed = updateHostelStructureSchema.safeParse(input);
+  if (!parsed.success) return fail("Please check the highlighted fields.", parsed.error.flatten().fieldErrors);
+  const { hostelId, floors, rooms } = parsed.data;
+  try {
+    await assertRole("super_admin");
+    const supabase = await createClient();
+    const { data: row, error: readErr } = await supabase
+      .from("hostels")
+      .select("id, total_floors, total_rooms, beds_per_room_default")
+      .eq("id", hostelId)
+      .maybeSingle();
+    if (readErr) return fail(errorMessage(readErr));
+    if (!row) return fail("Hostel not found.");
+    const current = row as { total_floors: number; total_rooms: number; beds_per_room_default: number };
+
+    if (floors < current.total_floors) return fail(`Floors can only be increased (currently ${current.total_floors}).`);
+    if (rooms < current.total_rooms) return fail(`Rooms can only be increased (currently ${current.total_rooms}).`);
+    if (floors === current.total_floors && rooms === current.total_rooms) return fail("Nothing to change — the structure is already set to these values.");
+
+    const { error: updErr } = await supabase.from("hostels").update({ total_floors: floors, total_rooms: rooms }).eq("id", hostelId);
+    if (updErr) return fail(errorMessage(updErr));
+
+    const { error: scaffoldErr } = await supabase.rpc("scaffold_hostel", {
+      p_hostel_id: hostelId,
+      p_floors: floors,
+      p_rooms: rooms,
+      p_beds_per_room: current.beds_per_room_default,
+    });
+    if (scaffoldErr) return fail(errorMessage(scaffoldErr));
+
+    revalidateSuperAdmin(hostelId);
+    return ok({ floors, rooms }, "Hostel structure updated");
   } catch (e) {
     return fail(errorMessage(e));
   }

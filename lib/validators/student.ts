@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { COMPLAINT_CATEGORIES } from "@/lib/types";
+import { toISODate } from "@/lib/utils";
 
 export const createComplaintSchema = z.object({
   category: z.enum(COMPLAINT_CATEGORIES as [string, ...string[]], { message: "Pick a category" }),
@@ -16,5 +17,7 @@ export const applyLeaveSchema = z
     toDate: isoDate,
     reason: z.string().trim().min(3, "Tell your warden why you need leave").max(500, "Keep the reason under 500 characters"),
   })
-  .refine((v) => v.toDate >= v.fromDate, { path: ["toDate"], message: "End date can't be before the start date" });
+  .refine((v) => v.toDate >= v.fromDate, { path: ["toDate"], message: "End date can't be before the start date" })
+  // Mirrors the client-side min={today}: leave can't be filed for the past.
+  .refine((v) => v.fromDate >= toISODate(), { path: ["fromDate"], message: "Leave can't start in the past" });
 export type ApplyLeaveInput = z.infer<typeof applyLeaveSchema>;

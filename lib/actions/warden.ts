@@ -2,11 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { assertHostelContext, assertWritableContext, errorMessage } from "@/lib/permissions";
 import { createStudentAuthUser, deleteAuthUser } from "@/lib/auth/accounts";
 import { uploadToBucket } from "@/lib/storage";
 import { fail, ok, type ActionResult } from "@/lib/types";
-import { getFreeBeds, type FreeBed } from "@/lib/queries/warden";
+import { getFreeBeds, searchActiveStudents, type FreeBed, type StudentOption } from "@/lib/queries/warden";
 import {
   checkOutVisitorSchema,
   decideLeaveSchema,
@@ -23,6 +24,17 @@ function flatten(err: { flatten: () => { fieldErrors: Record<string, string[] | 
   const out: Record<string, string[]> = {};
   for (const [k, v] of Object.entries(fe)) if (v) out[k] = v;
   return out;
+}
+
+/** Best-effort cleanup of uploaded objects when the DB half of a flow fails (no orphans in the private bucket). */
+async function removeUploads(paths: (string | null | undefined)[]) {
+  const keep = paths.filter((p): p is string => !!p);
+  if (keep.length === 0) return;
+  try {
+    await createAdminClient().storage.from("student-docs").remove(keep);
+  } catch {
+    // never mask the original error
+  }
 }
 
 /* ───────────────────────── register student (WD-2) ───────────────────────── */
@@ -59,8 +71,12 @@ export async function registerStudent(formData: FormData): Promise<ActionResult<
   const idProof = formData.get("idProof");
   const photoFile = photo instanceof File && photo.size > 0 ? photo : null;
   const idProofFile = idProof instanceof File && idProof.size > 0 ? idProof : null;
+  // Spec §6.4 step 3: ID proof upload is mandatory (the client also enforces this).
+  if (!idProofFile) return fail("Upload the ID proof to continue.", { idProofType: ["ID proof file is required"] });
 
   let userId: string | null = null;
+  let photoPath: string | null = null;
+  let idProofPath: string | null = null;
   try {
     const { ctx } = await assertWritableContext("warden");
     const hostelId = ctx.hostel.id;
@@ -77,7 +93,7 @@ export async function registerStudent(formData: FormData): Promise<ActionResult<
     }
     userId = account.userId;
 
-    const [photoPath, idProofPath] = await Promise.all([
+    [photoPath, idProofPath] = await Promise.all([
       uploadToBucket("student-docs", hostelId, "photos", photoFile),
       uploadToBucket("student-docs", hostelId, "id-proofs", idProofFile),
     ]);
@@ -100,7 +116,7 @@ export async function registerStudent(formData: FormData): Promise<ActionResult<
       p_monthly_fee: input.monthlyFee,
     });
     if (error) {
-      await deleteAuthUser(userId);
+      await Promise.all([deleteAuthUser(userId), removeUploads([photoPath, idProofPath])]);
       return fail(errorMessage(error));
     }
 
@@ -116,17 +132,37 @@ export async function registerStudent(formData: FormData): Promise<ActionResult<
       credentials: { name: input.fullName, loginId: account.loginId, password: account.password },
     });
   } catch (e) {
-    if (userId) await deleteAuthUser(userId);
+    await Promise.all([userId ? deleteAuthUser(userId) : Promise.resolve(), removeUploads([photoPath, idProofPath])]);
     return fail(errorMessage(e));
   }
 }
 
-/** Free beds across the hostel (used by the register form + reassign sheet to refresh). */
-export async function fetchFreeBeds(): Promise<ActionResult<FreeBed[]>> {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Free beds — for one room (register form step 4, loaded when a room is
+ * tapped) or the whole hostel (reassign sheet, loaded when it opens). Always
+ * fresh, always RLS-scoped to the warden's hostel.
+ */
+export async function fetchFreeBeds(input: { roomId?: string } = {}): Promise<ActionResult<FreeBed[]>> {
+  const roomId = typeof input?.roomId === "string" && UUID_RE.test(input.roomId) ? input.roomId : undefined;
+  if (input?.roomId && !roomId) return fail("Invalid room.");
   try {
     const { ctx } = await assertHostelContext("warden");
     const supabase = await createClient();
-    return ok(await getFreeBeds(supabase, ctx.hostel.id));
+    return ok(await getFreeBeds(supabase, ctx.hostel.id, roomId));
+  } catch (e) {
+    return fail(errorMessage(e));
+  }
+}
+
+/** Student picker search (visitor log): name / phone, max 20 rows. */
+export async function searchStudents(input: { query?: string } = {}): Promise<ActionResult<StudentOption[]>> {
+  const query = typeof input?.query === "string" ? input.query.slice(0, 80) : "";
+  try {
+    const { ctx } = await assertHostelContext("warden");
+    const supabase = await createClient();
+    return ok(await searchActiveStudents(supabase, ctx.hostel.id, query, 20));
   } catch (e) {
     return fail(errorMessage(e));
   }
@@ -285,6 +321,16 @@ export async function logVisitor(input: {
     const supabase = await createClient();
     const checkIn = new Date(parsed.data.checkInAt);
     if (Number.isNaN(checkIn.getTime())) return fail("Pick a valid check-in time.");
+    // Tenant isolation: the visited student must be an active student of *this* hostel
+    // (visitors_insert RLS only checks hostel_id; nothing ties student_id to it).
+    const { data: st } = await supabase
+      .from("students")
+      .select("id")
+      .eq("id", parsed.data.studentId)
+      .eq("hostel_id", ctx.hostel.id)
+      .neq("status", "vacated")
+      .maybeSingle();
+    if (!st) return fail("Student not found.", { studentId: ["Select an active student of this hostel"] });
     const { error } = await supabase.from("visitors").insert({
       hostel_id: ctx.hostel.id,
       student_id: parsed.data.studentId,

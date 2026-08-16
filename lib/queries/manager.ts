@@ -112,12 +112,13 @@ export async function getMyTasks(supabase: SupabaseClient, hostelId: string, use
   return rows.sort((a, b) => rank[a.status] - rank[b.status]);
 }
 
-/** Owner announcements visible to the manager (audience filter is enforced by RLS). */
+/** Owner announcements visible to the manager — audience `all` / `manager` (RLS enforces the same rule; filtered here too as defence in depth). */
 export async function getAnnouncementsForManager(supabase: SupabaseClient, hostelId: string, limit = 5): Promise<AnnouncementRow[]> {
   const { data, error } = await supabase
     .from("announcements")
     .select("*")
     .eq("hostel_id", hostelId)
+    .in("audience", ["all", "manager"])
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(limit);

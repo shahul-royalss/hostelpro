@@ -33,16 +33,16 @@ export function DueDate({ date, status, className }: { date: string | null; stat
 export function TaskActions({ task, disabled, size = "sm" }: { task: TaskRow; disabled?: boolean; size?: "sm" | "default" }) {
   const { run, pending } = useAction(updateTaskStatus);
   const go = (status: TaskStatus) => run({ taskId: task.id, status });
-
-  if (disabled) return null;
+  // Read-only (expired subscription): keep the controls visible but disabled (rule §4.4), don't hide them.
+  const off = disabled || pending;
 
   if (task.status === "pending") {
     return (
       <div className="flex flex-wrap items-center gap-1.5">
-        <Button type="button" size={size} variant="secondary" loading={pending} onClick={() => go("in_progress")}>
+        <Button type="button" size={size} variant="secondary" loading={pending} disabled={off} onClick={() => go("in_progress")}>
           <Play /> Start
         </Button>
-        <Button type="button" size={size} variant="teal" loading={pending} onClick={() => go("done")}>
+        <Button type="button" size={size} variant="teal" loading={pending} disabled={off} onClick={() => go("done")}>
           <Check /> Done
         </Button>
       </div>
@@ -51,17 +51,17 @@ export function TaskActions({ task, disabled, size = "sm" }: { task: TaskRow; di
   if (task.status === "in_progress") {
     return (
       <div className="flex flex-wrap items-center gap-1.5">
-        <Button type="button" size={size} variant="ghost" loading={pending} onClick={() => go("pending")}>
+        <Button type="button" size={size} variant="ghost" loading={pending} disabled={off} onClick={() => go("pending")}>
           <Undo2 /> Pending
         </Button>
-        <Button type="button" size={size} variant="teal" loading={pending} onClick={() => go("done")}>
+        <Button type="button" size={size} variant="teal" loading={pending} disabled={off} onClick={() => go("done")}>
           <Check /> Done
         </Button>
       </div>
     );
   }
   return (
-    <Button type="button" size={size} variant="ghost" loading={pending} onClick={() => go("in_progress")}>
+    <Button type="button" size={size} variant="ghost" loading={pending} disabled={off} onClick={() => go("in_progress")}>
       <RotateCcw /> Reopen
     </Button>
   );

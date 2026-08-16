@@ -1,11 +1,10 @@
 import * as React from "react";
 import { GlassCard } from "@/components/shared/glass-card";
-import { cn } from "@/lib/utils";
 
 /** Frosted section of grouped read-only rows (ST-2 "Guardian", "Address", …). */
 export function DetailSection({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <GlassCard className={cn("p-0", className)}>
+    <GlassCard padded={false} className={className}>
       <div className="label-caps px-5 pt-4">{title}</div>
       <dl className="divide-y divide-line px-5">{children}</dl>
     </GlassCard>

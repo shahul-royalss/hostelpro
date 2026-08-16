@@ -2,8 +2,8 @@ import Link from "next/link";
 import { IndianRupee, ListChecks, Megaphone, PieChart, Plus, Receipt, TrendingUp } from "lucide-react";
 import { requireHostelContext } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { firstName, formatDateTime, formatINR, formatINRCompact, formatNumber, formatPeriodMonth, greeting, toPeriodMonth } from "@/lib/utils";
-import { getAnnouncementsForManager, getExpensesByCategory, getManagerStats, getMyTasks } from "@/lib/queries/manager";
+import { firstName, formatDateTime, formatINR, formatINRCompact, formatNumber, formatPeriodMonth, greeting, sumBy, toISODate, toPeriodMonth } from "@/lib/utils";
+import { getAnnouncementsForManager, getExpenses, getExpensesByCategory, getManagerStats, getMyTasks, getRevenues } from "@/lib/queries/manager";
 import { GlassCard, GlassCardHeader } from "@/components/shared/glass-card";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusPill } from "@/components/shared/status-pill";
@@ -19,20 +19,26 @@ export default async function ManagerDashboardPage() {
   const supabase = await createClient();
   const hostelId = ctx.hostel.id;
   const period = toPeriodMonth();
+  const today = toISODate();
 
-  const [stats, categories, openTasks, announcements] = await Promise.all([
+  const [stats, categories, monthExpenses, monthRevenues, openTasks, announcements] = await Promise.all([
     getManagerStats(supabase, hostelId, period),
     getExpensesByCategory(supabase, hostelId, period),
+    getExpenses(supabase, hostelId, period),
+    getRevenues(supabase, hostelId, period),
     getMyTasks(supabase, hostelId, user.id, { openOnly: true }),
     getAnnouncementsForManager(supabase, hostelId, 5),
   ]);
 
-  const expensesToday = Number(stats?.expenses_today ?? 0);
-  const revenueToday = Number(stats?.revenue_today ?? 0);
-  const revenueMonth = Number(stats?.revenue_month ?? 0);
-  const expensesMonth = Number(stats?.expenses_month ?? 0);
+  // "Today" is computed here against the app's date (same `toISODate()` the entry forms default to),
+  // not the RPC's Postgres `current_date` (UTC), so an entry saved after midnight IST shows up immediately.
+  const expensesToday = sumBy(monthExpenses.filter((r) => r.date === today), (r) => r.amount);
+  const revenueToday = sumBy(monthRevenues.filter((r) => r.date === today), (r) => r.amount);
+  const revenueMonth = Number(stats?.revenue_month ?? sumBy(monthRevenues, (r) => r.amount));
+  const expensesMonth = Number(stats?.expenses_month ?? sumBy(monthExpenses, (r) => r.amount));
   const profit = revenueMonth - expensesMonth;
-  const pendingTasks = Number(stats?.pending_tasks ?? openTasks.length);
+  // Per-manager count (the RPC's pending_tasks is hostel-wide and can include a previous manager's tasks).
+  const pendingTasks = openTasks.length;
   const monthLabel = formatPeriodMonth(period);
 
   return (

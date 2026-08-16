@@ -18,6 +18,8 @@ function dayCount(from: string, to: string): number {
   return Math.max(1, Math.round((b - a) / 86_400_000) + 1);
 }
 
+const READ_ONLY_MESSAGE = "Subscription expired — the hostel is read-only";
+
 const ICON_TONE: Record<LeaveRow["status"], string> = {
   pending: "bg-sand-soft text-sand-deep",
   approved: "bg-teal-soft text-teal",
@@ -40,21 +42,21 @@ export function LeaveView({
 
   // ?new=1 opens the sheet once, then the query is dropped so a refresh doesn't reopen it.
   React.useEffect(() => {
-    if (openNew && writable) {
-      setOpen(true);
-      router.replace(pathname, { scroll: false });
-    }
+    if (!openNew) return;
+    if (writable) setOpen(true);
+    router.replace(pathname, { scroll: false });
   }, [openNew, pathname, router, writable]);
 
   const pending = leaves.filter((l) => l.status === "pending").length;
 
   return (
     <div className="flex flex-col gap-4">
-      {writable ? (
-        <Button size="xl" onClick={() => setOpen(true)}>
+      <div className="flex flex-col gap-2">
+        <Button size="xl" onClick={() => setOpen(true)} disabled={!writable} title={writable ? undefined : READ_ONLY_MESSAGE}>
           <Plus /> Apply for leave
         </Button>
-      ) : null}
+        {!writable ? <p className="px-1 text-center text-[12px] text-muted">{READ_ONLY_MESSAGE}.</p> : null}
+      </div>
 
       {leaves.length === 0 ? (
         <GlassCard>

@@ -15,7 +15,21 @@ const optionalPhone = z
   .transform((v) => (v ? v.replace(/\D/g, "") : ""))
   .refine((v) => v === "" || /^\d{10}$/.test(v), "Enter a valid 10-digit phone number");
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date");
+/** Real calendar date (rejects 2026-13-45, which Postgres would otherwise reject with a raw error). */
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date")
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  }, "Pick a valid date");
+
+/** Today's date (UTC+5:30 — hostel timezone) as YYYY-MM-DD, for "not in the future" checks. */
+function todayISO() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+const isoDateNotFuture = isoDate.refine((v) => v <= todayISO(), "Date cannot be in the future");
+
 const uuid = z.string().uuid("Invalid selection");
 
 export const ID_PROOF_TYPES = ["Aadhaar", "PAN", "Passport", "Driving licence", "Voter ID", "Other"] as const;
@@ -92,7 +106,7 @@ export const recordPaymentSchema = z.object({
   periodMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Invalid month"),
   amount: z.coerce.number({ invalid_type_error: "Enter an amount" }).positive("Amount must be greater than zero").max(10_000_000),
   mode: z.enum(["cash", "upi", "bank"]),
-  paidOn: isoDate,
+  paidOn: isoDateNotFuture,
   notes: z.string().trim().max(300).optional(),
 });
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
@@ -111,7 +125,12 @@ export const logVisitorSchema = z.object({
   visitorName: z.string().trim().min(2, "Enter the visitor's name").max(120),
   visitorPhone: optionalPhone,
   relation: z.string().trim().max(60).optional(),
-  checkInAt: z.string().min(1, "Pick a check-in time"),
+  checkInAt: z
+    .string()
+    .min(1, "Pick a check-in time")
+    .refine((v) => !Number.isNaN(new Date(v).getTime()), "Pick a valid check-in time")
+    // small clock-skew allowance; the client caps the picker at "now"
+    .refine((v) => new Date(v).getTime() <= Date.now() + 5 * 60_000, "Check-in time cannot be in the future"),
 });
 export type LogVisitorInput = z.infer<typeof logVisitorSchema>;
 

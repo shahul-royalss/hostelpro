@@ -21,14 +21,14 @@ export default async function OwnerDashboardPage() {
   const supabase = await createClient();
   const hostelId = ctx.hostel.id;
 
-  // Keep stored subscription statuses / hostel read-only flags fresh (DECISIONS #14). Errors are non-fatal.
-  await supabase.rpc("refresh_subscription_statuses").then(() => undefined, () => undefined);
-
+  // Stored subscription statuses / hostel read-only flags are refreshed alongside the reads (DECISIONS #14) —
+  // it never blocks the page (read-only enforcement is computed live via app.subscription_state) and errors are non-fatal.
   const [stats, finance, announcements, complaints] = await Promise.all([
     getHostelStats(supabase, hostelId),
     getLast30DaysFinance(supabase, hostelId),
     getLatestAnnouncements(supabase, hostelId, 4),
     getRecentComplaints(supabase, hostelId, 4),
+    supabase.rpc("refresh_subscription_statuses").then(() => undefined, () => undefined),
   ]);
 
   const totalBeds = stats?.total_beds ?? 0;

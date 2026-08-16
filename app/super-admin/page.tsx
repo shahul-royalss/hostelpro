@@ -7,13 +7,10 @@ import { formatDate, formatINRCompact, formatNumber } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { GlassCard, GlassCardHeader } from "@/components/shared/glass-card";
-import { StatusPill } from "@/components/shared/status-pill";
 import { EmptyState } from "@/components/shared/empty-state";
 import { CHART, Donut, DonutLegend, LineTrend } from "@/components/shared/charts";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { RenewButton } from "@/components/super-admin/renew-dialog";
-import { DaysLeftPill } from "@/components/super-admin/days-left-pill";
+import { ExpiringSoonTable } from "@/components/super-admin/expiring-soon-table";
 
 export const dynamic = "force-dynamic";
 
@@ -38,9 +35,8 @@ export default async function SuperAdminDashboardPage() {
   ];
   const totalSubs = stats.active_subs + stats.expiring_subs + stats.expired_subs;
 
-  const expiringSoon = hostels
-    .filter((h) => h.days_left !== null && h.days_left <= 30)
-    .sort((a, b) => (a.days_left ?? 0) - (b.days_left ?? 0));
+  // §4.4 — flag hostels expiring in 7 / 15 / 30 days (+ already expired); bucketed client-side in ExpiringSoonTable
+  const expiringSoon = hostels.filter((h) => h.days_left !== null && h.days_left <= 30);
 
   return (
     <>
@@ -95,12 +91,12 @@ export default async function SuperAdminDashboardPage() {
         </GlassCard>
       </div>
 
-      {/* Expiring soon table */}
+      {/* Expiring soon table — 7 / 15 / 30-day windows (§4.4) */}
       <GlassCard className="mt-6" padded={false}>
-        <div className="p-5 pb-0 md:p-6 md:pb-0">
+        <div className="p-5 pb-4 md:p-6 md:pb-4">
           <GlassCardHeader
             title="Expiring soon"
-            description="Subscriptions ending within 30 days (and any already expired)"
+            description="Subscriptions ending within 7 / 15 / 30 days (and any already expired)"
             action={
               <Button asChild variant="ghost" size="sm">
                 <Link href="/super-admin/subscriptions">View all</Link>
@@ -108,50 +104,7 @@ export default async function SuperAdminDashboardPage() {
             }
           />
         </div>
-        {expiringSoon.length === 0 ? (
-          <EmptyState compact title="Nothing expiring in the next 30 days" description="All subscriptions are in good standing." />
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="pl-6">Hostel</TableHead>
-                <TableHead>Owner</TableHead>
-                <TableHead>Ends on</TableHead>
-                <TableHead>Days left</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="pr-6 text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {expiringSoon.map((h) => (
-                <TableRow key={h.hostel_id}>
-                  <TableCell className="pl-6">
-                    <Link href={`/super-admin/hostels/${h.hostel_id}`} className="font-medium text-navy hover:underline">
-                      {h.hostel_name}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-charcoal">{h.owner_name}</div>
-                    <div className="text-xs text-muted">{h.owner_email ?? h.owner_phone ?? ""}</div>
-                  </TableCell>
-                  <TableCell className="tabular">{formatDate(h.sub_end)}</TableCell>
-                  <TableCell>
-                    <DaysLeftPill daysLeft={h.days_left} />
-                  </TableCell>
-                  <TableCell>
-                    <StatusPill status={h.hostel_status === "suspended" ? "suspended" : h.sub_state} />
-                  </TableCell>
-                  <TableCell className="pr-6 text-right">
-                    <RenewButton
-                      size="sm"
-                      target={{ hostelId: h.hostel_id, hostelName: h.hostel_name, currentEnd: h.sub_end, defaultAmount: h.sub_amount }}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+        <ExpiringSoonTable rows={expiringSoon} />
       </GlassCard>
     </>
   );

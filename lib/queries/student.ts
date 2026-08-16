@@ -51,9 +51,15 @@ export interface FeeSummary {
 
 /** Current-month fee status; no fee_payments row → the whole monthly fee is due. */
 export function summariseFee(fee: FeePaymentRow | null, monthlyFee: number): FeeSummary {
-  if (!fee) return { status: "unpaid", due: monthlyFee, paid: 0, remaining: monthlyFee };
-  const due = Number(fee.amount_due) || monthlyFee;
+  if (!fee) {
+    // A zero / waived monthly fee has nothing outstanding — don't show "Due ₹0".
+    if (monthlyFee <= 0) return { status: "paid", due: 0, paid: 0, remaining: 0 };
+    return { status: "unpaid", due: monthlyFee, paid: 0, remaining: monthlyFee };
+  }
+  // A legitimate 0 amount_due must not fall back to monthly_fee — only null/undefined does.
+  const due = fee.amount_due == null ? monthlyFee : Number(fee.amount_due);
   const paid = Number(fee.amount_paid) || 0;
+  if (due <= 0) return { status: "paid", due: 0, paid, remaining: 0 };
   return { status: fee.status, due, paid, remaining: Math.max(0, due - paid) };
 }
 

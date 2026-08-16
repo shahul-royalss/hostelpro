@@ -4,13 +4,14 @@ import * as React from "react";
 import { Download, Pencil, Receipt, Trash2 } from "lucide-react";
 import { deleteExpense } from "@/lib/actions/manager";
 import { useAction } from "@/hooks/use-action";
-import type { ExpenseRow } from "@/lib/types";
+import { EXPENSE_CATEGORIES, type ExpenseCategory, type ExpenseRow } from "@/lib/types";
 import { formatDate, formatINR, formatPeriodMonth, sumBy, titleCase } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { GlassCard, GlassCardHeader } from "@/components/shared/glass-card";
 import { Chip } from "@/components/shared/status-pill";
+import { SegmentedPills } from "@/components/shared/segmented";
 import { EmptyState } from "@/components/shared/empty-state";
 import { MonthNav } from "./month-nav";
 import { ReceiptButton } from "./receipt-button";
@@ -26,10 +27,20 @@ const CATEGORY_TONE: Record<ExpenseRow["category"], "navy" | "teal" | "sand" | "
   other: "muted",
 };
 
+type CategoryFilter = "all" | ExpenseCategory;
+
 export function ExpenseTable({ rows, month, writable }: { rows: ExpenseRow[]; month: string; writable: boolean }) {
   const [editing, setEditing] = React.useState<ExpenseRow | null>(null);
   const [deleting, setDeleting] = React.useState<ExpenseRow | null>(null);
+  const [filter, setFilter] = React.useState<CategoryFilter>("all");
+  // Footer total is always the whole month, regardless of the category filter.
   const total = sumBy(rows, (r) => r.amount);
+  const counts = React.useMemo(() => {
+    const m = new Map<ExpenseCategory, number>();
+    for (const r of rows) m.set(r.category, (m.get(r.category) ?? 0) + 1);
+    return m;
+  }, [rows]);
+  const visible = filter === "all" ? rows : rows.filter((r) => r.category === filter);
 
   const del = useAction(deleteExpense, { onSuccess: () => setDeleting(null) });
 
@@ -41,10 +52,30 @@ export function ExpenseTable({ rows, month, writable }: { rows: ExpenseRow[]; mo
           description={`${rows.length} ${rows.length === 1 ? "entry" : "entries"} in ${formatPeriodMonth(month)}`}
           action={<MonthNav value={month} />}
         />
+        {rows.length > 0 ? (
+          <SegmentedPills<CategoryFilter>
+            ariaLabel="Filter by category"
+            size="sm"
+            className="mb-4"
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { value: "all", label: "All", count: rows.length },
+              ...EXPENSE_CATEGORIES.filter((c) => (counts.get(c) ?? 0) > 0).map((c) => ({
+                value: c,
+                label: titleCase(c),
+                count: counts.get(c) ?? 0,
+                tone: (CATEGORY_TONE[c] === "muted" ? "navy" : CATEGORY_TONE[c]) as "navy" | "teal" | "sand" | "sage" | "red",
+              })),
+            ]}
+          />
+        ) : null}
       </div>
 
       {rows.length === 0 ? (
         <EmptyState icon={Receipt} title="No expenses recorded" description={`Nothing has been logged for ${formatPeriodMonth(month)} yet. Add today's expense above.`} />
+      ) : visible.length === 0 ? (
+        <EmptyState compact icon={Receipt} title={`No ${titleCase(filter)} expenses`} description={`Nothing under ${titleCase(filter)} in ${formatPeriodMonth(month)}. Try another category.`} />
       ) : (
         <Table>
           <TableHeader>
@@ -58,7 +89,7 @@ export function ExpenseTable({ rows, month, writable }: { rows: ExpenseRow[]; mo
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((r) => (
+            {visible.map((r) => (
               <TableRow key={r.id}>
                 <TableCell className="whitespace-nowrap pl-5 text-charcoal md:pl-6">{formatDate(r.date)}</TableCell>
                 <TableCell>

@@ -3,7 +3,7 @@ import { MobilePage } from "@/components/shell/role-shells";
 import { requireHostelContext } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { signedUrl } from "@/lib/storage";
-import { getFreeBeds, getRoomDetail } from "@/lib/queries/warden";
+import { getRoomDetail } from "@/lib/queries/warden";
 import { RoomDetailView } from "@/components/warden/room-detail";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,8 @@ export default async function WardenRoomDetailPage({ params }: { params: Promise
   if (!UUID.test(id)) notFound();
 
   const supabase = await createClient();
-  const [detail, freeBeds] = await Promise.all([getRoomDetail(supabase, ctx.hostel.id, id), getFreeBeds(supabase, ctx.hostel.id)]);
+  // Free beds for the reassign sheet are fetched when it opens (fetchFreeBeds action) — always fresh, not capped.
+  const detail = await getRoomDetail(supabase, ctx.hostel.id, id);
   if (!detail) notFound();
 
   // Signed photo URLs (null when the storage key is not configured → initials avatar)
@@ -26,7 +27,7 @@ export default async function WardenRoomDetailPage({ params }: { params: Promise
 
   return (
     <MobilePage role="warden" title={`Room ${detail.room.room_number} · Floor ${detail.room.floor_number}`} backHref="/warden/rooms">
-      <RoomDetailView room={detail.room} beds={beds} freeBeds={freeBeds} writable={ctx.writable} />
+      <RoomDetailView room={detail.room} beds={beds} writable={ctx.writable} />
     </MobilePage>
   );
 }

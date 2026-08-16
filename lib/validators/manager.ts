@@ -6,10 +6,17 @@ const isoDate = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date.")
   .refine((s) => !Number.isNaN(Date.parse(s)), "Enter a valid date.");
 
-const amount = z.coerce
-  .number({ invalid_type_error: "Enter an amount." })
-  .min(0, "Amount cannot be negative.")
-  .max(99_999_999, "Amount is too large.");
+/**
+ * Required, positive amount. Both forms are `noValidate`, so an empty field arrives as "" —
+ * preprocess maps that to `undefined` so it fails as "required" instead of coercing to 0.
+ */
+const amount = z.preprocess(
+  (v) => (v === "" || v === null ? undefined : v),
+  z.coerce
+    .number({ required_error: "Enter an amount.", invalid_type_error: "Enter an amount." })
+    .positive("Amount must be greater than 0.")
+    .max(99_999_999, "Amount is too large."),
+);
 
 const note = z
   .string()
@@ -39,7 +46,8 @@ export const revenueSchema = z.object({
   amount,
   note,
 });
-export type RevenueInput = z.infer<typeof revenueSchema>;
+/** Raw (pre-validation) shape the client form sends — `amount` is the untrimmed field string. */
+export type RevenueInput = z.input<typeof revenueSchema>;
 
 export const revenueUpdateSchema = revenueSchema.extend({ id: z.string().uuid() });
 
@@ -61,5 +69,5 @@ export type MenuCellInput = z.infer<typeof menuCellSchema>;
 
 export const exportSchema = z.object({
   type: z.enum(["expenses", "revenue"]),
-  month: z.string().regex(/^\d{4}-\d{2}$/),
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
 });

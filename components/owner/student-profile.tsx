@@ -1,6 +1,6 @@
 import * as React from "react";
 import { ExternalLink, FileText, Phone } from "lucide-react";
-import type { StudentDirectoryRow } from "@/lib/queries/owner";
+import type { StudentProfileRow } from "@/lib/queries/owner";
 import { formatDate, formatINR, formatPeriodMonth, toPeriodMonth } from "@/lib/utils";
 import { UserAvatar } from "@/components/ui/avatar";
 import { StatusPill, Chip } from "@/components/shared/status-pill";
@@ -13,7 +13,7 @@ export function StudentProfile({
   idProofUrl,
   filesLoading = false,
 }: {
-  student: StudentDirectoryRow;
+  student: StudentProfileRow;
   photoUrl: string | null;
   idProofUrl: string | null;
   filesLoading?: boolean;
@@ -21,6 +21,7 @@ export function StudentProfile({
   const s = student;
   const period = formatPeriodMonth(toPeriodMonth());
   const balance = Math.max(s.amount_due - s.amount_paid, 0);
+  const vacated = s.status === "vacated";
 
   return (
     <div className="space-y-6">
@@ -41,7 +42,11 @@ export function StudentProfile({
       {/* Room & fee */}
       <div className="grid grid-cols-2 gap-3">
         <InfoTile label="Room" value={s.room_number ? `${s.room_number}` : "—"} caption={s.floor_number != null ? `Floor ${s.floor_number}` : undefined} />
-        <InfoTile label={`Fee · ${period}`} value={<StatusPill status={s.fee_status} />} caption={s.fee_status === "paid" ? `Paid ${formatINR(s.amount_paid)}` : `Due ${formatINR(balance)}`} />
+        {vacated ? (
+          <InfoTile label="Stay ended" value={<StatusPill status="vacated" />} caption={s.vacated_at ? `Vacated ${formatDate(s.vacated_at)}` : "No fees due"} />
+        ) : (
+          <InfoTile label={`Fee · ${period}`} value={<StatusPill status={s.fee_status} />} caption={s.fee_status === "paid" ? `Paid ${formatINR(s.amount_paid)}` : `Due ${formatINR(balance)}`} />
+        )}
       </div>
 
       <Section title="Stay">

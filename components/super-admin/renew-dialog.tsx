@@ -88,10 +88,17 @@ export function RenewDialog({
             <DialogDescription>
               <span className="font-medium text-charcoal">{target.hostelName}</span>
               {target.currentEnd ? (
-                <>
-                  {" "}
-                  — current period ends {formatDate(target.currentEnd)}. The new period starts from that date.
-                </>
+                target.currentEnd < toISODate() ? (
+                  <>
+                    {" "}
+                    — previous period ended {formatDate(target.currentEnd)}. The new period starts today.
+                  </>
+                ) : (
+                  <>
+                    {" "}
+                    — current period ends {formatDate(target.currentEnd)}. The new period starts from that date.
+                  </>
+                )
               ) : (
                 " — no subscription on record yet."
               )}

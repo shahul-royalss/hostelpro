@@ -8,7 +8,7 @@ import { QuickGrid } from "@/components/student/quick-grid";
 import { requireHostelContext } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { getAnnouncements, getHostelContacts, getMyFeeForPeriod, getMyStudent, summariseFee } from "@/lib/queries/student";
-import { formatDate, formatINR, formatPeriodMonth, toPeriodMonth } from "@/lib/utils";
+import { firstName, formatDate, formatINR, formatPeriodMonth, toPeriodMonth } from "@/lib/utils";
 
 export default async function StudentHomePage() {
   const { user, ctx } = await requireHostelContext("student");
@@ -30,7 +30,7 @@ export default async function StudentHomePage() {
     : null;
 
   return (
-    <MobilePage role="student" title="greeting">
+    <MobilePage role="student" title={`Hi, ${firstName(user.full_name)}`} subtitle={ctx.hostel.name}>
       <div className="flex flex-col gap-4">
         {/* Hero — room + fee status */}
         <GlassCard strong className="p-5">

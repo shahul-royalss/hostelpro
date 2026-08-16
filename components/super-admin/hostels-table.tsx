@@ -3,26 +3,40 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2, ChevronRight, Search, X } from "lucide-react";
+import { Building2, CalendarPlus, ChevronRight, CreditCard, Eye, KeyRound, MoreHorizontal, Search, X } from "lucide-react";
 import type { SaHostelRow } from "@/lib/types";
 import { cn, formatDate, formatNumber, percent } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/misc";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { GlassCard } from "@/components/shared/glass-card";
 import { SegmentedPills } from "@/components/shared/segmented";
 import { StatusPill } from "@/components/shared/status-pill";
 import { EmptyState } from "@/components/shared/empty-state";
 import { DaysLeftPill } from "./days-left-pill";
+import { RenewDialog, type RenewTarget } from "./renew-dialog";
+import { HostelStatusButton, useRegenerateOwnerPassword } from "./hostel-actions";
 
 type Filter = "all" | "active" | "expiring" | "expired" | "suspended";
 
-/** /super-admin/hostels — searchable, filterable hostel table; row → detail. */
+/**
+ * /super-admin/hostels — searchable, filterable hostel table; row → detail.
+ * §6.1 row actions: view detail · renew · suspend · regenerate owner password.
+ */
 export function HostelsTable({ rows }: { rows: SaHostelRow[] }) {
   const router = useRouter();
   const [filter, setFilter] = React.useState<Filter>("all");
   const [query, setQuery] = React.useState("");
+  const [renewTarget, setRenewTarget] = React.useState<RenewTarget | null>(null);
+  const [renewOpen, setRenewOpen] = React.useState(false);
+  const { regenerate, pending: regenPending, dialog: regenDialog } = useRegenerateOwnerPassword();
+
+  const openRenew = (r: SaHostelRow) => {
+    setRenewTarget({ hostelId: r.hostel_id, hostelName: r.hostel_name, currentEnd: r.sub_end, defaultAmount: r.sub_amount });
+    setRenewOpen(true);
+  };
 
   const counts = React.useMemo(() => {
     const c: Record<Filter, number> = { all: rows.length, active: 0, expiring: 0, expired: 0, suspended: 0 };
@@ -97,9 +111,7 @@ export function HostelsTable({ rows }: { rows: SaHostelRow[] }) {
                 <TableHead>Students</TableHead>
                 <TableHead>Subscription</TableHead>
                 <TableHead>Days left</TableHead>
-                <TableHead className="pr-6 text-right">
-                  <span className="sr-only">Open</span>
-                </TableHead>
+                <TableHead className="pr-6 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -149,8 +161,37 @@ export function HostelsTable({ rows }: { rows: SaHostelRow[] }) {
                     <TableCell>
                       <DaysLeftPill daysLeft={r.days_left} />
                     </TableCell>
-                    <TableCell className="pr-6 text-right">
-                      <ChevronRight className="ml-auto h-4 w-4 text-muted" />
+                    <TableCell className="pr-6">
+                      <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                        <Button size="sm" onClick={() => openRenew(r)}>
+                          <CalendarPlus />
+                          Renew
+                        </Button>
+                        <HostelStatusButton hostelId={r.hostel_id} hostelName={r.hostel_name} status={r.hostel_status} />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon-sm" aria-label="More actions" disabled={regenPending}>
+                              <MoreHorizontal />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onSelect={() => router.push(`/super-admin/hostels/${r.hostel_id}`)}>
+                              <Eye />
+                              View hostel
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => router.push(`/super-admin/subscriptions`)}>
+                              <CreditCard />
+                              Subscriptions
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onSelect={() => regenerate(r.owner_id)}>
+                              <KeyRound />
+                              Regenerate owner password
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <ChevronRight className="ml-1 h-4 w-4 text-muted" aria-hidden />
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -159,6 +200,9 @@ export function HostelsTable({ rows }: { rows: SaHostelRow[] }) {
           </Table>
         )}
       </GlassCard>
+
+      <RenewDialog target={renewTarget} open={renewOpen} onOpenChange={setRenewOpen} />
+      {regenDialog}
     </>
   );
 }

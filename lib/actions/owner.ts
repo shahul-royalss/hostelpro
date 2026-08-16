@@ -7,7 +7,7 @@ import { createStaffAccount, regeneratePassword, setAccountStatus } from "@/lib/
 import { signedUrl } from "@/lib/storage";
 import { fail, ok, type ActionResult, type AnnouncementAudience } from "@/lib/types";
 import { ROLE_LABEL } from "@/lib/roles";
-import { getActiveManager } from "@/lib/queries/owner";
+import { getActiveManager, getStudentById, type StudentProfileRow } from "@/lib/queries/owner";
 import {
   announcementIdSchema,
   createAnnouncementSchema,
@@ -306,23 +306,27 @@ export async function updateHostelRules(input: { rules: string }): Promise<Actio
 
 /* ───────────────────────── Students (OW-5) — read helpers ───────────────────────── */
 
-/** Signed URLs for a student's photo and ID proof (private bucket, 1 h). Read-only. */
-export async function getStudentFiles(input: { studentId: string }): Promise<ActionResult<{ photoUrl: string | null; idProofUrl: string | null }>> {
+export interface StudentProfilePayload {
+  student: StudentProfileRow;
+  /** signed URLs (private bucket, 1 h) */
+  photoUrl: string | null;
+  idProofUrl: string | null;
+}
+
+/**
+ * Full profile for the slide-over — loaded on row select so the directory list never ships
+ * guardian / address / ID-proof PII in bulk. Read-only; scoped to the active hostel via RLS + hostel_id.
+ */
+export async function getStudentProfile(input: { studentId: string }): Promise<ActionResult<StudentProfilePayload>> {
   const parsed = studentIdSchema.safeParse(input);
   if (!parsed.success) return fail("Invalid request.");
   try {
     const { ctx } = await assertHostelContext("owner");
     const supabase = await createClient();
-    const { data } = await supabase
-      .from("students")
-      .select("photo_url, id_proof_url")
-      .eq("id", parsed.data.studentId)
-      .eq("hostel_id", ctx.hostel.id)
-      .maybeSingle();
-    if (!data) return fail("Student not found.");
-    const row = data as { photo_url: string | null; id_proof_url: string | null };
-    const [photoUrl, idProofUrl] = await Promise.all([signedUrl("student-docs", row.photo_url), signedUrl("student-docs", row.id_proof_url)]);
-    return ok({ photoUrl, idProofUrl });
+    const student = await getStudentById(supabase, ctx.hostel.id, parsed.data.studentId);
+    if (!student) return fail("Student not found.");
+    const [photoUrl, idProofUrl] = await Promise.all([signedUrl("student-docs", student.photo_url), signedUrl("student-docs", student.id_proof_url)]);
+    return ok({ student, photoUrl, idProofUrl });
   } catch (e) {
     return fail(errorMessage(e));
   }
