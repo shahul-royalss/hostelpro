@@ -71,11 +71,15 @@ scripts/                   QA helpers (see scripts/README.md)
 2. Open **SQL Editor** and run, in this order:
    1. `db/schema.sql` — enums, tables, helper functions (`app.*`), triggers, RPCs
    2. `db/rls-policies.sql` — enables RLS on every table and creates the policies
-3. Storage → create three **private** buckets: `student-docs`, `receipts`, `complaint-photos`
-   (the server writes to them with the service role, so no storage policies are needed).
+3. Storage: `schema.sql` inserts the three **private** buckets (`student-docs`, `receipts`,
+   `complaint-photos`) into `storage.buckets`. If your SQL user can't write that table,
+   create them manually as private buckets — the server writes to them with the service
+   role, so no storage policies are needed.
 4. Auth → Providers → Email: keep enabled. Sign-ups are never done from the UI —
    every account is created by the server (auth admin API) — so you can disable
-   "Allow new users to sign up" and "Confirm email".
+   "Allow new users to sign up" and "Confirm email". Recommended: Authentication →
+   Settings → enable **Leaked password protection** (flagged by the Supabase security advisor;
+   dashboard-only setting).
 
 ### 2. Environment
 

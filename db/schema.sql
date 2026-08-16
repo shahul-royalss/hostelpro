@@ -372,12 +372,12 @@ create index if not exists notifications_user_idx on public.notifications (user_
 -- ─────────────────────────────────────────────────────────────────────────────
 
 create or replace function app.uid() returns uuid
-language sql stable as $$ select auth.uid() $$;
+language sql stable set search_path = public as $$ select auth.uid() $$;
 
 -- JWT-claim based (NOT current_user — inside SECURITY DEFINER functions current_user
 -- would be the function owner and this would wrongly return true for everyone).
 create or replace function app.is_service_role() returns boolean
-language sql stable as $$
+language sql stable set search_path = public as $$
   select coalesce(auth.role() = 'service_role', false)
 $$;
 
@@ -470,7 +470,7 @@ $$;
 -- ─────────────────────────────────────────────────────────────────────────────
 
 create or replace function app.set_updated_at() returns trigger
-language plpgsql as $$
+language plpgsql set search_path = public as $$
 begin
   new.updated_at = now();
   return new;
@@ -669,7 +669,7 @@ create trigger rooms_capacity_sync after insert or update of capacity on public.
 -- FEES — derive status from amounts
 -- ─────────────────────────────────────────────────────────────────────────────
 create or replace function app.fee_status_compute() returns trigger
-language plpgsql as $$
+language plpgsql set search_path = public as $$
 begin
   if new.amount_paid <= 0 then
     new.status := 'unpaid';
@@ -691,7 +691,7 @@ create trigger fee_status_compute before insert or update on public.fee_payments
 -- SUBSCRIPTIONS — status derived from dates; hostel read-only on expiry
 -- ─────────────────────────────────────────────────────────────────────────────
 create or replace function app.subscription_status_compute() returns trigger
-language plpgsql as $$
+language plpgsql set search_path = public as $$
 begin
   new.status := case
     when new.end_date < current_date then 'expired'
@@ -1024,6 +1024,31 @@ begin
   return v_hostel_id;
 end $$;
 
+-- Super Admin: change floor / room counts after creation (Hard rule §4.2). Grow-only, atomic;
+-- the only sanctioned way to call scaffold_hostel() after creation.
+create or replace function public.sa_update_hostel_structure(p_hostel_id uuid, p_floors int, p_rooms int)
+returns void
+language plpgsql security definer set search_path = public as $$
+declare v_h public.hostels%rowtype;
+begin
+  if not app.is_super_admin() then
+    raise exception 'Only the Super Admin can change the hostel structure.' using errcode = '42501';
+  end if;
+  select * into v_h from public.hostels where id = p_hostel_id for update;
+  if not found then raise exception 'Hostel not found.' using errcode = 'P0001'; end if;
+  if p_floors < v_h.total_floors then
+    raise exception 'Floors can only be increased (currently %).', v_h.total_floors using errcode = 'P0001';
+  end if;
+  if p_rooms < v_h.total_rooms then
+    raise exception 'Rooms can only be increased (currently %).', v_h.total_rooms using errcode = 'P0001';
+  end if;
+  if p_floors = v_h.total_floors and p_rooms = v_h.total_rooms then
+    raise exception 'Nothing to change — the structure is already set to these values.' using errcode = 'P0001';
+  end if;
+  update public.hostels set total_floors = p_floors, total_rooms = p_rooms where id = p_hostel_id;
+  perform public.scaffold_hostel(p_hostel_id, p_floors, p_rooms, v_h.beds_per_room_default);
+end $$;
+
 -- Super Admin: extend / renew subscription (adds a new subscription record = history)
 create or replace function public.sa_renew_subscription(
   p_hostel_id uuid, p_new_end_date date, p_amount numeric, p_notes text default null
@@ -1233,7 +1258,9 @@ language sql stable security invoker set search_path = public as $$
     (select count(*)::int from led where status = 'paid'),
     (select count(*)::int from led where status <> 'paid'),
     (select count(*)::int from public.leaves where hostel_id = p_hostel_id and status = 'pending'),
-    (select count(*)::int from public.visitors where hostel_id = p_hostel_id and check_in_at::date = current_date),
+    -- "today" in hostel-local time (India) — the app's day boundary is IST, not UTC
+    (select count(*)::int from public.visitors where hostel_id = p_hostel_id
+       and (check_in_at at time zone 'Asia/Kolkata')::date = (now() at time zone 'Asia/Kolkata')::date),
     (select count(*)::int from public.tasks where hostel_id = p_hostel_id and status <> 'done' and deleted_at is null),
     coalesce((select sum(amount) from public.revenues where hostel_id = p_hostel_id and date = current_date and deleted_at is null), 0),
     coalesce((select sum(amount) from public.expenses where hostel_id = p_hostel_id and date = current_date and deleted_at is null), 0),
@@ -1345,3 +1372,11 @@ grant execute on all functions in schema public to authenticated, service_role;
 grant execute on all functions in schema app to authenticated, service_role;
 alter default privileges in schema public grant all on tables to authenticated, service_role;
 alter default privileges in schema public grant execute on functions to authenticated, service_role;
+
+-- Hardening: anon must never call RPCs (Postgres grants EXECUTE to PUBLIC by default);
+-- internal helpers are reachable only through SECURITY DEFINER wrappers / the service role.
+revoke execute on all functions in schema public from public, anon;
+revoke execute on all functions in schema app from public, anon;
+alter default privileges in schema public revoke execute on functions from public;
+alter default privileges in schema app revoke execute on functions from public;
+revoke execute on function public.scaffold_hostel(uuid, int, int, int) from authenticated;

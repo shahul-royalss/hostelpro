@@ -200,29 +200,14 @@ export async function updateHostelStructure(input: UpdateHostelStructureInput): 
   try {
     await assertRole("super_admin");
     const supabase = await createClient();
-    const { data: row, error: readErr } = await supabase
-      .from("hostels")
-      .select("id, total_floors, total_rooms, beds_per_room_default")
-      .eq("id", hostelId)
-      .maybeSingle();
-    if (readErr) return fail(errorMessage(readErr));
-    if (!row) return fail("Hostel not found.");
-    const current = row as { total_floors: number; total_rooms: number; beds_per_room_default: number };
-
-    if (floors < current.total_floors) return fail(`Floors can only be increased (currently ${current.total_floors}).`);
-    if (rooms < current.total_rooms) return fail(`Rooms can only be increased (currently ${current.total_rooms}).`);
-    if (floors === current.total_floors && rooms === current.total_rooms) return fail("Nothing to change — the structure is already set to these values.");
-
-    const { error: updErr } = await supabase.from("hostels").update({ total_floors: floors, total_rooms: rooms }).eq("id", hostelId);
-    if (updErr) return fail(errorMessage(updErr));
-
-    const { error: scaffoldErr } = await supabase.rpc("scaffold_hostel", {
+    // Atomic, SA-guarded, grow-only (validation + scaffold happen inside the RPC;
+    // scaffold_hostel itself is not callable directly by users).
+    const { error } = await supabase.rpc("sa_update_hostel_structure", {
       p_hostel_id: hostelId,
       p_floors: floors,
       p_rooms: rooms,
-      p_beds_per_room: current.beds_per_room_default,
     });
-    if (scaffoldErr) return fail(errorMessage(scaffoldErr));
+    if (error) return fail(errorMessage(error));
 
     revalidateSuperAdmin(hostelId);
     return ok({ floors, rooms }, "Hostel structure updated");
