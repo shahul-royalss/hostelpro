@@ -115,9 +115,8 @@ npx tsx db/seed.ts --force --force-admin   # …and recreate the super admin too
 The seed uses the same RPCs the UI calls (`sa_create_hostel_with_subscription`,
 `wd_register_student`, `wd_record_payment`) so triggers, notifications and role limits
 run exactly as in the app. It refuses to run on top of existing demo accounts
-("Already seeded — rerun with --force"). Note: the current dev Supabase project already
-contains this demo data (created via SQL for QA), so the first real run there must use
-`--force`.
+("Already seeded — rerun with --force"); use `--force` to reset the demo data at any time
+(the current dev project `nimxvgzscbanhtvgnjll` was seeded with this script on 2026-08-16).
 
 > **TLS-inspecting antivirus (Norton, etc.)** — if `npm run dev` / the seed fails with
 > `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` / `self signed certificate in certificate chain`,

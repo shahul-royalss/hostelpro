@@ -11,11 +11,9 @@
  * (sa_create_hostel_with_subscription, wd_register_student, wd_record_payment) work here.
  * Standalone script: no Next.js / lib imports (tsx only).
  *
- * NOTE (project state): the live Supabase project already contains this exact demo data set
- * (it was created via SQL for QA before SUPABASE_SERVICE_ROLE_KEY was available locally).
- * The seed refuses to run on top of existing demo accounts, so the FIRST real run against
- * that project must be `npx tsx db/seed.ts --force`, which wipes the QA-created demo hostels
- * and accounts (super admin is kept) and recreates everything through this script.
+ * NOTE: the seed refuses to run on top of existing demo accounts; `--force` wipes the demo
+ * hostels and accounts (super admin is kept) and recreates everything. The dev project
+ * nimxvgzscbanhtvgnjll was (re)seeded with this script on 2026-08-16.
  *
  * Idempotency: without --force the script aborts with "Already seeded — rerun with --force"
  * as soon as it meets an existing demo login; nothing is partially written before that check
