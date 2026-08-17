@@ -534,6 +534,65 @@ create trigger enforce_role_limits
   for each row execute function app.enforce_role_limits();
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- PRIVILEGED COLUMN GUARD on public.users (checklist §4 "users cannot alter their
+-- own role", §14 mass assignment).
+--
+-- RLS gates ROWS, not COLUMNS: the users_update policy allows `id = auth.uid()` so a
+-- signed-in user could otherwise call PostgREST directly —
+--     PATCH /rest/v1/users?id=eq.<self>   {"role":"super_admin"}
+-- — and escalate to platform admin, because the anon key and REST endpoint are public.
+-- This trigger makes role / hostel_id / status / created_by privileged on EVERY write
+-- path (app, PostgREST, SQL), so authorization no longer depends on the client.
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function app.users_update_guard() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_manages_target boolean;
+begin
+  -- Super Admin (and the service role, used by account-management server actions)
+  -- may change anything; those paths do their own authorization first.
+  if app.is_super_admin() then
+    return new;
+  end if;
+
+  -- Who legitimately administers the TARGET account?
+  v_manages_target :=
+       (old.role in ('manager','warden') and app.owns_hostel(old.hostel_id))
+    or (old.role = 'student' and app.has_role_in(old.hostel_id, 'warden'));
+
+  -- Identity, role and tenant binding are never self-serviceable.
+  if new.id is distinct from old.id then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+  if new.role is distinct from old.role then
+    raise exception 'You cannot change an account''s role.' using errcode = '42501';
+  end if;
+  if new.hostel_id is distinct from old.hostel_id then
+    raise exception 'You cannot move an account to another hostel.' using errcode = '42501';
+  end if;
+  if new.created_by is distinct from old.created_by then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+
+  -- Activation state may only be changed by the account's administrator.
+  if (new.status is distinct from old.status or new.deleted_at is distinct from old.deleted_at)
+     and not v_manages_target then
+    raise exception 'You cannot change this account''s status.' using errcode = '42501';
+  end if;
+
+  -- Remaining columns (full_name, phone, email, must_change_password):
+  -- the account holder themselves, or the account's administrator.
+  if new.id = auth.uid() or v_manages_target then
+    return new;
+  end if;
+  raise exception 'Not allowed.' using errcode = '42501';
+end $$;
+
+drop trigger if exists users_update_guard on public.users;
+create trigger users_update_guard before update on public.users
+  for each row execute function app.users_update_guard();
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- HARD RULE §4.7 — bed ↔ student integrity  (students.bed_id is source of truth)
 -- ─────────────────────────────────────────────────────────────────────────────
 create or replace function app.students_bed_guard() returns trigger

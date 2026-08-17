@@ -14,3 +14,12 @@
   header; FormData actions via Next's no-JS `$ACTION_ID_<id>` multipart path, files supported).
   Action ids come from `.next/server/server-reference-manifest.json` (dev) — visit the page first
   so it's compiled. In Git Bash prefix with `MSYS_NO_PATHCONV=1` so `/manager/...` isn't rewritten.
+
+- `_qa-rls-attack.mjs` — direct PostgREST attack suite (bypasses the Next.js app): signs in as
+  real demo users with the anon key and attempts privilege escalation, cross-user reads/writes,
+  cross-tenant access, expired-subscription writes and anonymous access. Every attempt must be
+  blocked; it exits non-zero if any succeeds. Run it after any RLS/policy/trigger change:
+
+  ```bash
+  node scripts/_qa-rls-attack.mjs
+  ```
