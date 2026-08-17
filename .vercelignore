@@ -1,0 +1,14 @@
+# Never upload local secrets — production values live in Vercel's env settings.
+.env
+.env.*
+!.env.example
+
+# Build/local artifacts
+.next
+node_modules
+.claude
+
+# Not needed by the build (raw design references, agent skills, QA harnesses)
+design-exports
+skills
+scripts/_qa-*

@@ -198,6 +198,29 @@ RLS client → `ok()` / `fail(errorMessage(e))` → `revalidatePath()`. Client-s
 
 ---
 
+## Live deployment
+
+**Production:** https://hostelpro-three.vercel.app (Vercel project `dhrishta/hostelpro`)
+
+Environment variables are configured in Vercel for Production + Preview:
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
+`NEXT_PUBLIC_APP_NAME`, `TRUSTED_PROXY_HOPS=1`.
+
+Redeploy after changes:
+
+```bash
+npx vercel --prod
+```
+
+Security posture and the pre-release sign-off live in [`SECURITY.md`](./SECURITY.md).
+Re-run the direct-PostgREST attack suite after any RLS/policy/trigger change:
+
+```bash
+node scripts/_qa-rls-attack.mjs
+```
+
+---
+
 ## Deploying to Vercel
 
 1. Push the repo and import it in Vercel (framework preset: Next.js; build `next build`).
