@@ -46,13 +46,40 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   return { ...(profile as UserRow), authEmail: user.email ?? null };
 });
 
-/** Redirects to /login when signed out. */
+/**
+ * True when the session has completed TOTP step-up (or the account has no factor).
+ * Decodes the local session — no network call.
+ */
+async function mfaSatisfied(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (!data) return true;
+    return !(data.nextLevel === "aal2" && data.currentLevel !== "aal2");
+  } catch {
+    return true; // never lock the app out on a decode failure
+  }
+}
+
+/**
+ * Redirects to /login when signed out, and enforces the two "half-authenticated"
+ * gates — forced password change (§4.9) and TOTP step-up.
+ *
+ * These are ALSO enforced in middleware. They are duplicated here deliberately: middleware
+ * runs only on paths matched by a hand-written regex, and an audit found that a matcher
+ * excluding `*.png` let any route ending in an image extension skip every middleware gate
+ * while still executing Server Actions. An authentication control that exists in exactly
+ * one place, keyed off a regex, is one typo away from being bypassable — so every Server
+ * Component and Server Action re-checks it here, independently of routing.
+ */
 export async function requireUser(): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (user.status !== "active" || user.deleted_at) {
     redirect("/login?error=inactive");
   }
+  if (!(await mfaSatisfied())) redirect("/mfa");
+  if (user.must_change_password) redirect("/change-password");
   return user;
 }
 
@@ -66,11 +93,18 @@ export async function requireRole(...roles: UserRole[]): Promise<SessionUser> {
   return user;
 }
 
-/** Non-redirecting variant for server actions that return ActionResult */
+/**
+ * Non-redirecting variant for server actions that return ActionResult.
+ * Applies the same half-authenticated gates as requireUser() (see the note there) so a
+ * Server Action can never run for a session that still owes a password change or a
+ * second factor, regardless of which URL it was posted to.
+ */
 export async function assertRole(...roles: UserRole[]): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) throw new PermissionError("You are signed out. Please sign in again.");
-  if (user.status !== "active") throw new PermissionError("Your account is inactive.");
+  if (user.status !== "active" || user.deleted_at) throw new PermissionError("Your account is inactive.");
+  if (user.must_change_password) throw new PermissionError("Please set a new password before continuing.");
+  if (!(await mfaSatisfied())) throw new PermissionError("Two-factor verification is required before continuing.");
   if (!roles.includes(user.role)) throw new PermissionError("You don't have permission to do that.");
   return user;
 }

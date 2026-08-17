@@ -23,6 +23,28 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
 
   return (
     <form action={action} className="flex flex-col gap-5" noValidate>
+      {/* Voluntary change must be reauthenticated; the forced first-login change is exempt
+          (the temporary password was just used to sign in). The server re-decides this. */}
+      {!forced && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="currentPassword">Current password</Label>
+          <div className="relative">
+            <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Input
+              id="currentPassword"
+              name="currentPassword"
+              type="password"
+              autoComplete="current-password"
+              className="pl-10"
+              aria-invalid={!!fieldErrors.currentPassword}
+              required
+              autoFocus
+            />
+          </div>
+          {fieldErrors.currentPassword?.[0] ? <p className="text-xs text-red">{fieldErrors.currentPassword[0]}</p> : null}
+        </div>
+      )}
+
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="password">New password</Label>
         <div className="relative">
@@ -37,7 +59,7 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
             onChange={(e) => setPw(e.target.value)}
             aria-invalid={!!fieldErrors.password}
             required
-            autoFocus
+            autoFocus={forced}
           />
           <button
             type="button"

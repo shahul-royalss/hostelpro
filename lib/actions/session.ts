@@ -27,7 +27,13 @@ export async function switchHostel(hostelId: string): Promise<ActionResult> {
     const { data } = await supabase.from("hostels").select("id").eq("id", hostelId).eq("owner_user_id", user.id).maybeSingle();
     if (!data) return fail("That hostel isn't linked to your account.");
     const cookieStore = await cookies();
-    cookieStore.set(ACTIVE_HOSTEL_COOKIE, hostelId, { path: "/", httpOnly: true, sameSite: "lax", maxAge: 60 * 60 * 24 * 365 });
+    cookieStore.set(ACTIVE_HOSTEL_COOKIE, hostelId, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 365,
+    });
     revalidatePath("/owner", "layout");
     return ok(undefined);
   } catch (e) {

@@ -13,7 +13,8 @@ import { getClientIp, getUserAgent } from "@/lib/rate-limit";
  */
 export type AuditAction =
   | "auth.login.success" | "auth.login.failed" | "auth.login.rate_limited" | "auth.logout"
-  | "auth.password.changed" | "auth.mfa.enrolled" | "auth.mfa.unenrolled" | "auth.mfa.verified" | "auth.mfa.failed"
+  | "auth.password.changed" | "auth.password.reauth_failed"
+  | "auth.mfa.enrolled" | "auth.mfa.unenrolled" | "auth.mfa.verified" | "auth.mfa.failed"
   | "sa.owner_hostel.create" | "sa.subscription.renew" | "sa.hostel.status" | "sa.owner.password_reset" | "sa.hostel.structure"
   | "owner.staff.create" | "owner.staff.password_reset" | "owner.staff.status" | "owner.announcement.create" | "owner.hostel.rules"
   | "warden.student.register" | "warden.student.vacate" | "warden.student.reassign" | "warden.payment.record" | "warden.room.update"

@@ -77,7 +77,9 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Export failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Never return the raw exception (checklist §18): it can carry Postgres/driver text,
+    // column names or file paths. Log it server-side, hand the caller a generic message.
+    console.error("[hostelpro] CSV export failed:", e instanceof Error ? e.message : String(e));
+    return NextResponse.json({ error: "Could not generate the export. Please try again." }, { status: 500 });
   }
 }

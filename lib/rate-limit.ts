@@ -42,13 +42,35 @@ export async function rateLimit(key: string, max: number, windowSeconds: number,
   }
 }
 
-/** Best-effort client IP (Vercel / proxies set x-forwarded-for; first hop is the client). */
+/**
+ * Client IP for rate-limit keys and the audit trail.
+ *
+ * `x-forwarded-for` is CLIENT-CONTROLLED unless a trusted proxy overwrites it, so taking
+ * its first hop would let an attacker mint a fresh "IP" per request and walk straight
+ * through the per-IP login limit. We therefore prefer headers that only the platform edge
+ * can set, and otherwise take the LAST hop of XFF (appended by the nearest trusted proxy)
+ * rather than the spoofable first one.
+ *
+ * TRUSTED_PROXY_HOPS: number of proxies in front of the app (default 1 — e.g. Vercel).
+ * Set to 0 for a directly-exposed server so XFF is ignored entirely.
+ */
 export async function getClientIp(): Promise<string> {
   try {
     const h = await headers();
+
+    // Platform-set, not forgeable by the client.
+    const platform = h.get("x-vercel-forwarded-for") ?? h.get("cf-connecting-ip") ?? h.get("true-client-ip");
+    if (platform) return platform.split(",")[0]!.trim().slice(0, 64);
+
+    const hops = Number.parseInt(process.env.TRUSTED_PROXY_HOPS ?? "1", 10);
     const xff = h.get("x-forwarded-for");
-    if (xff) return xff.split(",")[0]!.trim().slice(0, 64);
-    return (h.get("x-real-ip") ?? h.get("cf-connecting-ip") ?? "unknown").slice(0, 64);
+    if (xff && hops > 0) {
+      const chain = xff.split(",").map((s) => s.trim()).filter(Boolean);
+      // The nearest trusted proxy appends the address it actually saw; count back from the end.
+      const idx = Math.max(0, chain.length - hops);
+      if (chain[idx]) return chain[idx].slice(0, 64);
+    }
+    return (h.get("x-real-ip") ?? "unknown").slice(0, 64);
   } catch {
     return "unknown";
   }

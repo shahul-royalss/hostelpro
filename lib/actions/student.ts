@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { LIMITS, rateLimit } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { assertWritableContext, errorMessage, PermissionError } from "@/lib/permissions";
-import { uploadToBucket } from "@/lib/storage";
+import { removeFromBucket, uploadToBucket } from "@/lib/storage";
 import { fail, ok, type ActionResult } from "@/lib/types";
 import { applyLeaveSchema, createComplaintSchema } from "@/lib/validators/student";
 
@@ -63,7 +63,11 @@ export async function createComplaint(formData: FormData): Promise<ActionResult<
       photo_url: photoUrl,
       updated_by: user.id,
     });
-    if (error) return fail(errorMessage(error));
+    if (error) {
+      // Don't leave the uploaded photo orphaned in the bucket when the row never lands.
+      await removeFromBucket("complaint-photos", [photoUrl]);
+      return fail(errorMessage(error));
+    }
 
     revalidatePath("/student/complaints");
     revalidatePath("/student");

@@ -85,11 +85,17 @@ export async function uploadToBucket(bucket: Bucket, hostelId: string, folder: s
  */
 export async function signedUrl(bucket: Bucket, path: string | null | undefined, hostelId: string, expiresIn = SIGNED_URL_TTL[bucket]): Promise<string | null> {
   if (!path) return null;
-  if (/^https?:\/\//.test(path)) return path; // legacy absolute URL (seed data)
+  // NO absolute-URL passthrough. `*_url` columns are writable by staff through PostgREST,
+  // so echoing an arbitrary https:// value back into another user's page would let a warden
+  // point an owner's browser at any host (tracking pixel / phishing image). Only real
+  // objects inside this tenant's prefix are ever signed.
   if (!isPathInHostel(path, hostelId)) return null;
   try {
     const admin = createAdminClient();
-    const { data } = await admin.storage.from(bucket).createSignedUrl(path, expiresIn);
+    // Images are rendered in <img> and must stay inline; documents (PDF) are forced to
+    // download so an uploaded file can never render as a document in the viewer's origin.
+    const isDocument = path.toLowerCase().endsWith(".pdf");
+    const { data } = await admin.storage.from(bucket).createSignedUrl(path, expiresIn, isDocument ? { download: true } : {});
     return data?.signedUrl ?? null;
   } catch {
     return null;

@@ -12,6 +12,8 @@ const inter = Inter({
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "HostelPro";
 
 export const metadata: Metadata = {
+  // Private workspace — keep every screen out of search indexes (checklist §17).
+  robots: { index: false, follow: false, nocache: true },
   title: {
     default: APP_NAME,
     template: `%s · ${APP_NAME}`,

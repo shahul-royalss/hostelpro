@@ -96,6 +96,7 @@ export async function signIn(_prev: ActionResult | null, formData: FormData): Pr
 /** First-login forced change + regular self-service change (§4.9). */
 export async function changePassword(_prev: ActionResult | null, formData: FormData): Promise<ActionResult> {
   const parsed = changePasswordSchema.safeParse({
+    currentPassword: (formData.get("currentPassword") as string | null) || undefined,
     password: formData.get("password"),
     confirm: formData.get("confirm"),
   });
@@ -109,6 +110,27 @@ export async function changePassword(_prev: ActionResult | null, formData: FormD
   if (!rl.allowed) return fail("Too many attempts. Please wait a few minutes and try again.");
 
   const supabase = await createClient();
+
+  /**
+   * Reauthentication (checklist §8): a *voluntary* change must prove the current password,
+   * so a hijacked session (stolen cookie, unlocked laptop) cannot be used to lock the real
+   * owner out. The forced first-login change is exempt — the user just authenticated with
+   * the temporary password. Whether it is forced is read from the DB, never from the form.
+   */
+  if (!user.must_change_password) {
+    if (!parsed.data.currentPassword) {
+      return fail("Enter your current password.", { currentPassword: ["Enter your current password."] });
+    }
+    const { error: reauthError } = await supabase.auth.signInWithPassword({
+      email: user.authEmail ?? "",
+      password: parsed.data.currentPassword,
+    });
+    if (reauthError) {
+      await audit("auth.password.reauth_failed", { targetType: "user", targetId: user.id });
+      return fail("Your current password is incorrect.", { currentPassword: ["Your current password is incorrect."] });
+    }
+  }
+
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
   if (error) {
     return fail(
@@ -128,6 +150,14 @@ export async function changePassword(_prev: ActionResult | null, formData: FormD
     // Service role key not configured — DB flag is cleared; middleware falls back to it.
   }
   await audit("auth.password.changed", { targetType: "user", targetId: user.id, meta: { forced: user.must_change_password } });
+
+  // Revoke every OTHER session (checklist §3): if the password was changed because it may
+  // have leaked, any session an attacker still holds dies here. This session stays valid.
+  try {
+    await supabase.auth.signOut({ scope: "others" });
+  } catch {
+    /* best effort — the password is already rotated */
+  }
 
   redirect(ROLE_HOME[user.role]);
 }

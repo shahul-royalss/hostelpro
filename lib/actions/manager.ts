@@ -5,7 +5,7 @@ import { audit } from "@/lib/audit";
 import { LIMITS, rateLimit } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { assertHostelContext, assertWritableContext, errorMessage } from "@/lib/permissions";
-import { signedUrl, uploadToBucket } from "@/lib/storage";
+import { removeFromBucket, signedUrl, uploadToBucket } from "@/lib/storage";
 import { fail, ok, type ActionResult } from "@/lib/types";
 import {
   expenseSchema,
@@ -103,8 +103,27 @@ export async function updateExpense(formData: FormData): Promise<ActionResult> {
   if (!parsed.success) return fail("Please check the form.", parsed.error.flatten().fieldErrors);
 
   try {
-    const { ctx } = await assertWritableContext("manager");
-    const { path, warning } = await tryUploadReceipt(ctx.hostel.id, formFile(formData, "receipt"));
+    const { user, ctx } = await assertWritableContext("manager");
+
+    const newFile = formFile(formData, "receipt");
+    if (newFile) {
+      const rl = await rateLimit(`upload:${user.id}`, LIMITS.uploadPerUser.max, LIMITS.uploadPerUser.windowSeconds);
+      if (!rl.allowed) return fail(`Too many uploads. Try again in ${Math.ceil(rl.retryAfterSeconds / 60)} minute(s).`);
+    }
+
+    const supabase = await createClient();
+    // Read the current receipt first so a replaced/removed object can be deleted from the
+    // bucket instead of being orphaned there forever (checklist §10).
+    const { data: existing } = await supabase
+      .from("expenses")
+      .select("receipt_url")
+      .eq("id", parsed.data.id)
+      .eq("hostel_id", ctx.hostel.id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    const previousReceipt = (existing as { receipt_url?: string | null } | null)?.receipt_url ?? null;
+
+    const { path, warning } = await tryUploadReceipt(ctx.hostel.id, newFile);
 
     const patch: Record<string, unknown> = {
       date: parsed.data.date,
@@ -115,15 +134,25 @@ export async function updateExpense(formData: FormData): Promise<ActionResult> {
     if (path) patch.receipt_url = path;
     else if (parsed.data.removeReceipt === "1") patch.receipt_url = null;
 
-    const supabase = await createClient();
     const { error, count } = await supabase
       .from("expenses")
       .update(patch, { count: "exact" })
       .eq("id", parsed.data.id)
       .eq("hostel_id", ctx.hostel.id)
       .is("deleted_at", null);
-    if (error) return fail(errorMessage(error));
-    if (!count) return fail("That expense no longer exists.");
+    if (error) {
+      await removeFromBucket("receipts", [path]); // don't leave the new upload orphaned
+      return fail(errorMessage(error));
+    }
+    if (!count) {
+      await removeFromBucket("receipts", [path]);
+      return fail("That expense no longer exists.");
+    }
+
+    // The row now points elsewhere (or nowhere) — drop the object it used to reference.
+    if (previousReceipt && previousReceipt !== patch.receipt_url && (path || parsed.data.removeReceipt === "1")) {
+      await removeFromBucket("receipts", [previousReceipt]);
+    }
 
     revalidateFinance();
     return ok(undefined, warning ?? "Expense updated");

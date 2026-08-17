@@ -26,12 +26,15 @@ end $$;
 alter table public.users enable row level security;
 select app.drop_policies('users');
 
+-- The self branch carries an active/not-deleted predicate: without it a just-deactivated
+-- account could still read (and via users_update edit) its own row through PostgREST until
+-- its access token expired (checklist §37). Every other table already fails closed because
+-- app.user_role() / app.user_hostel_id() only resolve for active accounts.
 create policy users_select on public.users for select
   using (
-    id = auth.uid()
+    (id = auth.uid() and status = 'active' and deleted_at is null)
     or app.is_super_admin()
     or (app.user_role() in ('owner','manager','warden') and app.can_read_hostel(hostel_id))
-    or (app.user_role() = 'owner' and role = 'owner' and id = auth.uid())
   );
 
 -- Super Admin creates owners; Owner creates manager/warden for hostels they own.
@@ -45,13 +48,13 @@ create policy users_insert on public.users for insert
 create policy users_update on public.users for update
   using (
     app.is_super_admin()
-    or id = auth.uid()
+    or (id = auth.uid() and status = 'active' and deleted_at is null)
     or (role in ('manager','warden') and app.owns_hostel(hostel_id))
     or (role = 'student' and app.has_role_in(hostel_id, 'warden'))
   )
   with check (
     app.is_super_admin()
-    or id = auth.uid()
+    or (id = auth.uid() and status = 'active' and deleted_at is null)
     or (role in ('manager','warden') and app.owns_hostel(hostel_id) and app.hostel_writable(hostel_id))
     or (role = 'student' and app.has_role_in(hostel_id, 'warden') and app.hostel_writable(hostel_id))
   );
