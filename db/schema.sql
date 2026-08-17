@@ -533,6 +533,13 @@ create trigger enforce_role_limits
   before insert or update of role, status, hostel_id, deleted_at on public.users
   for each row execute function app.enforce_role_limits();
 
+-- The trigger above does a count(*), which two concurrent inserts can both pass (TOCTOU).
+-- This partial unique index makes the "1 active manager / 1 active warden per hostel" rule
+-- race-proof at the storage layer; the trigger stays for the friendly error message.
+create unique index if not exists users_one_active_staff_per_hostel
+  on public.users (hostel_id, role)
+  where role in ('manager','warden') and status = 'active' and deleted_at is null;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PRIVILEGED COLUMN GUARD on public.users (checklist §4 "users cannot alter their
 -- own role", §14 mass assignment).
@@ -1250,14 +1257,18 @@ language sql stable security definer set search_path = public as $$
   where h.id = coalesce(app.user_hostel_id(), (select hostel_id from public.students where user_id = auth.uid() limit 1))
 $$;
 
--- Owner: update hostel rules text (only field owners may edit on hostels)
+-- Owner: update hostel rules text (only field owners may edit on hostels).
+-- Subject to the §4.4 read-only gate like every other tenant write.
 create or replace function public.ow_update_hostel_rules(p_hostel_id uuid, p_rules text) returns void
 language plpgsql security definer set search_path = public as $$
 begin
   if not app.owns_hostel(p_hostel_id) and not app.is_super_admin() then
     raise exception 'Not allowed.' using errcode = '42501';
   end if;
-  update public.hostels set rules = p_rules where id = p_hostel_id;
+  if not app.is_super_admin() and not app.hostel_writable(p_hostel_id) then
+    raise exception 'Subscription expired — hostel is read-only.' using errcode = '42501';
+  end if;
+  update public.hostels set rules = left(p_rules, 20000) where id = p_hostel_id;
 end $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -1473,20 +1484,39 @@ create policy audit_log_select on public.audit_log for select
   using (app.is_super_admin() or (hostel_id is not null and app.owns_hostel(hostel_id)));
 -- no insert/update/delete policies for users: writes go through audit_event() / service role only
 
+-- Audit writes are SERVICE-ROLE ONLY. If `authenticated` could execute this, any signed-in
+-- user could call it through PostgREST and inject rows into another tenant's (owner-visible)
+-- trail or flood the table. lib/audit.ts calls it with the service role and passes the actor
+-- from the session the server already verified, so the actor still cannot be spoofed.
 create or replace function public.audit_event(
   p_action text, p_target_type text default null, p_target_id text default null,
-  p_hostel_id uuid default null, p_meta jsonb default '{}'::jsonb, p_ip text default null, p_user_agent text default null
+  p_hostel_id uuid default null, p_meta jsonb default '{}'::jsonb, p_ip text default null, p_user_agent text default null,
+  p_actor_user_id uuid default null, p_actor_role public.user_role default null
 ) returns void
 language plpgsql security definer set search_path = public as $$
+declare v_meta jsonb := coalesce(p_meta, '{}'::jsonb); k text;
 begin
+  -- Defense in depth (§27 "logs do not contain secrets"): lib/audit.ts already strips
+  -- credential-ish keys; strip them here too so no future caller can persist one.
+  if jsonb_typeof(v_meta) = 'object' then
+    for k in select jsonb_object_keys(v_meta) loop
+      if k ~* '(pass|secret|token|key|otp|code|authorization|cookie)' then
+        v_meta := v_meta - k;
+      end if;
+    end loop;
+  else
+    v_meta := '{}'::jsonb;
+  end if;
+
   insert into public.audit_log (actor_user_id, actor_role, action, target_type, target_id, hostel_id, ip, user_agent, meta)
-  values (auth.uid(), app.user_role(), left(p_action, 80), left(p_target_type, 40), left(p_target_id, 80),
-          p_hostel_id, left(p_ip, 64), left(p_user_agent, 300), coalesce(p_meta, '{}'::jsonb));
+  values (coalesce(p_actor_user_id, auth.uid()), coalesce(p_actor_role, app.user_role()),
+          left(p_action, 80), left(p_target_type, 40), left(p_target_id, 80),
+          p_hostel_id, left(p_ip, 64), left(p_user_agent, 300), v_meta);
 exception when others then
   null; -- auditing must never break the primary action
 end $$;
-revoke all on function public.audit_event(text, text, text, uuid, jsonb, text, text) from public, anon;
-grant execute on function public.audit_event(text, text, text, uuid, jsonb, text, text) to authenticated, service_role;
+revoke all on function public.audit_event(text, text, text, uuid, jsonb, text, text, uuid, public.user_role) from public, anon, authenticated;
+grant execute on function public.audit_event(text, text, text, uuid, jsonb, text, text, uuid, public.user_role) to service_role;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- STORAGE BUCKETS (private; files served via signed URLs from the server)

@@ -26,12 +26,28 @@ export interface AuditOptions {
   meta?: Record<string, unknown>;
 }
 
-/** Record an event as the current signed-in user. */
+/**
+ * Record an event as the current signed-in user.
+ *
+ * The write goes through the SERVICE ROLE, not the user's session: audit_event() is not
+ * executable by `authenticated`, otherwise any signed-in user could call it directly via
+ * PostgREST and inject rows into another tenant's (owner-visible) trail or flood the table.
+ * The actor is taken from the session this server already verified with getUser(), so it
+ * still cannot be spoofed by the client.
+ */
 export async function audit(action: AuditAction, opts: AuditOptions = {}): Promise<void> {
   try {
     const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     const [ip, ua] = await Promise.all([getClientIp(), getUserAgent()]);
-    await supabase.rpc("audit_event", {
+    let actorRole: string | null = null;
+    if (user) {
+      const { data } = await supabase.from("users").select("role").eq("id", user.id).maybeSingle();
+      actorRole = (data as { role?: string } | null)?.role ?? null;
+    }
+    await createAdminClient().rpc("audit_event", {
       p_action: action,
       p_target_type: opts.targetType ?? null,
       p_target_id: opts.targetId ?? null,
@@ -39,6 +55,8 @@ export async function audit(action: AuditAction, opts: AuditOptions = {}): Promi
       p_meta: sanitizeMeta(opts.meta),
       p_ip: ip,
       p_user_agent: ua,
+      p_actor_user_id: user?.id ?? null,
+      p_actor_role: actorRole,
     });
   } catch {
     /* never block the primary action */
