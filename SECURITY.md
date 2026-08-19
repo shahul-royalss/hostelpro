@@ -143,6 +143,11 @@ Confirmed live for all four tables. A warden at one hostel could fabricate fee d
 | 18 | `st_my_roommates()` returned `photo_url`; §4.8 limits roommate data to name and phone | Column removed from the function and from `RoommateRow` |
 | 19 | Unbounded text columns — a 200 KB complaint title was accepted | Length CHECKs on 7 tables |
 | 20 | `npm audit`: 3 High (`postcss` arbitrary `.map` file read, `sharp`/libvips CVEs) | Pinned past both via `overrides`; **0 vulnerabilities**. Previously argued as unreachable — closing them outright is cheaper than defending the reachability argument |
+| 21 | 16 privileged actions wrote **no** audit row — announcements, owner tasks, hostel rules, expense/revenue create+update, task status, mess menu, leave decisions, visitor log/checkout, complaint status. Authentication was logged; day-to-day privileged writes were not, so the trail could not answer *"who changed this"* | `audit()` added to all 16 |
+| 22 | Every `auth.*` row was written with `hostel_id = NULL`, and the owner's read policy is scoped by `hostel_id` — so an owner could not see login/logout/password/MFA activity **for their own staff**. The trail existed but was invisible to the person it is for | `audit()` now defaults `hostel_id` to the actor's own hostel. Verified live: an owner sees their warden's login, the other hostel's owner sees 0, a student sees 0 |
+| 23 | Middleware redirects inherited Next's `Cache-Control: public, max-age=0, must-revalidate`. Each redirect is a function of *who is asking* (role home, login bounce, MFA step-up), so `public` invites a shared cache to store a per-user `Location` | `private, no-store`; verified on the deployed site |
+| 24 | The "Subscription expiring soon" notification was **dead code**: its loop needed `status = 'active'` AND ≤15 days to expiry, but the `subscription_status_compute` trigger flips status to `'expiring'` the instant that window opens — mutually exclusive, so no owner ever got the notice | Condition fixed **and** a 7-day dedup added in the same change: this RPC runs on every owner/super-admin dashboard load, so fixing the condition alone would have turned a dead path into a notification flood |
+| 25 | A forged `AUDIT sa.subscription.renew (spoofed by student)` row from round-1 attack testing was still sitting in the production audit log, reading as evidence of a real breach | Removed |
 
 ---
 
@@ -173,8 +178,8 @@ Confirmed live for all four tables. A warden at one hostel could fabricate fee d
 | Low | Raw storage object keys are included in the RSC payload next to the signed URL | Strip before serialization |
 | Low | Over-8 MB uploads surface Next's body-size error rather than the friendly message | Add a client-side size check on the remaining upload forms |
 | Low | No retention policy for `audit_log` IP/user-agent | Define retention + alerting before real tenants |
-| Low | Audit coverage is partial — announcements, hostel rules, tasks, leaves, visitors, complaints, expenses and menu changes are not written to `audit_log`, and no UI surfaces the log | Extend `logAudit()` coverage; add a Super Admin log view |
-| Low | Authentication audit rows carry `hostel_id = NULL`, so a hostel owner cannot see login events for their own staff | Resolve and stamp `hostel_id` on auth events |
+| Low | No UI surfaces `audit_log` — the trail is complete but only readable via SQL | Add a Super Admin / owner log view |
+| Low | `select("*")` is used in ~20 queries; all are RLS-scoped and none of these tables hold secrets, but it over-fetches columns into the RSC payload | Narrow to explicit column lists when next touching those queries |
 | Low | No GDPR/DPDP erasure path — `students_delete` is service-role only and there is no tooling behind it | Build an erasure runbook before real personal data |
 | Info | Supabase **leaked-password protection** is off | Enable in Dashboard → Authentication → Settings (dashboard-only; needs the account owner) |
 | Info | Service-role key was used from a developer workstation throughout the build | Rotate before handing the project to a customer (Dashboard → Settings → API) |
