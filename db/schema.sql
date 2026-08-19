@@ -772,42 +772,46 @@ create trigger subscription_status_compute before insert or update on public.sub
 
 -- Recompute all subscription statuses + hostel readonly flags; notify owners entering "expiring".
 -- Called by the Super Admin dashboard load and by the app on owner dashboard load (cheap).
-create or replace function public.refresh_subscription_statuses() returns void
+-- The "Subscription expiring soon" notification was dead code: its loop required
+-- `status = 'active' AND end_date - current_date <= 15`, but the subscription_status_compute
+-- trigger rewrites status to 'expiring' the moment that window is entered, so the two
+-- conditions are mutually exclusive and no owner ever received the notice.
+--
+-- Fixing the condition alone would create a flood: this runs on EVERY owner and super-admin
+-- dashboard load, so each page view would insert another row. The dedup guard is therefore
+-- part of the fix, not an optimisation - it also removes any write-amplification value in
+-- calling this RPC in a loop (it is callable by any authenticated user by design).
+create or replace function public.refresh_subscription_statuses()
+returns void
 language plpgsql security definer set search_path = public as $$
 declare r record;
 begin
-  -- notify owners whose latest subscription just flipped to expiring
   for r in
     select s.id, s.hostel_id, s.owner_user_id, h.name, s.end_date
-    from public.subscriptions s
-    join public.hostels h on h.id = s.hostel_id
-    where s.status = 'active'
-      and s.end_date >= current_date
-      and s.end_date - current_date <= 15
-      and s.id = (select id from public.subscriptions x where x.hostel_id = s.hostel_id order by end_date desc limit 1)
+    from public.subscriptions s join public.hostels h on h.id = s.hostel_id
+    where s.status in ('active', 'expiring')
+      and s.end_date >= current_date and s.end_date - current_date <= 15
+      and s.owner_user_id is not null
+      and s.id = (select x.id from public.subscriptions x where x.hostel_id = s.hostel_id order by x.end_date desc limit 1)
+      -- at most one expiry notice per owner per hostel per 7 days
+      and not exists (
+        select 1 from public.notifications n
+         where n.user_id = s.owner_user_id
+           and n.hostel_id = s.hostel_id
+           and n.type = 'subscription'
+           and n.created_at > now() - interval '7 days'
+      )
   loop
     insert into public.notifications (hostel_id, user_id, type, title, body, link)
-    values (r.hostel_id, r.owner_user_id, 'subscription',
-            'Subscription expiring soon',
-            format('%s subscription ends on %s. Contact support to renew.', r.name, to_char(r.end_date, 'DD Mon YYYY')),
-            '/owner');
+    values (r.hostel_id, r.owner_user_id, 'subscription', 'Subscription expiring soon',
+            format('%s subscription ends on %s. Contact support to renew.', r.name, to_char(r.end_date, 'DD Mon YYYY')), '/owner');
   end loop;
 
   update public.subscriptions
-     set status = case
-       when end_date < current_date then 'expired'
-       when end_date - current_date <= 15 then 'expiring'
-       else 'active' end::public.subscription_status
-   where status is distinct from (case
-       when end_date < current_date then 'expired'
-       when end_date - current_date <= 15 then 'expiring'
-       else 'active' end::public.subscription_status);
-
-  -- hostels: readonly when expired, back to active when renewed (never touch suspended)
-  update public.hostels h set status = 'readonly'
-   where h.status = 'active' and app.subscription_state(h.id) = 'expired';
-  update public.hostels h set status = 'active'
-   where h.status = 'readonly' and app.subscription_state(h.id) <> 'expired';
+     set status = case when end_date < current_date then 'expired' when end_date - current_date <= 15 then 'expiring' else 'active' end::public.subscription_status
+   where status is distinct from (case when end_date < current_date then 'expired' when end_date - current_date <= 15 then 'expiring' else 'active' end::public.subscription_status);
+  update public.hostels h set status = 'readonly' where h.status = 'active' and app.subscription_state(h.id) = 'expired';
+  update public.hostels h set status = 'active'   where h.status = 'readonly' and app.subscription_state(h.id) <> 'expired';
 end $$;
 
 -- After a subscription is inserted/extended, re-evaluate that hostel's flag immediately
