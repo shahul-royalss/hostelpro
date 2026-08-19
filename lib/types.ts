@@ -378,12 +378,12 @@ export interface ComplaintsPerWeekRow {
   complaints: number;
 }
 
+/** §4.8 — students may see roommates' name and phone only (no photo, no address, no fee). */
 export interface RoommateRow {
   student_id: string;
   full_name: string;
   phone: string;
   bed_number: number | null;
-  photo_url: string | null;
 }
 
 /* ───────────────────────── Server action result ───────────────────────── */

@@ -119,7 +119,7 @@ create table if not exists public.subscriptions (
   owner_user_id  uuid not null references public.users(id),
   start_date     date not null,
   end_date       date not null check (end_date >= start_date),
-  amount         numeric(12,2) not null default 0 check (amount >= 0),
+  amount         numeric(12,2) not null default 0 check (amount >= 0 and amount <= 100000000),
   status         public.subscription_status not null default 'active',
   created_by     uuid references public.users(id),
   notes          text,
@@ -165,7 +165,7 @@ create table if not exists public.students (
   date_of_joining   date not null default current_date,
   room_id           uuid references public.rooms(id),
   bed_id            uuid,                                   -- FK added after beds
-  monthly_fee       numeric(10,2) not null default 0 check (monthly_fee >= 0),
+  monthly_fee       numeric(10,2) not null default 0 check (monthly_fee >= 0 and monthly_fee <= 10000000),
   status            public.student_status not null default 'active',
   vacated_at        timestamptz,
   created_by        uuid references public.users(id),
@@ -207,8 +207,8 @@ create table if not exists public.fee_payments (
   hostel_id     uuid not null references public.hostels(id) on delete cascade,
   student_id    uuid not null references public.students(id) on delete cascade,
   period_month  text not null check (period_month ~ '^\d{4}-(0[1-9]|1[0-2])$'),
-  amount_due    numeric(10,2) not null default 0 check (amount_due >= 0),
-  amount_paid   numeric(10,2) not null default 0 check (amount_paid >= 0),
+  amount_due    numeric(10,2) not null default 0 check (amount_due >= 0 and amount_due <= 10000000),
+  amount_paid   numeric(10,2) not null default 0 check (amount_paid >= 0 and amount_paid <= 10000000),
   status        public.fee_status not null default 'unpaid',
   paid_on       date,
   mode          public.payment_mode,
@@ -255,7 +255,7 @@ create table if not exists public.expenses (
   hostel_id    uuid not null references public.hostels(id) on delete cascade,
   date         date not null default current_date,
   category     public.expense_category not null default 'other',
-  amount       numeric(12,2) not null check (amount >= 0),
+  amount       numeric(12,2) not null check (amount >= 0 and amount <= 100000000),
   note         text,
   receipt_url  text,
   uploaded_by  uuid references public.users(id),
@@ -270,7 +270,7 @@ create table if not exists public.revenues (
   hostel_id    uuid not null references public.hostels(id) on delete cascade,
   date         date not null default current_date,
   source       public.revenue_source not null default 'other',
-  amount       numeric(12,2) not null check (amount >= 0),
+  amount       numeric(12,2) not null check (amount >= 0 and amount <= 100000000),
   note         text,
   uploaded_by  uuid references public.users(id),
   created_at   timestamptz not null default now(),
@@ -1201,29 +1201,43 @@ begin
 end $$;
 
 -- Warden: record / top-up a fee payment for a period (upsert)
+-- Warden records / tops up a fee payment. Hardened: no NaN (Postgres numeric NaN compares
+-- EQUAL to itself, so the IEEE `x <> x` idiom never fires — test against 'NaN'::numeric), no payments for
+-- checked-out students, sane upper bound, no future-dating.
 create or replace function public.wd_record_payment(
-  p_student_id uuid, p_period_month text, p_amount numeric, p_mode public.payment_mode, p_paid_on date default current_date, p_notes text default null
+  p_student_id uuid, p_period_month text, p_amount numeric, p_mode public.payment_mode,
+  p_paid_on date default current_date, p_notes text default null
 ) returns public.fee_payments
 language plpgsql security definer set search_path = public as $$
-declare v_hostel uuid; v_fee numeric; v_row public.fee_payments;
+declare v_hostel uuid; v_fee numeric; v_status public.student_status; v_row public.fee_payments;
 begin
-  select hostel_id, monthly_fee into v_hostel, v_fee from public.students where id = p_student_id;
+  select hostel_id, monthly_fee, status into v_hostel, v_fee, v_status
+    from public.students where id = p_student_id;
   if v_hostel is null then raise exception 'Student not found.' using errcode = 'P0001'; end if;
-  if not app.has_role_in(v_hostel, 'warden', 'manager', 'owner') then
+  if not app.has_role_in(v_hostel, 'warden', 'owner') then
     raise exception 'Not allowed.' using errcode = '42501';
   end if;
   if not app.hostel_writable(v_hostel) then
     raise exception 'Subscription expired — hostel is read-only.' using errcode = '42501';
   end if;
+  if v_status = 'vacated' then
+    raise exception 'That student has been checked out — no further payments can be recorded.' using errcode = 'P0001';
+  end if;
+  if p_amount is null or p_amount = 'NaN'::numeric then
+    raise exception 'Enter a valid amount.' using errcode = 'P0001';
+  end if;
   if p_amount <= 0 then raise exception 'Amount must be greater than zero.' using errcode = 'P0001'; end if;
+  if p_amount > 10000000 then raise exception 'That amount is too large.' using errcode = 'P0001'; end if;
+  if p_paid_on > current_date + 1 then
+    raise exception 'Payment date cannot be in the future.' using errcode = 'P0001';
+  end if;
 
   insert into public.fee_payments (hostel_id, student_id, period_month, amount_due, amount_paid, paid_on, mode, notes, recorded_by)
   values (v_hostel, p_student_id, p_period_month, v_fee, p_amount, p_paid_on, p_mode, p_notes, auth.uid())
   on conflict (student_id, period_month) do update
     set amount_paid = public.fee_payments.amount_paid + excluded.amount_paid,
-        paid_on     = excluded.paid_on,
-        mode        = excluded.mode,
-        notes       = coalesce(excluded.notes, public.fee_payments.notes),
+        paid_on = excluded.paid_on, mode = excluded.mode,
+        notes = coalesce(excluded.notes, public.fee_payments.notes),
         recorded_by = excluded.recorded_by
   returning * into v_row;
   return v_row;
@@ -1232,10 +1246,12 @@ end $$;
 -- ─────────────────────────────────────────────────────────────────────────────
 -- STUDENT — roommates (names + phones only; Hard rule §4.8)
 -- ─────────────────────────────────────────────────────────────────────────────
-create or replace function public.st_my_roommates()
-returns table (student_id uuid, full_name text, phone text, bed_number int, photo_url text)
+-- §4.8 — students see roommates' NAME and PHONE only (no photo/storage key, no address).
+drop function if exists public.st_my_roommates();
+create function public.st_my_roommates()
+returns table (student_id uuid, full_name text, phone text, bed_number int)
 language sql stable security definer set search_path = public as $$
-  select s.id, s.full_name, s.phone, b.bed_number, s.photo_url
+  select s.id, s.full_name, s.phone, b.bed_number
   from public.students me
   join public.students s on s.room_id = me.room_id and s.id <> me.id and s.status <> 'vacated'
   left join public.beds b on b.id = s.bed_id
@@ -1517,6 +1533,127 @@ exception when others then
 end $$;
 revoke all on function public.audit_event(text, text, text, uuid, jsonb, text, text, uuid, public.user_role) from public, anon, authenticated;
 grant execute on function public.audit_event(text, text, text, uuid, jsonb, text, text, uuid, public.user_role) to service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- CROSS-TENANT INTEGRITY GUARDS (checklist §4, §14, §25)
+--
+-- RLS gates the hostel_id COLUMN of the row being written, but nothing checked that the
+-- FOREIGN KEYS on that row point at objects in the SAME tenant. Confirmed exploitable
+-- before these guards existed:
+--   * a warden repointed students.user_id at another hostel's warden account, handing
+--     that account read access to this tenant's resident PII, fees and complaints;
+--   * a warden inserted a fee_payments / visitors row whose student_id belonged to
+--     another hostel's student — the victim saw the debt on their own page;
+--   * an owner assigned a task to another hostel's warden, or to a student.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Any row that references a student must live in that student's hostel.
+create or replace function app.assert_student_in_hostel() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_hostel uuid;
+begin
+  if new.student_id is null then return new; end if;
+  select hostel_id into v_hostel from public.students where id = new.student_id;
+  if v_hostel is null then
+    raise exception 'Student not found.' using errcode = 'P0001';
+  end if;
+  if v_hostel is distinct from new.hostel_id then
+    raise exception 'That student belongs to a different hostel.' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists fee_payments_student_tenant on public.fee_payments;
+create trigger fee_payments_student_tenant before insert or update of student_id, hostel_id
+  on public.fee_payments for each row execute function app.assert_student_in_hostel();
+drop trigger if exists visitors_student_tenant on public.visitors;
+create trigger visitors_student_tenant before insert or update of student_id, hostel_id
+  on public.visitors for each row execute function app.assert_student_in_hostel();
+drop trigger if exists complaints_student_tenant on public.complaints;
+create trigger complaints_student_tenant before insert or update of student_id, hostel_id
+  on public.complaints for each row execute function app.assert_student_in_hostel();
+drop trigger if exists leaves_student_tenant on public.leaves;
+create trigger leaves_student_tenant before insert or update of student_id, hostel_id
+  on public.leaves for each row execute function app.assert_student_in_hostel();
+
+-- students.user_id may only point at a student account in the SAME hostel, and may never
+-- be repointed after creation (that is an account-takeover primitive).
+create or replace function app.students_identity_guard() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_role public.user_role; v_hostel uuid;
+begin
+  if app.is_super_admin() then return new; end if;
+  if tg_op = 'UPDATE' then
+    if new.id is distinct from old.id then
+      raise exception 'Not allowed.' using errcode = '42501';
+    end if;
+    if new.user_id is distinct from old.user_id then
+      raise exception 'A student record cannot be re-linked to another account.' using errcode = '42501';
+    end if;
+    if new.hostel_id is distinct from old.hostel_id then
+      raise exception 'You cannot move a student to another hostel.' using errcode = '42501';
+    end if;
+  end if;
+  if new.user_id is not null then
+    select role, hostel_id into v_role, v_hostel from public.users where id = new.user_id;
+    if v_role is null then
+      raise exception 'Linked account not found.' using errcode = 'P0001';
+    end if;
+    if v_role <> 'student' or v_hostel is distinct from new.hostel_id then
+      raise exception 'A student record can only be linked to a student account in the same hostel.' using errcode = '42501';
+    end if;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists students_identity_guard on public.students;
+create trigger students_identity_guard before insert or update on public.students
+  for each row execute function app.students_identity_guard();
+
+-- A task may only be assigned to this hostel's active manager.
+create or replace function app.tasks_assignee_guard() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_role public.user_role; v_hostel uuid; v_status public.user_status;
+begin
+  if app.is_super_admin() then return new; end if;
+  select role, hostel_id, status into v_role, v_hostel, v_status from public.users where id = new.assigned_to;
+  if v_role is null then
+    raise exception 'That user does not exist.' using errcode = 'P0001';
+  end if;
+  if v_role <> 'manager' or v_hostel is distinct from new.hostel_id or v_status <> 'active' then
+    raise exception 'Tasks can only be assigned to this hostel active manager.' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists tasks_assignee_guard on public.tasks;
+create trigger tasks_assignee_guard before insert or update of assigned_to, hostel_id
+  on public.tasks for each row execute function app.tasks_assignee_guard();
+
+-- Length ceilings so a direct PostgREST write cannot store an unbounded blob.
+alter table public.complaints    drop constraint if exists complaints_text_len;
+alter table public.complaints    add  constraint complaints_text_len
+  check (length(title) <= 200 and (description is null or length(description) <= 4000)
+         and (resolution_note is null or length(resolution_note) <= 2000));
+alter table public.announcements drop constraint if exists announcements_text_len;
+alter table public.announcements add  constraint announcements_text_len
+  check (length(title) <= 200 and length(body) <= 4000);
+alter table public.leaves        drop constraint if exists leaves_reason_len;
+alter table public.leaves        add  constraint leaves_reason_len
+  check (reason is null or length(reason) <= 2000);
+alter table public.tasks         drop constraint if exists tasks_text_len;
+alter table public.tasks         add  constraint tasks_text_len
+  check (length(title) <= 200 and (description is null or length(description) <= 4000));
+alter table public.expenses      drop constraint if exists expenses_note_len;
+alter table public.expenses      add  constraint expenses_note_len
+  check (note is null or length(note) <= 1000);
+alter table public.revenues      drop constraint if exists revenues_note_len;
+alter table public.revenues      add  constraint revenues_note_len
+  check (note is null or length(note) <= 1000);
+alter table public.visitors      drop constraint if exists visitors_text_len;
+alter table public.visitors      add  constraint visitors_text_len
+  check (length(visitor_name) <= 120 and (relation is null or length(relation) <= 60)
+         and (visitor_phone is null or length(visitor_phone) <= 20));
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- STORAGE BUCKETS (private; files served via signed URLs from the server)
