@@ -16,9 +16,15 @@ export type AuditAction =
   | "auth.password.changed" | "auth.password.reauth_failed"
   | "auth.mfa.enrolled" | "auth.mfa.unenrolled" | "auth.mfa.verified" | "auth.mfa.failed"
   | "sa.owner_hostel.create" | "sa.subscription.renew" | "sa.hostel.status" | "sa.owner.password_reset" | "sa.hostel.structure"
-  | "owner.staff.create" | "owner.staff.password_reset" | "owner.staff.status" | "owner.announcement.create" | "owner.hostel.rules"
+  | "owner.staff.create" | "owner.staff.password_reset" | "owner.staff.status"
+  | "owner.announcement.create" | "owner.announcement.delete" | "owner.hostel.rules"
+  | "owner.task.create" | "owner.task.update" | "owner.task.delete"
   | "warden.student.register" | "warden.student.vacate" | "warden.student.reassign" | "warden.payment.record" | "warden.room.update"
-  | "manager.expense.delete" | "manager.revenue.delete";
+  | "warden.leave.decide" | "warden.visitor.log" | "warden.visitor.checkout"
+  | "manager.expense.create" | "manager.expense.update" | "manager.expense.delete"
+  | "manager.revenue.create" | "manager.revenue.update" | "manager.revenue.delete"
+  | "manager.task.status" | "manager.menu.save"
+  | "staff.complaint.status";
 
 export interface AuditOptions {
   targetType?: string;
@@ -44,15 +50,21 @@ export async function audit(action: AuditAction, opts: AuditOptions = {}): Promi
     } = await supabase.auth.getUser();
     const [ip, ua] = await Promise.all([getClientIp(), getUserAgent()]);
     let actorRole: string | null = null;
+    let actorHostelId: string | null = null;
     if (user) {
-      const { data } = await supabase.from("users").select("role").eq("id", user.id).maybeSingle();
+      const { data } = await supabase.from("users").select("role, hostel_id").eq("id", user.id).maybeSingle();
       actorRole = (data as { role?: string } | null)?.role ?? null;
+      actorHostelId = (data as { hostel_id?: string | null } | null)?.hostel_id ?? null;
     }
     await createAdminClient().rpc("audit_event", {
       p_action: action,
       p_target_type: opts.targetType ?? null,
       p_target_id: opts.targetId ?? null,
-      p_hostel_id: opts.hostelId ?? null,
+      // Default to the actor's own hostel. Authentication events (login, logout, password
+      // change, MFA) pass no hostelId, so they were all written with hostel_id NULL — and the
+      // owner's read policy is scoped by hostel_id, so an owner could not see login activity
+      // for their own staff. The audit trail existed but was invisible to the person it is for.
+      p_hostel_id: opts.hostelId ?? actorHostelId,
       p_meta: sanitizeMeta(opts.meta),
       p_ip: ip,
       p_user_agent: ua,

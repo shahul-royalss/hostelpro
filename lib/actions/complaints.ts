@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { assertWritableContext, errorMessage } from "@/lib/permissions";
+import { audit } from "@/lib/audit";
 import { fail, ok, type ActionResult, type ComplaintStatus } from "@/lib/types";
 
 const updateSchema = z.object({
@@ -44,6 +45,7 @@ export async function updateComplaintStatus(input: {
     revalidatePath("/warden/complaints");
     revalidatePath("/warden");
     revalidatePath("/student/complaints");
+    await audit("staff.complaint.status", { targetType: "complaint", targetId: parsed.data.complaintId, hostelId: ctx.hostel.id, meta: { status: parsed.data.status } });
     return ok(undefined, parsed.data.status === "resolved" ? "Complaint marked resolved" : "Complaint updated");
   } catch (e) {
     return fail(errorMessage(e));

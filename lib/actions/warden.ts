@@ -303,6 +303,7 @@ export async function decideLeave(input: { leaveId: string; status: "approved" |
     revalidatePath("/warden/leaves");
     revalidatePath("/warden");
     revalidatePath("/student/leave");
+    await audit("warden.leave.decide", { targetType: "leave", targetId: parsed.data.leaveId, hostelId: ctx.hostel.id, meta: { status: parsed.data.status } });
     return ok(undefined, parsed.data.status === "approved" ? "Leave approved" : "Leave rejected");
   } catch (e) {
     return fail(errorMessage(e));
@@ -347,6 +348,7 @@ export async function logVisitor(input: {
     if (error) return fail(errorMessage(error));
     revalidatePath("/warden/visitors");
     revalidatePath("/warden");
+    await audit("warden.visitor.log", { targetType: "student", targetId: parsed.data.studentId, hostelId: ctx.hostel.id });
     return ok(undefined, "Visitor logged");
   } catch (e) {
     return fail(errorMessage(e));
@@ -371,6 +373,7 @@ export async function checkOutVisitor(input: { visitorId: string }): Promise<Act
     if (!data) return fail("This visitor was already checked out.");
     revalidatePath("/warden/visitors");
     revalidatePath("/warden");
+    await audit("warden.visitor.checkout", { targetType: "visitor", targetId: parsed.data.visitorId, hostelId: ctx.hostel.id });
     return ok(undefined, "Visitor checked out");
   } catch (e) {
     return fail(errorMessage(e));

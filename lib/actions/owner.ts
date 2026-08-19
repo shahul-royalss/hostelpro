@@ -62,6 +62,7 @@ export async function createAnnouncement(input: { title: string; body: string; a
     revalidatePath("/manager");
     revalidatePath("/warden");
     revalidatePath("/student");
+    await audit("owner.announcement.create", { targetType: "announcement", targetId: String((data as { id: string }).id), hostelId: ctx.hostel.id, meta: { audience: parsed.data.audience } });
     return ok({ id: String((data as { id: string }).id) }, "Update sent");
   } catch (e) {
     return fail(errorMessage(e));
@@ -83,6 +84,7 @@ export async function deleteAnnouncement(input: { announcementId: string }): Pro
     if (error) return fail(errorMessage(error));
     revalidatePath("/owner/updates");
     revalidatePath("/owner");
+    await audit("owner.announcement.delete", { targetType: "announcement", targetId: parsed.data.announcementId, hostelId: ctx.hostel.id });
     return ok(undefined, "Update removed");
   } catch (e) {
     return fail(errorMessage(e));
@@ -237,6 +239,7 @@ export async function createTask(input: { title: string; description?: string; d
     revalidatePath("/owner/staff");
     revalidatePath("/manager/tasks");
     revalidatePath("/manager");
+    await audit("owner.task.create", { targetType: "task", targetId: String((data as { id: string }).id), hostelId: ctx.hostel.id });
     return ok({ id: String((data as { id: string }).id) }, "Task added");
   } catch (e) {
     return fail(errorMessage(e));
@@ -264,6 +267,7 @@ export async function updateTask(input: { taskId: string; title?: string; descri
     revalidatePath("/owner/staff");
     revalidatePath("/manager/tasks");
     revalidatePath("/manager");
+    await audit("owner.task.update", { targetType: "task", targetId: parsed.data.taskId, hostelId: ctx.hostel.id, meta: { fields: Object.keys(patch) } });
     return ok(undefined, "Task updated");
   } catch (e) {
     return fail(errorMessage(e));
@@ -285,6 +289,7 @@ export async function deleteTask(input: { taskId: string }): Promise<ActionResul
     revalidatePath("/owner/staff");
     revalidatePath("/manager/tasks");
     revalidatePath("/manager");
+    await audit("owner.task.delete", { targetType: "task", targetId: parsed.data.taskId, hostelId: ctx.hostel.id });
     return ok(undefined, "Task removed");
   } catch (e) {
     return fail(errorMessage(e));
@@ -307,6 +312,7 @@ export async function updateHostelRules(input: { rules: string }): Promise<Actio
     revalidatePath("/owner/staff");
     revalidatePath("/owner");
     revalidatePath("/student");
+    await audit("owner.hostel.rules", { targetType: "hostel", targetId: ctx.hostel.id, hostelId: ctx.hostel.id });
     return ok(undefined, "Hostel rules saved");
   } catch (e) {
     return fail(errorMessage(e));

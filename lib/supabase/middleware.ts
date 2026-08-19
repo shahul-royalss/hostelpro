@@ -60,7 +60,13 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = pathname;
     url.search = search;
-    return finish(NextResponse.redirect(url));
+    const res = finish(NextResponse.redirect(url));
+    // Every redirect here is a function of *who is asking* — the role home, the login
+    // bounce, the MFA step-up. Next defaults these to `public, max-age=0, must-revalidate`,
+    // which authorizes a shared/CDN cache to store a per-user Location. Revalidation makes
+    // that hard to exploit, but there is no reason to store it at all.
+    res.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+    return res;
   };
 
   const supabase = createServerClient(

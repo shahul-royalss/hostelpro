@@ -85,6 +85,7 @@ export async function createExpense(formData: FormData): Promise<ActionResult<{ 
     if (error) return fail(errorMessage(error));
 
     revalidateFinance();
+    await audit("manager.expense.create", { targetType: "expense", targetId: (data as { id: string }).id, hostelId: ctx.hostel.id, meta: { amount: parsed.data.amount, category: parsed.data.category } });
     return ok({ id: (data as { id: string }).id }, warning ?? "Expense saved");
   } catch (e) {
     return fail(errorMessage(e));
@@ -155,6 +156,7 @@ export async function updateExpense(formData: FormData): Promise<ActionResult> {
     }
 
     revalidateFinance();
+    await audit("manager.expense.update", { targetType: "expense", targetId: parsed.data.id, hostelId: ctx.hostel.id, meta: { amount: parsed.data.amount, category: parsed.data.category } });
     return ok(undefined, warning ?? "Expense updated");
   } catch (e) {
     return fail(errorMessage(e));
@@ -230,6 +232,7 @@ export async function createRevenue(input: RevenueInput): Promise<ActionResult<{
       .single();
     if (error) return fail(errorMessage(error));
     revalidateFinance();
+    await audit("manager.revenue.create", { targetType: "revenue", targetId: (data as { id: string }).id, hostelId: ctx.hostel.id, meta: { amount: parsed.data.amount } });
     return ok({ id: (data as { id: string }).id }, "Revenue saved");
   } catch (e) {
     return fail(errorMessage(e));
@@ -254,6 +257,7 @@ export async function updateRevenue(input: RevenueInput & { id: string }): Promi
     if (error) return fail(errorMessage(error));
     if (!count) return fail("That revenue entry no longer exists.");
     revalidateFinance();
+    await audit("manager.revenue.update", { targetType: "revenue", targetId: parsed.data.id, hostelId: ctx.hostel.id, meta: { amount: parsed.data.amount } });
     return ok(undefined, "Revenue updated");
   } catch (e) {
     return fail(errorMessage(e));
@@ -307,6 +311,7 @@ export async function updateTaskStatus(input: TaskStatusInput): Promise<ActionRe
     revalidatePath("/manager/tasks");
     revalidatePath("/owner/staff");
     const label = parsed.data.status === "done" ? "Task marked done" : parsed.data.status === "in_progress" ? "Task started" : "Task moved back to pending";
+    await audit("manager.task.status", { targetType: "task", targetId: parsed.data.taskId, hostelId: ctx.hostel.id, meta: { status: parsed.data.status } });
     return ok(undefined, label);
   } catch (e) {
     return fail(errorMessage(e));
@@ -334,6 +339,7 @@ export async function saveMenu(cells: MenuCellInput[]): Promise<ActionResult> {
     revalidatePath("/manager/menu");
     revalidatePath("/student/menu");
     revalidatePath("/student");
+    await audit("manager.menu.save", { targetType: "menu", targetId: ctx.hostel.id, hostelId: ctx.hostel.id, meta: { cells: rows.length } });
     return ok(undefined, "Menu saved — students will see it in their app");
   } catch (e) {
     return fail(errorMessage(e));
