@@ -212,6 +212,16 @@ const ADMIN_ALLOWED = new Set([
   "lib/rate-limit.ts",
   "lib/audit.ts",
   "lib/actions/warden.ts",
+  // Account-deletion requests. Three uses, each forced by an RLS policy rather than chosen:
+  //   1. inserting notifications  - notifications_insert requires app.is_service_role()
+  //   2. reading audit_log        - audit_log_select allows only super_admin / hostel owner, so a
+  //                                 resident cannot see even their own request; the query is
+  //                                 pinned to the caller's own actor_user_id
+  //   3. resolving the recipients - users_select stops a student enumerating staff accounts
+  // A fourth use (reading the caller's own students row) was removed instead of allowlisted:
+  // students_select already permits user_id = auth.uid(). Adding a file here is a review
+  // decision, not a formality - it exempts that file from the RLS-bypass check permanently.
+  "lib/actions/account.ts",
   "db/seed.ts",
 ]);
 const adminUsers = SRC.filter((f) => /createAdminClient|supabase\/admin/.test(fs.readFileSync(f, "utf8")));

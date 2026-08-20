@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { assertHostelContext, errorMessage, requireUser, type SessionUser } from "@/lib/permissions";
 import { rateLimit } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { fail, ok, type ActionResult } from "@/lib/types";
 
 /**
@@ -218,7 +219,11 @@ async function latestRequestAt(userId: string): Promise<string | null> {
 async function myStudentId(user: SessionUser): Promise<string | null> {
   if (user.role !== "student") return null;
   try {
-    const { data } = await createAdminClient()
+    // RLS client, deliberately: students_select allows `user_id = auth.uid()`, so a resident can
+    // read their own row under their own session. Reaching for the service role here would be
+    // privilege this function does not need.
+    const supabase = await createClient();
+    const { data } = await supabase
       .from("students")
       .select("id")
       .eq("user_id", user.id)
