@@ -25,6 +25,10 @@ export type AuditAction =
   | "manager.revenue.create" | "manager.revenue.update" | "manager.revenue.delete"
   | "manager.task.status" | "manager.menu.save"
   | "staff.complaint.status"
+  // Google Play account-deletion policy. The request IS the record: nobody in the app holds a
+  // DELETE privilege on students/users (db/rls-policies.sql), so fulfilment is the manual
+  // runbook in docs/account-deletion.md and this row is what proves the ask was made.
+  | "account.deletion.requested"
   | "authz.denied";
 
 export interface AuditOptions {

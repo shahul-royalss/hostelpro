@@ -3,7 +3,17 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ROLE_HOME, roleForPath, type UserRole } from "@/lib/roles";
 import { applySecurityHeaders, buildCsp, generateNonce } from "@/lib/security-headers";
 
-const PUBLIC_PATHS = ["/login", "/manifest.webmanifest", "/icons", "/api/health", "/robots.txt"];
+// Google Play requires the privacy policy and the account-deletion route to be reachable by a
+// reviewer who is NOT signed in — a policy URL behind a login is a rejection. /legal covers the
+// policy, terms and the deletion-request page; they must stay signed-out-accessible.
+const PUBLIC_PATHS = [
+  "/login",
+  "/legal",
+  "/manifest.webmanifest",
+  "/icons",
+  "/api/health",
+  "/robots.txt",
+];
 /** Paths a signed-in user may reach without completing MFA / password change */
 const AUTH_STEP_PATHS = ["/mfa", "/change-password", "/api/health"];
 

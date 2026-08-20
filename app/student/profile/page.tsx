@@ -7,16 +7,21 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { UserAvatar } from "@/components/ui/avatar";
 import { DetailRow, DetailSection } from "@/components/student/detail-rows";
 import { LogoutButton } from "@/components/student/logout-button";
+import { DeleteAccountCard } from "@/components/account/delete-account-card";
 import { requireHostelContext } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { signedUrl } from "@/lib/storage";
 import { getMyStudent } from "@/lib/queries/student";
+import { getMyDeletionRequest } from "@/lib/actions/account";
 import { formatDate, formatINR } from "@/lib/utils";
 
 export default async function StudentProfilePage() {
   const { user, ctx } = await requireHostelContext("student");
   const supabase = await createClient();
-  const student = await getMyStudent(supabase, user.id);
+  // Play policy requires the deletion control to live in the app as well as on a public URL
+  // (/legal/account-deletion). A student's own record may be missing, so it is rendered in
+  // both branches below — an account with no student row still needs the path.
+  const [student, deletionRequest] = await Promise.all([getMyStudent(supabase, user.id), getMyDeletionRequest()]);
 
   const [photoSrc, idProofHref] = student
     ? await Promise.all([signedUrl("student-docs", student.photo_url, ctx.hostel.id), signedUrl("student-docs", student.id_proof_url, ctx.hostel.id)])
@@ -25,12 +30,13 @@ export default async function StudentProfilePage() {
   return (
     <MobilePage role="student" title="My details">
       {!student ? (
-        <GlassCard>
-          <EmptyState icon={UserX} title="No student record linked" description="Ask your warden to check your registration." />
-          <div className="mt-2">
-            <LogoutButton />
-          </div>
-        </GlassCard>
+        <div className="flex flex-col gap-4">
+          <GlassCard>
+            <EmptyState icon={UserX} title="No student record linked" description="Ask your warden to check your registration." />
+          </GlassCard>
+          <DeleteAccountCard requestedAt={deletionRequest?.requestedAt ?? null} />
+          <LogoutButton />
+        </div>
       ) : (
         <div className="flex flex-col gap-4">
           {/* Header card */}
@@ -112,6 +118,8 @@ export default async function StudentProfilePage() {
             <span className="flex-1 text-sm font-semibold text-navy">Change password</span>
             <ChevronRight className="h-5 w-5 text-muted" />
           </Link>
+
+          <DeleteAccountCard requestedAt={deletionRequest?.requestedAt ?? null} />
 
           <LogoutButton />
         </div>

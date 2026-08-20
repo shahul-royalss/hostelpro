@@ -33,9 +33,32 @@ export function AuthCard({
         </div>
         <div className="mt-6 text-center">
           {footer ?? (
-            <p className="text-caption uppercase tracking-[0.05em] text-muted/80">
-              © {new Date().getFullYear()} {appName}. Accounts are created by your administrator.
-            </p>
+            <div className="space-y-2">
+              <p className="text-caption uppercase tracking-[0.05em] text-muted/80">
+                © {new Date().getFullYear()} {appName}. Accounts are created by your administrator.
+              </p>
+              {/*
+                Google Play expects the privacy policy to be reachable from inside the app, not
+                only from the store listing. The sign-in screen is the one page every user and
+                every reviewer sees, and it is reachable without a session.
+              */}
+              <p className="text-caption text-muted/80">
+                <a href="/legal/privacy" className="underline underline-offset-2 hover:text-navy">
+                  Privacy
+                </a>
+                <span aria-hidden="true"> · </span>
+                <a href="/legal/terms" className="underline underline-offset-2 hover:text-navy">
+                  Terms
+                </a>
+                <span aria-hidden="true"> · </span>
+                <a
+                  href="/legal/account-deletion"
+                  className="underline underline-offset-2 hover:text-navy"
+                >
+                  Delete my data
+                </a>
+              </p>
+            </div>
           )}
         </div>
       </main>
