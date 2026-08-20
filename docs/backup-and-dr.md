@@ -291,12 +291,71 @@ What was actually run, against production project `nimxvgzscbanhtvgnjll`:
 | Restore dry run against production | **PASS** — all 20 tables reported backup count == live count |
 | Restore **write path**, end to end against a protocol-level PostgREST/GoTrue stand-in | **PASS** — 611 rows POSTed, parents-first order, `users` inserted without `hostel_id` and `students` without `bed_id`, 24 + 15 rows patched in pass 2, deletes issued children-first with filters, all upserts idempotent (`resolution=merge-duplicates`), no batch over 500 |
 
-**The honest gap:** the organisation has exactly **one** Supabase project, and creating a
-scratch one costs money, so no restore has been executed against a real Postgres. The stand-in
-proves the client logic — ordering, cycle-breaking, batching, idempotency — but **not** that
-the schema's triggers, RLS and constraints accept the restored rows. Steps 1–12 above close
-that gap and should be run before this is treated as proven. Until then, treat the restore
-path as *verified in logic, unverified in production semantics*.
+### Drill run 2026-08-20 — schema rebuild and production semantics, on a real Postgres
+
+The earlier version of this section said a scratch project "costs money". **That was wrong.**
+Supabase allows **two active free projects** per organisation, and `get_cost` for a new project
+in this org returns **$0/month**. A staging project was created (`hostelpro-staging`, ref
+`gtodjqlhdtvpnppulwgj`, `ap-southeast-1`, same region as production) and the drill was run.
+
+**Rebuild from the repo alone — PASS, exact parity.** `db/schema.sql` and `db/rls-policies.sql`
+were applied to the empty project and produced, byte-for-byte in count, what production has:
+
+| | staging | production |
+|---|---|---|
+| public tables | 20 | 20 |
+| RLS policies | 64 | 64 |
+| functions (`public` + `app`) | 61 | 61 |
+| triggers | 45 | 45 |
+| `pg_cron` jobs | 1 | 1 |
+| storage buckets | 3 | 3 |
+| tables with RLS enabled | 20 | 20 |
+
+This is the half of DR the backup file cannot give you, and it is now proven rather than assumed.
+
+**Production semantics — PASS.** A restore-shaped object graph (explicit ids, parents first,
+both FK cycles patched in a second pass) was inserted into the rebuilt schema inside a
+transaction that then rolled itself back. Every trigger fired correctly on real Postgres:
+
+| Behaviour | Result |
+|---|---|
+| `rooms_capacity_sync` auto-created beds | 3 beds |
+| `students_bed_sync` set `beds.student_id` | true |
+| `students_bed_guard` derived `students.room_id` | true |
+| `fee_status_compute` derived fee status | `paid` |
+| FK cycle 1 — `users.hostel_id` patched in pass 2 | true |
+| FK cycle 2 — `students.bed_id` accepted | true |
+| `fee_payments_after_change` notification | 1 row |
+| Rollback left staging clean | 0 rows in every table |
+
+That closes the "verified in logic, unverified in production semantics" caveat.
+
+**What the drill found.** Run as an ordinary caller, the FK-cycle patch **fails**:
+
+```
+ERROR 42501: You cannot move an account to another hostel.
+CONTEXT: app.users_update_guard() ... update public.users set hostel_id = ...
+```
+
+`app.users_update_guard` deliberately forbids repointing `users.hostel_id` — it is an
+account-takeover primitive (SECURITY.md §3.4). Its only bypass is `app.is_super_admin()`, which
+includes `app.is_service_role()`. So the restore's second pass works **only** when run with the
+service-role key. It is, and the same run passed once the caller was the service role. But if
+anyone ever runs a restore with a user JWT, it will fail halfway through with an error that
+reads like a permissions bug rather than "you used the wrong key". Use the service-role key.
+
+**Still not exercised:** `restore-db.mjs` writing to a real Postgres end to end. The Supabase
+Management API exposes only publishable keys, so the staging **service-role** key has to be
+copied from the dashboard by a human. To finish this last step:
+
+1. Supabase dashboard → `hostelpro-staging` → Settings → API → copy the `service_role` key.
+2. Put it in `.env.local` as `RESTORE_SUPABASE_SERVICE_ROLE_KEY` (never in a tracked file —
+   `scripts/security-scan.mjs` compares tracked files against real `.env` values and will fail).
+3. `RESTORE_SUPABASE_URL=https://gtodjqlhdtvpnppulwgj.supabase.co node scripts/restore-db.mjs       backups/<file>.hpb --execute --confirm-overwrite gtodjqlhdtvpnppulwgj --recreate-auth-users`
+4. Then steps 3–12 of the drill above.
+
+**Delete the staging project, or empty it, once the drill is done** — a completed restore leaves
+it holding a full copy of production personal data.
 
 ## Failure modes to watch
 
