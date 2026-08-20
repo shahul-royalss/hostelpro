@@ -34,6 +34,13 @@ const eslintConfig = [
       "build/**",
       "next-env.d.ts",
       "scripts/_qa-*.mjs",
+      // Vendored Claude Code skill content, not application code. It is CommonJS and trips
+      // no-require-imports, which made `npm run lint` exit 1 on a clean tree — so the PR
+      // template's "lint is clean locally" gate could not honestly be ticked by anyone, and
+      // a gate nobody can pass is a gate everybody learns to ignore.
+      "skills/**",
+      // Android/Gradle build output.
+      "android/**",
     ],
   },
 ];

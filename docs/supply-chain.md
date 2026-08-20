@@ -108,7 +108,7 @@ Being precise about this is the difference between a gate and a green badge.
 
 | Secret | Referenced by | Exists in repo settings? |
 |---|---|---|
-| `SUPABASE_URL` | `backup.yml` | **No — must be created before the first scheduled run** |
+| `NEXT_PUBLIC_SUPABASE_URL` | `backup.yml` (mapped to the `SUPABASE_URL` env var the script reads) | Yes — created |
 | `SUPABASE_SERVICE_ROLE_KEY` | `backup.yml` | **No — must be created.** This is the full-bypass key: it defeats every RLS policy in `db/schema.sql`. Treat it as the highest-value credential in the project. |
 | `BACKUP_ENCRYPTION_KEY` | `backup.yml` | **No — must be generated and created.** Store the only other copy offline; losing it makes every backup unreadable. |
 | `GITHUB_TOKEN` | implicit, all workflows | Automatic. Scoped to `contents: read` in `ci.yml` (§7). |
@@ -134,10 +134,13 @@ A tag is a mutable pointer. Whoever controls the action's repository — or anyo
 
 Pinning does not mean going stale: the `# v7.0.1` comment is what Dependabot reads, and the `github-actions` entry in `dependabot.yml` opens a weekly PR that moves the SHA and the comment together.
 
-**Two of the three workflows are not yet pinned**, and both are known follow-ups owned outside this change:
+**All three workflows are pinned to full commit SHAs.** The three action SHAs were resolved
+from the GitHub API and each verified to be the tagged commit of its release before being
+used, rather than copied on trust:
 
-- `security.yml` uses `actions/checkout@v4` and `actions/setup-node@v4`.
-- `backup.yml` uses `actions/checkout@v4`, `actions/setup-node@v4` and `actions/upload-artifact@v4`.
+- `actions/checkout` v7.0.1 → `3d3c42e5aac5ba805825da76410c181273ba90b1`
+- `actions/setup-node` v7.0.0 → `820762786026740c76f36085b0efc47a31fe5020`
+- `actions/upload-artifact` v7.0.1 → `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a`
 
 **Pin `backup.yml` first.** It is the only workflow holding `SUPABASE_SERVICE_ROLE_KEY` (§5), so a repointed tag there is not a broken build — it is a full-bypass database credential handed to whoever repointed it, on a schedule, with no diff in this repo. The SHAs in the table below are the ones to use.
 

@@ -14,7 +14,7 @@ personal data), [`../SECURITY.md`](../SECURITY.md), [`../THREAT-MODEL.md`](../TH
 
 | Source | Contains | Read it at | Controlled by | Retention |
 |---|---|---|---|---|
-| `public.audit_log` | Authentication events and every privileged **write**, with actor, actor role, target, tenant, IP, user-agent, and a small `meta` object | Supabase SQL editor — **no UI exists** (`SECURITY.md` §5) | Us | §4 |
+| `public.audit_log` | Authentication events and every privileged **write**, with actor, actor role, target, tenant, IP, user-agent, and a small `meta` object | `/super-admin/security` (Alerts + Audit trail tabs), or the Supabase SQL editor | Us | §4 |
 | `public.security_alerts` | Suspicious-pattern alerts derived from audit activity | Supabase SQL editor | Us | §4 |
 | `app.rate_limits` | Live fixed-window counters, keyed by SHA-256 hash. Not a log — a control whose state is briefly observable | Supabase SQL editor | Us | Rows self-expire; stale windows GC'd opportunistically (`db/schema.sql`, `rate_limit()`) |
 | Supabase **Auth** logs | Every sign-in attempt, token refresh, MFA event, and Admin API call — including ones the app never sees, e.g. dashboard actions | Supabase Dashboard → Logs | Supabase | Plan-dependent — **look this up and record it here** |
@@ -201,9 +201,9 @@ retention job is a privacy control and not merely housekeeping.
 
 | Data | Retention | Mechanism | Why |
 |---|---|---|---|
-| `audit_log` rows | **400 days** | Scheduled delete via `pg_cron` in the Supabase project | Long enough to investigate an incident discovered late and to cover an annual review cycle; short enough that the trail is not an indefinite archive of residents' movements. Deletion is by `at`, oldest first |
+| `audit_log` rows | **365 days** | Scheduled delete via `pg_cron` in the Supabase project | Long enough to investigate an incident discovered late and to cover an annual review cycle; short enough that the trail is not an indefinite archive of residents' movements. Deletion is by `at`, oldest first |
 | `audit_log` `ip` / `user_agent` | **90 days**, then nulled in place while the row survives | Same scheduled job | This is the data-minimisation half. The forensic value of an IP decays within weeks; the value of "who changed this fee, and when" does not. Nulling the two identifying columns keeps the accountability record and drops the tracking record |
-| `security_alerts` | Follows `audit_log` | Same job | An alert without the underlying events is not evidence |
+| `security_alerts` | **Acknowledged** alerts: 365 days. **Unacknowledged alerts are never deleted** | Same job | An alert without the underlying events is not evidence |
 | `app.rate_limits` | Hours | Opportunistic GC inside `rate_limit()` (`db/schema.sql`) deletes windows older than 1 day | Counters, not history |
 | Supabase / Vercel platform logs | Vendor default for the plan | Vendor | Not ours to set — see the note in §1 |
 
@@ -215,13 +215,14 @@ select jobid, schedule, command, active from cron.job;
 select jobid, status, start_time, end_time from cron.job_run_details order by start_time desc limit 20;
 ```
 
-If `cron.job` returns nothing, the retention policy is aspirational and `audit_log` is growing
+The job is scheduled as part of `db/schema.sql`. If `cron.job` returns nothing the schema was
+applied without it, the retention policy is not running, and `audit_log` is growing
 without bound — which is the state `SECURITY.md` §5 records as an open Low
 ("No retention policy for `audit_log` IP/user-agent").
 
 **Before you shorten these numbers, read §6.4 of [`incident-response.md`](./incident-response.md).**
 The CERT-In directions require covered entities to maintain ICT system logs for a rolling **180
-days** within Indian jurisdiction. 400/90 days satisfies the *duration* comfortably; the
+days** within Indian jurisdiction. 365/90 days satisfies the *duration* comfortably; the
 *jurisdiction* half depends on where the Supabase project actually is. Check with:
 
 ```bash
@@ -253,7 +254,7 @@ owner and one query.
 
 ```sql
 -- Anything the alerting raised
-select * from public.security_alerts where created_at > now() - interval '1 day' order by created_at desc;
+select * from public.security_alerts where at > now() - interval '1 day' order by at desc;
 
 -- Authorization probing (a normal user never generates these)
 select at, actor_user_id, actor_role, hostel_id, ip, meta
@@ -280,7 +281,7 @@ order by at;
 
 ### 5.3 Per-tenant, for an owner
 
-An owner can run this only via SQL today — there is no UI (`SECURITY.md` §5, open Low). Until there
+An owner sees their own hostel's alerts at `/super-admin/security` (RLS scopes the view); the SQL below is the same data for anyone who prefers the editor. Until there
 is, the platform operator runs it and sends the result:
 
 ```sql
@@ -294,6 +295,17 @@ order by at desc;
 
 ## 6. Alert catalogue
 
+> **Which of these actually fire on their own.** The detector in `app.detect_suspicious_activity()`
+> (`db/schema.sql`) implements **five** alert kinds, not eleven:
+> `auth.bruteforce` (A1), `auth.rate_limited` (A3), `authz.probing` (A4),
+> `auth.mfa.bruteforce`, and `account.password_reset_by_admin` (the reset half of A7).
+> Everything marked `no` in the **Auto** column is a *review* item — the data is in
+> `audit_log` and the query is written here, but nothing raises it for you. Treating this
+> catalogue as eleven live alerts is the mistake it is designed to prevent: adding a row to a
+> table is not the same as shipping a detector. A4's threshold also differs from the text
+> below: the shipped rule is ≥5 in 10 minutes, not ≥3.
+
+
 Each alert names what fires it, why it is worth a human's attention, who responds, and what they do.
 An alert nobody owns is noise, and noise trains people to ignore the next real one.
 
@@ -301,19 +313,19 @@ The sink is `public.security_alerts`; delivery today is **pull, not push** — t
 is what surfaces them. There is no email or SMS channel in this build (`THREAT-MODEL.md` §1), so an
 alert is only as timely as the review cadence. **If you add a push channel, add it here.**
 
-| # | Alert | Fires on | Why it matters | Owner | Response |
-|---|---|---|---|---|---|
-| A1 | **Credential attack on one identifier** | ≥5 `auth.login.failed` for the same `target_id` within 15 min | The per-identifier limiter caps at 8 per 15 min (`LIMITS.loginPerIdentifier`), so 5 means someone is close to the ceiling on one account | Platform operator | Identify the account by hashing the suspected identifier (§3.2). If any `auth.login.success` follows in the window, treat as SEV3 and freeze the account ([`incident-response.md`](./incident-response.md) §4.1) |
-| A2 | **Distributed credential attack** | ≥20 `auth.login.failed` across ≥5 distinct `target_id` within 15 min | Credential stuffing against the tenant, rather than one account | Platform operator | Check for successes in the same window. Consider forcing MFA for staff roles (§`MFA_REQUIRED_ROLES`) |
-| A3 | **Rate limiter engaged on login** | Any `auth.login.rate_limited` | The IP limiter (20/5 min) is generous; tripping it is abnormal for a hostel-sized user base | Platform operator | Correlate the IP against A1/A4. Note that per-IP keying is only as good as `getClientIp()` — platform headers first, otherwise the **last** XFF hop (`lib/rate-limit.ts`), so `TRUSTED_PROXY_HOPS` must match the real topology |
-| A4 | **Role probing** | ≥3 `authz.denied` from one `actor_user_id` within 10 min | A legitimate user never hits a role gate (§2.2). This is the clearest signal of an account being explored rather than used | Platform operator | Pull that actor's full history. If `surface = "action"` in `meta`, they attempted to *execute*, not just navigate — escalate to SEV3 and freeze |
-| A5 | **MFA turned off** | Any `auth.mfa.unenrolled` | A classic post-takeover step, and it silently weakens a role you may have chosen to require MFA for | Platform operator | Confirm with the account holder out of band. If not them: SEV2, freeze, reset, re-enrol |
-| A6 | **Reauthentication failures** | ≥3 `auth.password.reauth_failed` for one user in 1 hour | A voluntary password change requires the current password (`SECURITY.md` §3.3 item 8). Repeated failures mean someone holds a session but not the password — i.e. a stolen token, not a stolen credential | Platform operator | SEV3. Freeze the account; the token dies with it (§4.1 of the IR doc) |
-| A7 | **Privileged account change** | Any `owner.staff.create`, `owner.staff.password_reset`, `owner.staff.status`, `sa.owner.password_reset` | These mint or reset credentials. Every one should correspond to something a human knows about | Platform operator + affected hostel owner | Reconcile against the weekly review (§5.2). An unexplained one is SEV2 |
-| A8 | **Tenant status changed** | Any `sa.hostel.status` or `sa.hostel.structure` | Only the super admin can do this; an unexpected occurrence means the SA account is compromised, which is SEV1 by definition | Platform operator | Verify with the SA holder out of band before anything else |
-| A9 | **Off-hours super-admin activity** | Any `sa.*` outside declared working hours | Small blast radius by count, largest by consequence | Platform operator | Same as A8 |
-| A10 | **Privileged login from an unfamiliar IP** | `auth.login.success` where `actor_role in ('super_admin','owner')` and the `(actor_user_id, ip)` pair is unseen in the previous 30 days | Cheap, high-yield takeover signal | Platform operator | Confirm with the account holder. Expect false positives from mobile networks — tune on `/24` or ASN if it gets noisy, and record the tuning here |
-| A11 | **Audit path silent** | Zero `auth.login.success` rows in a 24-hour period during normal operation | `audit()` swallows its own failures by design (§2). This is the only way an audit outage becomes visible | Platform operator | Check Vercel runtime logs for `rate limiter unavailable`, and whether `SUPABASE_SERVICE_ROLE_KEY` is valid — the same credential backs both paths |
+| # | Auto | Alert | Fires on | Why it matters | Owner | Response |
+|---|---|---|---|---|---|---|
+| A1 | **yes** | **Credential attack on one identifier** | ≥5 `auth.login.failed` for the same `target_id` within 15 min | The per-identifier limiter caps at 8 per 15 min (`LIMITS.loginPerIdentifier`), so 5 means someone is close to the ceiling on one account | Platform operator | Identify the account by hashing the suspected identifier (§3.2). If any `auth.login.success` follows in the window, treat as SEV3 and freeze the account ([`incident-response.md`](./incident-response.md) §4.1) |
+| A2 | no | **Distributed credential attack** | ≥20 `auth.login.failed` across ≥5 distinct `target_id` within 15 min | Credential stuffing against the tenant, rather than one account | Platform operator | Check for successes in the same window. Consider forcing MFA for staff roles (§`MFA_REQUIRED_ROLES`) |
+| A3 | **yes** | **Rate limiter engaged on login** | Any `auth.login.rate_limited` | The IP limiter (20/5 min) is generous; tripping it is abnormal for a hostel-sized user base | Platform operator | Correlate the IP against A1/A4. Note that per-IP keying is only as good as `getClientIp()` — platform headers first, otherwise the **last** XFF hop (`lib/rate-limit.ts`), so `TRUSTED_PROXY_HOPS` must match the real topology |
+| A4 | **yes** | **Role probing** | ≥3 `authz.denied` from one `actor_user_id` within 10 min | A legitimate user never hits a role gate (§2.2). This is the clearest signal of an account being explored rather than used | Platform operator | Pull that actor's full history. If `surface = "action"` in `meta`, they attempted to *execute*, not just navigate — escalate to SEV3 and freeze |
+| A5 | no | **MFA turned off** | Any `auth.mfa.unenrolled` | A classic post-takeover step, and it silently weakens a role you may have chosen to require MFA for | Platform operator | Confirm with the account holder out of band. If not them: SEV2, freeze, reset, re-enrol |
+| A6 | no | **Reauthentication failures** | ≥3 `auth.password.reauth_failed` for one user in 1 hour | A voluntary password change requires the current password (`SECURITY.md` §3.3 item 8). Repeated failures mean someone holds a session but not the password — i.e. a stolen token, not a stolen credential | Platform operator | SEV3. Freeze the account; the token dies with it (§4.1 of the IR doc) |
+| A7 | partial | **Privileged account change** | Any `owner.staff.create`, `owner.staff.password_reset`, `owner.staff.status`, `sa.owner.password_reset` | These mint or reset credentials. Every one should correspond to something a human knows about | Platform operator + affected hostel owner | Reconcile against the weekly review (§5.2). An unexplained one is SEV2 |
+| A8 | no | **Tenant status changed** | Any `sa.hostel.status` or `sa.hostel.structure` | Only the super admin can do this; an unexpected occurrence means the SA account is compromised, which is SEV1 by definition | Platform operator | Verify with the SA holder out of band before anything else |
+| A9 | no | **Off-hours super-admin activity** | Any `sa.*` outside declared working hours | Small blast radius by count, largest by consequence | Platform operator | Same as A8 |
+| A10 | no | **Privileged login from an unfamiliar IP** | `auth.login.success` where `actor_role in ('super_admin','owner')` and the `(actor_user_id, ip)` pair is unseen in the previous 30 days | Cheap, high-yield takeover signal | Platform operator | Confirm with the account holder. Expect false positives from mobile networks — tune on `/24` or ASN if it gets noisy, and record the tuning here |
+| A11 | no | **Audit path silent** | Zero `auth.login.success` rows in a 24-hour period during normal operation | `audit()` swallows its own failures by design (§2). This is the only way an audit outage becomes visible | Platform operator | Check Vercel runtime logs for `rate limiter unavailable`, and whether `SUPABASE_SERVICE_ROLE_KEY` is valid — the same credential backs both paths |
 
 **Deliberately not alertable today, and you should know why:**
 

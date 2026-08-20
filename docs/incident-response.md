@@ -96,7 +96,7 @@ You are notified by one of these. Know their latency before the incident, not du
 
 | Source | What it shows | Where | Latency |
 |---|---|---|---|
-| `public.audit_log` | Auth events + every privileged write, with actor, role, tenant, IP, user-agent | Supabase SQL editor (no UI exists — `SECURITY.md` §5) | Real time |
+| `public.audit_log` | Auth events + every privileged write, with actor, role, tenant, IP, user-agent | `/super-admin/security` → Audit trail, or the Supabase SQL editor | Real time |
 | `public.security_alerts` | Suspicious-pattern alerts raised from audit activity | Supabase SQL editor | Near real time — **see [`logging-and-monitoring.md`](./logging-and-monitoring.md) §6 for current status** |
 | Supabase **Auth logs** | Sign-in attempts, token refreshes, admin API calls, MFA events — including ones the app never sees | Supabase Dashboard → Logs | Minutes |
 | Supabase **Postgres logs** | Errors, RLS denials, statement failures | Supabase Dashboard → Logs | Minutes |

@@ -70,10 +70,11 @@ tasks          users      visitors
 captures everything and the *job* fails afterwards — so a schema change is a loud reminder
 to update `RESTORE_ORDER` and the FK map, never a silent data loss.
 
-> **Known drift, already true today:** `security_alerts` exists in production but is **not
-> in `db/schema.sql`**. It is backed up, but rebuilding the schema from the repo alone would
-> not recreate it, and the restore of that table would fail against a fresh project. Either
-> add it to `db/schema.sql` or drop it.
+> **Why discovery rather than a hardcoded list:** the table set is read from the live
+> OpenAPI schema on every run, and the reviewed `EXPECTED_TABLES` manifest is only a drift
+> *check*. A table added in a migration is therefore backed up the same night, and the drift
+> warning fires **after** the file is written — so a schema change never costs a night's data.
+> There is no drift today: `db/schema.sql` and production both define the same 20 tables.
 
 Also captured: the **auth user directory** (`auth.users` ids, emails, phones, metadata, and
 which MFA factors existed). This is the directory, not the credentials — see below.
@@ -84,7 +85,7 @@ which MFA factors existed). This is the directory, not the credentials — see b
 |---|---|---|
 | **`auth.users` credentials** — password hashes, MFA factor secrets, refresh tokens | The Admin API does not expose them, by design | The backup keeps each account's **original UUID**, which matters because `public.users.id` is an FK to `auth.users(id)`. `restore-db.mjs --recreate-auth-users` recreates the accounts under those UUIDs with **no password**; every user then does a "forgot password" flow, and MFA users re-enrol. Sessions do not survive. |
 | **Storage objects** — the `student-docs`, `receipts` and `complaint-photos` private buckets | PostgREST does not expose Storage; objects would also dwarf the 28 KB dump | **Not covered. There is no automated recovery for uploaded files.** The DB rows keep their paths (`students.photo_url`, `students.id_proof_url`, `complaints.photo_url`, `expenses.receipt_url`), so after a restore those columns point at objects that may not exist and signed-URL generation will 404. Today exactly **1 row** across production references an object (one ID proof), so the present exposure is small — but it grows with usage. If uploads become material, this is the next gap to close. |
-| **Schema, RLS policies, functions, triggers, roles** | A logical row dump carries data, not DDL | `db/schema.sql` (59 functions, 24 triggers) and `db/rls-policies.sql` (63 policies) are in the repo and rebuild the structure. They are version-controlled, which is a *better* guarantee than a nightly dump — with the caveat about `security_alerts` above. |
+| **Schema, RLS policies, functions, triggers, roles** | A logical row dump carries data, not DDL | `db/schema.sql` (59 functions, 24 triggers) and `db/rls-policies.sql` (63 policies) are in the repo and rebuild the structure. They are version-controlled, which is a *better* guarantee than a nightly dump, because a reviewer can read the diff. Verified in sync with production: both define the same 20 tables. |
 | **Realtime / queued jobs / rate-limit state** (`app.rate_limits`) | Ephemeral by nature | Rebuilds itself. Losing it means rate-limit counters reset, which is acceptable. |
 | **Identity sequence positions** | `setval` is DDL-adjacent; PostgREST cannot run it | `restore-db.mjs` prints the exact `setval` statements for `audit_log` and `security_alerts` at the end of a restore. **Skipping them means the next insert collides with a restored id.** |
 
@@ -186,8 +187,11 @@ Only for a **new** project — skip if you are restoring in place:
 1. Run `db/schema.sql` in the Supabase SQL editor.
 2. Run `db/rls-policies.sql`.
 3. Create the three private Storage buckets: `student-docs`, `receipts`, `complaint-photos`.
-4. Remember `security_alerts` is not in `db/schema.sql` — create it, or the restore of that
-   table fails.
+4. Confirm the rebuild produced all 20 tables before restoring
+   (`select count(*) from information_schema.tables where table_schema = 'public'`).
+   `db/schema.sql` creates every one of them, including `security_alerts`; a short count
+   means the script did not run to completion, and restoring into a partial schema will
+   fail on the first missing table.
 
 ### 3. Point the restore at the target
 
@@ -248,8 +252,9 @@ A backup nobody has restored is a hypothesis. Drill quarterly, and after any sch
 **Procedure** (~30 minutes, costs one scratch project):
 
 1. Create a second Supabase project. Do not reuse the production one.
-2. Run `db/schema.sql`, then `db/rls-policies.sql`, then create `security_alerts` and the
-   three Storage buckets.
+2. Run `db/schema.sql`, then `db/rls-policies.sql`, then create the three Storage buckets
+   (`student-docs`, `receipts`, `complaint-photos`). The SQL files create every table;
+   only the buckets need doing by hand.
 3. Download the most recent nightly artifact and `verify-backup.mjs` it.
 4. Point `RESTORE_SUPABASE_URL` / `RESTORE_SUPABASE_SERVICE_ROLE_KEY` at the scratch project.
 5. Dry run. Confirm every table shows `in target: 0`.
@@ -299,8 +304,9 @@ path as *verified in logic, unverified in production semantics*.
   prevent. If it is ever removed or its assertions weakened, the backup becomes decorative.
 - **Every core table empty** — the dump ran with a key that could not read (an anon key
   instead of service-role). Verification fails on this explicitly.
-- **`security_alerts` still missing from `db/schema.sql`** — an unfixed hole in the
-  schema-rebuild half of the plan.
+- **A table in the dump that the rebuilt schema does not have** — means `db/schema.sql`
+  drifted behind a migration applied straight to production. The nightly drift check is what
+  catches this; treat that warning as a real defect, not noise.
 - **`BACKUP_ENCRYPTION_KEY` known only to GitHub** — see the key section. One lost account
   and 90 days of backups are unreadable.
 - **A new table added without updating the manifest** — the data *is* captured, but

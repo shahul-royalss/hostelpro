@@ -50,9 +50,6 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
  * Verified against the live schema of project nimxvgzscbanhtvgnjll on 2026-08-20
  * via the PostgREST OpenAPI document (20 tables).
  *
- * NOTE: `security_alerts` is live but is NOT in db/schema.sql. It is backed up
- * here; see docs/backup-and-dr.md — rebuilding the schema from the repo alone
- * would not recreate it.
  */
 export const EXPECTED_TABLES = [
   "announcements",

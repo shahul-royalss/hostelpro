@@ -108,8 +108,11 @@ Sensitivity: **H** = identity-theft or safety risk if exposed; **M** = privacy o
 | `notifications` | `user_id`, `title`, `body` — bodies quote task and complaint text, so they carry copies of the above | Everyone | L | 90 days |
 | `hostels` | `address`, `owner_user_id`, `rules` | Owner / business | L | Life of the tenant |
 | `subscriptions` | `owner_user_id`, `amount`, `notes` | Owner | M | 8 years — commercial record (§5) |
-| `audit_log` | `actor_user_id`, `target_id`, **`ip`**, **`user_agent`**, `meta` | Everyone who signs in | M | 400 days; `ip`/`user_agent` nulled at 90 days ([`logging-and-monitoring.md`](./logging-and-monitoring.md) §4) |
+| `audit_log` | `actor_user_id`, `target_id`, **`ip`**, **`user_agent`**, `meta` | Everyone who signs in | M | 365 days; `ip`/`user_agent` nulled at 90 days ([`logging-and-monitoring.md`](./logging-and-monitoring.md) §4) |
 | `app.rate_limits` | SHA-256 hashed keys only — never a clear IP or identifier (`lib/rate-limit.ts`) | Pseudonymous | L | Hours |
+| `security_alerts` | `actor_user_id`, **`ip`**, `summary`, `details` — a detection references the person it fired on | Everyone who signs in | M | Acknowledged: 365 days. **Unacknowledged: retained indefinitely** — an open alert is an open investigation |
+| `floors` | None — structural only (`hostel_id`, floor number) | n/a | — | Life of the tenant |
+| `rooms` | None directly, but `room_id` links a resident to a physical location via `beds`/`students` | n/a (indirect) | L | Life of the tenant |
 
 ### 4.2 Supabase Auth (`auth.users`, not an application table)
 
@@ -190,7 +193,7 @@ own statutory duties override them upward, never downward.
 | `fee_payments`, `expenses`, `revenues`, `subscriptions` | **Per the tenant's statutory accounting duty; default 8 years** | Indian tax and company-law record-keeping periods differ by entity type and are longer than any privacy-driven period. **Confirm the applicable period with the tenant's accountant and record it per tenant** — do not delete financial records on a privacy schedule |
 | `notifications` | 90 days | Transient UI state that quotes other records |
 | `announcements`, `tasks` | 24 months | Operational history |
-| `audit_log` | 400 days; `ip`/`user_agent` nulled at 90 days | [`logging-and-monitoring.md`](./logging-and-monitoring.md) §4 — and note the CERT-In 180-day floor discussed there |
+| `audit_log` | 365 days; `ip`/`user_agent` nulled at 90 days | [`logging-and-monitoring.md`](./logging-and-monitoring.md) §4 — and note the CERT-In 180-day floor discussed there |
 
 **None of these are automated today** except the `audit_log` job (see its status note). Vacated
 resident records accumulate until someone runs §6. That is a real, current gap: write the quarterly

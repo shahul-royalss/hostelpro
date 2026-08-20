@@ -103,7 +103,9 @@ async function main() {
   const targetRef = projectRef(url);
 
   /* ── open the backup ────────────────────────────────────────────────── */
-  const { header, payload } = openBackup(fs.readFileSync(args.file), key);
+  // openBackup() verifies the GCM auth tag and the sha256 before returning, so the header
+  // itself is not needed here — a tampered or wrong-key file throws rather than reaching this.
+  const { payload } = openBackup(fs.readFileSync(args.file), key);
   const sourceRef = payload.meta.project;
   const tables = payload.tables ?? {};
   const authRows = payload.authUsers?.rows ?? [];
@@ -175,6 +177,12 @@ async function main() {
   if (args.recreateAuth) {
     let made = 0, existed = 0;
     for (const u of authRows) {
+      // `id` is NOT declared on AdminUserAttributes in @supabase/auth-js typings, but GoTrue
+      // does honour it — verified empirically against this project: creating a user with a
+      // chosen UUID returns that same UUID. This is load-bearing, not cosmetic: public.users.id
+      // is an FK to auth.users(id), so if the id were ignored the restore would silently
+      // produce a database whose every user row points at a non-existent account. If a future
+      // auth-js release stops honouring it, this loop must fail loudly rather than continue.
       const { error } = await admin.auth.admin.createUser({
         id: u.id,
         email: u.email ?? undefined,
@@ -187,6 +195,19 @@ async function main() {
       if (!error) made++;
       else if (/already (been )?registered|already exists|duplicate/i.test(error.message)) existed++;
       else problems.push(`auth.users ${u.id}: ${error.message}`);
+      // Guard the assumption above rather than trusting it: if GoTrue ever stops honouring a
+      // supplied id, every subsequent public.users insert would fail on its FK with a far more
+      // confusing error, halfway through a restore someone is running under pressure.
+      if (!error && made === 1) {
+        const { data: probe } = await admin.auth.admin.getUserById(u.id);
+        if (!probe?.user) {
+          throw new Error(
+            `auth.users id was not honoured: asked for ${u.id} and it does not exist afterwards. ` +
+            `@supabase/auth-js no longer preserves caller-supplied UUIDs, so this restore would ` +
+            `break every public.users foreign key. Aborting before any application row is written.`,
+          );
+        }
+      }
     }
     console.log(`  auth.users        created ${made}, already present ${existed}`);
     if (made) console.log(`                    NOTE: created WITHOUT a password. Each user must use "forgot password" before they can sign in.`);
