@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { LEGAL, isConfigured } from "@/lib/legal-config";
 import Link from "next/link";
 import { Callout, DataTable, DocBody, DocHeader, Section, TableOfContents } from "../layout";
 
@@ -12,21 +13,14 @@ import { Callout, DataTable, DocBody, DocHeader, Section, TableOfContents } from
  * notice at the top; that notice disappears on its own once real values are set.
  * ──────────────────────────────────────────────────────────────────────────── */
 const OPERATOR = {
-  /** Legal name of the entity that provides this HostelPro deployment. */
-  legalName: "[OPERATOR LEGAL NAME — NOT YET SET]",
-  /** Inbox for contractual and support correspondence. */
-  email: "legal@placeholder.invalid",
-  /** Postal address at which legal notice can be served. */
-  postalAddress: "[POSTAL ADDRESS — NOT YET SET]",
-  /** Governing law, e.g. "the laws of India". */
-  governingLaw: "[GOVERNING LAW — NOT YET SET]",
-  /** Courts with exclusive jurisdiction, e.g. "the courts at Pune, Maharashtra". */
-  jurisdiction: "[COURTS OF EXCLUSIVE JURISDICTION — NOT YET SET]",
+  legalName: LEGAL.operatorName,
+  email: LEGAL.legalEmail,
+  postalAddress: LEGAL.postalAddress,
+  governingLaw: LEGAL.governingLaw,
+  jurisdiction: LEGAL.jurisdiction,
 } as const;
 
-const PLACEHOLDERS_UNSET = Object.values(OPERATOR).some(
-  (v) => v.startsWith("[") || v.endsWith(".invalid"),
-);
+const PLACEHOLDERS_UNSET = !isConfigured;
 
 const UPDATED = "2026-08-21";
 
@@ -78,11 +72,12 @@ export default function TermsOfServicePage() {
       />
 
       {PLACEHOLDERS_UNSET ? (
-        <Callout tone="sand" title="Before publishing this page">
+        <Callout tone="sand" title="This document is not ready to publish">
           <p>
-            The operator name, contact details, governing law and jurisdiction in these terms are
-            still placeholders. Set them in the <code>OPERATOR</code> constant at the top of{" "}
-            <code>app/legal/terms/page.tsx</code>. This notice removes itself once they are real.
+            The operator&rsquo;s legal name, contact address and postal address have not been set
+            yet, so this document does not yet identify who is responsible for your data. Please do
+            not rely on it. If you need to reach someone about your personal data in the meantime,
+            contact the hostel that issued your account directly.
           </p>
         </Callout>
       ) : null}

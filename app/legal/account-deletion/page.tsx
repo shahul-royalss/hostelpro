@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { LEGAL, isConfigured } from "@/lib/legal-config";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { Callout, DataTable, DocBody, DocHeader, Section, TableOfContents } from "../layout";
@@ -25,11 +26,10 @@ import { Callout, DataTable, DocBody, DocHeader, Section, TableOfContents } from
  * CONTACT block of app/legal/privacy/page.tsx; set both, in the same change.
  * ──────────────────────────────────────────────────────────────────────────── */
 const CONTACT = {
-  /** Inbox monitored by the Grievance Officer / privacy contact. */
-  email: "grievance@placeholder.invalid",
+  email: LEGAL.grievanceEmail,
 } as const;
 
-const PLACEHOLDERS_UNSET = CONTACT.email.endsWith(".invalid");
+const PLACEHOLDERS_UNSET = !isConfigured;
 
 const UPDATED = "2026-08-21";
 
@@ -81,12 +81,12 @@ export default async function AccountDeletionPage() {
       />
 
       {PLACEHOLDERS_UNSET ? (
-        <Callout tone="sand" title="Before publishing this page">
+        <Callout tone="sand" title="This document is not ready to publish">
           <p>
-            The contact address below is still a placeholder. Set it in the <code>CONTACT</code>{" "}
-            constant at the top of <code>app/legal/account-deletion/page.tsx</code> — and in the
-            matching block in <code>app/legal/privacy/page.tsx</code> — before this URL is submitted
-            to the Play Console. This notice removes itself once the address is real.
+            The operator&rsquo;s legal name, contact address and postal address have not been set
+            yet, so this document does not yet identify who is responsible for your data. Please do
+            not rely on it. If you need to reach someone about your personal data in the meantime,
+            contact the hostel that issued your account directly.
           </p>
         </Callout>
       ) : null}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { LEGAL, isConfigured } from "@/lib/legal-config";
 import Link from "next/link";
 import { Callout, DataTable, DocBody, DocHeader, Section, TableOfContents } from "../layout";
 
@@ -12,18 +13,12 @@ import { Callout, DataTable, DocBody, DocHeader, Section, TableOfContents } from
  * notice at the top; that notice disappears on its own once real values are set.
  * ──────────────────────────────────────────────────────────────────────────── */
 const CONTACT = {
-  /** Legal name of the entity that operates this HostelPro deployment. */
-  operatorName: "[OPERATOR LEGAL NAME — NOT YET SET]",
-  /** Inbox monitored by the Grievance Officer / privacy contact. */
-  email: "grievance@placeholder.invalid",
-  /** Postal address at which legal notice can be served. */
-  postalAddress: "[POSTAL ADDRESS — NOT YET SET]",
+  operatorName: LEGAL.operatorName,
+  email: LEGAL.grievanceEmail,
+  postalAddress: LEGAL.postalAddress,
 } as const;
 
-const PLACEHOLDERS_UNSET =
-  CONTACT.email.endsWith(".invalid") ||
-  CONTACT.operatorName.startsWith("[") ||
-  CONTACT.postalAddress.startsWith("[");
+const PLACEHOLDERS_UNSET = !isConfigured;
 
 const UPDATED = "2026-08-21";
 
@@ -80,11 +75,12 @@ export default function PrivacyPolicyPage() {
       />
 
       {PLACEHOLDERS_UNSET ? (
-        <Callout tone="sand" title="Before publishing this page">
+        <Callout tone="sand" title="This document is not ready to publish">
           <p>
-            The operator name, contact email and postal address in this policy are still
-            placeholders. Set them in the <code>CONTACT</code> constant at the top of{" "}
-            <code>app/legal/privacy/page.tsx</code>. This notice removes itself once they are real.
+            The operator&rsquo;s legal name, contact address and postal address have not been set
+            yet, so this document does not yet identify who is responsible for your data. Please do
+            not rely on it. If you need to reach someone about your personal data in the meantime,
+            contact the hostel that issued your account directly.
           </p>
         </Callout>
       ) : null}
