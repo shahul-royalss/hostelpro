@@ -93,28 +93,53 @@ for (const [role, [email, password]] of Object.entries(ACCOUNTS)) {
     const { data: ch } = await client.auth.mfa.challenge({ factorId: en.id });
     const { error: ve } = await client.auth.mfa.verify({ factorId: en.id, challengeId: ch.id, code: totp(en.totp.secret) });
     if (ve) throw new Error(`step-up ${role}: ${ve.message}`);
-    temporaryFactors.push({ client, factorId: en.id, role });
+    temporaryFactors.push({ client, factorId: en.id, role, userId: (await client.auth.getUser()).data.user?.id });
   }
   cookies[role] = cookie();
 }
 
-console.log("=== each role reaches its own pages ===");
-for (const [role, paths] of Object.entries(OWN)) {
-  const codes = await Promise.all(paths.map((p) => status(cookies[role], p)));
-  const bad = paths.filter((_, i) => codes[i] !== 200);
-  if (bad.length === 0) { console.log(`  PASS  ${role.padEnd(8)} ${paths.length} routes 200`); pass++; }
-  else { console.log(`  FAIL  ${role.padEnd(8)} ${bad.map((p, i) => `${p}->${codes[paths.indexOf(p)]}`).join(" ")}`); fail++; }
-}
-
-console.log("\n=== no role reaches another role's pages ===");
-for (const [owner, paths] of Object.entries(OWN)) {
-  for (const role of Object.keys(ACCOUNTS)) {
-    if (role === owner) continue;
+try {
+  console.log("=== each role reaches its own pages ===");
+  for (const [role, paths] of Object.entries(OWN)) {
     const codes = await Promise.all(paths.map((p) => status(cookies[role], p)));
-    const leaked = paths.filter((_, i) => codes[i] === 200);
-    if (leaked.length === 0) { console.log(`  PASS  ${role.padEnd(8)} denied all ${paths.length} ${owner} routes`); pass++; }
-    else { console.log(`  FAIL  ${role.padEnd(8)} *** REACHED ${leaked.join(" ")}`); fail++; }
+    const bad = paths.filter((_, i) => codes[i] !== 200);
+    if (bad.length === 0) { console.log(`  PASS  ${role.padEnd(8)} ${paths.length} routes 200`); pass++; }
+    else { console.log(`  FAIL  ${role.padEnd(8)} ${bad.map((p, i) => `${p}->${codes[paths.indexOf(p)]}`).join(" ")}`); fail++; }
+  }
+
+  console.log("\n=== no role reaches another role's pages ===");
+  for (const [owner, paths] of Object.entries(OWN)) {
+    for (const role of Object.keys(ACCOUNTS)) {
+      if (role === owner) continue;
+      const codes = await Promise.all(paths.map((p) => status(cookies[role], p)));
+      const leaked = paths.filter((_, i) => codes[i] === 200);
+      if (leaked.length === 0) { console.log(`  PASS  ${role.padEnd(8)} denied all ${paths.length} ${owner} routes`); pass++; }
+      else { console.log(`  FAIL  ${role.padEnd(8)} *** REACHED ${leaked.join(" ")}`); fail++; }
+    }
+  }
+} finally {
+  // MUST run even if an assertion above throws. A factor left behind here holds a secret
+  // that only this process ever saw, so the account it belongs to is locked out — which is
+  // exactly the bug this suite exists to catch, self-inflicted. The service-role fallback
+  // matters because unenroll() itself needs aal2, and a session that died mid-run no
+  // longer has it.
+  if (temporaryFactors.length) console.log("\n=== cleanup ===");
+  for (const { client, factorId, role, userId } of temporaryFactors) {
+    let { error } = await client.auth.mfa.unenroll({ factorId });
+    if (error) {
+      const { createClient } = await import("@supabase/supabase-js");
+      const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+      ({ error } = await admin.auth.admin.mfa.deleteFactor({ userId, id: factorId }));
+    }
+    if (error) {
+      console.log(`  FAIL  ${role} temporary factor ${factorId} SURVIVED — remove it by hand or that account is locked out: ${error.message}`);
+      fail++;
+    } else {
+      console.log(`  PASS  ${role} temporary factor removed`);
+      pass++;
+    }
   }
 }
+
 console.log(`\n═══ RESULT: ${pass} passed, ${fail} FAILED ═══`);
 process.exit(fail ? 1 : 0);
