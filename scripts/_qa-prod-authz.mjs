@@ -11,12 +11,21 @@ const env = Object.fromEntries(fs.readFileSync(".env.local", "utf8").split(/\r?\
   .filter((l) => l && !l.startsWith("#") && l.includes("="))
   .map((l) => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; }));
 
+// The four demo-tenant passwords are seeded constants (db/seed.ts) and are printed in the
+// credentials table for the client — they are public by design and rotate on every re-seed.
+// The SUPER ADMIN password is NOT: it comes from SUPER_ADMIN_PASSWORD in .env.local and is a
+// real production secret, so it is read from the environment and never written down here.
+const SA_PASSWORD = env.SUPER_ADMIN_PASSWORD;
+if (!SA_PASSWORD) {
+  console.error("SUPER_ADMIN_PASSWORD is not set in .env.local — cannot test the super admin.");
+  process.exit(1);
+}
 const ACCOUNTS = {
   owner:   ["owner@demo.hostelpro.app", "Owner@12345"],
   manager: ["manager@demo.hostelpro.app", "Manager@12345"],
   warden:  ["warden@demo.hostelpro.app", "Warden@12345"],
   student: ["9000000001@student.hostelpro.local", "Student@12345"],
-  admin:   ["admin@hostelpro.app", "[REDACTED-ROTATED-CREDENTIAL]"],
+  admin:   [env.SUPER_ADMIN_EMAIL ?? "admin@hostelpro.app", SA_PASSWORD],
 };
 const OWN = {
   owner:   ["/owner", "/owner/staff", "/owner/students", "/owner/finance", "/owner/complaints", "/owner/updates"],
