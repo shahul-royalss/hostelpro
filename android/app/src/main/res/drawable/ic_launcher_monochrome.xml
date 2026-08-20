@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Monochrome (Android 13 themed-icon) variant of public/icons/icon.svg (the house mark + teal dot),
+  minus the rounded-square plate — on API 26+ the plate is the adaptive-icon
+  background layer and the launcher masks it to whatever shape the OEM uses.
+
+  The source art fills its 512-unit box; adaptive icons only guarantee the
+  inner 66/108 of the canvas is visible, so the whole mark is scaled to 0.62
+  about the centre to stay inside that safe zone.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <group
+        android:pivotX="256"
+        android:pivotY="256"
+        android:scaleX="0.62"
+        android:scaleY="0.62">
+
+        <path
+            android:pathData="M128,384V212l128,-92 128,92v172"
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="28"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M96,384h320"
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="28"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M208,384v-96h96v96"
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="28"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M350,148a26,26 0 1,0 52,0a26,26 0 1,0 -52,0z"
+            android:fillColor="#FFFFFF" />
+    </group>
+</vector>

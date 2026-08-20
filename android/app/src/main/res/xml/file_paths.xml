@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The single file the wrapper ever shares: the splash bitmap it hands to Chrome
+  through the TrustedWebActivityService. Nothing else is exposed.
+-->
+<paths>
+    <files-path
+        name="twa_splash"
+        path="twa_splash/" />
+</paths>

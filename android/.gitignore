@@ -1,0 +1,16 @@
+# Gradle / Android build output
+.gradle/
+build/
+app/build/
+captures/
+.cxx/
+*.iml
+local.properties
+
+# Signing material. The keystore itself lives outside the repository
+# (see docs/play-store.md); these patterns are belt-and-braces so an
+# accidental copy into the tree cannot be committed.
+keystore.properties
+*.jks
+*.p12
+*.keystore

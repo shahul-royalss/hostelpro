@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HostelPro</string>
+
+    <!-- Matches start_url in app/manifest.ts. -->
+    <string name="launch_url" translatable="false">https://hostelpro-three.vercel.app/</string>
+
+    <!--
+      The app side of Digital Asset Links. The site side is
+      public/.well-known/assetlinks.json, which must carry the SHA-256
+      fingerprint of the certificate that signed the installed build.
+      Escaped quotes are required: this is a JSON document inside an XML string.
+    -->
+    <string name="asset_statements" translatable="false">
+        [{
+          \"relation\": [\"delegate_permission/common.handle_all_urls\"],
+          \"target\": {
+            \"namespace\": \"web\",
+            \"site\": \"https://hostelpro-three.vercel.app\"
+          }
+        }]
+    </string>
+</resources>

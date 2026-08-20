@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base theme. No AppCompat dependency: the wrapper never inflates a layout. -->
+    <style name="Theme.HostelPro" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorBackground">@color/backgroundColor</item>
+    </style>
+
+    <!--
+      The launcher is transparent so the only thing the user sees between tapping
+      the icon and Chrome taking over is the splash screen, not a white flash.
+    -->
+    <style name="Theme.HostelPro.Launcher" parent="Theme.HostelPro">
+        <item name="android:windowBackground">@color/backgroundColor</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@color/colorPrimary</item>
+        <item name="android:navigationBarColor">@color/navigationColor</item>
+    </style>
+</resources>

@@ -3,13 +3,13 @@
 **Application:** HostelPro — multi-tenant PG/hostel management SaaS
 **Stack:** Next.js 15 (App Router, Server Components + Server Actions) · React 19 · Supabase (Postgres + RLS + Auth + private Storage)
 **Production:** https://hostelpro-three.vercel.app (Vercel) · Supabase project `nimxvgzscbanhtvgnjll`
-**Audit date:** 2026-08-17 (round 1) · 2026-08-20 (round 2) · **Method:** threat model → manual source review → automated sweeps → live exploitation (app + direct PostgREST) → adversarial verification of every serious finding.
+**Audit date:** 2026-08-17 (round 1) · 2026-08-20 (rounds 2 and 3) · **Method:** threat model → manual source review → automated sweeps → live exploitation (app + direct PostgREST) → adversarial verification of every serious finding.
 
 ---
 
 ## 1. Verdict
 
-**No Critical and no High findings remain open.** Across two rounds, **three Critical and three High** findings were found and are **fixed and re-tested** (details in §3). The remaining open items are Low/Info, listed in §5 with owners.
+**No Critical and no High findings remain open.** Across three rounds, **four Critical and three High** findings were found and are **fixed and re-tested** (details in §3). The remaining open items are Low/Info, listed in §5 with owners.
 
 > **Round 2 (2026-08-20) matters.** Round 1 signed off on "80/80 PostgREST attacks blocked". That was true and still is — but it was testing the wrong invariant. RLS gates **the row's own `hostel_id`**; it says nothing about **where that row's foreign keys point**. Two further Criticals lived in exactly that blind spot and were invisible to the round-1 suite. Both are fixed, and `scripts/_qa-tenant-integrity.mjs` now tests the invariant the old suite could not express.
 
@@ -148,6 +148,32 @@ Confirmed live for all four tables. A warden at one hostel could fabricate fee d
 | 23 | Middleware redirects inherited Next's `Cache-Control: public, max-age=0, must-revalidate`. Each redirect is a function of *who is asking* (role home, login bounce, MFA step-up), so `public` invites a shared cache to store a per-user `Location` | `private, no-store`; verified on the deployed site |
 | 24 | The "Subscription expiring soon" notification was **dead code**: its loop needed `status = 'active'` AND ≤15 days to expiry, but the `subscription_status_compute` trigger flips status to `'expiring'` the instant that window opens — mutually exclusive, so no owner ever got the notice | Condition fixed **and** a 7-day dedup added in the same change: this RPC runs on every owner/super-admin dashboard load, so fixing the condition alone would have turned a dead path into a notification flood |
 | 25 | A forged `AUDIT sa.subscription.renew (spoofed by student)` row from round-1 attack testing was still sitting in the production audit log, reading as evidence of a real breach | Removed |
+
+### 3.8 CRITICAL — the production super-admin password was committed to git (round 3)
+**Root cause.** `scripts/_qa-prod-authz.mjs`, added during round 2, hardcoded all five test logins as array literals — including `admin@hostelpro.app` and the value of `SUPER_ADMIN_PASSWORD`. The four demo-tenant passwords are seeded constants printed in the credentials table and public by design; the super-admin password is not. It comes from `.env.local` and grants platform-wide access across every tenant.
+
+**Why the scanner missed it.** The only password rule was `/(password|passwd|pwd)\s*[:=]\s*["']…/`. The leak was a bare array literal with no `password` keyword anywhere near it. The scanner had been "canary-verified" in round 2 — but the canary was planted in the shape the regex was written from, so the test proved the pattern matched itself.
+
+**Fix, in three parts:**
+1. **Rotated.** The super-admin password was regenerated (24 chars, CSPRNG) and written only to `.env.local`. Verified live: the new password authenticates, the old one is rejected.
+2. **Purged.** `git-filter-repo` rewrote all 19 commits to remove the string. Verified: `git grep` across every reachable commit returns nothing, and the full-history scan reads 90k diff lines clean. This was safe to do because no remote existed yet — the rewrite happened *before* the first push.
+3. **Detector rebuilt.** The scanner now takes the **actual values** out of `.env.local` and looks for them verbatim in every tracked file. This is shape-independent: it cannot be evaded by array literals, template strings, concatenation or any other syntax. Canary-verified against the exact evasion that beat the old rule — planting the live key in a bare array literal produces `1 blocker, exit 1`.
+
+The old allowlist also carried `SUPER_ADMIN_PASSWORD` and its value as "demo credentials". That entry was the hole: it explicitly blinded the scanner to the one secret that mattered. Never allowlist a value that appears in `.env.local`.
+
+### 3.9 MEDIUM — preview deployments held the production admin key with no MFA gate
+Vercel had `SUPABASE_SERVICE_ROLE_KEY` set for **Preview** as well as Production, pointing at the same (only) Supabase project, while `MFA_REQUIRED_ROLES` was set on Production alone. Any preview URL would therefore have run against production data with MFA enforcement switched off. This had never mattered because no git remote existed — and connecting one is precisely what starts generating preview deployments, so it was about to become live. `MFA_REQUIRED_ROLES` now matches across both environments. The deeper issue — one Supabase project serving prod, preview and local development — is in §5.
+
+### 3.10 Detection, alerting, retention and a reader (round 3)
+| # | Gap | Fix |
+|---|---|---|
+| 26 | **Authorization failures were never logged.** `assertRole`/`requireRole` refused the operation silently, so privilege probing left no trace | `authz.denied` recorded at both enforcement points. The middleware route-group bounce is deliberately *not* logged and this is documented in the code: reaching for the service-role client on every Edge request is both slow and the wrong place for that credential. A bounce is navigation hygiene; an attempt to execute the operation lands in `assertRole` and is recorded |
+| 27 | **Nothing ever read the audit trail.** A brute-force run produced rows nobody would see until after the fact — "logged" is not "monitored" | A trigger on `audit_log` raises `security_alerts` for repeated failed sign-ins (5/15min, counted by IP *and* actor, since a failed login often has no actor), authorization probing (5/10min), failed second factors (3/10min), tripped rate limits, and admin-initiated password resets. De-duplicated to one alert per (kind, actor) per hour so a sustained attack yields one actionable row, not thousands. Canary-verified in a self-rolling-back transaction: all three counting detectors fired, nothing was written |
+| 28 | Alerts with a write policy would be evidence an attacker could delete | `security_alerts` has a SELECT policy and **nothing else** — no INSERT/UPDATE/DELETE policy exists. Acknowledgement goes through `ack_security_alert()`, which re-checks the caller in the database. Verified against a *seeded real alert* (against an empty table these tests pass vacuously): owner can read and acknowledge, cannot insert/update/delete; a student is refused with "Not allowed."; the row survives every tamper attempt |
+| 29 | `audit_log` grew without bound while holding IP and user-agent — personal data under the DPDP Act | `pg_cron` (available on the free plan) runs `app.apply_retention()` nightly: **pseudonymise at 90 days** (drop IP/UA, keep the event), **delete at 365**. Dropping the personal data early keeps the security event useful far longer than the personal data may lawfully be retained. Also sweeps spent rate-limit buckets and read notifications |
+| 30 | No UI surfaced alerts or the trail | `/super-admin/security` console with acknowledgement. Verified in production end-to-end (7/7), including the two negatives: an `aal1` session cannot reach it, and a warden cannot reach it at all |
+| 31 | MFA existed but **0 of 25 accounts had enrolled**, and `MFA_REQUIRED_ROLES` was empty | Set to `super_admin,owner` in both Production and Preview. Verified live: super admin and owner are redirected to `/security/mfa?required=1`, warden is unaffected, and the enrolment page renders a working setup flow — enforced, not locked out |
+| 32 | A stray `skills/mvanhorn` gitlink (mode 160000, no `.gitmodules`) | Invisible locally; on CI `actions/checkout` died with `No url found for submodule path` and failed all four jobs before compiling a line. Removed from the index and ignored |
 
 ---
 
