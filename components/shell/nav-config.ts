@@ -1,26 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import {
-  Bed,
-  BedDouble,
-  Building2,
-  CalendarOff,
-  ClipboardList,
-  CreditCard,
-  Home,
-  IndianRupee,
-  LayoutDashboard,
-  ListChecks,
-  Megaphone,
-  MessageSquareWarning,
-  PlusCircle,
-  Receipt,
-  UserCircle,
-  UserPlus,
-  Users,
-  UtensilsCrossed,
-  Wallet,
-  Contact,
-} from "lucide-react";
+import { Bed, BedDouble, Building2, CalendarOff, ClipboardList, Contact, CreditCard, Home, IndianRupee, LayoutDashboard, ListChecks, Megaphone, MessageSquareWarning, PlusCircle, Receipt, ShieldAlert, UserCircle, UserPlus, Users, UtensilsCrossed, Wallet } from "lucide-react";
 import type { UserRole } from "@/lib/roles";
 
 export interface NavItem {
@@ -40,6 +19,7 @@ export const NAV: Record<UserRole, NavItem[]> = {
     { href: "/super-admin/hostels", label: "Hostels", icon: Building2 },
     { href: "/super-admin/subscriptions", label: "Subscriptions", icon: CreditCard },
     { href: "/super-admin/create", label: "Create Owner", icon: PlusCircle },
+    { href: "/super-admin/security", label: "Security", icon: ShieldAlert },
   ],
   owner: [
     { href: "/owner", label: "Dashboard", icon: LayoutDashboard, exact: true },

@@ -24,7 +24,8 @@ export type AuditAction =
   | "manager.expense.create" | "manager.expense.update" | "manager.expense.delete"
   | "manager.revenue.create" | "manager.revenue.update" | "manager.revenue.delete"
   | "manager.task.status" | "manager.menu.save"
-  | "staff.complaint.status";
+  | "staff.complaint.status"
+  | "authz.denied";
 
 export interface AuditOptions {
   targetType?: string;

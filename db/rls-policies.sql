@@ -272,3 +272,13 @@ create policy notifications_delete on public.notifications for delete using (use
 -- Buckets are private. Uploads + signed URLs are produced server-side with the
 -- service role after `requireRole()` checks, so no anon/authenticated storage
 -- policies are needed. (Keeping storage.objects RLS default-deny.)
+
+-- ───────────────────────────── security_alerts ─────────────────────────────
+alter table public.security_alerts enable row level security;
+select app.drop_policies('security_alerts');
+-- Read-only for humans. Nothing may INSERT/UPDATE/DELETE through PostgREST: alerts are raised
+-- by a trigger running as the definer, and an attacker able to delete alerts could erase the
+-- evidence of their own activity. Acknowledgement goes through ack_security_alert(), not an
+-- UPDATE policy, so the only possible mutation is "mark as seen".
+create policy security_alerts_select on public.security_alerts for select
+  using (app.is_super_admin() or (hostel_id is not null and app.owns_hostel(hostel_id)));

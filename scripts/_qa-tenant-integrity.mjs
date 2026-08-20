@@ -154,5 +154,64 @@ console.log("\n=== LEN-01  unbounded text via direct PostgREST ===");
     () => c.from("leaves").insert({ hostel_id: ids.sunrise, student_id: ids.stuSun.id, from_date: "2026-09-01", to_date: "2026-09-02", reason: "A".repeat(200000) }).select());
 }
 
+// An alert an attacker can delete is not evidence. security_alerts therefore has a SELECT
+// policy and nothing else - no INSERT/UPDATE/DELETE policy exists at all - and the only
+// mutation reachable from the API is ack_security_alert(), which re-checks the caller itself.
+console.log("\n=== ALERT-01  security_alerts is read-only, and only for the right eyes ===");
+{
+  const staff = ["manager@demo.hostelpro.app", "warden@demo.hostelpro.app"];
+  for (const email of staff) {
+    const { c } = await login(email, email.startsWith("manager") ? "Manager@12345" : "Warden@12345");
+    await mustFail(`${email.split("@")[0]} reads security_alerts`, () => c.from("security_alerts").select("*"));
+  }
+  const { c: stu } = await login("9000000001@student.hostelpro.local", "Student@12345");
+  await mustFail("student reads security_alerts", () => stu.from("security_alerts").select("*"));
+
+  // Seed a REAL alert first: against an empty table a DELETE/UPDATE/ack trivially affects
+  // 0 rows and would "pass" without the policy doing anything at all.
+  const { data: seeded } = await admin.from("security_alerts")
+    .insert({ severity: "low", kind: "audit.canary", summary: "AUDIT canary alert", hostel_id: ids.sunrise })
+    .select("id").single();
+  const alertId = seeded.id;
+  console.log(`  (seeded alert id=${alertId} so the write tests have a real target)`);
+
+  const { c: own } = await login("owner@demo.hostelpro.app", "Owner@12345");
+  await expectRows("owner CAN read their own hostel's alert", () => own.from("security_alerts").select("id").eq("id", alertId), 1);
+  await mustFail("owner INSERTs a forged alert",
+    () => own.from("security_alerts").insert({ severity: "low", kind: "forged", summary: "AUDIT" }).select());
+  await mustFail("owner DELETEs the alert (evidence destruction)",
+    () => own.from("security_alerts").delete().eq("id", alertId).select());
+  await mustFail("owner UPDATEs the alert to hide it",
+    () => own.from("security_alerts").update({ summary: "nothing to see" }).eq("id", alertId).select());
+  await mustFail("student acknowledges the alert via the RPC",
+    () => stu.rpc("ack_security_alert", { p_alert_id: alertId }));
+
+  // the row must still be intact and unacknowledged after all of that
+  const { data: after } = await admin.from("security_alerts").select("summary,acknowledged_at").eq("id", alertId).single();
+  const intact = after && after.summary === "AUDIT canary alert" && after.acknowledged_at === null;
+  console.log(intact ? "  PASS  alert survived every tamper attempt, still unacknowledged"
+                     : `  FAIL  *** alert was altered: ${JSON.stringify(after)}`);
+  intact ? pass++ : fail++;
+
+  // the legitimate path must still work
+  const { error: ackErr } = await own.rpc("ack_security_alert", { p_alert_id: alertId });
+  const { data: acked } = await admin.from("security_alerts").select("acknowledged_at").eq("id", alertId).single();
+  const ok2 = !ackErr && acked?.acknowledged_at !== null;
+  console.log(ok2 ? "  PASS  owner CAN acknowledge it through the RPC"
+                  : `  FAIL  *** owner could not acknowledge: ${ackErr?.message ?? "no timestamp written"}`);
+  ok2 ? pass++ : fail++;
+
+  await admin.from("security_alerts").delete().eq("id", alertId);
+}
+
+console.log("\n=== ALERT-02  detection helpers are not callable from the API ===");
+{
+  const { c } = await login("owner@demo.hostelpro.app", "Owner@12345");
+  await mustFail("owner calls app.raise_security_alert directly",
+    () => c.rpc("raise_security_alert", { p_severity: "low", p_kind: "forged", p_summary: "AUDIT" }));
+  await mustFail("owner calls app.apply_retention (would purge the audit trail)",
+    () => c.rpc("apply_retention"));
+}
+
 console.log(`\n═══ RESULT: ${pass} passed, ${fail} FAILED ═══`);
 process.exit(fail > 0 ? 1 : 0);

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_HOME, type UserRole } from "@/lib/roles";
+import { audit } from "@/lib/audit";
 import type { HostelRow, SubscriptionStatus, UserRow } from "@/lib/types";
 
 export const ACTIVE_HOSTEL_COOKIE = "hp_active_hostel";
@@ -89,8 +90,31 @@ export async function requireUser(): Promise<SessionUser> {
  */
 export async function requireRole(...roles: UserRole[]): Promise<SessionUser> {
   const user = await requireUser();
-  if (!roles.includes(user.role)) redirect(ROLE_HOME[user.role]);
+  if (!roles.includes(user.role)) {
+    // Log BEFORE redirect(): redirect() throws to unwind, so anything after it never runs.
+    await denied(user, roles, "page");
+    redirect(ROLE_HOME[user.role]);
+  }
   return user;
+}
+
+/**
+ * Record an authorization failure (checklist §27).
+ *
+ * These are the points where a privileged operation is actually refused, so this is the
+ * authoritative denial record. Note the deliberate gap: middleware also bounces a session
+ * away from another role's route group, and that redirect is NOT logged here — it runs in
+ * the Edge runtime, where reaching for the service-role client on every request would be
+ * both slow and the wrong place to put that credential. A middleware bounce is navigation
+ * hygiene; an attempt to actually execute the operation still lands here and is recorded.
+ */
+async function denied(user: SessionUser, roles: UserRole[], surface: "page" | "action") {
+  await audit("authz.denied", {
+    targetType: surface,
+    targetId: user.id,
+    hostelId: user.hostel_id,
+    meta: { actorRole: user.role, requiredRoles: roles, surface },
+  });
 }
 
 /**
@@ -105,7 +129,10 @@ export async function assertRole(...roles: UserRole[]): Promise<SessionUser> {
   if (user.status !== "active" || user.deleted_at) throw new PermissionError("Your account is inactive.");
   if (user.must_change_password) throw new PermissionError("Please set a new password before continuing.");
   if (!(await mfaSatisfied())) throw new PermissionError("Two-factor verification is required before continuing.");
-  if (!roles.includes(user.role)) throw new PermissionError("You don't have permission to do that.");
+  if (!roles.includes(user.role)) {
+    await denied(user, roles, "action");
+    throw new PermissionError("You don't have permission to do that.");
+  }
   return user;
 }
 

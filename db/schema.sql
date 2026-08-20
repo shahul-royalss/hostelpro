@@ -1687,3 +1687,169 @@ revoke execute on all functions in schema app from public, anon;
 alter default privileges in schema public revoke execute on functions from public;
 alter default privileges in schema app revoke execute on functions from public;
 revoke execute on function public.scaffold_hostel(uuid, int, int, int) from authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- DETECTION & ALERTING (checklist §27)
+--
+-- The audit trail recorded what happened but nothing ever LOOKED at it, so a brute-force run
+-- or a privilege-probing session produced rows nobody would read until after the fact. This
+-- turns the trail into a detector: suspicious PATTERNS raise a row in security_alerts, which
+-- the Super Admin (all) and the hostel Owner (own hostel) see at /super-admin/security.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create table if not exists public.security_alerts (
+  id              bigint generated always as identity primary key,
+  at              timestamptz not null default now(),
+  severity        text not null check (severity in ('low','medium','high','critical')),
+  kind            text not null,
+  summary         text not null check (length(summary) <= 500),
+  hostel_id       uuid references public.hostels(id) on delete cascade,
+  actor_user_id   uuid references public.users(id) on delete set null,
+  ip              text,
+  details         jsonb not null default '{}'::jsonb,
+  acknowledged_at timestamptz,
+  acknowledged_by uuid references public.users(id) on delete set null
+);
+create index if not exists security_alerts_at_idx     on public.security_alerts (at desc);
+create index if not exists security_alerts_open_idx   on public.security_alerts (acknowledged_at) where acknowledged_at is null;
+create index if not exists security_alerts_hostel_idx on public.security_alerts (hostel_id, at desc);
+create index if not exists security_alerts_dedup_idx  on public.security_alerts (kind, actor_user_id, at desc);
+
+-- One alert per (kind, actor) per hour while unacknowledged, so a sustained attack produces
+-- one actionable row rather than thousands.
+create or replace function app.raise_security_alert(
+  p_severity text, p_kind text, p_summary text,
+  p_hostel_id uuid default null, p_actor uuid default null,
+  p_ip text default null, p_details jsonb default '{}'::jsonb
+) returns void
+language plpgsql security definer set search_path = public as $fn$
+begin
+  if exists (
+    select 1 from public.security_alerts
+     where kind = p_kind
+       and actor_user_id is not distinct from p_actor
+       and acknowledged_at is null
+       and at > now() - interval '1 hour'
+  ) then
+    return;
+  end if;
+  insert into public.security_alerts (severity, kind, summary, hostel_id, actor_user_id, ip, details)
+  values (p_severity, p_kind, left(p_summary, 500), p_hostel_id, p_actor, p_ip, coalesce(p_details, '{}'::jsonb));
+end $fn$;
+
+create or replace function app.detect_suspicious_activity() returns trigger
+language plpgsql security definer set search_path = public as $fn$
+declare n int;
+begin
+  if new.action = 'auth.login.failed' then
+    -- count by IP as well as by actor: a failed login often has no actor_user_id at all
+    select count(*) into n from public.audit_log
+     where action = 'auth.login.failed'
+       and at > now() - interval '15 minutes'
+       and ((new.actor_user_id is not null and actor_user_id = new.actor_user_id)
+            or (new.actor_user_id is null and new.ip is not null and ip = new.ip));
+    if n >= 5 then
+      perform app.raise_security_alert('high', 'auth.bruteforce',
+        format('%s failed sign-ins in 15 minutes from %s', n, coalesce(new.ip, 'unknown IP')),
+        new.hostel_id, new.actor_user_id, new.ip, jsonb_build_object('count', n, 'window', '15 minutes'));
+    end if;
+  elsif new.action = 'authz.denied' then
+    select count(*) into n from public.audit_log
+     where action = 'authz.denied' and actor_user_id = new.actor_user_id
+       and at > now() - interval '10 minutes';
+    if n >= 5 then
+      perform app.raise_security_alert('high', 'authz.probing',
+        format('%s authorization denials in 10 minutes for one account', n),
+        new.hostel_id, new.actor_user_id, new.ip, jsonb_build_object('count', n));
+    end if;
+  elsif new.action = 'auth.mfa.failed' then
+    select count(*) into n from public.audit_log
+     where action = 'auth.mfa.failed' and actor_user_id = new.actor_user_id
+       and at > now() - interval '10 minutes';
+    if n >= 3 then
+      perform app.raise_security_alert('high', 'auth.mfa.bruteforce',
+        format('%s failed second-factor attempts in 10 minutes', n),
+        new.hostel_id, new.actor_user_id, new.ip, jsonb_build_object('count', n));
+    end if;
+  elsif new.action = 'auth.login.rate_limited' then
+    perform app.raise_security_alert('medium', 'auth.rate_limited',
+      'Sign-in rate limit tripped', new.hostel_id, new.actor_user_id, new.ip, '{}'::jsonb);
+  elsif new.action in ('sa.owner.password_reset', 'owner.staff.password_reset') then
+    perform app.raise_security_alert('medium', 'account.password_reset_by_admin',
+      format('An administrator reset another account password (%s)', new.action),
+      new.hostel_id, new.actor_user_id, new.ip, jsonb_build_object('target', new.target_id));
+  end if;
+  return new;
+end $fn$;
+
+drop trigger if exists audit_log_detect on public.audit_log;
+create trigger audit_log_detect after insert on public.audit_log
+  for each row execute function app.detect_suspicious_activity();
+
+-- Acknowledgement is an RPC, not a table UPDATE: security_alerts has no write policy at all,
+-- because anyone able to edit or delete an alert could erase evidence of their own activity.
+create or replace function public.ack_security_alert(p_alert_id bigint)
+returns void
+language plpgsql security definer set search_path = public as $fn$
+declare v_hostel uuid;
+begin
+  select hostel_id into v_hostel from public.security_alerts where id = p_alert_id;
+  if not found then raise exception 'Alert not found.' using errcode = 'P0001'; end if;
+  if not (app.is_super_admin() or (v_hostel is not null and app.owns_hostel(v_hostel))) then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+  update public.security_alerts
+     set acknowledged_at = now(), acknowledged_by = auth.uid()
+   where id = p_alert_id and acknowledged_at is null;
+end $fn$;
+
+revoke all on function public.ack_security_alert(bigint) from public, anon;
+grant execute on function public.ack_security_alert(bigint) to authenticated;
+revoke all on function app.raise_security_alert(text,text,text,uuid,uuid,text,jsonb) from public, anon, authenticated;
+revoke all on function app.detect_suspicious_activity() from public, anon, authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- RETENTION (checklist §27 + DPDP data minimisation)
+--
+-- audit_log carries IP and user-agent - personal data under the DPDP Act - and grew without
+-- bound. Two-stage policy: pseudonymise early, delete late. Dropping IP/UA at 90 days removes
+-- the personal data while KEEPING the security event, so the trail stays useful for far longer
+-- than the personal data is allowed to be retained.
+-- ─────────────────────────────────────────────────────────────────────────────
+create extension if not exists pg_cron with schema pg_catalog;
+
+create or replace function app.apply_retention()
+returns table (step text, rows_affected bigint)
+language plpgsql security definer set search_path = public as $fn$
+declare n bigint;
+begin
+  update public.audit_log set ip = null, user_agent = null
+   where at < now() - interval '90 days' and (ip is not null or user_agent is not null);
+  get diagnostics n = row_count;
+  step := 'audit_log pseudonymised (>90d)'; rows_affected := n; return next;
+
+  delete from public.audit_log where at < now() - interval '365 days';
+  get diagnostics n = row_count;
+  step := 'audit_log deleted (>365d)'; rows_affected := n; return next;
+
+  delete from public.security_alerts
+   where acknowledged_at is not null and at < now() - interval '365 days';
+  get diagnostics n = row_count;
+  step := 'security_alerts deleted (ack + >365d)'; rows_affected := n; return next;
+
+  delete from app.rate_limits where window_start < now() - interval '1 day';
+  get diagnostics n = row_count;
+  step := 'rate_limits swept (>1d)'; rows_affected := n; return next;
+
+  delete from public.notifications
+   where read_at is not null and created_at < now() - interval '90 days';
+  get diagnostics n = row_count;
+  step := 'notifications deleted (read + >90d)'; rows_affected := n; return next;
+end $fn$;
+
+revoke all on function app.apply_retention() from public, anon, authenticated;
+
+-- 03:15 UTC daily
+select cron.unschedule('hostelpro-retention')
+ where exists (select 1 from cron.job where jobname = 'hostelpro-retention');
+select cron.schedule('hostelpro-retention', '15 3 * * *', $job$select app.apply_retention()$job$);

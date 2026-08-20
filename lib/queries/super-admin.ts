@@ -201,3 +201,67 @@ export async function fetchHostelStaff(supabase: SupabaseClient, hostelId: strin
   if (error) throw error;
   return (data ?? []) as UserRow[];
 }
+
+/* ───────────────────────── Security console (SA-5) ───────────────────────── */
+
+export interface SecurityAlertRow {
+  id: number;
+  at: string;
+  severity: "low" | "medium" | "high" | "critical";
+  kind: string;
+  summary: string;
+  hostel_id: string | null;
+  actor_user_id: string | null;
+  ip: string | null;
+  details: Record<string, unknown>;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+}
+
+export interface AuditRow {
+  id: number;
+  at: string;
+  actor_user_id: string | null;
+  actor_role: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  hostel_id: string | null;
+  ip: string | null;
+  meta: Record<string, unknown>;
+}
+
+/**
+ * The audit trail and the alerts it raises had no reader — the data existed but nothing
+ * ever surfaced it, which is the difference between "logged" and "monitored".
+ * RLS scopes both: Super Admin sees everything, an Owner sees only their own hostel.
+ */
+export async function fetchSecurityAlerts(
+  supabase: SupabaseClient,
+  { openOnly = false, limit = 100 }: { openOnly?: boolean; limit?: number } = {},
+): Promise<SecurityAlertRow[]> {
+  let q = supabase
+    .from("security_alerts")
+    .select("id,at,severity,kind,summary,hostel_id,actor_user_id,ip,details,acknowledged_at,acknowledged_by")
+    .order("at", { ascending: false })
+    .limit(limit);
+  if (openOnly) q = q.is("acknowledged_at", null);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as SecurityAlertRow[];
+}
+
+export async function fetchAuditLog(
+  supabase: SupabaseClient,
+  { action, limit = 200 }: { action?: string; limit?: number } = {},
+): Promise<AuditRow[]> {
+  let q = supabase
+    .from("audit_log")
+    .select("id,at,actor_user_id,actor_role,action,target_type,target_id,hostel_id,ip,meta")
+    .order("at", { ascending: false })
+    .limit(limit);
+  if (action) q = q.like("action", `${action}%`);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as AuditRow[];
+}
