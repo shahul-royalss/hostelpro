@@ -1,0 +1,188 @@
+name: CI
+
+# Correctness gate. This workflow answers one question: "does this commit compile, lint,
+# build, and install from a lockfile that matches package.json?"
+#
+# It deliberately does NOT duplicate .github/workflows/security.yml, which owns the
+# *security* questions: secret scanning over the full git history, the backdoor audit,
+# `npm audit`, the SAST lint pass (eslint-plugin-security over app/components/lib/hooks/db)
+# and the assert that no server secret reached the client bundle.
+#
+# The one honest overlap is typecheck + build, which run in both workflows. That is kept on
+# purpose: each workflow is a separately-required status check, so neither can be weakened
+# by an edit to the other. The cost is roughly two extra runner-minutes per push.
+#
+# ── Why every action is pinned to a full commit SHA ──────────────────────────────────────
+# A tag like `actions/checkout@v4` is a mutable pointer. Whoever controls that repository —
+# or anyone who steals a maintainer token, which is how the tj-actions/changed-files
+# compromise worked — can repoint the tag at new code, and every workflow in the world
+# picks it up on its next run with no diff, no PR and no review. A 40-character commit SHA
+# is content-addressed: it cannot be repointed, so an upgrade is a visible commit in this
+# repo that a human reviews. The trailing `# vX.Y.Z` comment is what Dependabot reads to
+# offer the bump (see .github/dependabot.yml), so pinning does not mean going stale.
+#
+# SHAs below were resolved from the GitHub API on 2026-08-20 and each is the tagged commit
+# of that release:
+#   actions/checkout        v7.0.1 -> 3d3c42e5aac5ba805825da76410c181273ba90b1
+#   actions/setup-node      v7.0.0 -> 820762786026740c76f36085b0efc47a31fe5020
+#   actions/upload-artifact v7.0.1 -> 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+# Least privilege: no job here writes anything back to the repository, so the GITHUB_TOKEN
+# gets read access to the code and nothing else. Without this block the token inherits the
+# repository default, which on older repos is read/write to every scope.
+permissions:
+  contents: read
+
+# Cancel a superseded run so a PR that gets three pushes in a minute does not queue three
+# full builds. Push runs on main/master are NOT cancelled: each main commit needs its own
+# recorded status, and cancelling one leaves the branch with a missing check.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Node 22 matches security.yml. Keep the two in step — a version skew between the
+  # security build and the CI build means the two workflows are testing different trees.
+  NODE_VERSION: "22"
+
+jobs:
+  typecheck:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step in this job pushes, so the checkout token should not be left behind in
+          # .git/config where a later step (or a malicious dependency's postinstall) could use it.
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: tsc --noEmit
+        run: npx tsc --noEmit
+
+  lint:
+    name: ESLint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: next lint
+        # `next lint` covers the whole project with eslint-config-next's rules, including the
+        # React/Next correctness rules that `npm run lint:sast` (security.yml) does not run
+        # because it targets only the source directories.
+        #
+        # NOTE: `next lint` is deprecated in Next 15 and is REMOVED in Next 16. When the Next
+        # 16 upgrade lands this step must become `npm run lint` (the flat-config ESLint CLI,
+        # already defined in package.json). It will fail loudly rather than silently pass, so
+        # this cannot rot into a no-op gate.
+        run: npx next lint
+
+  build:
+    # NOT "Production build" — security.yml already has a job by that name. A required status
+    # check is matched by its name string, so two jobs sharing one name are indistinguishable
+    # to branch protection and either could satisfy the rule. Keep every job name in this repo
+    # unique across all workflows.
+    name: Next build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: next build
+        # Only the two NEXT_PUBLIC_* values are needed to build, and they are public by
+        # design (the anon key is a browser key guarded by RLS). Placeholders are used
+        # anyway: a build gate that needs a real credential is a build gate that cannot run
+        # on a fork PR, and no CI job here should hold one.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+        run: npx next build
+
+  lockfile:
+    name: Lockfile integrity + SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: npm ci
+        # `npm ci` is itself the primary gate: unlike `npm install` it refuses to run at all
+        # when package.json and package-lock.json disagree, and it installs strictly what the
+        # lockfile pins, verifying each tarball against its recorded integrity hash.
+        run: npm ci
+
+      - name: Assert the lockfile did not drift
+        # Second line of defence. `npm ci` is documented never to write the lockfile, but npm
+        # has normalised lockfile fields in place across releases, and a lockfile that CI
+        # silently rewrites is a lockfile that no longer describes what the reviewer read.
+        # This step turns "it changed under us" into a red build instead of a quiet mutation.
+        run: |
+          if ! git diff --quiet -- package.json package-lock.json; then
+            echo "::error file=package-lock.json::npm ci modified package.json/package-lock.json. The committed lockfile does not match what npm resolves. Run 'npm install' locally and commit the result."
+            git --no-pager diff --stat -- package.json package-lock.json
+            git --no-pager diff -- package.json package-lock.json | head -200
+            exit 1
+          fi
+          echo "lockfile is byte-identical after npm ci"
+
+      - name: Assert every dependency resolves to registry.npmjs.org
+        # A poisoned lockfile does not need a poisoned package.json: rewriting a `resolved`
+        # URL to an attacker-controlled registry is a one-line diff that reviewers skim past
+        # in a 300 KB file. This is cheap and catches it. Legitimate private-registry or git
+        # dependencies would need this list widened — deliberately, in a reviewed commit.
+        run: |
+          node -e '
+            const lock = require("./package-lock.json");
+            const ALLOWED = new Set(["registry.npmjs.org"]);
+            const bad = [];
+            for (const [p, e] of Object.entries(lock.packages || {})) {
+              if (!e.resolved) continue;
+              let host = "";
+              try { host = new URL(e.resolved).host; } catch { host = e.resolved; }
+              if (!ALLOWED.has(host)) bad.push(p + " <- " + e.resolved);
+            }
+            if (bad.length) {
+              console.error("::error file=package-lock.json::" + bad.length + " package(s) resolve outside registry.npmjs.org");
+              for (const b of bad.slice(0, 20)) console.error("  " + b);
+              process.exit(1);
+            }
+            console.log("all " + Object.keys(lock.packages).length + " lockfile entries resolve to registry.npmjs.org");
+          '
+
+      - name: Generate CycloneDX SBOM
+        # scripts/sbom.mjs parses package-lock.json and adds no dependency of its own. It
+        # exits non-zero on a malformed lockfile or an internally inconsistent graph, so this
+        # step is a real check and not just artifact production.
+        run: node scripts/sbom.mjs
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.json
+          if-no-files-found: error
+          retention-days: 90

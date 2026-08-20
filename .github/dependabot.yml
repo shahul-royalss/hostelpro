@@ -1,0 +1,108 @@
+version: 2
+
+# Dependency update policy in machine-readable form. The reasoning behind it — severity
+# SLAs, who reviews what, how to handle an advisory with no upstream fix — lives in
+# docs/dependency-policy.md. Change both together or they drift apart.
+#
+# Two ecosystems are watched:
+#   npm            — package.json / package-lock.json
+#   github-actions — the `uses:` pins in .github/workflows/*.yml
+#
+# The github-actions entry is the reason SHA-pinning in ci.yml does not mean going stale.
+# Dependabot reads the `# v7.0.1` comment that follows each SHA, and opens a PR that moves
+# both the SHA and the comment. Pinning buys immutability; this entry buys freshness.
+
+updates:
+  # ── npm ────────────────────────────────────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      # security.yml runs its scheduled full-history scan at 03:17 UTC Monday. Landing the
+      # dependency PRs a few hours later means that week's clean scan is already recorded
+      # against the previous tree, so any new finding is attributable to the bump.
+      time: "07:00"
+      timezone: "Etc/UTC"
+
+    # Five is about what one reviewer can actually read in a week. A higher number does not
+    # produce more updates, only a backlog that gets rubber-stamped — which is precisely the
+    # failure mode dependency review exists to prevent.
+    #
+    # This limit does NOT apply to Dependabot *security* updates, which have their own quota
+    # and are opened as soon as an advisory lands regardless of schedule. That separation is
+    # deliberate: routine bumps are rate-limited, vulnerability fixes are not.
+    open-pull-requests-limit: 5
+
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: "scope"
+
+    groups:
+      # Next and its ESLint config are pinned to the same exact version in package.json
+      # (next 15.5.23 / eslint-config-next 15.5.23). Bumping one without the other breaks
+      # `next lint`, so they must arrive in a single PR — including majors.
+      next:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+          - "@next/*"
+
+      # react and react-dom are exact-pinned to the same version and are a matched pair at
+      # runtime; their @types follow the same rule.
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+
+      # ~15 separately-versioned @radix-ui/react-* packages from one publisher on one release
+      # cadence. Ungrouped this is the single largest source of PR noise in the repo.
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+
+      # Everything else, minor and patch only, split by where the code ends up. A production
+      # bump ships to users and gets a real review; a devDependency bump cannot reach the
+      # runtime and gets a lighter one. Reviewers should be able to tell which is which from
+      # the PR title alone.
+      production-minor-patch:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      development-minor-patch:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+
+    # Majors are intentionally left OUT of the catch-all groups above, so each one arrives
+    # as its own PR. A major is a breaking-change review — read the changelog, check the
+    # migration notes — and batching five of them into one PR guarantees none gets read.
+
+  # ── GitHub Actions ─────────────────────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/" # resolves to .github/workflows regardless of the path given here
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Etc/UTC"
+
+    # Three workflows, a handful of actions between them. Anything above this is noise.
+    open-pull-requests-limit: 3
+
+    labels: ["dependencies", "github-actions"]
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+    groups:
+      # First-party actions from the actions/ org move together often enough that one PR a
+      # week is the right granularity. Majors are excluded: actions/upload-artifact v3 -> v4
+      # was a breaking change that silently altered artifact behaviour, and that class of
+      # change deserves its own PR.
+      actions-minor-patch:
+        patterns:
+          - "actions/*"
+        update-types: ["minor", "patch"]

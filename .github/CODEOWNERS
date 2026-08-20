@@ -1,0 +1,57 @@
+# CODEOWNERS — who must approve a change to what.
+#
+# Paired with the "Require review from Code Owners" branch protection rule (see
+# docs/supply-chain.md §2), every pattern below becomes a mandatory reviewer on any PR
+# touching a matching file. Without that rule this file only *suggests* reviewers.
+#
+# !! VERIFY THE HANDLE BEFORE RELYING ON THIS FILE !!
+# @dhrishta2025 is taken from the repo's git config (user.name), not from GitHub. If the
+# GitHub account is named differently, every rule here silently stops applying: GitHub
+# flags unknown owners in the repository's CODEOWNERS view and treats those lines as
+# inactive, so "Require review from Code Owners" is satisfied by nobody. Open
+# Settings -> Code security, or the CODEOWNERS file view, and confirm there are no
+# "Unknown owner" warnings after the first push.
+#
+# Order matters: the LAST matching pattern wins, so the catch-all comes first and the
+# high-risk paths come after it.
+
+# ── Default owner for everything ─────────────────────────────────────────────────────────
+*                           @dhrishta2025
+
+# ── Authorization and tenancy: the code that decides who may see whose data ───────────────
+# Every Critical in SECURITY.md §3 lived in one of these paths. Changes here need the
+# matching attack suite re-run (scripts/_qa-rls-attack.mjs, scripts/_qa-tenant-integrity.mjs)
+# before approval, not after merge.
+/db/                        @dhrishta2025
+/lib/                       @dhrishta2025
+/middleware.ts              @dhrishta2025
+/app/api/                   @dhrishta2025
+
+# ── Supply chain: adding code written by strangers ───────────────────────────────────────
+# A one-line package.json diff can pull in hundreds of transitive packages. Treat these as
+# security review, not housekeeping — see docs/dependency-policy.md.
+/package.json               @dhrishta2025
+/package-lock.json          @dhrishta2025
+
+# ── The gates themselves ─────────────────────────────────────────────────────────────────
+# Whoever can edit CI can disable CI. These files must never be self-approvable, which is
+# why "Do not allow bypassing the above settings" matters in branch protection.
+/.github/                   @dhrishta2025
+/.github/workflows/         @dhrishta2025
+/scripts/                   @dhrishta2025
+
+# ── Security documentation ───────────────────────────────────────────────────────────────
+# The sign-off record. Editing it changes what the project claims about itself.
+/SECURITY.md                @dhrishta2025
+/THREAT-MODEL.md            @dhrishta2025
+/docs/supply-chain.md       @dhrishta2025
+/docs/dependency-policy.md  @dhrishta2025
+
+# ── When a second maintainer joins ───────────────────────────────────────────────────────
+# Replace the individual handle with a GitHub team so ownership survives someone leaving:
+#
+#   /db/    @your-org/security
+#   /lib/   @your-org/security
+#
+# Teams only work inside an organisation; on a personal account, list handles individually
+# (space-separated) and note that GitHub requires only ONE of them to approve, not all.

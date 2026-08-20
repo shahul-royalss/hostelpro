@@ -1,0 +1,129 @@
+name: Database backup
+
+# The Supabase org is on the FREE plan: no PITR, no managed scheduled backups, and
+# no direct Postgres password for pg_dump. This workflow IS the backup — see
+# docs/backup-and-dr.md for the RPO/RTO it delivers and what it does not cover.
+#
+# It runs on a schedule only. It is deliberately NOT on push: a backup that runs
+# per-commit would burn artifact storage and still leave the same overnight gap.
+on:
+  schedule:
+    - cron: "40 19 * * *" # 19:40 UTC = 01:10 IST, nightly, well after the daily peak
+  workflow_dispatch: # a human can always take one on demand (before a migration, say)
+
+# Actions are pinned to full commit SHAs, not tags: a tag is a mutable pointer that its
+# owner (or anyone who steals a maintainer token) can repoint at new code, which every
+# workflow then picks up with no diff and no review. The trailing version comment is what
+# Dependabot reads to offer the bump. SHAs verified against the GitHub API on 2026-08-20.
+permissions:
+  contents: read
+
+# Two backups writing artifacts at once gains nothing and doubles the read load
+# on a free-tier database. Queue them instead of cancelling — never cancel a
+# backup that is already running.
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Dump, verify, retain 90d
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Without this, a missing or un-renamed secret surfaces as a confusing runtime
+      # error deep in the script — or worse, as a job that looks like it half-worked.
+      # Fail here, before touching the database, with a message that names the secret.
+      - name: Check required secrets are configured
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          missing=0
+          for name in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY BACKUP_ENCRYPTION_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::repository secret $name is not set — see docs/backup-and-dr.md"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Encrypted logical backup
+        id: dump
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          set +e
+          node scripts/backup-db.mjs --out backups --strict | tee dump.log
+          code=${PIPESTATUS[0]}
+          set -e
+          case "$code" in
+            0) echo "drift=no" >> "$GITHUB_OUTPUT" ;;
+            3) # The dump succeeded and the file is on disk; only the table manifest
+               # is stale. Record it, keep going so the artifact still gets uploaded,
+               # and fail the job at the very end.
+               echo "::warning::schema drift detected — the backup is complete, but scripts/backup-db.mjs EXPECTED_TABLES is stale"
+               echo "drift=yes" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::backup failed (exit $code) — no usable dump was produced"
+               exit "$code" ;;
+          esac
+          echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      # if: always() on purpose. If verification below fails, the encrypted dump is
+      # exactly the thing an operator needs in order to investigate — losing it to a
+      # failed step would be the worst possible outcome of a backup job.
+      - name: Upload encrypted backup
+        if: always() && steps.dump.outputs.date != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: db-backup-${{ steps.dump.outputs.date }}-${{ github.run_id }}
+          path: backups/*.hpb
+          retention-days: 90
+          if-no-files-found: error # an artifact step that silently uploads nothing is a fake backup
+          compression-level: 0 # already gzipped inside the ciphertext; recompressing is pure CPU
+
+      # The real gate. Decrypts the file that was just uploaded and asserts it is
+      # restorable: right key, every manifest table present, no core table empty,
+      # counts self-consistent, and no dangling foreign keys.
+      - name: Verify the backup decrypts and is complete
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: node scripts/verify-backup.mjs --latest --dir backups --max-age-hours 2 --min-rows 100
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Nightly database backup"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Artifact | \`db-backup-${{ steps.dump.outputs.date }}-${{ github.run_id }}\` |"
+            echo "| Retention | 90 days |"
+            echo "| Encryption | AES-256-GCM under \`BACKUP_ENCRYPTION_KEY\` |"
+            echo "| Schema drift | ${{ steps.dump.outputs.drift || 'unknown' }} |"
+            echo ""
+            echo "Restore runbook: \`docs/backup-and-dr.md\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Last, so drift is reported but never costs the night's data.
+      - name: Fail on schema drift
+        if: steps.dump.outputs.drift == 'yes'
+        run: |
+          echo "::error::A table was added to or removed from the database and scripts/backup-db.mjs was not updated."
+          echo "The backup above is complete (tables are discovered, not hardcoded), but the manifest,"
+          echo "RESTORE_ORDER and the FK map in scripts/verify-backup.mjs must be reviewed."
+          sed -n '/DRIFT/p' dump.log
+          exit 1

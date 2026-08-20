@@ -9,6 +9,10 @@ on:
   schedule:
     - cron: "17 3 * * 1" # weekly, so newly-disclosed CVEs surface even with no commits
 
+# Actions are pinned to full commit SHAs, not tags: a tag is a mutable pointer that its
+# owner (or anyone who steals a maintainer token) can repoint at new code, which every
+# workflow then picks up with no diff and no review. The trailing version comment is what
+# Dependabot reads to offer the bump. SHAs verified against the GitHub API on 2026-08-20.
 permissions:
   contents: read
 
@@ -17,8 +21,8 @@ jobs:
     name: Types, lint, SAST
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -32,10 +36,10 @@ jobs:
     name: Secret scan, backdoor audit, dependencies
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # full history — the secret scan walks every commit
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -49,8 +53,8 @@ jobs:
     name: Production build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
