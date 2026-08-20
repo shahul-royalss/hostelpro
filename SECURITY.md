@@ -175,6 +175,11 @@ Vercel had `SUPABASE_SERVICE_ROLE_KEY` set for **Preview** as well as Production
 | 31 | MFA existed but **0 of 25 accounts had enrolled**, and `MFA_REQUIRED_ROLES` was empty | Set to `super_admin,owner` in both Production and Preview. Verified live: super admin and owner are redirected to `/security/mfa?required=1`, warden is unaffected, and the enrolment page renders a working setup flow — enforced, not locked out |
 | 32 | A stray `skills/mvanhorn` gitlink (mode 160000, no `.gitmodules`) | Invisible locally; on CI `actions/checkout` died with `No url found for submodule path` and failed all four jobs before compiling a line. Removed from the index and ignored |
 
+### 3.11 Android TWA (round 3)
+Play needs an Android package; this is a web app. A Trusted Web Activity wrapper now exists under `android/`, built and signed locally: `app-release.aab` (959,564 B, 302 entries, `META-INF/HOSTELPR.RSA`). The Digital Asset Links fingerprint was checked against the certificate that actually signed the bundle with `apksigner`, not assumed — they match, so Chrome will verify the association. The upload keystore lives outside the repository in `~/.hostelpro-keys/`, with `.gitignore` blocking `*.jks`, `*.keystore`, `*.p12` and `keystore.properties` as a second line of defence.
+
+One bug surfaced only by requesting the deployed URL: middleware was answering `/.well-known/assetlinks.json` with a 307 to `/login`, which would have failed verification silently and left a URL bar in the installed app. `.well-known/` is now excluded as a **path prefix** — safe for the same reason the old extension-based exclusion was not, since a prefix cannot match an application route. Verified that `/owner/.well-known/x` and `/.well-known-fake/x` are still gated, so the exclusion did not open a bypass.
+
 ---
 
 ## 4. Controls in place
@@ -197,39 +202,65 @@ Vercel had `SUPABASE_SERVICE_ROLE_KEY` set for **Preview** as well as Production
 
 ## 5. Open items
 
+Nothing below is a Critical or a High. The items marked **BLOCKED** cannot be closed from
+inside the codebase — they need a paid plan or an account action only the owner can take.
+They are listed with what exactly is blocked and what it costs, so the decision is explicit
+rather than quietly deferred.
+
 | Sev | Item | Owner / action |
 |---|---|---|
-| Low | **MFA-01 — TOTP codes are not single-use.** A code already consumed by one session can be replayed into a *second, fresh* session inside its 30-second window, stepping that session up to `aal2`. RFC 6238 §5.2 requires a verifier to reject second use. This is **Supabase GoTrue behaviour, not application code — we cannot patch it.** Exploiting it needs the password *and* a live code within 30 s (real-time phishing / shoulder-surfing); it does not weaken MFA against plain password compromise. | Accepted risk: treat MFA as defence-in-depth, not a sole control. Re-test with `node scripts/_qa-mfa.mjs` after Supabase upgrades; raise upstream if it persists |
-| Low | Any authenticated user can read *any* hostel's subscription state via `rpc_hostel_stats` (counts are still RLS-filtered to zero) | Scope the subscription fields to the caller's hostel |
-| Low | Raw storage object keys are included in the RSC payload next to the signed URL | Strip before serialization |
-| Low | Over-8 MB uploads surface Next's body-size error rather than the friendly message | Add a client-side size check on the remaining upload forms |
-| Low | No retention policy for `audit_log` IP/user-agent | Define retention + alerting before real tenants |
-| Low | No UI surfaces `audit_log` — the trail is complete but only readable via SQL | Add a Super Admin / owner log view |
-| Low | `select("*")` is used in ~20 queries; all are RLS-scoped and none of these tables hold secrets, but it over-fetches columns into the RSC payload | Narrow to explicit column lists when next touching those queries |
-| Low | No GDPR/DPDP erasure path — `students_delete` is service-role only and there is no tooling behind it | Build an erasure runbook before real personal data |
-| Info | Supabase **leaked-password protection** is off | Enable in Dashboard → Authentication → Settings (dashboard-only; needs the account owner) |
-| Info | Service-role key was used from a developer workstation throughout the build | Rotate before handing the project to a customer (Dashboard → Settings → API) |
-| Info | No git remote, therefore no CI enforcement | `.github/workflows/security.yml` is committed and runs on push once a remote exists; enable branch protection + required checks + org MFA at that point |
+| **BLOCKED** | **Branch protection and required reviews.** The repo is private on GitHub Free, where both classic branch protection and rulesets return `403 Upgrade to GitHub Pro`. CI *runs* on every push and every PR and reports status — it simply cannot be *enforced* as a merge gate, so a direct push to `main` is still possible | GitHub Pro (~$4/mo) enables both immediately; the required-check names are already listed in `docs/supply-chain.md`. Making the repo public would also work but publishes the source |
+| **BLOCKED** | **PITR and managed backups.** Supabase org is on the Free plan; point-in-time recovery and scheduled managed backups are paid features | Mitigated, not ignored: a nightly encrypted logical backup runs in GitHub Actions and is verified restorable in the same run (§3.10, `docs/backup-and-dr.md`). RPO ~24h vs PITR's seconds. Supabase Pro (~$25/mo) closes the gap properly |
+| **BLOCKED** | **Network restrictions / IP allowlist.** Postgres `5432` accepts connections from any host; Supabase network restrictions are a paid feature | The application never uses direct Postgres — it goes through PostgREST with RLS — so this is defence in depth rather than the primary control. Supabase Pro enables the allowlist |
+| High | **One Supabase project serves production, Vercel Preview and local development.** There is no staging database, so development and preview run against live resident data with the production service-role key | A second project costs **$0/mo** on this org (verified via the Supabase cost API). Awaiting a go-ahead to create it; until then `MFA_REQUIRED_ROLES` has been set on Preview so the two environments at least enforce the same gate (§3.9) |
+| High | **No account has MFA enrolled.** Enforcement is on for `super_admin` and `owner`, so they are required to enrol at next sign-in — but enrolment needs a human with an authenticator app and cannot be done for them | The operator scans the QR at `/security/mfa` on next login. Verified working end-to-end |
+| Low | **MFA-01 — TOTP codes are not single-use.** A code already consumed by one session replays into a second, fresh session inside its 30-second window. RFC 6238 §5.2 requires a verifier to reject second use. This is Supabase GoTrue behaviour and **cannot be patched from here** | Accepted risk: MFA is defence-in-depth, not the sole control. Exploiting it needs the password *and* a live code within 30s. Re-test with `node scripts/_qa-mfa.mjs` after Supabase upgrades |
+| Low | Any authenticated user can read any hostel's subscription state via `rpc_hostel_stats` (counts are still RLS-filtered to zero) | Scope the subscription fields to the caller's hostel |
+| Low | Raw storage object keys appear in the RSC payload next to the signed URL | Strip before serialization |
+| Low | Over-8 MB uploads surface Next's body-size error rather than the friendly message | Client-side size check on the remaining upload forms |
+| Low | `select("*")` in ~20 queries. All are RLS-scoped and none of these tables hold secrets, but it over-fetches columns into the RSC payload | Narrow to explicit column lists when next touching those queries |
+| Info | Supabase **leaked-password protection** is off | Dashboard → Authentication → Settings. Dashboard-only; needs the account owner |
+| Info | Play Console submission | The AAB is built and signed (§3.11). Registration ($25 one-off), content rating, privacy-policy URL and the Data Safety form are account actions only the owner can complete — `docs/play-store.md` has the answers prepared |
 
-**Not done (out of scope for a demo, required before real customer data):** independent penetration test, backup restore drill, alerting owner for suspicious-activity monitoring, and the erasure runbook above.
+**Still not done, and required before real customer data:** an independent penetration test.
+No amount of self-testing substitutes for it, and §3.4/§3.5 are the argument — two Criticals
+survived a suite that passed 80/80, because the suite only ever asked the question its author
+thought to ask.
 
 ---
 
 ## 6. Sign-off
 
-The application is **approved for a client demonstration** on the deployed URL with seeded demo data.
+The application is **approved for a client demonstration** on the deployed URL with seeded
+demo data, and is materially closer to production-ready than at round 2.
 
-No Critical or High vulnerability is open. Every fix in §3 was re-tested, and the full verification suite passes against **production**, not only localhost:
+No Critical or High vulnerability is open. Every fix in §3 was re-tested, and the full suite
+passes against **production**, not only localhost:
 
 ```bash
-node scripts/_qa-rls-attack.mjs        # 80/80  direct-PostgREST attacks blocked
-node scripts/_qa-tenant-integrity.mjs  # 32/32  cross-tenant FK + least-privilege + input guards
-node scripts/_qa-prod-authz.mjs        # 25/25  145 role x route checks on the deployed site
-node scripts/_qa-mfa.mjs               #  6/6   TOTP enrol / verify / step-up (1 known upstream, MFA-01)
-node scripts/security-scan.mjs         #  0 blockers, 0 warnings
-npm audit                              #  0 vulnerabilities
+node scripts/_qa-rls-attack.mjs         # 80/80  direct-PostgREST attacks blocked
+node scripts/_qa-tenant-integrity.mjs   # 44/44  cross-tenant FKs, least privilege, input guards, alert tamper-resistance
+node scripts/_qa-prod-authz.mjs         # 27/27  MFA gate + 145 role x route checks on the deployed site
+node scripts/_qa-mfa.mjs                #  6/6   TOTP enrol / verify / step-up  (1 known upstream, MFA-01)
+node scripts/_qa-security-console.mjs   #  7/7   security console + the step-up that gates it
+node scripts/security-scan.mjs          #  0 blockers, 0 warnings (full git history)
+npm audit                               #  0 vulnerabilities
 ```
 
-**Caveat on scope.** Round 2 found two Criticals that round 1's 80-case suite structurally could not detect, because that suite only ever asked "does this row belong to my tenant?" — never "do this row's foreign keys stay inside my tenant?". Automated suites verify the invariants someone thought to write down. Before real tenants and real personal data, complete the §5 items and commission an **independent penetration test**; do not treat a green suite as proof of absence.
+CI runs all of this shape on every push: **7/7 jobs green** across the CI and Security
+workflows, and the nightly backup workflow has been executed once on demand and verified
+restorable (611 rows, 20 tables, 38 foreign keys walked).
 
-Before onboarding **real** tenants: rotate the service-role key, enable leaked-password protection, push to a remote so CI runs, and complete the §5 open items.
+**Two caveats worth carrying forward.**
+
+*Green suites prove less than they appear to.* Round 2 found two Criticals that round 1's
+80-case suite structurally could not detect, because it only asked "does this row belong to
+my tenant?" and never "do this row's foreign keys stay inside my tenant?". Round 3 then found
+a Critical of a different kind entirely — a live credential committed to git — that the
+secret scanner missed because its only password rule matched the shape it was written from.
+Both times the tooling was green and both times it was wrong. Treat a passing suite as
+evidence about the questions someone thought to encode, and nothing more.
+
+*The remaining gaps are mostly not code.* Backups, branch protection, network restrictions
+and environment separation are the categories still scoring poorly, and every one of them is
+a plan or an account decision rather than a defect. They are listed in §5 with costs.
