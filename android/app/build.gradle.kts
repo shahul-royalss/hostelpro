@@ -7,10 +7,11 @@ plugins {
 /* ──────────────────────────────────────────────────────────────────────────
  * Release signing material.
  *
- * The keystore and its passwords are NEVER in this repository. Losing the
- * upload key means you can never publish an update to this listing again
- * (see docs/play-store.md), so it lives outside the working tree where a
- * `git clean`, a branch switch or an accidental `git add -A` cannot touch it.
+ * The keystore and its passwords are NEVER in this repository. It lives outside
+ * the working tree, where a `git clean`, a branch switch or an accidental
+ * `git add -A` cannot touch it. Losing it costs an upload-key reset through Play
+ * support and a redeployed assetlinks.json at best, and the ability to ever
+ * update the listing at worst - docs/play-store.md §3 spells out which.
  *
  * Resolution order, first hit wins:
  *   1. environment variables  — what CI should use
@@ -76,7 +77,8 @@ android {
                 storePassword = ksStorePass
                 keyAlias = ksKeyAlias
                 keyPassword = ksKeyPass
-                // v1 for API 21-23, v2/v3 for everything newer.
+                // API 23 predates APK Signature Scheme v2, so v1 (JAR signing)
+                // is still required at this minSdk; v2/v3 cover API 24+.
                 enableV1Signing = true
                 enableV2Signing = true
                 enableV3Signing = true
