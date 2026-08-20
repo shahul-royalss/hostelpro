@@ -7,6 +7,40 @@
 
 ---
 
+
+## Branch protection is NOT active — and cannot be, on this plan
+
+This was attempted and **refused by GitHub**, twice:
+
+```
+PUT  /repos/shahul-royalss/hostelpro/branches/main/protection   -> 403
+POST /repos/shahul-royalss/hostelpro/rulesets                   -> 403
+{"message":"Upgrade to GitHub Pro or make this repository public to enable this feature."}
+```
+
+Branch protection and rulesets are paid features for **private** repositories. The repository is
+private by choice (it is a commercial product with a client), so the only two ways to turn this on
+are **GitHub Pro (~$4/month)** or making the source public. Until one of those happens:
+
+| Intended control | Status | What actually stops a mistake today |
+|---|---|---|
+| Require PR before merge | **Not enforced** | Convention only. `git push` to `main` succeeds. |
+| Require CI to pass before merge | **Not enforced** | CI still *runs* on every push and fails loudly — it just cannot *block*. |
+| Require 1 approving review | **Not enforced** | Single-operator repo today; this becomes real the moment a second person commits. |
+| Block force-push / deletion of `main` | **Not enforced** | Nothing prevents it. |
+| Dependabot alerts | **Active** | Enabled via API. |
+| Dependabot automated security fixes | **Active** | Enabled via API. |
+| Delete branch on merge | **Active** | Enabled via API. |
+
+**Do not read the CI badges as a merge gate.** They are a signal, not a guard. The distinction
+matters: a green pipeline that cannot block a bad merge is exactly the false assurance this
+document exists to prevent.
+
+**To close this properly:** upgrade to GitHub Pro, then re-run the two API calls above — the exact
+payloads are in this repo's history, and the required check names (`TypeScript`, `ESLint`,
+`Next build`) match the job names in `.github/workflows/ci.yml`.
+
+
 ## 1. Repository settings
 
 Apply these once, immediately after the first push. Settings → the named section.
