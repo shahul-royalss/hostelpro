@@ -28,10 +28,12 @@ import { loadRazorpayCheckout, openRazorpayCheckout, type RazorpayCheckoutInstan
  */
 
 /** Swappable success visual — see payment-success-animation.tsx. Kept out of the
- *  route's chunk so `motion` is fetched only after a payment has succeeded. */
+ *  route's chunk so the receipt printer's markup and CSS are fetched only after a
+ *  payment has succeeded. The placeholder reserves the machine's height so the
+ *  Done button does not jump when the chunk lands. */
 const PaymentSuccessAnimation = dynamic(
   () => import("./payment-success-animation").then((m) => m.PaymentSuccessAnimation),
-  { ssr: false, loading: () => <div className="h-[124px]" aria-hidden /> },
+  { ssr: false, loading: () => <div className="h-[352px]" aria-hidden /> },
 );
 
 const POLL_INTERVAL_MS = 2000;
@@ -299,7 +301,15 @@ export function PayRentSheet({
 
           {phase === "success" && (
             <div className="flex flex-col gap-4">
-              <PaymentSuccessAnimation label={`${formatINR(status?.amountRupees ?? amount ?? 0)} paid`} />
+              <PaymentSuccessAnimation
+                label={`${formatINR(status?.amountRupees ?? amount ?? 0)} paid`}
+                amountRupees={status?.amountRupees ?? amount ?? 0}
+                period={status?.period ?? period ?? null}
+                paymentId={status?.paymentId ?? null}
+                method={status?.method ?? null}
+                hostelName={receiptFor?.hostelName}
+                studentName={receiptFor?.studentName}
+              />
               <PaymentReceipt
                 amountRupees={status?.amountRupees ?? amount ?? 0}
                 period={status?.period ?? period ?? ""}

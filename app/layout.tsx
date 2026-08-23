@@ -27,8 +27,13 @@ export const metadata: Metadata = {
     title: APP_NAME,
   },
   icons: {
-    icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+    // The logo is raster artwork, so there is no honest SVG of it — pointing at a stale
+    // hand-drawn placeholder was worse than pointing at the real thing in PNG.
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
 

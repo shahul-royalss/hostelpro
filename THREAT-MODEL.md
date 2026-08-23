@@ -10,10 +10,21 @@ Companion documents: [`SECURITY.md`](./SECURITY.md) (findings + sign-off),
 
 ## 1. System shape
 
-Single Next.js 15 application (Vercel) + Supabase (Postgres, Auth, Storage). **No** payment
-provider, **no** webhooks, **no** background workers/queues, **no** AI/LLM integration,
-**no** native mobile binary, **no** second backend. Exactly one outbound HTTP call exists
-(`app/api/health/route.ts` → the Supabase health URL built from an env var, never user input).
+Single Next.js 15 application (Vercel) + Supabase (Postgres, Auth, Storage), wrapped for Android
+as a Trusted Web Activity (`app.nivora.twa`) that loads the same deployment. **No** background
+workers/queues, **no** AI/LLM integration, **no** second backend.
+
+Since 24 Aug 2026 there IS a payment provider and there IS a webhook, and both widen this model:
+  * **Razorpay** processes online rent payments. Two server-side outbound calls now exist —
+    `app/api/health/route.ts` → the Supabase health URL, and `lib/razorpay.ts` → the Razorpay
+    orders API. Neither is built from user input.
+  * **`POST /api/webhooks/razorpay`** is a new UNAUTHENTICATED entry point: Razorpay is not a
+    signed-in user, so it is exempt from the session gate. Its authentication is an HMAC-SHA256
+    over the RAW request body, compared with `timingSafeEqual`. That signature check is the only
+    thing standing between the public internet and the fee ledger — treat it as the highest-value
+    control in the application and see §6 for what was tested against it.
+  * Razorpay's Checkout script runs in the browser, and the CSP grants its origins **only** on
+    `/student` routes rather than app-wide (`lib/security-headers.ts`).
 
 Trust boundaries, outermost first:
 

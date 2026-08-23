@@ -440,10 +440,19 @@ export default function PrivacyPolicyPage() {
 
           <h3>Outside your hostel</h3>
           <p>
-            {APP_NAME} uses three service providers. They process data on our instructions and are
+            {APP_NAME} uses four service providers. They process data on our instructions and are
             not permitted to use it for their own purposes. This is the complete list — there is no
-            payment processor, no messaging provider, no analytics vendor, no AI service and no
-            advertising network involved.
+            messaging provider, no analytics vendor, no AI service and no advertising network
+            involved.
+          </p>
+          <p>
+            Paying rent inside the app is optional. If you use it, the card, UPI or netbanking
+            details are collected by <strong>Razorpay on Razorpay&rsquo;s own page</strong> and are
+            never sent to us — we never see and never store a card number, a UPI ID, a CVV or a
+            bank account. What we keep is the record of the payment itself: the amount, the
+            currency, Razorpay&rsquo;s order and payment identifiers, and which method you chose
+            (for example &ldquo;upi&rdquo;). If you pay your warden in cash instead, Razorpay
+            receives nothing about you at all.
           </p>
           <DataTable
             head={["Provider", "What they do", "What they hold"]}
@@ -462,6 +471,11 @@ export default function PrivacyPolicyPage() {
                 "GitHub",
                 "Source code, and storage for the nightly encrypted database backup",
                 "Encrypted backup archives, retained 90 days",
+              ],
+              [
+                "Razorpay",
+                "Processing an online rent payment, only when you choose to pay in the app",
+                "Your name, email and phone, so the payment can be attributed to you, plus the payment details you enter on their page. We receive back only the amount, the identifiers and the method",
               ],
             ]}
           />

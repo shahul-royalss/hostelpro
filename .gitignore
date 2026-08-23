@@ -67,3 +67,7 @@ skills/mvanhorn/
 
 # Release artifacts (AAB/APK) — binaries, rebuilt from android/ on demand
 /dist/
+
+# Owner-supplied prototype kept as reference for components/payments/receipt-printer.tsx.
+# Not built and not shipped; excluded from lint. Remove once the port is settled.
+reciept animation/

@@ -111,6 +111,7 @@ Sensitivity: **H** = identity-theft or safety risk if exposed; **M** = privacy o
 | `audit_log` | `actor_user_id`, `target_id`, **`ip`**, **`user_agent`**, `meta` | Everyone who signs in | M | 365 days; `ip`/`user_agent` nulled at 90 days ([`logging-and-monitoring.md`](./logging-and-monitoring.md) §4) |
 | `app.rate_limits` | SHA-256 hashed keys only — never a clear IP or identifier (`lib/rate-limit.ts`) | Pseudonymous | L | Hours |
 | `security_alerts` | `actor_user_id`, **`ip`**, `summary`, `details` — a detection references the person it fired on | Everyone who signs in | M | Acknowledged: 365 days. **Unacknowledged: retained indefinitely** — an open alert is an open investigation |
+| `payment_intents` | `student_id`, `amount_paise`, `currency`, `razorpay_order_id`, `razorpay_payment_id`, `method` — a record that a payment happened. **No card number, UPI ID, CVV or bank account**: those are collected by Razorpay on Razorpay's own page and never reach this server | Residents who pay online | M | 8 years — it evidences a rent payment, so it follows the accounting retention in §5.2 rather than the shorter operational periods |
 | `floors` | None — structural only (`hostel_id`, floor number) | n/a | — | Life of the tenant |
 | `rooms` | None directly, but `room_id` links a resident to a physical location via `beds`/`students` | n/a (indirect) | L | Life of the tenant |
 
@@ -370,12 +371,18 @@ anonymisation quietly fails.**
 | **Vercel** | Application hosting, edge, runtime and access logs | Requests, IPs, user-agents; the runtime `console.error` output in [`logging-and-monitoring.md`](./logging-and-monitoring.md) §3.4 | Project `dhrishta/hostelpro`. Holds `SUPABASE_SERVICE_ROLE_KEY` as an encrypted env var |
 | **GitHub** | Source and CI | Source code only — no resident data | `.github/workflows/security.yml` runs without secrets |
 
-**That is the complete list**, and it is verifiable rather than asserted: `THREAT-MODEL.md` §1 and
-§6D record no payment provider, no webhooks, no queues, no AI/LLM integration, no email or SMS
-provider and no second backend; there is exactly one outbound HTTP call in the entire application
-(`app/api/health/route.ts` → the Supabase health URL, built from an env var and never from user
-input); and the 29 production dependencies in `package.json` contain **no analytics, telemetry,
-error-reporting or session-replay package** — verified by reading the list.
+| **Razorpay** | Online rent payment, only when a resident chooses to pay in the app | The student's own name, email and phone (sent as Checkout prefill), plus the payment credentials they enter on Razorpay's page | We receive back only the amount, the order/payment ids and the method. A resident who pays cash at the warden desk is never sent to Razorpay at all |
+
+**That is the complete list.** It is verifiable rather than asserted: there is no messaging
+provider, no analytics vendor, no AI/LLM integration and no second backend, and the production
+dependencies in `package.json` contain **no analytics, telemetry, error-reporting or
+session-replay package** — verified by reading the list.
+
+Two outbound HTTP destinations exist, both from the server and both to a named provider:
+`app/api/health/route.ts` → the Supabase health URL, and `lib/razorpay.ts` → the Razorpay orders
+API. Neither is built from user input. Razorpay's Checkout script additionally runs in the
+browser, and only on `/student` routes — `lib/security-headers.ts` scopes the CSP grant rather
+than widening it for the whole app.
 
 Supabase and Vercel are the trust root: a compromise of either is total, and the mitigations are
 least-privilege keys and the ability to rotate (`THREAT-MODEL.md` §6D).

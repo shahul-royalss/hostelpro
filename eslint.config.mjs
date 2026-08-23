@@ -41,6 +41,9 @@ const eslintConfig = [
       "skills/**",
       // Android/Gradle build output.
       "android/**",
+      // The receipt-printer prototype the owner supplied, kept as reference for the ported
+      // React component in components/payments/. Not built, not shipped, not ours to lint.
+      "reciept animation/**",
     ],
   },
 ];

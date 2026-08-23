@@ -13,8 +13,9 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#F6F4EF",
     orientation: "portrait",
     icons: [
-      { src: "/icons/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      // scripts/gen-icons.mjs makes 192 rounded-with-alpha (the "any" icon) and 512
+      // full-bleed and opaque, which is what purpose "maskable" requires.
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };

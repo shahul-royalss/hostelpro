@@ -1,75 +1,100 @@
 "use client";
 
 import * as React from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { Check } from "lucide-react";
+import { ReceiptPrinter, type ReceiptPrinterProps } from "./receipt-printer";
 
 /**
  * THE SUCCESS VISUAL — and nothing else.
  *
- * This file is the seam. It holds no payment state, imports no action, knows no
- * order id: it is handed a label and draws a confirmation. Replacing it with a
- * Lottie file, a video, a hand-drawn SVG or a brand animation is a matter of
- * rewriting this one component's body — pay-rent-sheet.tsx renders it through a
- * `next/dynamic` import and never looks inside.
+ * This file is still the seam it always was: it holds no payment state, calls no
+ * action, starts nothing and can undo nothing. It is handed values the server has
+ * already confirmed and draws a confirmation of them. pay-rent-sheet.tsx renders
+ * it through a `next/dynamic` import and never looks inside.
  *
- * Two reasons it is loaded dynamically rather than imported directly:
- *   • `motion` is otherwise unused in this app, so a static import would pull the
- *     animation runtime into the shared chunk for every route, to be evaluated by
- *     everyone who never pays anything;
- *   • it is only ever rendered after a payment has already succeeded, which is the
- *     one moment in the flow where a few hundred milliseconds of chunk fetch costs
- *     nothing.
+ * What it draws now is the user's thermal receipt dispenser (receipt-printer.tsx
+ * + receipt-printer.module.css), ported from the stand-alone prototype in
+ * `reciept animation/`. It is loaded dynamically for the same two reasons the
+ * spring-and-checkmark version was:
+ *   • the machine's CSS and markup are dead weight on every route that never
+ *     opens the pay sheet, and this app's navigation budget was fought for;
+ *   • it is only ever rendered after a payment has already succeeded, the one
+ *     moment in the flow where a chunk fetch costs nothing.
  *
- * Respects prefers-reduced-motion: the same mark is drawn, statically.
+ * DECORATION OVER A COMPLETED TRANSACTION. By the time this renders, the money
+ * has moved and the ledger has been credited by a signed webhook — the sheet
+ * polls the server and does not believe Checkout's callback. So the printer is
+ * wrapped in an error boundary and every prop below is optional: if the machine
+ * throws for any reason, the student still sees an unambiguous "paid", and the
+ * receipt card underneath it (payment-receipt.tsx) still carries the copyable
+ * payment id. A broken ornament must never read as a failed payment.
  */
-export function PaymentSuccessAnimation({ label = "Payment successful" }: { label?: string }) {
-  const reduced = useReducedMotion();
 
-  const spring = { type: "spring" as const, stiffness: 220, damping: 18 };
+export interface PaymentSuccessAnimationProps extends ReceiptPrinterProps {
+  /** Plain-language headline. Also the whole of the fallback, so it should be
+   *  true on its own without the receipt: "₹4,500 paid". */
+  label?: string;
+}
 
+/**
+ * Static, motionless, dependency-free. This is what a student sees if the
+ * printer throws — the same fact, drawn the boring way.
+ */
+function SuccessFallback({ label }: { label: string }) {
   return (
-    <div className="flex flex-col items-center gap-3 py-2" role="status" aria-live="polite">
-      <div className="relative flex h-24 w-24 items-center justify-center">
-        {/* Halo — a single soft pulse outward, then gone. */}
-        {!reduced && (
-          <motion.span
-            aria-hidden
-            className="absolute inset-0 rounded-full bg-teal/20"
-            initial={{ scale: 0.6, opacity: 0.9 }}
-            animate={{ scale: 1.5, opacity: 0 }}
-            transition={{ duration: 0.9, ease: "easeOut" }}
-          />
-        )}
+    <div className="flex flex-col items-center gap-3 py-2">
+      <span className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-teal text-white shadow-glass-lg">
+        <Check className="h-9 w-9" strokeWidth={3} aria-hidden />
+      </span>
+      <p className="text-[17px] font-semibold text-navy">{label}</p>
+    </div>
+  );
+}
 
-        <motion.span
-          className="relative flex h-[72px] w-[72px] items-center justify-center rounded-full bg-teal text-white shadow-glass-lg"
-          initial={reduced ? false : { scale: 0.4, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={reduced ? { duration: 0 } : spring}
-        >
-          <svg viewBox="0 0 40 40" className="h-9 w-9" fill="none" aria-hidden>
-            <motion.path
-              d="M11 20.5 L17.5 27 L29 14"
-              stroke="currentColor"
-              strokeWidth={3.2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              initial={reduced ? false : { pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={reduced ? { duration: 0 } : { duration: 0.4, delay: 0.16, ease: "easeOut" }}
-            />
-          </svg>
-        </motion.span>
-      </div>
+class ReceiptBoundary extends React.Component<
+  { fallback: React.ReactNode; children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
 
-      <motion.p
-        className="text-[17px] font-semibold text-navy"
-        initial={reduced ? false : { opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={reduced ? { duration: 0 } : { duration: 0.28, delay: 0.3 }}
-      >
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    // Swallowed on purpose. There is no recovery to attempt and nothing the
+    // student can do about it: the payment is already credited, and this
+    // component only ever drew a picture of that fact. Logged, not surfaced.
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[payment-success] receipt printer failed to render:", error);
+    }
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+export function PaymentSuccessAnimation({
+  label = "Payment successful",
+  ...receipt
+}: PaymentSuccessAnimationProps) {
+  return (
+    <div className="flex flex-col items-center py-1">
+      {/*
+        The announcement is deliberately short and separate from the slip. The
+        printed receipt below is real text and a screen reader can read every
+        line of it in browse mode, but a live region should say one thing when
+        it appears, not recite a whole document — and the receipt card further
+        down the sheet repeats these values anyway.
+      */}
+      <p className="sr-only" role="status" aria-live="polite">
         {label}
-      </motion.p>
+      </p>
+
+      <ReceiptBoundary fallback={<SuccessFallback label={label} />}>
+        <ReceiptPrinter {...receipt} />
+      </ReceiptBoundary>
     </div>
   );
 }

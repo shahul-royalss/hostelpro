@@ -1,0 +1,544 @@
+/*
+  ─────────────────────────────────────────────────────────────────────────────
+  Thermal receipt dispenser — ported from the stand-alone prototype in
+  `reciept animation/` (index.html + style.css + script.js).
+
+  What survived the port, because it is the whole point of the thing: the
+  metallic hood, the dark slit, the 3D roll-out from behind that slit, the
+  serrated cutter teeth, the cutter-blade flash, the paper grain and the
+  drop-shadow cast around the paper's real silhouette.
+
+  What did not: the customizer drawer, the sound toggle, the classic/smooth
+  mode switch and the Print button — in the app the receipt rolls out by
+  itself the moment a payment is confirmed, so there is nothing to press.
+  The prototype's two print curves collapse to one (its default, "smooth"),
+  and the paper micro-vibration moved off the paper — where it fought the
+  roll-out for the `transform` property — onto the machine chrome, where a
+  motor hum belongs anyway.
+
+  WHY A CSS MODULE, and the first one in this codebase: these ~300 lines of
+  machine chrome are rendered by exactly one component, behind a
+  next/dynamic boundary that only resolves after a payment has succeeded.
+  In app/globals.css they would ride along in the stylesheet that every
+  route downloads, to be parsed by every student who never opens the pay
+  sheet. Here they are fetched with the printer's own chunk and nowhere else.
+
+  NO WEBFONT. The prototype linked JetBrains Mono and Plus Jakarta Sans from
+  fonts.googleapis.com; this app's CSP grants `font-src 'self' data:` and no
+  style-src entry for Google, so those requests are blocked outright. The
+  receipt uses --font-mono from globals.css (the ui-monospace / SF Mono /
+  Cascadia / Roboto Mono stack) with tabular figures, which is already the
+  design system's treatment for money.
+  ─────────────────────────────────────────────────────────────────────────────
+*/
+
+.stage {
+  /* One knob. Every other width below is a ratio of it, taken from the
+     prototype's 400 / 380 / 350 / 330 px measurements. */
+  --nv-machine-w: min(300px, 100%);
+  --nv-viewport-w: 95%;
+  --nv-slit-w: 87.5%;
+  /* Percent of the VIEWPORT, which is itself 95% of the machine — so this is
+     the prototype's 330-of-400 slip (82.5% of the machine), not 82.5% of the
+     viewport, which would come out four per cent narrow. */
+  --nv-paper-w: 86.8%;
+
+  --nv-paper-bg: #fafaf8;
+  --nv-paper-ink: #222222;
+  --nv-paper-faint: #888888;
+  --nv-paper-rule: #cfcfc9;
+
+  position: relative;
+  width: var(--nv-machine-w);
+  margin: 0 auto 10px;
+  isolation: isolate;
+}
+
+/* ── Metallic hood ───────────────────────────────────────────────────────── */
+
+.hoodTop {
+  position: relative;
+  z-index: 25;
+  width: 100%;
+  height: 40px;
+  border-radius: 14px 14px 4px 4px;
+  background: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    #fbf4e8 15%,
+    #e9cf9f 45%,
+    #d19e54 75%,
+    #b37f35 100%
+  );
+  box-shadow:
+    0 -2px 6px rgba(255, 255, 255, 0.9),
+    0 10px 20px rgba(179, 127, 53, 0.28),
+    inset 0 2px 2px rgba(255, 255, 255, 0.9),
+    inset 0 -2px 4px rgba(105, 68, 16, 0.45);
+  overflow: hidden;
+}
+
+.hoodHighlight {
+  position: absolute;
+  top: 3px;
+  left: 5%;
+  width: 90%;
+  height: 5px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  border-radius: 999px;
+  filter: blur(1px);
+}
+
+/* The dark mouth. Sits UNDER the paper (z 5 < z 8) so the emerging slip
+   fills the opening instead of being swallowed by it. */
+.slit {
+  position: relative;
+  z-index: 5;
+  width: var(--nv-slit-w);
+  height: 11px;
+  margin: -5px auto 0;
+  border-radius: 2px;
+  background: #0f0a03;
+  box-shadow:
+    inset 0 6px 12px rgba(25, 12, 2, 0.95),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.2);
+}
+
+/* The lower lip. Sits OVER the paper (z 10 > z 8), which is what sells the
+   idea that the slip is coming out from behind the machine's face. */
+.hoodBottom {
+  position: absolute;
+  z-index: 10;
+  top: 42px;
+  left: 0;
+  right: 0;
+  height: 12px;
+  border-radius: 0 0 12px 12px;
+  background: linear-gradient(180deg, #9e6d2b 0%, #d8b478 40%, #fff7ea 100%);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.hoodShadow {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0) 100%);
+}
+
+/* ── Cutter blade flash ──────────────────────────────────────────────────── */
+
+.cutterFlash {
+  position: absolute;
+  z-index: 35;
+  top: 37px;
+  left: 0;
+  right: 0;
+  width: var(--nv-slit-w);
+  height: 3px;
+  margin: 0 auto;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    #ffffff 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  box-shadow: 0 0 10px #ffffff;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cutterFlashActive {
+  animation: nvCutterFlash 350ms ease-out forwards;
+}
+
+@keyframes nvCutterFlash {
+  0% {
+    opacity: 0;
+    transform: scaleX(0.1);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+}
+
+/* ── Motor hum ───────────────────────────────────────────────────────────── */
+/* On the chrome, not on the paper: the paper's own `transform` is already
+   carrying the roll-out, and the prototype's `.vibrating` class quietly
+   cancelled it. */
+
+.humming {
+  animation: nvMachineHum 60ms infinite alternate ease-in-out;
+}
+
+@keyframes nvMachineHum {
+  from {
+    transform: translate3d(-0.4px, 0, 0);
+  }
+  to {
+    transform: translate3d(0.4px, 0, 0);
+  }
+}
+
+/* ── Paper viewport ──────────────────────────────────────────────────────── */
+/*
+  In normal flow, and deliberately so. Its height is always the finished
+  receipt's height because `transform` does not affect layout — which means
+  the space the slip will occupy is reserved from the first paint and
+  nothing below the printer (the receipt card, the Done button) moves while
+  it rolls. The prototype animated a margin instead and shoved its whole
+  page around.
+
+  `clip-path` rather than `overflow: hidden`: it clips the top edge at the
+  slit line while leaving the sides and bottom open, so the drop shadow is
+  free to fall past the paper's edges.
+*/
+.viewport {
+  position: relative;
+  z-index: 8;
+  width: var(--nv-viewport-w);
+  margin: -10px auto 0;
+  clip-path: inset(0 -50px -1200px -50px);
+  pointer-events: none;
+  perspective: 1000px;
+  perspective-origin: 50% 0%;
+  filter:
+    drop-shadow(0 14px 28px rgba(20, 15, 5, 0.16))
+    drop-shadow(0 3px 9px rgba(20, 15, 5, 0.08));
+}
+
+/* ── The slip ────────────────────────────────────────────────────────────── */
+
+.paper {
+  width: var(--nv-paper-w);
+  margin: 0 auto;
+  background-color: var(--nv-paper-bg);
+  position: relative;
+  transform-origin: top center;
+  transform-style: preserve-3d;
+  user-select: none;
+  /* Thermal cutter teeth, straight from the prototype (30 teeth), 8px deep
+     for the narrower slip. */
+  clip-path: polygon(
+    0% 0%, 100% 0%,
+    100% calc(100% - 8px),
+    98.33% 100%, 96.67% calc(100% - 8px),
+    95.00% 100%, 93.33% calc(100% - 8px),
+    91.67% 100%, 90.00% calc(100% - 8px),
+    88.33% 100%, 86.67% calc(100% - 8px),
+    85.00% 100%, 83.33% calc(100% - 8px),
+    81.67% 100%, 80.00% calc(100% - 8px),
+    78.33% 100%, 76.67% calc(100% - 8px),
+    75.00% 100%, 73.33% calc(100% - 8px),
+    71.67% 100%, 70.00% calc(100% - 8px),
+    68.33% 100%, 66.67% calc(100% - 8px),
+    65.00% 100%, 63.33% calc(100% - 8px),
+    61.67% 100%, 60.00% calc(100% - 8px),
+    58.33% 100%, 56.67% calc(100% - 8px),
+    55.00% 100%, 53.33% calc(100% - 8px),
+    51.67% 100%, 50.00% calc(100% - 8px),
+    48.33% 100%, 46.67% calc(100% - 8px),
+    45.00% 100%, 43.33% calc(100% - 8px),
+    41.67% 100%, 40.00% calc(100% - 8px),
+    38.33% 100%, 36.67% calc(100% - 8px),
+    35.00% 100%, 33.33% calc(100% - 8px),
+    31.67% 100%, 30.00% calc(100% - 8px),
+    28.33% 100%, 26.67% calc(100% - 8px),
+    25.00% 100%, 23.33% calc(100% - 8px),
+    21.67% 100%, 20.00% calc(100% - 8px),
+    18.33% 100%, 16.67% calc(100% - 8px),
+    15.00% 100%, 13.33% calc(100% - 8px),
+    11.67% 100%, 10.00% calc(100% - 8px),
+    8.33% 100%, 6.67% calc(100% - 8px),
+    5.00% 100%, 3.33% calc(100% - 8px),
+    1.67% 100%, 0% calc(100% - 8px)
+  );
+}
+
+/* Thermal paper grain. An inline SVG turbulence, so no network request and
+   nothing for img-src to reject beyond `data:`, which the CSP grants. */
+.paper::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Light falling across the slip: bright where it leaves the slot, dropping
+   off towards the torn end. */
+.paper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.45) 0%,
+    rgba(255, 255, 255, 0.15) 35%,
+    rgba(0, 0, 0, 0.02) 75%,
+    rgba(0, 0, 0, 0.05) 100%
+  );
+}
+
+/*
+  Loaded but not fed. The prototype tuned this so the serrated end just peeked
+  under the lip, because there it was a resting state you looked at until you
+  pressed Print. Here it lasts exactly one frame — the component flips to
+  .paperPrinting on the next rAF — so it is tuned the other way: -93% keeps the
+  slip fully inside the machine for ANY receipt height, and no combination of a
+  long hostel name or a long resident name can leave a line of the receipt
+  hanging out of the slot before the roll begins.
+*/
+.paperRetracted {
+  transform: translateY(-93%) rotateX(-18deg) translateZ(-30px) scale(0.97);
+  opacity: 0.4;
+}
+
+/* Fed, cut, resting. Also the state prefers-reduced-motion mounts straight
+   into — see receipt-printer.tsx, which never starts the timers at all. */
+.paperPrinted {
+  transform: none;
+  opacity: 1;
+}
+
+.paperPrinting {
+  animation: nvRollOut var(--nv-roll-ms, 2500ms) cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes nvRollOut {
+  0% {
+    transform: translateY(-93%) rotateX(-18deg) translateZ(-30px) scale(0.97);
+    opacity: 0.4;
+  }
+  20% {
+    transform: translateY(-70%) rotateX(-12deg) translateZ(20px) scale(0.985);
+    opacity: 0.85;
+  }
+  45% {
+    transform: translateY(-40%) rotateX(-6deg) translateZ(26px) scale(0.995);
+    opacity: 1;
+  }
+  75% {
+    transform: translateY(-12%) rotateX(-2deg) translateZ(10px) scale(1);
+  }
+  90% {
+    transform: translateY(1%) rotateX(0.8deg) translateZ(2px) scale(1);
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* ── Printed matter ──────────────────────────────────────────────────────── */
+
+.content {
+  position: relative;
+  z-index: 2;
+  padding: 14px 14px 20px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--nv-paper-ink);
+  text-align: left;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brandName {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1.1;
+  color: rgb(var(--brand-navy));
+}
+
+.brandSub {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.35;
+  color: #555555;
+  overflow-wrap: anywhere;
+}
+
+.mark {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: rgb(var(--brand-navy));
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.amount {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: #111111;
+}
+
+.meta {
+  margin-top: 3px;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--nv-paper-faint);
+  overflow-wrap: anywhere;
+}
+
+.rule {
+  height: 0;
+  margin: 10px 0;
+  border-bottom: 1px dashed var(--nv-paper-rule);
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.lineLabel {
+  color: #444444;
+  min-width: 0;
+}
+
+.lineValue {
+  font-weight: 600;
+  color: #222222;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.grand {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--nv-paper-rule);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #111111;
+}
+
+.foot {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.footMsg {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: #555555;
+}
+
+.barcode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin-top: 8px;
+  opacity: 0.75;
+}
+
+.barcodeLines {
+  width: 76%;
+  height: 22px;
+  background: repeating-linear-gradient(
+    90deg,
+    #222 0px, #222 1.5px,
+    transparent 1.5px, transparent 3px,
+    #222 3px, #222 4px,
+    transparent 4px, transparent 5.5px,
+    #222 5.5px, #222 8px,
+    transparent 8px, transparent 9.5px
+  );
+}
+
+.barcodeNum {
+  font-size: 8px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  color: var(--nv-paper-faint);
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+/* Room for the teeth to bite into without eating the barcode. */
+.tearMargin {
+  height: 10px;
+}
+
+/*
+  prefers-reduced-motion. globals.css already crushes every animation to
+  0.01ms, which would leave the slip snapping from retracted to printed in
+  one frame — movement removed, but a flicker left behind. The component
+  does not schedule the roll at all in this case; these rules are the belt
+  to that braces, for the user who flips the OS setting mid-animation.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .paperPrinting {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+  .paperRetracted {
+    transform: none;
+    opacity: 1;
+  }
+  .humming {
+    animation: none;
+  }
+  .cutterFlashActive {
+    animation: none;
+    opacity: 0;
+  }
+}
