@@ -14,6 +14,7 @@ import { Callout, DataTable, DocBody, DocHeader, Section, TableOfContents } from
  * ──────────────────────────────────────────────────────────────────────────── */
 const CONTACT = {
   operatorName: LEGAL.operatorName,
+  officer: LEGAL.grievanceOfficer,
   email: LEGAL.grievanceEmail,
   postalAddress: LEGAL.postalAddress,
 } as const;
@@ -735,9 +736,9 @@ export default function PrivacyPolicyPage() {
           </p>
           <div className="rounded-card border border-line bg-white/60 p-5 text-sm leading-7">
             <p className="text-navy">
-              <strong>Grievance Officer</strong>
+              <strong>{CONTACT.officer}</strong>
             </p>
-            <p>{CONTACT.operatorName}</p>
+            <p>Grievance Officer, {CONTACT.operatorName}</p>
             <p>
               <a href={"mailto:" + CONTACT.email} className="text-teal underline underline-offset-2">
                 {CONTACT.email}
