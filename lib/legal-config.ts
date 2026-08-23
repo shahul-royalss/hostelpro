@@ -32,7 +32,7 @@ export const LEGAL = {
   postalAddress: "RVS Nagar, Chittoor, Andhra Pradesh, India",
 
   /** Named Grievance Officer, as the DPDP Act 2023 requires a Data Fiduciary to publish. */
-  grievanceOfficer: "[GRIEVANCE OFFICER NAME — NOT YET SET]",
+  grievanceOfficer: "Shaik.Shahul",
 
   /** e.g. "the laws of India". */
   governingLaw: "the laws of India",
