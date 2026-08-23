@@ -1853,3 +1853,35 @@ revoke all on function app.apply_retention() from public, anon, authenticated;
 select cron.unschedule('hostelpro-retention')
  where exists (select 1 from cron.job where jobname = 'hostelpro-retention');
 select cron.schedule('hostelpro-retention', '15 3 * * *', $job$select app.apply_retention()$job$);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- KEEP THE VERCEL FUNCTION WARM
+--
+-- Vercel's Hobby plan has no provisioned concurrency, so a function idle for a few minutes pays
+-- a cold start. Measured on production: /api/health — which touches no database and renders no
+-- page — ranged 0.47s warm to 1.29s cold, and a real page hit 3.6s on an unlucky invocation.
+-- The application code is not the cause; it adds only ~0.1s over an empty endpoint.
+--
+-- pg_cron is already here for retention and pg_net can make an outbound request, so the database
+-- keeps the function warm at no cost. /api/health is the cheapest route in the app (no auth, no
+-- query) and is already in middleware's PUBLIC_PATHS.
+--
+-- ~10,800 invocations/month, well inside the Hobby allowance. To stop it:
+--   select cron.unschedule('hostelpro-keepwarm');
+-- Change the URL here if the deployment ever moves to a custom domain.
+create extension if not exists pg_net with schema extensions;
+
+select cron.unschedule('hostelpro-keepwarm')
+ where exists (select 1 from cron.job where jobname = 'hostelpro-keepwarm');
+
+select cron.schedule(
+  'hostelpro-keepwarm',
+  '*/4 * * * *',
+  $job$
+    select net.http_get(
+      url     := 'https://hostelpro-three.vercel.app/api/health',
+      headers := '{"User-Agent": "hostelpro-keepwarm/pg_cron"}'::jsonb,
+      timeout_milliseconds := 8000
+    );
+  $job$
+);
