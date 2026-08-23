@@ -25,6 +25,12 @@ export type AuditAction =
   | "manager.revenue.create" | "manager.revenue.update" | "manager.revenue.delete"
   | "manager.task.status" | "manager.menu.save"
   | "staff.complaint.status"
+  // Student rent payment (Razorpay). Every state change on the money path, plus the
+  // two things a human has to be told about: a delivery that failed its HMAC check,
+  // and a payment Razorpay captured that the fee ledger has not been credited with.
+  // See docs/payments.md §7 for the reconciliation query.
+  | "payment.order.created" | "payment.captured" | "payment.credited" | "payment.failed"
+  | "payment.webhook.rejected" | "payment.reconcile.required"
   // Google Play account-deletion policy. The request IS the record: nobody in the app holds a
   // DELETE privilege on students/users (db/rls-policies.sql), so fulfilment is the manual
   // runbook in docs/account-deletion.md and this row is what proves the ask was made.

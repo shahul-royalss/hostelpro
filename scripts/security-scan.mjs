@@ -222,6 +222,12 @@ const ADMIN_ALLOWED = new Set([
   // students_select already permits user_id = auth.uid(). Adding a file here is a review
   // decision, not a formality - it exempts that file from the RLS-bypass check permanently.
   "lib/actions/account.ts",
+  // The Razorpay webhook. Razorpay is not a signed-in user, so there is no session to act
+  // under; it writes with the service role only AFTER verifying an HMAC over the raw body.
+  // Its DB functions (rz_record_capture / rz_credit_fee) additionally re-check
+  // app.is_service_role() in their own bodies, so this file cannot credit anything by
+  // holding the key alone.
+  "app/api/webhooks/razorpay/route.ts",
   "db/seed.ts",
 ]);
 const adminUsers = SRC.filter((f) => /createAdminClient|supabase\/admin/.test(fs.readFileSync(f, "utf8")));

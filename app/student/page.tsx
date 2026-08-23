@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PayRentButton } from "@/components/payments/pay-rent-button";
 import { Bed, Building2, CalendarOff, ChevronRight, MessageSquareWarning, Phone, UtensilsCrossed, Megaphone, ShieldQuestion } from "lucide-react";
 import { MobilePage } from "@/components/shell/role-shells";
 import { GlassCard, GlassCardHeader } from "@/components/shared/glass-card";
@@ -70,6 +71,14 @@ export default async function StudentHomePage() {
               )
             ) : null}
           </div>
+
+          {/* Pay online. Renders nothing when nothing is outstanding; the sheet asks the
+              server for the real figure when it opens an order, so these props are labels. */}
+          {fee && fee.remaining > 0 ? (
+            <div className="mt-4">
+              <PayRentButton amountDue={fee.remaining} period={period} />
+            </div>
+          ) : null}
         </GlassCard>
 
         {/* Updates */}

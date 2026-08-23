@@ -9,6 +9,12 @@ import { applySecurityHeaders, buildCsp, generateNonce } from "@/lib/security-he
 const PUBLIC_PATHS = [
   "/login",
   "/legal",
+  // Razorpay is not a signed-in user. Without this the webhook 307s to /login, Razorpay retries
+  // until it gives up, and money that was actually captured is never credited to the student —
+  // the app takes payment it cannot account for. This bypasses the SESSION check only: the route
+  // verifies an HMAC over the raw body against RAZORPAY_WEBHOOK_SECRET and rejects anything else,
+  // which is the real authentication for this endpoint.
+  "/api/webhooks/razorpay",
   "/manifest.webmanifest",
   "/icons",
   "/api/health",
@@ -186,7 +192,7 @@ function hardenCookie(options: Record<string, unknown> | undefined) {
  */
 export async function updateSession(request: NextRequest) {
   const nonce = generateNonce();
-  const csp = buildCsp(nonce);
+  const csp = buildCsp(nonce, request.nextUrl.pathname);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", csp);

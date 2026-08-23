@@ -3,14 +3,328 @@
 @tailwind utilities;
 
 /*
-  HostelPro — "liquid glass" design language (DESIGN.md §1)
-  Frosted translucent white cards floating over a warm ivory background.
+  ─────────────────────────────────────────────────────────────────────────────
+  Design tokens — see docs/design-system.md for the reasoning and the measured
+  contrast ratios behind every number in this file.
+
+  The language is Apple's: a semantic colour system with a label/fill hierarchy,
+  layered translucent materials (blur + saturation + tint + hairline), spring
+  motion, and an optical type ramp. The brand stays exactly where it was —
+  warm ivory, navy ink, teal accent — every legacy token below resolves to the
+  same colour it always did.
+
+  Everything here is ADDITIVE. No token was renamed or removed; the brand hexes
+  simply moved behind CSS custom properties so that `prefers-contrast: more`
+  and the dark theme can re-point them without touching a single component.
+  ─────────────────────────────────────────────────────────────────────────────
 */
 
 @layer base {
   :root {
-    --radius: 12px;
+    /* ── Brand channels (unchanged values, now addressable) ──────────────── */
+    --brand-ivory: 246 244 239;      /* #F6F4EF */
+    --brand-stone: 237 234 227;      /* #EDEAE3 */
+    --brand-navy: 28 43 69;          /* #1C2B45 */
+    --brand-navy-deep: 6 22 47;      /* #06162F */
+    --brand-navy-soft: 56 71 98;     /* #384762 */
+    --brand-teal: 62 124 116;        /* #3E7C74 */
+    --brand-teal-soft: 228 239 237;  /* #E4EFED */
+    --brand-sage: 140 166 135;       /* #8CA687 */
+    --brand-sage-soft: 234 240 232;  /* #EAF0E8 */
+    --brand-sand: 216 185 138;       /* #D8B98A */
+    --brand-sand-deep: 168 131 75;   /* #A8834B */
+    --brand-sand-soft: 247 239 225;  /* #F7EFE1 */
+    --brand-red: 196 87 78;          /* #C4574E */
+    --brand-red-soft: 248 231 229;   /* #F8E7E5 */
+    --brand-charcoal: 42 46 53;      /* #2A2E35 */
+    --brand-muted: 110 116 128;      /* #6E7480 */
+    --brand-line: 229 225 216;       /* #E5E1D8 */
+    --brand-input: 221 217 207;      /* #DDD9CF */
+
+    /* ── Accessible inks — same hues, darkened until they clear 4.5:1 on
+          ivory, on a glass card AND on their own soft tint. Use these for
+          any text that carries meaning (status pills, inline amounts). ──── */
+    --ink-teal: 55 109 102;    /* #376D66 */
+    --ink-sage: 92 108 88;     /* #5C6C58 */
+    --ink-sand: 120 103 81;    /* #786751 */
+    --ink-red: 162 69 61;      /* #A2453D */
+    --ink-muted: 97 103 114;   /* #616772 */
+    --ink-navy: 28 43 69;      /* navy already clears 12.9:1 */
+
+    /* ── Graphical marks — the 3:1 floor for chart series, icon strokes and
+          any non-text object that must be distinguishable. ───────────────── */
+    --mark-sage: 123 146 119;  /* #7B9277 */
+    --mark-sand: 160 137 102;  /* #A08966 */
+
+    /* ── Label hierarchy (Apple's four rungs, re-solved for ivory) ───────── */
+    --label-ink: var(--brand-charcoal);
+    --label-a1: 1;      /* primary  — 12.40:1 on ivory */
+    --label-a2: 0.68;   /* secondary — 4.70:1, clears AA for body copy */
+    --label-a3: 0.52;   /* tertiary  — 3.02:1, large text / icons only */
+    --label-a4: 0.3;    /* quaternary — decorative, never carries meaning */
+
+    /* ── Fill hierarchy (Apple's grey fills, brand-neutral) ──────────────── */
+    --fill-ink: 120 120 128;
+    --fill-a1: 0.2;
+    --fill-a2: 0.16;
+    --fill-a3: 0.12;
+    --fill-a4: 0.08;
+
+    /* ── Separators ──────────────────────────────────────────────────────── */
+    --separator-ink: var(--brand-charcoal);
+    --separator-a: 0.1;
+
+    /* ── Apple system colours. Two sets: the shipping values, and Apple's
+          own "accessible" (Increase Contrast) values, which we swap in
+          automatically under prefers-contrast. ──────────────────────────── */
+    --sys-blue: 0 122 255;
+    --sys-green: 52 199 89;
+    --sys-indigo: 88 86 214;
+    --sys-orange: 255 149 0;
+    --sys-pink: 255 45 85;
+    --sys-purple: 175 82 222;
+    --sys-red: 255 59 48;
+    --sys-teal: 48 176 199;
+    --sys-yellow: 255 204 0;
+    --sys-gray: 142 142 147;
+
+    /* ── Materials — blur + saturation + tint + hairline, five weights ───── */
+    --material-tint: 255 255 255;
+    --material-a-ultra-thin: 0.45;
+    --material-a-thin: 0.65;      /* == the historical .glass-card */
+    --material-a-regular: 0.85;   /* == the historical .glass-card-strong */
+    --material-a-thick: 0.94;
+    --material-a-chrome: 0.65;    /* == the historical .glass-bar */
+    --material-border: rgb(255 255 255 / 0.6);
+    --material-border-strong: rgb(255 255 255 / 0.8);
+    /* The specular top edge. This is the detail that reads as glass rather
+       than as a grey panel; it costs nothing because the shadow already runs. */
+    --material-highlight: inset 0 1px 0 0 rgb(255 255 255 / 0.55);
+    --material-opaque: rgb(252 251 249);          /* 65% white over ivory, flattened */
+    --material-opaque-strong: rgb(254 253 253);
+
+    /* ── Elevation. Two-part shadows: a tight contact shadow plus a wide
+          ambient one, both keyed to navy so they stay warm on ivory. ────── */
+    --shadow-1: 0 1px 2px 0 rgb(6 22 47 / 0.04), 0 1px 1px -0.5px rgb(6 22 47 / 0.03);
+    --shadow-2: 0 2px 6px -1px rgb(6 22 47 / 0.06), 0 1px 2px -1px rgb(6 22 47 / 0.04);
+    --shadow-3: 0 8px 32px 0 rgb(6 22 47 / 0.04), 0 2px 8px -2px rgb(6 22 47 / 0.03);
+    --shadow-4: 0 16px 48px -8px rgb(6 22 47 / 0.08), 0 4px 12px -4px rgb(6 22 47 / 0.04);
+    --shadow-5: 0 32px 80px -12px rgb(6 22 47 / 0.14), 0 8px 24px -8px rgb(6 22 47 / 0.06);
+
+    /* ── Radii — the continuous-corner ramp ─────────────────────────────── */
+    --radius-xs: 6px;
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
+    --radius-xl: 28px;
+    --radius: 12px; /* legacy shadcn hook — unchanged */
+
+    /* ── Motion ─────────────────────────────────────────────────────────────
+       Durations are Apple's three tiers. The curves below are the real thing:
+       each linear() is a damped-harmonic solution sampled at 29 points across
+       its own settle time, so `--ease-snappy` genuinely overshoots by 0.6% and
+       comes back, the way a UIKit spring does. No JS, no physics engine. ── */
+    --duration-quick: 0.2s;
+    --duration-standard: 0.3s;
+    --duration-emphasized: 0.5s;
+
+    --ease-sys: cubic-bezier(0.25, 0.1, 0.25, 1);       /* CAMediaTimingFunction .default */
+    --ease-sys-in: cubic-bezier(0.42, 0, 1, 1);
+    --ease-sys-out: cubic-bezier(0, 0, 0.58, 1);
+    --ease-sys-in-out: cubic-bezier(0.42, 0, 0.58, 1);
+
+    /* cubic-bezier fallbacks first; browsers that know linear() take the second
+       declaration, the rest keep the approximation. No @supports needed. */
+    --ease-spring: cubic-bezier(0.32, 1.02, 0.36, 1);
+    --ease-spring: linear(0, 0.0375, 0.1273, 0.2428, 0.3661, 0.4855, 0.5944, 0.6891, 0.7687, 0.8335, 0.8847, 0.9241, 0.9534, 0.9746, 0.9894, 0.9991, 1.0052, 1.0085, 1.01, 1.0102, 1.0096, 1.0085, 1.0073, 1.0061, 1.0049, 1.0038, 1.0029, 1.0021, 1);
+    --ease-smooth: cubic-bezier(0.33, 0.9, 0.4, 1);
+    --ease-smooth: linear(0, 0.0395, 0.1295, 0.2401, 0.3539, 0.4612, 0.5573, 0.6406, 0.711, 0.7695, 0.8173, 0.8561, 0.8872, 0.912, 0.9315, 0.9469, 0.959, 0.9684, 0.9757, 0.9814, 0.9858, 0.9891, 0.9917, 0.9937, 0.9952, 0.9964, 0.9972, 0.9979, 1);
+    --ease-snappy: cubic-bezier(0.3, 1.05, 0.35, 1);
+    --ease-snappy: linear(0, 0.0373, 0.126, 0.2397, 0.3606, 0.4776, 0.5841, 0.677, 0.7552, 0.8193, 0.8704, 0.9102, 0.9403, 0.9626, 0.9787, 0.9898, 0.9972, 1.0019, 1.0046, 1.0059, 1.0063, 1.0061, 1.0055, 1.0048, 1.0041, 1.0033, 1.0027, 1.0021, 1);
+    --ease-bouncy: cubic-bezier(0.28, 1.35, 0.4, 1);
+    --ease-bouncy: linear(0, 0.0481, 0.1632, 0.3098, 0.463, 0.6066, 0.7315, 0.8334, 0.912, 0.9689, 1.0072, 1.0305, 1.0424, 1.046, 1.0441, 1.039, 1.0324, 1.0253, 1.0186, 1.0128, 1.008, 1.0043, 1.0016, 0.9998, 0.9987, 0.9981, 0.9979, 0.998, 1);
+
+    /* Each spring's own settle time. Pair the curve with its duration or the
+       overshoot lands in the wrong place. */
+    --duration-spring: 0.73s;
+    --duration-smooth: 0.7s;
+    --duration-snappy: 0.66s;
+    --duration-bouncy: 0.75s;
+
+    /* ── Focus ──────────────────────────────────────────────────────────── */
+    --focus-ring: rgb(var(--brand-navy) / 0.35);
+    --focus-ring-width: 3px;
+    --focus-ring-offset: 2px;
+
+    /* ── Type ───────────────────────────────────────────────────────────────
+       -apple-system resolves to the real SF Pro on Apple platforms (including
+       its optical Text/Display switch); everywhere else — which for this app
+       is most of Android and Windows — Inter renders, loaded by next/font. */
+    --font-sans:
+      -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+      var(--font-inter, Inter), Inter, "Segoe UI Variable Text", "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "Cascadia Mono",
+      "Roboto Mono", Consolas, monospace;
+
     color-scheme: light;
+  }
+
+  /*
+    Dark theme.
+
+    Deliberately gated on an explicit `.dark` / [data-theme="dark"] opt-in and
+    NOT on prefers-color-scheme. Every screen in this app currently hard-codes
+    light surfaces (bg-white/60, bg-ivory, text-charcoal); flipping the tokens
+    on an OS preference alone would put light text on those light surfaces. The
+    palette below is complete and measured — switching it on is one attribute
+    on <html> plus a pass over the hard-coded surface classes.
+  */
+  .dark,
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --brand-ivory: 11 15 20;        /* #0B0F14 — navy-black, not neutral black */
+    --brand-stone: 25 29 34;        /* #191D22 */
+    --brand-navy: 127 135 150;      /* #7F8796 — navy is unreadable on dark, lifted to 4.72:1 */
+    --brand-navy-deep: 6 22 47;
+    --brand-navy-soft: 126 135 153;  /* #7E8799 */
+    --brand-teal: 92 144 137;       /* #5C9089 — 4.70:1 on the dark material */
+    --brand-teal-soft: 20 40 38;
+    --brand-sage: 140 166 135;      /* already 6.4:1 on dark */
+    --brand-sage-soft: 25 36 24;
+    --brand-sand: 216 185 138;      /* already 9.1:1 on dark */
+    --brand-sand-deep: 216 185 138;
+    --brand-sand-soft: 43 35 22;
+    --brand-red: 203 107 99;        /* #CB6B63 — 4.70:1 on the dark material */
+    --brand-red-soft: 48 26 24;
+    --brand-charcoal: 235 235 245;
+    --brand-muted: 130 135 145;     /* #828791 */
+    --brand-line: 56 56 58;
+    --brand-input: 68 68 72;
+
+    --ink-teal: 92 144 137;
+    --ink-sage: 140 166 135;
+    --ink-sand: 216 185 138;
+    --ink-red: 203 107 99;
+    --ink-muted: 152 158 168;
+    --ink-navy: 126 135 153;
+    --mark-sage: 140 166 135;
+    --mark-sand: 216 185 138;
+
+    --label-ink: 235 235 245;
+    --label-a1: 1;      /* 14.34:1 on the dark material */
+    --label-a2: 0.6;    /*  5.94:1 — Apple's own value clears AA here */
+    --label-a3: 0.45;   /*  3.94:1 — large text / icons */
+    --label-a4: 0.3;    /* decorative */
+    --fill-a1: 0.36;
+    --fill-a2: 0.32;
+    --fill-a3: 0.24;
+    --fill-a4: 0.18;
+    --separator-ink: 235 235 245;
+    --separator-a: 0.14;
+
+    --sys-blue: 10 132 255;
+    --sys-green: 48 209 88;
+    --sys-indigo: 94 92 230;
+    --sys-orange: 255 159 10;
+    --sys-pink: 255 55 95;
+    --sys-purple: 191 90 242;
+    --sys-red: 255 69 58;
+    --sys-teal: 64 200 224;
+    --sys-yellow: 255 214 10;
+    --sys-gray: 142 142 147;
+
+    --material-tint: 30 34 40;
+    --material-a-ultra-thin: 0.55;
+    --material-a-thin: 0.72;
+    --material-a-regular: 0.86;
+    --material-a-thick: 0.96;
+    --material-a-chrome: 0.72;
+    --material-border: rgb(255 255 255 / 0.1);
+    --material-border-strong: rgb(255 255 255 / 0.16);
+    --material-highlight: inset 0 1px 0 0 rgb(255 255 255 / 0.08);
+    --material-opaque: rgb(25 29 34);
+    --material-opaque-strong: rgb(29 33 38);
+
+    --shadow-1: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+    --shadow-2: 0 2px 6px -1px rgb(0 0 0 / 0.45);
+    --shadow-3: 0 8px 32px 0 rgb(0 0 0 / 0.45);
+    --shadow-4: 0 16px 48px -8px rgb(0 0 0 / 0.55);
+    --shadow-5: 0 32px 80px -12px rgb(0 0 0 / 0.65);
+
+    --focus-ring: rgb(var(--sys-blue) / 0.6);
+  }
+
+  /*
+    Increase Contrast. Apple ships a second, darker set of system colours for
+    this setting; we do the same, and we re-point the brand hues at the
+    accessible inks solved in docs/design-system.md. Every status pill in the
+    app then clears 4.5:1 without a single component changing.
+  */
+  @media (prefers-contrast: more) {
+    :root {
+      --brand-teal: var(--ink-teal);
+      --brand-sage: var(--ink-sage);
+      --brand-sand-deep: var(--ink-sand);
+      --brand-red: var(--ink-red);
+      --brand-muted: var(--ink-muted);
+      --label-a2: 0.82;   /* 7.15:1 */
+      --label-a3: 0.68;   /* 4.62:1 */
+      --label-a4: 0.45;
+      --separator-a: 0.28;
+      --material-a-ultra-thin: 0.82;
+      --material-a-thin: 0.92;
+      --material-a-regular: 0.97;
+      --material-a-thick: 1;
+      --material-a-chrome: 0.95;
+      --material-border: rgb(var(--brand-charcoal) / 0.35);
+      --material-border-strong: rgb(var(--brand-charcoal) / 0.45);
+      --focus-ring: rgb(var(--brand-navy) / 0.7);
+      --focus-ring-width: 4px;
+
+      /* Apple's accessible (Increase Contrast) system colours, light */
+      --sys-blue: 0 64 221;
+      --sys-green: 36 138 61;
+      --sys-indigo: 54 52 163;
+      --sys-orange: 201 52 0;
+      --sys-pink: 211 15 69;
+      --sys-purple: 137 68 171;
+      --sys-red: 215 0 21;
+      --sys-teal: 0 113 164;
+      --sys-yellow: 178 80 0;
+      --sys-gray: 108 108 112;
+    }
+
+    .dark,
+    :root[data-theme="dark"] {
+      --label-a2: 0.75;
+      --label-a3: 0.6;
+      --separator-a: 0.3;
+      /* Apple's accessible system colours, dark */
+      --sys-blue: 64 156 255;
+      --sys-green: 48 219 91;
+      --sys-indigo: 125 122 255;
+      --sys-orange: 255 179 64;
+      --sys-pink: 255 100 130;
+      --sys-purple: 218 143 255;
+      --sys-red: 255 105 97;
+      --sys-teal: 93 230 255;
+      --sys-yellow: 255 212 38;
+      --sys-gray: 152 152 157;
+    }
+  }
+
+  /* Reduce Transparency: materials become opaque, blur stops compositing. */
+  @media (prefers-reduced-transparency: reduce) {
+    :root {
+      --material-a-ultra-thin: 1;
+      --material-a-thin: 1;
+      --material-a-regular: 1;
+      --material-a-thick: 1;
+      --material-a-chrome: 1;
+      --material-highlight: 0 0 0 0 transparent;
+    }
   }
 
   * {
@@ -21,13 +335,15 @@
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-optical-sizing: auto;
+    font-synthesis-weight: none;
   }
 
   body {
     @apply bg-ivory text-charcoal font-sans text-body;
     background-image:
-      radial-gradient(at 0% 0%, rgba(255, 255, 255, 0.45) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, rgba(255, 255, 255, 0.4) 0px, transparent 50%);
+      radial-gradient(at 0% 0%, rgb(var(--material-tint) / 0.45) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgb(var(--material-tint) / 0.4) 0px, transparent 50%);
     background-attachment: fixed;
     min-height: 100dvh;
   }
@@ -47,34 +363,115 @@
       font-size: 16px;
     }
   }
+
+  /*
+    A system focus ring for everything that does not already define one.
+    :where() has zero specificity, so any component that opts out with
+    focus-visible:outline-none (all of components/ui does) still wins.
+  */
+  :where(a, button, summary, [role="button"], [role="tab"], input, select, textarea, [tabindex]):focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  ::selection {
+    background: rgb(var(--brand-navy) / 0.14);
+  }
 }
 
 @layer components {
-  /* Frosted glass card — the core surface */
+  /* ── Materials ──────────────────────────────────────────────────────────
+     One implementation, five weights. Saturation is the part that makes a
+     backdrop-filter read as an Apple material instead of as frosted grey: it
+     pulls the colour back out of whatever is blurring behind the surface.
+     The blur pass already exists on these surfaces, so adding saturate() to
+     the same filter chain is free — one compositing step, not two.        */
+  .material-ultra-thin,
+  .material-thin,
+  .material-regular,
+  .material-thick,
+  .material-chrome,
+  .glass-card,
+  .glass-card-strong,
+  .glass-bar {
+    background-color: rgb(var(--material-tint) / var(--m-alpha));
+    -webkit-backdrop-filter: blur(var(--m-blur)) saturate(var(--m-sat));
+    backdrop-filter: blur(var(--m-blur)) saturate(var(--m-sat));
+    border-color: var(--m-border, var(--material-border));
+  }
+
+  .material-ultra-thin { --m-alpha: var(--material-a-ultra-thin); --m-blur: 12px; --m-sat: 160%; }
+  .material-thin       { --m-alpha: var(--material-a-thin);       --m-blur: 20px; --m-sat: 180%; }
+  .material-regular    { --m-alpha: var(--material-a-regular);    --m-blur: 20px; --m-sat: 180%; --m-border: var(--material-border-strong); }
+  .material-thick      { --m-alpha: var(--material-a-thick);      --m-blur: 30px; --m-sat: 190%; --m-border: var(--material-border-strong); }
+  .material-chrome     { --m-alpha: var(--material-a-chrome);     --m-blur: 24px; --m-sat: 200%; }
+
+  .material-ultra-thin,
+  .material-thin,
+  .material-regular,
+  .material-thick {
+    border-width: 1px;
+    box-shadow: var(--material-highlight), var(--shadow-3);
+  }
+
+  /* ── Legacy surface names, now expressed in the material system ─────────
+     .glass-card === .material-thin, .glass-card-strong === .material-regular,
+     .glass-bar === .material-chrome. Identical tint and blur to before; the
+     only change is the saturation pass and the specular top edge.         */
   .glass-card {
-    background: rgba(255, 255, 255, 0.65);
-    -webkit-backdrop-filter: blur(20px);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    box-shadow: 0 8px 32px 0 rgba(6, 22, 47, 0.04);
+    --m-alpha: var(--material-a-thin);
+    --m-blur: 20px;
+    --m-sat: 180%;
+    border-width: 1px;
+    box-shadow: var(--material-highlight), var(--shadow-3);
     @apply rounded-card;
   }
 
   .glass-card-strong {
-    background: rgba(255, 255, 255, 0.85);
-    -webkit-backdrop-filter: blur(20px);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.8);
-    box-shadow: 0 8px 32px 0 rgba(6, 22, 47, 0.05);
+    --m-alpha: var(--material-a-regular);
+    --m-blur: 20px;
+    --m-sat: 180%;
+    --m-border: var(--material-border-strong);
+    border-width: 1px;
+    box-shadow: var(--material-highlight), var(--shadow-3);
     @apply rounded-card;
   }
 
-  /* Frosted bar for nav / sidebars */
   .glass-bar {
-    background: rgba(255, 255, 255, 0.65);
-    -webkit-backdrop-filter: blur(24px);
-    backdrop-filter: blur(24px);
-    border-color: rgba(255, 255, 255, 0.6);
+    --m-alpha: var(--material-a-chrome);
+    --m-blur: 24px;
+    --m-sat: 200%;
+  }
+
+  /* No backdrop-filter (old Firefox, some embedded webviews): go opaque
+     rather than shipping a see-through, unreadable panel. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .material-ultra-thin,
+    .material-thin,
+    .material-regular,
+    .material-thick,
+    .material-chrome,
+    .glass-card,
+    .glass-bar {
+      background-color: var(--material-opaque);
+    }
+    .glass-card-strong {
+      background-color: var(--material-opaque-strong);
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .material-ultra-thin,
+    .material-thin,
+    .material-regular,
+    .material-thick,
+    .material-chrome,
+    .glass-card,
+    .glass-card-strong,
+    .glass-bar {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
   }
 
   /* Uppercase caption label */
@@ -87,7 +484,7 @@
     position: absolute;
     width: 520px;
     height: 520px;
-    background: radial-gradient(circle, rgba(28, 43, 69, 0.10) 0%, rgba(62, 124, 116, 0.10) 50%, rgba(246, 244, 239, 0) 70%);
+    background: radial-gradient(circle, rgb(var(--brand-navy) / 0.1) 0%, rgb(var(--brand-teal) / 0.1) 50%, rgb(var(--brand-ivory) / 0) 70%);
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
@@ -109,14 +506,14 @@
   /* Recharts polish: no heavy gridlines */
   .recharts-cartesian-grid-horizontal line,
   .recharts-cartesian-grid-vertical line {
-    stroke: #E5E1D8;
+    stroke: rgb(var(--brand-line));
     stroke-dasharray: 3 3;
   }
   .recharts-default-tooltip {
     border-radius: 12px !important;
-    border: 1px solid rgba(255,255,255,0.7) !important;
-    background: rgba(255,255,255,0.9) !important;
-    box-shadow: 0 8px 32px rgba(6,22,47,0.08) !important;
+    border: 1px solid var(--material-border-strong) !important;
+    background: rgb(var(--material-tint) / 0.9) !important;
+    box-shadow: var(--shadow-4) !important;
     font-size: 12px;
   }
 }
@@ -127,5 +524,35 @@
   }
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Continuous ("squircle") corners where the platform can draw them; a plain
+     rounded corner everywhere else. Progressive enhancement, zero cost. */
+  @supports (corner-shape: squircle) {
+    .squircle {
+      corner-shape: squircle;
+    }
+  }
+
+  /* The system focus ring, for components that manage focus themselves. */
+  .focus-ring-sys:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+/*
+  Reduce Motion. Apple's guidance is to remove movement, not feedback, so
+  transitions collapse to an effectively instant cross-fade rather than being
+  cancelled — state still changes visibly, it just stops travelling.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
