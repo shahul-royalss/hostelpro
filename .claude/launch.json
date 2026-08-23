@@ -4,8 +4,25 @@
     {
       "name": "hostelpro-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000,
+      "env": {
+        "NODE_EXTRA_CA_CERTS": "C:\\ProgramData\\Norton\\Antivirus\\wscert.pem"
+      }
+    },
+    {
+      "name": "hostelpro-prod",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "next",
+        "start",
+        "-p",
+        "3200"
+      ],
+      "port": 3200,
       "env": {
         "NODE_EXTRA_CA_CERTS": "C:\\ProgramData\\Norton\\Antivirus\\wscert.pem"
       }

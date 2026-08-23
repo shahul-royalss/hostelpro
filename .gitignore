@@ -64,3 +64,6 @@ sbom.json
 # nested git repo committed as a gitlink with no .gitmodules entry; it made
 # `actions/checkout` fail with "No url found for submodule path" on every CI run
 skills/mvanhorn/
+
+# Release artifacts (AAB/APK) — binaries, rebuilt from android/ on demand
+/dist/

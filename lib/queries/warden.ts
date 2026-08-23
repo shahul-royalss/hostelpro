@@ -157,45 +157,36 @@ export interface RoomDetail {
 }
 
 export async function getRoomDetail(db: Db, hostelId: string, roomId: string, period = toPeriodMonth()): Promise<RoomDetail | null> {
-  const { data: room } = await db
-    .from("rooms")
-    .select("*, floors!inner(floor_number)")
-    .eq("hostel_id", hostelId)
-    .eq("id", roomId)
-    .maybeSingle();
+  type FeeEmbed = { status: FeeStatus; amount_due: number | string; amount_paid: number | string };
+  type S = Pick<StudentRow, "id" | "full_name" | "phone" | "photo_url" | "date_of_joining" | "monthly_fee" | "status" | "bed_id"> & {
+    fee?: FeeEmbed | FeeEmbed[] | null;
+  };
+
+  // The room row, its beds and its occupants are three independent reads — one round trip, not
+  // three. The period's fee row rides along on the students query as a left embed (fee_payments
+  // is unique per student+period), replacing the `.in(studentIds)` follow-up. Still only this
+  // room's occupants (≤ capacity rows) — never the whole hostel's ledger.
+  // The beds read no longer waits on the room lookup to prove the tenant, so it carries its own
+  // hostel_id filter (beds.hostel_id is denormalised for exactly this) on top of RLS.
+  const [{ data: room }, { data: beds }, { data: students }] = await Promise.all([
+    db.from("rooms").select("*, floors!inner(floor_number)").eq("hostel_id", hostelId).eq("id", roomId).maybeSingle(),
+    db.from("beds").select("id, bed_number, student_id").eq("hostel_id", hostelId).eq("room_id", roomId).order("bed_number"),
+    db
+      .from("students")
+      .select("id, full_name, phone, photo_url, date_of_joining, monthly_fee, status, bed_id, fee:fee_payments!left(status, amount_due, amount_paid)")
+      .eq("hostel_id", hostelId)
+      .eq("room_id", roomId)
+      .neq("status", "vacated")
+      .eq("fee.hostel_id", hostelId)
+      .eq("fee.period_month", period),
+  ]);
   if (!room) return null;
   const r = room as unknown as RoomRow & { floors: { floor_number: number } | { floor_number: number }[] };
   const floor = Array.isArray(r.floors) ? r.floors[0] : r.floors;
 
-  const [{ data: beds }, { data: students }] = await Promise.all([
-    db.from("beds").select("id, bed_number, student_id").eq("room_id", roomId).order("bed_number"),
-    db
-      .from("students")
-      .select("id, full_name, phone, photo_url, date_of_joining, monthly_fee, status, bed_id")
-      .eq("hostel_id", hostelId)
-      .eq("room_id", roomId)
-      .neq("status", "vacated"),
-  ]);
-
-  type S = Pick<StudentRow, "id" | "full_name" | "phone" | "photo_url" | "date_of_joining" | "monthly_fee" | "status" | "bed_id">;
   const byBed = new Map<string, S>();
-  const studentIds: string[] = [];
   for (const s of (students ?? []) as S[]) {
-    studentIds.push(s.id);
     if (s.bed_id) byBed.set(s.bed_id, s);
-  }
-  // Only this room's occupants (≤ capacity rows) — never the whole hostel's ledger.
-  const { data: fees } = studentIds.length
-    ? await db
-        .from("fee_payments")
-        .select("student_id, status, amount_due, amount_paid")
-        .eq("hostel_id", hostelId)
-        .eq("period_month", period)
-        .in("student_id", studentIds)
-    : { data: [] as unknown[] };
-  const feeByStudent = new Map<string, { status: FeeStatus; amount_due: number; amount_paid: number }>();
-  for (const f of (fees ?? []) as { student_id: string; status: FeeStatus; amount_due: number; amount_paid: number }[]) {
-    feeByStudent.set(f.student_id, f);
   }
 
   return {
@@ -203,7 +194,7 @@ export async function getRoomDetail(db: Db, hostelId: string, roomId: string, pe
     beds: ((beds ?? []) as { id: string; bed_number: number; student_id: string | null }[]).map((b) => {
       const s = byBed.get(b.id);
       if (!s) return { id: b.id, bed_number: b.bed_number, student: null };
-      const f = feeByStudent.get(s.id);
+      const f = (Array.isArray(s.fee) ? s.fee[0] : s.fee) ?? null;
       return {
         id: b.id,
         bed_number: b.bed_number,

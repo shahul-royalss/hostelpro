@@ -124,6 +124,8 @@ export async function getRecentComplaints(supabase: SupabaseClient, hostelId: st
 
 export type ComplaintFilter = "all" | ComplaintStatus;
 export const COMPLAINT_PAGE_SIZE = 50;
+/** Upper bound on the student ids a search resolves to — they travel in a `student_id.in.(…)` filter. */
+const STUDENT_ID_CAP = 200;
 
 export interface ComplaintsInboxParams {
   status?: ComplaintFilter;
@@ -153,15 +155,34 @@ export async function getComplaintsInbox(supabase: SupabaseClient, hostelId: str
   const pageSize = Math.min(Math.max(1, params.pageSize ?? COMPLAINT_PAGE_SIZE), 200);
   const requestedPage = Math.max(1, params.page ?? 1);
 
+  const countFor = (s: ComplaintStatus | null) => {
+    let query = supabase.from("complaints").select("id", { count: "exact", head: true }).eq("hostel_id", hostelId);
+    if (s) query = query.eq("status", s);
+    return query;
+  };
+  // The four pill counts are hostel-wide — they ignore the status filter, the search and paging —
+  // so they never need to wait for the student-id lookup below. Start them now and join later.
+  const countsPromise = Promise.all([countFor(null), countFor("open"), countFor("in_progress"), countFor("resolved")]);
+
   // Search terms that hit the embedded student (name / phone / room) are resolved to student ids first.
-  let studentIds: string[] = [];
+  // Name/phone and room-number matches are independent, so both run in one round trip instead of
+  // resolving room ids and then feeding them into a second students query. The room half joins
+  // `rooms` inline rather than pre-fetching ids, which also drops the old 50-room ceiling.
+  const studentIds: string[] = [];
   if (q) {
-    const { data: rooms } = await supabase.from("rooms").select("id").eq("hostel_id", hostelId).ilike("room_number", `%${q}%`).limit(50);
-    const roomIds = ((rooms ?? []) as { id: string }[]).map((r) => r.id);
-    const parts = [`full_name.ilike.%${q}%`, `phone.ilike.%${q}%`];
-    if (roomIds.length) parts.push(`room_id.in.(${roomIds.join(",")})`);
-    const { data: students } = await supabase.from("students").select("id").eq("hostel_id", hostelId).or(parts.join(",")).limit(200);
-    studentIds = ((students ?? []) as { id: string }[]).map((s) => s.id);
+    const [{ data: byNameOrPhone }, { data: byRoom }] = await Promise.all([
+      supabase.from("students").select("id").eq("hostel_id", hostelId).or(`full_name.ilike.%${q}%,phone.ilike.%${q}%`).limit(STUDENT_ID_CAP),
+      supabase.from("students").select("id, rooms!inner(room_number)").eq("hostel_id", hostelId).ilike("rooms.room_number", `%${q}%`).limit(STUDENT_ID_CAP),
+    ]);
+    // One combined list, name/phone matches first, capped exactly as the single query was: these ids
+    // go into a `student_id.in.(…)` filter and the request URL has to stay a sane length.
+    const seen = new Set<string>();
+    for (const s of [...((byNameOrPhone ?? []) as { id: string }[]), ...((byRoom ?? []) as { id: string }[])]) {
+      if (seen.has(s.id)) continue;
+      seen.add(s.id);
+      studentIds.push(s.id);
+      if (studentIds.length >= STUDENT_ID_CAP) break;
+    }
   }
 
   const build = (head = false) => {
@@ -176,19 +197,11 @@ export async function getComplaintsInbox(supabase: SupabaseClient, hostelId: str
     }
     return query.order("created_at", { ascending: false }).order("id", { ascending: true });
   };
-  const countFor = (s: ComplaintStatus | null) => {
-    let query = supabase.from("complaints").select("id", { count: "exact", head: true }).eq("hostel_id", hostelId);
-    if (s) query = query.eq("status", s);
-    return query;
-  };
 
   const from = (requestedPage - 1) * pageSize;
-  const [pageRes, { count: all }, { count: open }, { count: inProgress }, { count: resolved }] = await Promise.all([
+  const [pageRes, [{ count: all }, { count: open }, { count: inProgress }, { count: resolved }]] = await Promise.all([
     build().range(from, from + pageSize - 1),
-    countFor(null),
-    countFor("open"),
-    countFor("in_progress"),
-    countFor("resolved"),
+    countsPromise,
   ]);
 
   let rows = pageRes.data;
@@ -394,6 +407,25 @@ export async function getStudentsDirectory(supabase: SupabaseClient, hostelId: s
   const pageSize = Math.min(Math.max(1, params.pageSize ?? STUDENT_PAGE_SIZE), STUDENT_MAX_PAGE_SIZE);
   const requestedPage = Math.max(1, params.page ?? 1);
 
+  const activeBase = () => supabase.from("students").select("id", { count: "exact", head: true }).eq("hostel_id", hostelId).neq("status", "vacated").is("deleted_at", null);
+  const feeCount = (status: "paid" | "partial") =>
+    supabase
+      .from("students")
+      .select("id, fee:fee_payments!inner(status)", { count: "exact", head: true })
+      .eq("hostel_id", hostelId)
+      .neq("status", "vacated")
+      .is("deleted_at", null)
+      .eq("fee.period_month", period)
+      .eq("fee.status", status);
+  // The floor list and the three fee counts are hostel-wide — independent of the search, the
+  // filters and paging — so they never need to wait for the room-id lookup below.
+  const sidecarPromise = Promise.all([
+    supabase.from("floors").select("id, hostel_id, floor_number").eq("hostel_id", hostelId).order("floor_number"),
+    activeBase(),
+    feeCount("paid"),
+    feeCount("partial"),
+  ]);
+
   // Search across the embedded room number: resolve matching room ids first (rooms are few; students are many).
   let roomIds: string[] = [];
   if (q) {
@@ -427,24 +459,10 @@ export async function getStudentsDirectory(supabase: SupabaseClient, hostelId: s
     return query;
   };
 
-  const activeBase = () => supabase.from("students").select("id", { count: "exact", head: true }).eq("hostel_id", hostelId).neq("status", "vacated").is("deleted_at", null);
-  const feeCount = (status: "paid" | "partial") =>
-    supabase
-      .from("students")
-      .select("id, fee:fee_payments!inner(status)", { count: "exact", head: true })
-      .eq("hostel_id", hostelId)
-      .neq("status", "vacated")
-      .is("deleted_at", null)
-      .eq("fee.period_month", period)
-      .eq("fee.status", status);
-
   const from = (requestedPage - 1) * pageSize;
-  const [pageRes, { data: floors }, { count: allCount }, { count: paidCount }, { count: partialCount }] = await Promise.all([
+  const [pageRes, [{ data: floors }, { count: allCount }, { count: paidCount }, { count: partialCount }]] = await Promise.all([
     buildBase().order("full_name", { ascending: true }).order("id", { ascending: true }).range(from, from + pageSize - 1),
-    supabase.from("floors").select("id, hostel_id, floor_number").eq("hostel_id", hostelId).order("floor_number"),
-    activeBase(),
-    feeCount("paid"),
-    feeCount("partial"),
+    sidecarPromise,
   ]);
 
   let rows = pageRes.data;
@@ -572,31 +590,39 @@ export async function getMonthFinance(supabase: SupabaseClient, hostelId: string
   const from = toISODate(start);
   const to = toISODate(end);
 
+  // The uploader's name rides along as a to-one embed instead of a follow-up `.in("id", userIds)`
+  // lookup, so "recorded by" costs no second round trip. `uploaded_by` is the only FK from either
+  // table to users, so the relationship resolves without an FK hint (no constraint name to drift).
+  // The embed is still read through RLS on `users` exactly as the separate query was: a row the
+  // caller may not read comes back null, and `recorded_by` is null — the same value as before.
+  const RECORDER = "recorder:users(full_name)";
   const [{ data: exp }, { data: rev }, daily] = await Promise.all([
-    supabase.from("expenses").select("*").eq("hostel_id", hostelId).is("deleted_at", null).gte("date", from).lte("date", to).order("date", { ascending: false }).order("created_at", { ascending: false }),
-    supabase.from("revenues").select("*").eq("hostel_id", hostelId).is("deleted_at", null).gte("date", from).lte("date", to).order("date", { ascending: false }).order("created_at", { ascending: false }),
+    supabase.from("expenses").select(`*, ${RECORDER}`).eq("hostel_id", hostelId).is("deleted_at", null).gte("date", from).lte("date", to).order("date", { ascending: false }).order("created_at", { ascending: false }),
+    supabase.from("revenues").select(`*, ${RECORDER}`).eq("hostel_id", hostelId).is("deleted_at", null).gte("date", from).lte("date", to).order("date", { ascending: false }).order("created_at", { ascending: false }),
     getDailyFinance(supabase, hostelId, start, end),
   ]);
 
-  const expenses = ((exp ?? []) as ExpenseRow[]).map((e) => ({ ...e, amount: Number(e.amount) }));
-  const revenues = ((rev ?? []) as RevenueRow[]).map((r) => ({ ...r, amount: Number(r.amount) }));
-
-  // Resolve "recorded by" names with a second query (robust against FK-hint naming).
-  const userIds = Array.from(new Set([...expenses, ...revenues].map((r) => r.uploaded_by).filter((v): v is string => !!v)));
-  const names = new Map<string, string>();
-  if (userIds.length) {
-    const { data: users } = await supabase.from("users").select("id, full_name").in("id", userIds);
-    for (const u of (users ?? []) as Pick<UserRow, "id" | "full_name">[]) names.set(u.id, u.full_name);
-  }
+  // Lift the embedded name out by row id and drop it from the row: `expenses` / `revenues` are
+  // returned to the page as ExpenseRow / RevenueRow and must not grow an extra property.
+  type Recorder = Pick<UserRow, "full_name"> | Pick<UserRow, "full_name">[] | null;
+  const names = new Map<string, string | null>();
+  const expenses: ExpenseRow[] = ((exp ?? []) as (ExpenseRow & { recorder?: Recorder })[]).map(({ recorder, ...e }) => {
+    names.set(e.id, firstOf(recorder)?.full_name ?? null);
+    return { ...e, amount: Number(e.amount) };
+  });
+  const revenues: RevenueRow[] = ((rev ?? []) as (RevenueRow & { recorder?: Recorder })[]).map(({ recorder, ...r }) => {
+    names.set(r.id, firstOf(recorder)?.full_name ?? null);
+    return { ...r, amount: Number(r.amount) };
+  });
 
   const entries: FinanceEntry[] = [
     ...expenses.map<FinanceEntry>((e) => ({
       id: e.id, kind: "expense", date: e.date, created_at: e.created_at, label: e.category, amount: e.amount, note: e.note,
-      recorded_by: e.uploaded_by ? names.get(e.uploaded_by) ?? null : null,
+      recorded_by: names.get(e.id) ?? null,
     })),
     ...revenues.map<FinanceEntry>((r) => ({
       id: r.id, kind: "revenue", date: r.date, created_at: r.created_at, label: r.source, amount: r.amount, note: r.note,
-      recorded_by: r.uploaded_by ? names.get(r.uploaded_by) ?? null : null,
+      recorded_by: names.get(r.id) ?? null,
     })),
   ].sort((a, b) => (a.date === b.date ? b.created_at.localeCompare(a.created_at) : b.date.localeCompare(a.date)));
 
