@@ -3,6 +3,7 @@
 import * as React from "react";
 import { IndianRupee } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LiquidButton } from "@/components/ui/liquid-button";
 import { formatINR } from "@/lib/utils";
 import { PayRentSheet } from "./pay-rent-sheet";
 
@@ -43,12 +44,32 @@ export function PayRentButton({
 
   const due = amountDue ?? undefined;
 
+  const caption = label ?? (due ? `Pay ${formatINR(due)} now` : "Pay rent online");
+
   return (
     <>
-      <Button variant={variant} size="xl" className={className} onClick={() => setOpen(true)}>
-        <IndianRupee className="h-4 w-4" strokeWidth={2} />
-        {label ?? (due ? `Pay ${formatINR(due)} now` : "Pay rent online")}
-      </Button>
+      {/* The one place in the app that earns the glass treatment: paying rent is the moment a
+          resident most wants to feel the software is solid. LiquidButton falls back to the
+          ordinary design-system button when there is no 2D canvas or the user prefers reduced
+          motion, so this is decoration over a real <button>, never instead of one. The
+          secondary variant keeps the plain button — glass on a de-emphasised action reads as
+          noise. */}
+      {variant === "default" ? (
+        <LiquidButton
+          className={className}
+          captionClassName="inline-flex items-center gap-2"
+          onClick={() => setOpen(true)}
+          options={{ glassThickness: 90, bezelWidth: 11, refractiveIndex: 1.45 }}
+        >
+          <IndianRupee className="h-4 w-4" strokeWidth={2} />
+          {caption}
+        </LiquidButton>
+      ) : (
+        <Button variant={variant} size="xl" className={className} onClick={() => setOpen(true)}>
+          <IndianRupee className="h-4 w-4" strokeWidth={2} />
+          {caption}
+        </Button>
+      )}
       <PayRentSheet open={open} onOpenChange={setOpen} amountDueHint={due} periodHint={period} />
     </>
   );

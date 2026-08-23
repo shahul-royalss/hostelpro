@@ -123,25 +123,114 @@ function toArrayBuffer(buf) {
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 }
 
+/**
+ * Lay a string out one glyph at a time.
+ *
+ * font.getPath(string) is the obvious call and it is the one that was here first, but on this
+ * font it emits literal "NaN" into the path data — 11 of them in "Welcome", none in "NIVORA".
+ * It is not the outlines and it is not kerning: every glyph renders cleanly on its own AND at
+ * its accumulated x position, every advanceWidth is finite, and the NaN count is identical with
+ * kerning on and off. The fault is inside opentype.js's own string-layout pass for this variable
+ * font (Caveat[wght]), which is a family it does not fully support.
+ *
+ * Composing the glyphs ourselves sidesteps that layer entirely while producing the same result,
+ * kerning included — getKerningValue() returns correct finite values here.
+ */
+/**
+ * Serialise a Path ourselves instead of calling opentype's toPathData().
+ *
+ * The composed path holds 582 commands with ZERO non-finite numbers — verified by walking every
+ * x/y/x1/y1/x2/y2 — and toPathData() still returns a string containing 11 "NaN". It only does so
+ * once the glyphs carry an x offset; at the origin the same call is clean. So the fault is in
+ * that serialiser's own shorthand/rounding pass, not in the geometry we hand it.
+ *
+ * Writing the string here is a dozen lines, is exact, and removes a dependency on the one
+ * opentype.js function that demonstrably cannot round-trip this font.
+ */
+function serialisePath(commands, decimals) {
+  const n = (v) => {
+    if (!Number.isFinite(v)) throw new Error(`non-finite coordinate reached the serialiser: ${v}`);
+    // Number() drops the trailing zeros toFixed() adds, so 12.0 emits as "12".
+    return String(Number(v.toFixed(decimals)));
+  };
+  const out = [];
+  for (const c of commands) {
+    switch (c.type) {
+      case "M": out.push(`M${n(c.x)} ${n(c.y)}`); break;
+      case "L": out.push(`L${n(c.x)} ${n(c.y)}`); break;
+      case "Q": out.push(`Q${n(c.x1)} ${n(c.y1)} ${n(c.x)} ${n(c.y)}`); break;
+      case "C": out.push(`C${n(c.x1)} ${n(c.y1)} ${n(c.x2)} ${n(c.y2)} ${n(c.x)} ${n(c.y)}`); break;
+      case "Z": out.push("Z"); break;
+      default: throw new Error(`unhandled path command: ${c.type}`);
+    }
+  }
+  return out.join("");
+}
+
+function layout(font, text, x, y) {
+  const path = new opentype.Path();
+  let penX = x;
+  const scale = FONT_SIZE / font.unitsPerEm;
+  const glyphs = [...text].map((c) => font.charToGlyph(c));
+
+  glyphs.forEach((glyph, i) => {
+    // Render at the ORIGIN and translate the commands ourselves.
+    //
+    // glyph.getPath(penX, ...) is the natural call, and it is what produced 11-13 literal
+    // "NaN" coordinates in "Welcome" while leaving "NIVORA" untouched. It is not the outlines
+    // (every glyph is clean alone), not kerning (identical with it off, and every pair value is
+    // finite) and not the position (m is clean at 197.7 when asked directly). It only appears
+    // through opentype.js's own positioning pass on this variable font, which is a family it
+    // does not fully support. At x=0,y=0 that pass has nothing to do, so it cannot go wrong —
+    // and an offset is arithmetic we can do exactly.
+    const glyphPath = glyph.getPath(0, 0, FONT_SIZE);
+    for (const cmd of glyphPath.commands) {
+      if (cmd.x !== undefined) { cmd.x += penX; cmd.y += y; }
+      if (cmd.x1 !== undefined) { cmd.x1 += penX; cmd.y1 += y; }
+      if (cmd.x2 !== undefined) { cmd.x2 += penX; cmd.y2 += y; }
+    }
+    path.extend(glyphPath);
+
+    penX += glyph.advanceWidth * scale;
+    const next = glyphs[i + 1];
+    if (next) {
+      const kern = font.getKerningValue(glyph, next);
+      if (Number.isFinite(kern)) penX += kern * scale;
+    }
+  });
+  return path;
+}
+
 function buildEntry(font, text) {
   // Pass 1 at the origin tells us where the outlines actually land (y is a baseline, so the
   // box straddles it), pass 2 re-renders shifted so the box sits at PAD,PAD inside a viewBox.
-  const probe = font.getPath(text, 0, 0, FONT_SIZE, { kerning: true }).getBoundingBox();
+  const probe = layout(font, text, 0, 0).getBoundingBox();
   const dx = PAD - probe.x1;
   const dy = PAD - probe.y1;
 
-  const glyphPath = font.getPath(text, dx, dy, FONT_SIZE, { kerning: true });
+  const glyphPath = layout(font, text, dx, dy);
   const box = glyphPath.getBoundingBox();
   const width = round(box.x2 + PAD);
   const height = round(box.y2 + PAD);
 
-  return {
-    text,
-    d: glyphPath.toPathData(DECIMALS),
-    width,
-    height,
-    viewBox: `0 0 ${width} ${height}`,
-  };
+  const d = serialisePath(glyphPath.commands, DECIMALS);
+
+  // A path is a string, so a broken coordinate does not throw — it serialises the literal
+  // text "NaN" into the d attribute and the browser silently drops that subpath. The first
+  // generated "Welcome" shipped with 13 of them. Refuse to emit rather than write a mark
+  // that renders wrong; a build that fails here is far cheaper than one that does not.
+  if (!Number.isFinite(width) || !Number.isFinite(height) || /NaN|Infinity|undefined/.test(d)) {
+    const bad = (d.match(/NaN|Infinity|undefined/g) ?? []).length;
+    throw new Error(
+      `Path for ${JSON.stringify(text)} is not renderable: ${bad} invalid coordinate(s), ` +
+        `width=${width} height=${height}.
+` +
+        `  This is usually a glyph whose contour opentype.js could not resolve at this em size. ` +
+        `Try a different FONT_SIZE, or a font that has every glyph in the string.`,
+    );
+  }
+
+  return { text, d, width, height, viewBox: `0 0 ${width} ${height}` };
 }
 
 function round(n) {

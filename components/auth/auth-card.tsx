@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Building2 } from "lucide-react";
+import { HandwritingSvg } from "@/components/ui/handwriting-svg";
 
 /**
  * Centered frosted card over the ivory background with a subtle navy→teal glow (A-1 / A-2).
@@ -26,6 +27,16 @@ export function AuthCard({
               <Building2 className="h-6 w-6" strokeWidth={1.75} />
             </div>
             <div className="text-caption uppercase tracking-[0.12em] text-muted">{appName}</div>
+            {/* The wordmark is drawn once on arrival. `label={null}` marks it decorative because
+                the brand name is already in the line above — announcing it twice is noise to a
+                screen reader. Under prefers-reduced-motion it renders finished, not faster. */}
+            <HandwritingSvg
+              name="nivora"
+              label={null}
+              duration={1.6}
+              delay={0.15}
+              className="h-9 w-auto text-navy"
+            />
             <h1 className="text-title text-navy">{title}</h1>
             {subtitle ? <p className="text-sm text-muted">{subtitle}</p> : null}
           </div>
