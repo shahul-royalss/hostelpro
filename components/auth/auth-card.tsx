@@ -15,7 +15,7 @@ export function AuthCard({
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
-  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? "HostelPro";
+  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
   return (
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden px-page-mobile py-10 md:px-page-desktop">
       <div className="ambient-glow" aria-hidden />

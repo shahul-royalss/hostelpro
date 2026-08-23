@@ -5,12 +5,12 @@ import { Callout, DocHeader } from "./layout";
 
 const UPDATED = "2026-08-21";
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "HostelPro";
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
 
 export const metadata: Metadata = {
   title: "Legal",
   description:
-    "Privacy Policy, Terms of Service and data deletion request for HostelPro — hostel and PG management software.",
+    "Privacy Policy, Terms of Service and data deletion request for NIVORA — hostel and PG management software.",
 };
 
 /** Rendered per-request so middleware's CSP nonce reaches the script tags — see

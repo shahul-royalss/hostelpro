@@ -1,6 +1,6 @@
 # SECURITY.md — pre-release security sign-off
 
-**Application:** HostelPro — multi-tenant PG/hostel management SaaS
+**Application:** NIVORA — multi-tenant PG/hostel management SaaS
 **Stack:** Next.js 15 (App Router, Server Components + Server Actions) · React 19 · Supabase (Postgres + RLS + Auth + private Storage)
 **Production:** https://hostelpro-three.vercel.app (Vercel) · Supabase project `nimxvgzscbanhtvgnjll`
 **Audit date:** 2026-08-17 (round 1) · 2026-08-20 (rounds 2 and 3) · **Method:** threat model → manual source review → automated sweeps → live exploitation (app + direct PostgREST) → adversarial verification of every serious finding.

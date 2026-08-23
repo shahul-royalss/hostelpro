@@ -1,4 +1,4 @@
-# Incident response — HostelPro
+# Incident response — NIVORA
 
 **Scope:** the production deployment at https://hostelpro-three.vercel.app, the Supabase project
 `nimxvgzscbanhtvgnjll` (Postgres + Auth + Storage), and the source repository.
@@ -44,7 +44,7 @@ accounts (§4.1).
 
 Classify on **blast radius**, not on how alarming it feels. Pick the highest row that matches.
 
-| Sev | Definition | HostelPro examples | Ack | Containment target |
+| Sev | Definition | NIVORA examples | Ack | Containment target |
 |---|---|---|---|---|
 | **SEV1** | Confidentiality or integrity of *multiple tenants* is lost, or platform credentials are exposed | `SUPABASE_SERVICE_ROLE_KEY` leaked or in a public repo/log; super-admin account compromised; a cross-tenant authorization defect confirmed exploitable in production (the class of bug in `SECURITY.md` §3.1, §3.4, §3.5); Supabase or Vercel account takeover | 15 min | 1 hour |
 | **SEV2** | One tenant's personal data or money records are exposed or altered by someone not entitled to them | Owner/warden/manager account compromised; resident PII or ID-proof scans reachable by the wrong role; fee ledger tampered with; a private storage bucket found public | 30 min | 4 hours |
@@ -399,12 +399,12 @@ or a regulator becomes involved, an unlabelled CSV on a laptop is not evidence.
 The DPDP Act 2023 puts breach-intimation duties on the **Data Fiduciary** — the entity that
 determines the purpose and means of processing.
 
-- For **resident (student) data**, the hostel/PG operator is the Data Fiduciary; HostelPro is a
-  **Data Processor** acting on their instructions. HostelPro's duty is to notify the affected
+- For **resident (student) data**, the hostel/PG operator is the Data Fiduciary; NIVORA is a
+  **Data Processor** acting on their instructions. NIVORA's duty is to notify the affected
   tenant(s) **immediately**, so that *they* can meet their statutory clock, and to support their
   notification. This belongs in the tenant contract — see
   [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §2.
-- For **owner and platform-staff accounts** that HostelPro itself creates and controls, HostelPro is
+- For **owner and platform-staff accounts** that NIVORA itself creates and controls, NIVORA is
   the Data Fiduciary and owes the duty directly.
 
 Determine which case you are in **within the first 30 minutes** and write it in the incident log. It
@@ -431,7 +431,7 @@ Write it for a resident or their guardian, not for a regulator, and in a languag
   phone, permanent address, photo, ID-proof scan, fee records;
 - the likely consequences — for ID-proof scans, say plainly that identity fraud is the risk;
 - what you have done about it;
-- **what they should do** — specific actions, e.g. "your HostelPro password has been reset, collect
+- **what they should do** — specific actions, e.g. "your NIVORA password has been reset, collect
   the new one from the warden", "be sceptical of anyone phoning and claiming to be from the hostel";
 - a named contact who can answer questions.
 
@@ -440,7 +440,7 @@ Do not minimise, do not speculate about who did it, and do not promise what you 
 ### 6.4 Log retention interacts with this
 
 The CERT-In directions also require covered entities to enable ICT system logs and maintain them for
-a rolling **180 days**, within Indian jurisdiction. HostelPro's logs live in Supabase and Vercel.
+a rolling **180 days**, within Indian jurisdiction. NIVORA's logs live in Supabase and Vercel.
 **Whether the project's region satisfies "within Indian jurisdiction", and whether the directions
 bind an entity of this size, are open legal questions** — flagged in
 [`logging-and-monitoring.md`](./logging-and-monitoring.md) §4 and

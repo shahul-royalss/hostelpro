@@ -1,4 +1,4 @@
-package app.hostelpro.twa;
+package app.nivora.twa;
 
 /**
  * Entry point of the wrapper.

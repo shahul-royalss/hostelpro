@@ -1,4 +1,4 @@
-# Access control — HostelPro
+# Access control — NIVORA
 
 The role model, the least-privilege decisions and the reasoning behind them, how accounts are created
 and removed, how administrative access works, and how often all of it is reviewed.
@@ -261,7 +261,7 @@ TOCTOU-vulnerable under concurrency (`SECURITY.md` §3.3 item 4). Deactivating f
 1. Deactivate the account (above) — this is the step that actually removes access.
 2. If they held the `SUPABASE_SERVICE_ROLE_KEY` or the Supabase/Vercel dashboard logins, **rotate the
    key** ([`incident-response.md`](./incident-response.md) §4.5) and remove their dashboard access.
-   Deactivating their HostelPro account does nothing about either.
+   Deactivating their NIVORA account does nothing about either.
 3. Reset the passwords of any account whose once-shown credentials they handled (§4.1).
 4. Check `audit_log` for their activity in their last 30 days — not out of suspicion, but because
    this is the only moment anyone will ever look:
@@ -330,7 +330,7 @@ that requires:
 
 - The Supabase account owner's contact details are in the incident contact table
   ([`incident-response.md`](./incident-response.md) §2). **Fill it in.**
-- Dashboard access must not depend on a mailbox that a HostelPro compromise could reach.
+- Dashboard access must not depend on a mailbox that a NIVORA compromise could reach.
 - Any dashboard action taken during an incident goes in the incident log — Supabase Auth logs record
   Admin API calls, but they will not record *why*.
 

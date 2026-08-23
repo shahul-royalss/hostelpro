@@ -22,12 +22,12 @@ const PLACEHOLDERS_UNSET = !isConfigured;
 
 const UPDATED = "2026-08-21";
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "HostelPro";
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
-    "How HostelPro collects, stores, shares, protects and deletes the personal data of hostel residents, guardians, visitors and staff — including your rights under India's DPDP Act 2023 and the GDPR.",
+    "How NIVORA collects, stores, shares, protects and deletes the personal data of hostel residents, guardians, visitors and staff — including your rights under India's DPDP Act 2023 and the GDPR.",
 };
 
 /**

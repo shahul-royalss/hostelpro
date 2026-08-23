@@ -24,12 +24,12 @@ const PLACEHOLDERS_UNSET = !isConfigured;
 
 const UPDATED = "2026-08-21";
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "HostelPro";
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
   description:
-    "The terms on which HostelPro is provided to hostel and PG operators and to the staff and residents whose accounts they issue — including acceptable use, what happens when a subscription lapses, and limitation of liability.",
+    "The terms on which NIVORA is provided to hostel and PG operators and to the staff and residents whose accounts they issue — including acceptable use, what happens when a subscription lapses, and limitation of liability.",
 };
 
 /** Rendered per-request so middleware's CSP nonce reaches the script tags — see

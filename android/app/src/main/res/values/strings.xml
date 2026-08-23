@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">HostelPro</string>
+    <string name="app_name">NIVORA</string>
 
     <!-- Matches start_url in app/manifest.ts. -->
     <string name="launch_url" translatable="false">https://hostelpro-three.vercel.app/</string>

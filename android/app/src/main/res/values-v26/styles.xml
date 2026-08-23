@@ -4,7 +4,7 @@
       #F6F4EF is a light surface, so the status/navigation bar icons have to be
       drawn dark or they vanish. Both flags only exist from API 26 (O) upwards.
     -->
-    <style name="Theme.HostelPro.Launcher" parent="Theme.HostelPro">
+    <style name="Theme.NIVORA.Launcher" parent="Theme.NIVORA">
         <item name="android:windowBackground">@color/backgroundColor</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>

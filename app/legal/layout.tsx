@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
  * visitor — which is what the Play Console requires of a privacy policy URL.
  */
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "HostelPro";
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
 
 export const metadata: Metadata = {
   // The rest of the app is deliberately noindex (private workspace). The legal

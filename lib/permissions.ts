@@ -387,7 +387,7 @@ export async function assertHostelContext(...roles: UserRole[]) {
 export function assertWritable(ctx: HostelContext) {
   if (!ctx.writable) {
     if (ctx.hostel.status === "suspended") {
-      throw new PermissionError("This hostel is suspended. Contact HostelPro support.");
+      throw new PermissionError("This hostel is suspended. Contact NIVORA support.");
     }
     throw new PermissionError("Subscription expired — the hostel is read-only until it is renewed.");
   }

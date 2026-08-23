@@ -1,6 +1,6 @@
-# Shipping HostelPro to Google Play
+# Shipping NIVORA to Google Play
 
-HostelPro is a PWA. To put it on Play it is wrapped in a **Trusted Web Activity** (TWA):
+NIVORA is a PWA. To put it on Play it is wrapped in a **Trusted Web Activity** (TWA):
 a native Android shell whose only job is to launch Chrome full-screen, with no URL bar,
 pointed at `https://hostelpro-three.vercel.app/`. There is no second codebase — every
 screen, every RLS policy and every deploy is the one you already ship to the web.
@@ -33,7 +33,7 @@ public/.well-known/assetlinks.json      the site half of the app<->site proof
 
 | | |
 |---|---|
-| applicationId | `app.hostelpro.twa` |
+| applicationId | `app.nivora.twa` |
 | versionCode / versionName | `1` / `1.0.0` |
 | minSdk | 23 (Android 6.0) |
 | targetSdk / compileSdk | 36 (Android 16) |
@@ -187,7 +187,7 @@ What losing it costs depends on a choice you make at upload time:
   and every existing user has to find and install it manually.
 
 Leaking it is the mirror image: anyone holding the keystore and its password can sign a
-package that Android accepts as an in-place update to HostelPro.
+package that Android accepts as an in-place update to NIVORA.
 
 To create a replacement (new key = new fingerprint = `assetlinks.json` must be updated):
 
@@ -195,12 +195,12 @@ To create a replacement (new key = new fingerprint = `assetlinks.json` must be u
 keytool -genkeypair \
   -keystore C:/Users/shahu/.hostelpro-keys/hostelpro-upload.p12 -storetype PKCS12 \
   -alias hostelpro-upload -keyalg RSA -keysize 2048 -validity 25000 \
-  -dname "CN=HostelPro, O=HostelPro, C=IN"
+  -dname "CN=NIVORA, O=NIVORA, C=IN"
 ```
 
 Play requires the certificate to stay valid past 22 October 2033; `-validity 25000` (about
 68 years) clears that with room to spare. The DN is not shown to users — under Play App
-Signing it is not even the certificate users' devices see — so `O=HostelPro` is fine, but
+Signing it is not even the certificate users' devices see — so `O=NIVORA` is fine, but
 change it to your registered entity name if you prefer.
 
 ---
@@ -213,7 +213,7 @@ above:
 ```json
 [{ "relation": ["delegate_permission/common.handle_all_urls"],
    "target": { "namespace": "android_app",
-               "package_name": "app.hostelpro.twa",
+               "package_name": "app.nivora.twa",
                "sha256_cert_fingerprints": ["24:23:97:...:64:65"] } }]
 ```
 
@@ -248,7 +248,7 @@ $ curl -sS "https://digitalassetlinks.googleapis.com/v1/statements:list\
 &relation=delegate_permission/common.handle_all_urls"
 { "statements": [ { "source": { "web": { "site": "https://hostelpro-three.vercel.app." } },
     "relation": "delegate_permission/common.handle_all_urls",
-    "target": { "androidApp": { "packageName": "app.hostelpro.twa",
+    "target": { "androidApp": { "packageName": "app.nivora.twa",
       "certificate": { "sha256Fingerprint": "24:23:97:...:64:65" } } } } ] }
 ```
 
@@ -333,7 +333,7 @@ Security practices section:
 - *Users can request that their data be deleted* — answer honestly. There is currently **no
   self-service deletion path** in the app; deletion happens when a hostel owner deletes the
   record. Play separately requires apps with accounts to publish a **web URL where a user
-  can request account and data deletion**. HostelPro has no public sign-up (accounts are
+  can request account and data deletion**. NIVORA has no public sign-up (accounts are
   provisioned by an owner or manager), which is a mitigating argument, but you will still
   need that URL and a stated process. Build it into the privacy policy page.
 - *Independent security review* — No. (`SECURITY.md` is an internal review, not a
@@ -342,7 +342,7 @@ Security practices section:
 
 ### Other declarations
 
-- **Content rating**: complete the IARC questionnaire. HostelPro is a business/utility app
+- **Content rating**: complete the IARC questionnaire. NIVORA is a business/utility app
   with no violence, no gambling, no sexual content — expect Everyone / PEGI 3. Answer
   "yes" where it asks whether users can exchange content or communicate: complaints,
   notices and leave requests move between residents and staff, even though they never leave

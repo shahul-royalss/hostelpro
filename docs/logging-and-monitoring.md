@@ -1,4 +1,4 @@
-# Logging and monitoring — HostelPro
+# Logging and monitoring — NIVORA
 
 What is recorded, what is deliberately not recorded, how long any of it survives, who looks at it,
 and what fires an alert.

@@ -79,7 +79,7 @@ export function MfaManage({ status, required }: { status: MfaStatus; required: b
 
         {required && !status.enrolled ? (
           <p className="mt-4 rounded-control bg-red-soft px-3 py-2 text-[13px] text-red">
-            Two-factor authentication is required for your role. Set it up to continue using HostelPro.
+            Two-factor authentication is required for your role. Set it up to continue using NIVORA.
           </p>
         ) : null}
 
@@ -155,7 +155,7 @@ export function MfaManage({ status, required }: { status: MfaStatus; required: b
       </GlassCard>
 
       <p className="text-[12px] text-muted">
-        Lost your device? Ask your administrator to reset your password — that does not remove 2FA; contact HostelPro support to
+        Lost your device? Ask your administrator to reset your password — that does not remove 2FA; contact NIVORA support to
         remove a lost authenticator.
       </p>
     </div>

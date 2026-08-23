@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 /** PWA manifest — Warden & Student apps are installable (CLAUDE_2.md §2). */
 export default function manifest(): MetadataRoute.Manifest {
-  const name = process.env.NEXT_PUBLIC_APP_NAME ?? "HostelPro";
+  const name = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
   return {
     name,
     short_name: name,

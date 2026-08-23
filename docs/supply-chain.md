@@ -1,6 +1,6 @@
 # Supply chain and CI/CD controls
 
-**Applies to:** the private GitHub repository backing HostelPro, and the Vercel project `dhrishta/hostelpro` that deploys from it.
+**Applies to:** the private GitHub repository backing NIVORA, and the Vercel project `dhrishta/hostelpro` that deploys from it.
 **Companion:** [`docs/dependency-policy.md`](./dependency-policy.md) covers *which* dependencies are allowed and how fast advisories get fixed. This file covers *how a change gets from a laptop into production*, and what stands in its way.
 
 `SECURITY.md` §5 carries an open Info item: *"No git remote, therefore no CI enforcement — `.github/workflows/security.yml` is committed and runs on push once a remote exists; enable branch protection + required checks + org MFA at that point."* That point is now. Everything in §1–§3 below is the settings work that item is asking for, and none of it lives in a file — it is repository configuration a human applies in the GitHub UI or API.

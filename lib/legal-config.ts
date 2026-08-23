@@ -16,7 +16,7 @@
  */
 
 export const LEGAL = {
-  /** Registered legal name of the entity operating HostelPro. */
+  /** Registered legal name of the entity operating NIVORA. */
   operatorName: "NIVORA",
 
   /** Trading name shown to users. Safe to leave as-is. */

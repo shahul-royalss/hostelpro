@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Google Play store graphics for HostelPro — generated, not hand-made.
+ * Google Play store graphics for NIVORA — generated, not hand-made.
  *
  *   node scripts/store-assets.mjs            # regenerate everything into public/store/
  *   node scripts/store-assets.mjs --svg      # also write the SVG sources next to the PNGs
@@ -410,7 +410,7 @@ ${rect({ x: 0, y: 0, w: W, h: H, fill: C.ivory })}
 
 ${rect({ x: 112, y: 132, w: 92, h: 92, r: 21, fill: C.navy })}
 ${brandMark(glyph, 112, 132, 92)}
-${text("HostelPro", { x: 226, y: 182, size: 52, weight: 700, fill: C.navy })}
+${text("NIVORA", { x: 226, y: 182, size: 52, weight: 700, fill: C.navy })}
 ${text("Hostel & PG management", { x: 228, y: 214, size: 21, weight: 400, fill: C.muted })}
 ${text("Owner · Manager · Warden · Student", { x: 112, y: 278, size: 20, weight: 600, fill: C.navy })}
 ${text("One workspace, live data, private by default.", { x: 112, y: 308, size: 19, weight: 400, fill: C.charcoal })}

@@ -1,4 +1,4 @@
-# THREAT-MODEL.md — HostelPro
+# THREAT-MODEL.md — NIVORA
 
 GOD-MODE checklist **§1**. This is the inventory the rest of the security work is measured
 against: if an asset, boundary or entry point is not listed here, it was not tested.

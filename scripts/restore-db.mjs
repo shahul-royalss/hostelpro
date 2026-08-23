@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Restore a HostelPro logical backup into a target Supabase project.
+ * Restore a NIVORA logical backup into a target Supabase project.
  *
  *   node scripts/restore-db.mjs <file.hpb>                       # DRY RUN (default)
  *   node scripts/restore-db.mjs <file.hpb> --execute --confirm-overwrite <project-ref>
@@ -110,7 +110,7 @@ async function main() {
   const tables = payload.tables ?? {};
   const authRows = payload.authUsers?.rows ?? [];
 
-  console.log(`\n=== HostelPro restore ===`);
+  console.log(`\n=== NIVORA restore ===`);
   console.log(`  backup   ${args.file}`);
   console.log(`  taken    ${payload.meta.createdAt}  from project ${sourceRef}`);
   console.log(`  carries  ${payload.meta.rowCount} row(s) across ${Object.keys(tables).length} table(s), ${authRows.length} account(s)`);

@@ -60,7 +60,7 @@ export async function startTotpEnrollment(): Promise<ActionResult<{ factorId: st
     for (const f of factors?.totp ?? []) {
       if (f.status !== "verified") await supabase.auth.mfa.unenroll({ factorId: f.id });
     }
-    const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: `HostelPro (${user.role})` });
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: `NIVORA (${user.role})` });
     if (error || !data) return fail(errorMessage(error ?? new Error("Could not start enrolment.")));
     return ok({ factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret, uri: data.totp.uri });
   } catch (e) {

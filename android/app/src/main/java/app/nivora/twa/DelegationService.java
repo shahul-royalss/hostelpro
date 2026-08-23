@@ -1,4 +1,4 @@
-package app.hostelpro.twa;
+package app.nivora.twa;
 
 /**
  * The app half of {@code androidx.browser.trusted.TrustedWebActivityService}.

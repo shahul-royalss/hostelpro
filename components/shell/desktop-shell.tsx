@@ -54,7 +54,7 @@ export function DesktopShell({
   const pathname = usePathname();
   const [drawer, setDrawer] = React.useState(false);
   const items = NAV[user.role];
-  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? "HostelPro";
+  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
 
   React.useEffect(() => setDrawer(false), [pathname]);
 

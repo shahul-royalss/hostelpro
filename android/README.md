@@ -1,4 +1,4 @@
-# HostelPro — Android (Trusted Web Activity)
+# NIVORA — Android (Trusted Web Activity)
 
 A native shell whose only job is to launch Chrome full-screen at
 `https://hostelpro-three.vercel.app/`. No second codebase: the app you ship here is the

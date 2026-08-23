@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Encrypted logical backup of the HostelPro application database.
+ * Encrypted logical backup of the NIVORA application database.
  *
  *   node scripts/backup-db.mjs                 # write backups/hostelpro-<ref>-<ts>.hpb
  *   node scripts/backup-db.mjs --strict        # also FAIL if the live table set drifted
@@ -244,7 +244,7 @@ export function sealBackup(payload, key, { createdAt, project }) {
 
 export function readHeader(file) {
   if (file.length < 8 || !file.subarray(0, 4).equals(FILE_MAGIC)) {
-    throw new Error("not a HostelPro backup file (bad magic — expected 'HPB1')");
+    throw new Error("not a NIVORA backup file (bad magic — expected 'HPB1')");
   }
   const headerLen = file.readUInt32BE(4);
   if (headerLen <= 0 || 8 + headerLen > file.length) throw new Error("corrupt backup: header length out of range");
@@ -389,7 +389,7 @@ async function main() {
   const started = Date.now();
   const log = args.quiet ? () => {} : (...m) => console.log(...m);
 
-  log(`\n=== HostelPro logical backup — project ${ref} ===`);
+  log(`\n=== NIVORA logical backup — project ${ref} ===`);
 
   const live = await discoverTables(url, serviceKey);
   const missing = EXPECTED_TABLES.filter((t) => !live.includes(t)); // in manifest, gone from the DB

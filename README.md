@@ -1,4 +1,4 @@
-# HostelPro — PG / Hostel Management SaaS
+# NIVORA — PG / Hostel Management SaaS
 
 Multi-tenant SaaS for running PG hostels. The platform operator (Super Admin) sells
 subscriptions and creates hostel owners; each owner runs one hostel per subscription
@@ -93,7 +93,7 @@ cp .env.example .env.local
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Settings → API → Project API keys → `anon` `public` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Settings → API → Project API keys → `service_role` (**server-only**; used for creating accounts, regenerating passwords, private uploads and seeding — never expose to the browser) |
 | `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` / `SUPER_ADMIN_NAME` | Your platform login; the seed creates it |
-| `NEXT_PUBLIC_APP_NAME` | `HostelPro` |
+| `NEXT_PUBLIC_APP_NAME` | `NIVORA` |
 | `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` locally; your Vercel URL in production |
 
 ### 3. Install, seed, run

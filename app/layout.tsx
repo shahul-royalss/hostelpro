@@ -9,7 +9,7 @@ const inter = Inter({
   display: "swap",
 });
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "HostelPro";
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
 
 export const metadata: Metadata = {
   // Private workspace — keep every screen out of search indexes (checklist §17).

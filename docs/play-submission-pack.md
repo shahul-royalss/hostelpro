@@ -1,4 +1,4 @@
-# Play Console submission pack — HostelPro
+# Play Console submission pack — NIVORA
 
 Everything that has to be typed, pasted or ticked in Play Console, with the reasoning behind each
 answer. **Every answer here was derived from the code**, not assumed: `db/schema.sql`,
@@ -27,20 +27,20 @@ pure ASCII, so no character counts double against a UTF-16 limit.
 ### App name — limit 30
 
 ```
-HostelPro: PG & Hostel Manager
+NIVORA: PG & Hostel Manager
 ```
 
 **30 / 30 characters.** Exactly at the limit, which works but leaves no room. If Console rejects it
 for any reason, use the safe alternative:
 
 ```
-HostelPro - PG Management
+NIVORA - PG Management
 ```
 
 **25 / 30 characters.**
 
-The bare `HostelPro` (9 characters) is also available, but it wastes the strongest ranking surface in
-the whole listing — nobody searches for "HostelPro"; they search for "hostel management app" and
+The bare `NIVORA` (9 characters) is also available, but it wastes the strongest ranking surface in
+the whole listing — nobody searches for "NIVORA"; they search for "hostel management app" and
 "PG management".
 
 ### Short description — limit 80
@@ -68,7 +68,7 @@ rendered in a lot of surfaces at a lot of font sizes and a plain hyphen never su
 pasting.
 
 ```
-HostelPro is a complete management system for paying-guest accommodations and hostels. Rooms and beds, monthly fees, complaints, leave requests, the visitor register and the mess menu all live in one place, so the owner, the manager, the warden and the resident are finally looking at the same information.
+NIVORA is a complete management system for paying-guest accommodations and hostels. Rooms and beds, monthly fees, complaints, leave requests, the visitor register and the mess menu all live in one place, so the owner, the manager, the warden and the resident are finally looking at the same information.
 
 Built for how a PG actually runs. The owner sees the whole property. The manager runs the money and the kitchen. The warden runs the floor. The resident sees only their own room, their own fees and their own requests. Nobody has to be handed a spreadsheet they were not meant to see.
 
@@ -111,7 +111,7 @@ EXPENSES, REVENUE AND REPORTS
 - Charts that show where the month actually went
 
 BUILT FOR PRIVACY
-Residents' details are some of the most sensitive data a small business holds: phone numbers, guardian contacts, home addresses and identity documents. HostelPro treats them that way.
+Residents' details are some of the most sensitive data a small business holds: phone numbers, guardian contacts, home addresses and identity documents. NIVORA treats them that way.
 - Every property is isolated at the database level, so one hostel's staff can never read another's records
 - Photographs, identity documents and receipts are kept in private storage and served through short-lived links that expire in minutes
 - All traffic is encrypted in transit
@@ -120,23 +120,23 @@ Residents' details are some of the most sensitive data a small business holds: p
 - No advertising, no advertising identifier, no analytics or tracking SDKs of any kind
 
 HOW ACCOUNTS WORK - PLEASE READ BEFORE INSTALLING
-HostelPro has no public sign-up, and this is deliberate. You cannot create an account by downloading the app. A hostel owner is set up by the HostelPro administrator; the owner creates the manager and warden accounts; the warden registers residents. Residents then sign in with the phone number their warden registered.
+NIVORA has no public sign-up, and this is deliberate. You cannot create an account by downloading the app. A hostel owner is set up by the NIVORA administrator; the owner creates the manager and warden accounts; the warden registers residents. Residents then sign in with the phone number their warden registered.
 
-If your hostel does not use HostelPro yet, there is nothing for you to sign in to. Ask your hostel owner or warden first.
+If your hostel does not use NIVORA yet, there is nothing for you to sign in to. Ask your hostel owner or warden first.
 
 WHAT THIS APP DOES NOT DO
-It does not process payments. HostelPro records that a payment happened - the amount, the date, and whether it was cash, UPI or a bank transfer - so the ledger is accurate. Money is never taken, held or moved through this app or this company.
+It does not process payments. NIVORA records that a payment happened - the amount, the date, and whether it was cash, UPI or a bank transfer - so the ledger is accurate. Money is never taken, held or moved through this app or this company.
 
 REQUIREMENTS
-An internet connection, and an account created for you by your hostel. HostelPro is delivered as an installable web app, so you are always on the current version.
+An internet connection, and an account created for you by your hostel. NIVORA is delivered as an installable web app, so you are always on the current version.
 
-Questions, or want HostelPro at your property? Get in touch through the website.
+Questions, or want NIVORA at your property? Get in touch through the website.
 ```
 
 **Why the "HOW ACCOUNTS WORK" section is not optional.** An app that cannot be signed into is the
 classic one-star review and the classic policy complaint. Saying plainly, in the listing, that there
 is no public sign-up sets the expectation before the install and gives a reviewer the context for
-§6. It is also the honest answer to "minimum functionality": HostelPro is a real product with a
+§6. It is also the honest answer to "minimum functionality": NIVORA is a real product with a
 gated audience, not a broken app.
 
 **Why "WHAT THIS APP DOES NOT DO" is in there.** Fee tracking reads like a payments feature at a
@@ -179,12 +179,12 @@ service provider** that processes data on your behalf, on your instructions.
 
 > **Supabase and Vercel are service providers, not third parties.** They host the database, the auth
 > system, the private storage buckets and the application. They process resident data solely to run
-> HostelPro, under HostelPro's instructions. Per Play's definition this is **not sharing**, and the
+> NIVORA, under NIVORA's instructions. Per Play's definition this is **not sharing**, and the
 > answer to "Is this data shared?" is **No** for every single row in the table below.
 
 This trips people up because it feels dishonest to answer "not shared" when the data plainly sits on
 Supabase's servers. It is not dishonest — it is the answer the form is asking for. Ticking "shared"
-would tell users that HostelPro passes their residents' phone numbers and ID scans to outside
+would tell users that NIVORA passes their residents' phone numbers and ID scans to outside
 parties for those parties' own use. That is false, it would contradict the privacy policy, and it
 invites a review question that cannot be answered from the schema. The place to disclose Supabase and
 Vercel is the **privacy policy**, as named sub-processors — which is exactly what
@@ -193,7 +193,7 @@ Vercel is the **privacy policy**, as named sub-processors — which is exactly w
 GitHub holds source code only and never resident data, so it is not a recipient at all.
 
 **"Processed ephemerally"** means held in memory for the request and never written down. **Nothing in
-HostelPro is ephemeral** — it is a record-keeping product; persistence is the point. Answer **No**
+NIVORA is ephemeral** — it is a record-keeping product; persistence is the point. Answer **No**
 everywhere, including for `audit_log.ip`. Nulling IP at 90 days is retention, not ephemerality.
 
 ### 2.2 The table
@@ -240,7 +240,7 @@ requests no advertising ID (see the technical report §4).
 ### 2.3 Government ID — read this before answering
 
 **Play's Data safety form has no "Government ID" data type.** There is no box to tick. That is a gap
-in the form, not permission to stay quiet, and HostelPro holds exactly this kind of document:
+in the form, not permission to stay quiet, and NIVORA holds exactly this kind of document:
 `students.id_proof_type` plus a scan at `students.id_proof_url` in the private `student-docs` bucket.
 [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §4.4 calls it "the highest-value
 data in the system", and it is right.
@@ -270,7 +270,7 @@ of which requires a schema change:
 **Do not tick it.**
 
 Play's "User payment info" means payment instruments: card numbers, bank account numbers, payment
-credentials. HostelPro stores **none of these**. Checked column by column: `fee_payments` holds
+credentials. NIVORA stores **none of these**. Checked column by column: `fee_payments` holds
 `amount_due`, `amount_paid`, `status`, `paid_on`, a free-text `notes`, and `mode` — and `mode` is a
 Postgres enum with exactly three values:
 
@@ -347,7 +347,7 @@ Incidental free-text content is a data-minimisation problem, not a Data safety d
 | Committed to follow the Play Families Policy? | **No** | Not a children's app — see §4 |
 
 **The deletion caveat, stated plainly.** There is no self-service delete button in the app. Deletion
-is a *request*: the resident asks the hostel operator, the operator asks HostelPro, and an
+is a *request*: the resident asks the hostel operator, the operator asks NIVORA, and an
 administrator runs the runbook. Play's requirement is that users can **request** deletion, and a
 functional web request path satisfies it. Two things must be true before ticking Yes:
 
@@ -399,7 +399,7 @@ answer on this questionnaire a reviewer can trivially verify by opening the comp
 There is nothing in it — no characters, no games, no bright cartoon styling, no child-oriented
 content — that would draw a child in. The store listing itself says you cannot sign up.
 
-Consequence: HostelPro is **not** in the Designed for Families programme, is not subject to the Play
+Consequence: NIVORA is **not** in the Designed for Families programme, is not subject to the Play
 Families Policy, and the "Committed to follow Families Policy" answer in §2.8 is No.
 
 ### 4.2 The part that deserves honesty rather than a shrug
@@ -411,11 +411,11 @@ soften it. Pretending otherwise in this document would be worse than useless.
 
 So why is "18 and over" still the right answer? Because Play's question is about **who the app is
 designed and marketed for**, not about who might conceivably end up holding a phone with it
-installed. HostelPro is sold to hostel operators; its users are owners, managers, wardens and
+installed. NIVORA is sold to hostel operators; its users are owners, managers, wardens and
 residents of a business's premises; and a minor resident reaches it only because an adult member of
 staff created an account for them. Selecting an under-18 age group would pull the app into the
 Families programme and its content, ads and data requirements — a programme built for children's
-media, which this is not, and which HostelPro would fail on paperwork it has no reason to produce.
+media, which this is not, and which NIVORA would fail on paperwork it has no reason to produce.
 
 What the honest position does require:
 
@@ -466,19 +466,19 @@ doesn't provide any financial features."*
 
 The distinction, and it is a real one rather than a technicality:
 
-> HostelPro **records that a payment happened**. It does not **process** one.
+> NIVORA **records that a payment happened**. It does not **process** one.
 
 A warden collects ₹8,000 in cash, or receives a UPI transfer to the hostel's own account, and then
-opens HostelPro and types in what happened: the amount, the date, and which of the three modes it
+opens NIVORA and types in what happened: the amount, the date, and which of the three modes it
 was. The app is a ledger. It never initiates a transaction, never holds a balance, never touches a
-payment instrument and never moves money — not for the hostel, not for HostelPro. There is no
+payment instrument and never moves money — not for the hostel, not for NIVORA. There is no
 gateway, no PSP, no webhook, no card vault, and exactly one outbound HTTP call in the entire codebase
 (a Supabase health check).
 
 Declaring a financial feature here would drag in India-specific financial-services verification that
-HostelPro cannot satisfy and does not need. Declaring none is accurate today.
+NIVORA cannot satisfy and does not need. Declaring none is accurate today.
 
-**This changes the day UPI collection is added.** If HostelPro ever takes payment in-app, this
+**This changes the day UPI collection is added.** If NIVORA ever takes payment in-app, this
 declaration, the Data safety answer in §2.4, and the "WHAT THIS APP DOES NOT DO" paragraph in the
 store listing all have to be revised together. Note it now so the future change is not made
 piecemeal.
@@ -489,7 +489,7 @@ piecemeal.
 
 **Play Console → App content → App access → "All or some functionality is restricted."**
 
-This is not optional and it is not a formality. HostelPro has **no public sign-up by design**: the
+This is not optional and it is not a formality. NIVORA has **no public sign-up by design**: the
 Super Admin creates Owners, the Owner creates Managers and Wardens, the Warden registers Students.
 A Play reviewer who installs the app sees a login screen and can go no further. An app a reviewer
 cannot get into is rejected — this is one of the most common rejection reasons for B2B products, and
@@ -552,7 +552,7 @@ What the privacy policy has to actually say, drawn from
 Data safety form is itself a violation:
 
 - The data in the §2 table, in plain words, including **identity documents** (§2.3).
-- That the hostel operator is the data fiduciary and HostelPro is the processor (retention doc §2).
+- That the hostel operator is the data fiduciary and NIVORA is the processor (retention doc §2).
 - **Supabase and Vercel named as sub-processors**, with what each does (retention doc §7).
 - Retention periods (retention doc §5.2), including the 90-day nulling of IP and user agent.
 - How to request access, correction and erasure, and that the request goes to the hostel operator.
@@ -608,7 +608,7 @@ Two traps specific to the 14 days:
 - **Testers must be opted in via the closed-track opt-in link**, not merely told about the app.
   Installing is not the same as opting in.
 
-### The trap specific to HostelPro
+### The trap specific to NIVORA
 
 **Twelve testers need twelve working accounts, and this app has no sign-up.** A tester who installs
 it sees a login screen and nothing else. Before the test starts:
@@ -639,7 +639,7 @@ In order. Each step assumes the previous one is done.
 2. **Back up the upload keystore.** Copy `C:\Users\shahu\.hostelpro-keys\` — the `.p12` *and*
    `keystore.properties` — somewhere durable and private. It is outside the repository, so nothing
    else is backing it up.
-3. **Decide the `applicationId` permanently.** `app.hostelpro.twa` is what the artifact carries. To
+3. **Decide the `applicationId` permanently.** `app.nivora.twa` is what the artifact carries. To
    change it to `app.hostelpro`, do it now, in `android/app/build.gradle.kts` (`namespace` *and*
    `applicationId`) and in `package_name` in `public/.well-known/assetlinks.json`, then rebuild.
    After the first upload it can never change.
@@ -671,7 +671,7 @@ In order. Each step assumes the previous one is done.
     the site**. Then re-verify:
 
     ```sh
-    curl -sS "https://digitalassetlinks.googleapis.com/v1/assetlinks:check?source.web.site=https://hostelpro-three.vercel.app&relation=delegate_permission/common.handle_all_urls&target.android_app.package_name=app.hostelpro.twa&target.android_app.certificate.sha256_fingerprint=<the-new-one>"
+    curl -sS "https://digitalassetlinks.googleapis.com/v1/assetlinks:check?source.web.site=https://hostelpro-three.vercel.app&relation=delegate_permission/common.handle_all_urls&target.android_app.package_name=app.nivora.twa&target.android_app.certificate.sha256_fingerprint=<the-new-one>"
     ```
 
     Expect `"linked": true`. Skip this and every Play-installed copy of the app runs with a visible

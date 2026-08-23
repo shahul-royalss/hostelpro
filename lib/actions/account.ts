@@ -103,7 +103,7 @@ export async function requestAccountDeletion(input: {
       try {
         const body =
           user.full_name +
-          " asked for their HostelPro account and personal data to be deleted." +
+          " asked for their NIVORA account and personal data to be deleted." +
           (reason ? ' Reason: "' + reason.slice(0, REASON_IN_NOTIFICATION) + '"' : "") +
           " Verify who they are in person before acting.";
         const { error } = await createAdminClient()

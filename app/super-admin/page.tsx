@@ -42,7 +42,7 @@ export default async function SuperAdminDashboardPage() {
     <>
       <PageHeader
         title="Dashboard"
-        description="Platform overview — hostels, subscriptions and residents across HostelPro."
+        description="Platform overview — hostels, subscriptions and residents across NIVORA."
         actions={
           <Button asChild>
             <Link href="/super-admin/create">Create owner &amp; hostel</Link>

@@ -33,7 +33,7 @@ const PLACEHOLDERS_UNSET = !isConfigured;
 
 const UPDATED = "2026-08-21";
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "HostelPro";
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
 
 /** Android applicationId — android/app/build.gradle.kts, see docs/play-store.md §1. */
 const ANDROID_PACKAGE = "app.hostelpro.twa";
@@ -45,7 +45,7 @@ const COMPLETE_DAYS = 30;
 export const metadata: Metadata = {
   title: "Delete your account and data",
   description:
-    "How to ask for your HostelPro account and personal data to be deleted, what is erased, what has to be kept and why, and how long it takes.",
+    "How to ask for your NIVORA account and personal data to be deleted, what is erased, what has to be kept and why, and how long it takes.",
 };
 
 const SECTIONS = [

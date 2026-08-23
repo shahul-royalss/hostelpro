@@ -46,13 +46,13 @@ val hasSigningMaterial =
         File(ksStoreFile).isFile
 
 android {
-    namespace = "app.hostelpro.twa"
+    namespace = "app.nivora.twa"
     compileSdk = 36
 
     defaultConfig {
         // PERMANENT once the first build reaches Play — it is the app's identity
         // in the store and cannot be changed afterwards.
-        applicationId = "app.hostelpro.twa"
+        applicationId = "app.nivora.twa"
         // Chrome's TWA support itself starts at API 21, but
         // androidbrowserhelper 2.7.x declares minSdk 23 (Android 6.0), so that
         // is the real floor. It still covers ~99% of active devices.

@@ -47,7 +47,7 @@ rounded corners baked in from `public/icons/icon.svg` and an alpha channel. Uplo
 ## 2. Where each one goes in Play Console
 
 All of these are under **Grow → Store presence → Main store listing** for the app
-`app.hostelpro.twa`.
+`app.nivora.twa`.
 
 1. **App icon** — *Graphics → App icon*. Upload `public/store/icon-512.png`.
 2. **Feature graphic** — *Graphics → Feature graphic*. Upload
