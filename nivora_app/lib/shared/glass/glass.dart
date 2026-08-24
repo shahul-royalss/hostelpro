@@ -6,23 +6,40 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
 
-/// The Liquid Glass layer.
+/// The glass layer.
 ///
-/// One primitive — [GlassSurface] — and thin wrappers over it. Everything glass in Nivora goes
-/// through here, so "make the glass slightly less transparent" is one edit in [GlassWeight].
+/// One primitive — [GlassSurface] — plus [FlatSurface] for everything that does not deserve
+/// glass, and thin wrappers over the two. Everything glass in Nivora goes through here, so
+/// "make the panes a shade less transparent" is one edit in [GlassWeight].
 ///
-/// TWO RULES THIS FILE ENFORCES, because they are what separates expensive-looking glass from
-/// the cheap kind:
+/// ── WHAT A PANE IS ───────────────────────────────────────────────────────────────────────
 ///
-/// 1. **Glass is an elevation treatment, not a skin.** It marks a surface as floating ABOVE
+/// A pane paints its own theme's `colorScheme.surface` at [GlassWeight.opacity] over a blurred
+/// backdrop, and edges itself with a single hairline. That is all. In the light theme the veil
+/// is white; in the dark theme it is #101827 — NOT white at a smaller number, which lightens a
+/// dark pane toward its own near-white text and is illegible the moment anything bright
+/// scrolls under it. The measured proof is in [GlassWeight]; do not "restore" a white tint.
+///
+/// ── THREE RULES THIS FILE ENFORCES ───────────────────────────────────────────────────────
+///
+/// 1. **Glass is an elevation cue, not a skin.** It marks a surface as floating ABOVE
 ///    something. A glass card on a glass panel inside a glass sheet reads as fog, so
-///    [GlassSurface] asserts in debug when it finds itself nested more than one deep.
+///    [GlassSurface] asserts in debug when it finds itself nested more than one deep. When you
+///    need an inner surface, that is what [FlatSurface] is for — and reaching for it is the
+///    normal case, not the fallback. Roughly one pane per screen carries the thing that
+///    matters; the rest sit quietly behind an outline.
 ///
-/// 2. **The blur is optional; the layout is not.** When [Motion.glassFallback] is set — a
-///    low-end device, or the user asking for reduced transparency — the BackdropFilter is
-///    skipped and an opaque tinted surface is painted instead. Identical geometry, so nothing
-///    reflows and no screen needs a second design. Performance beats the effect: a premium
-///    interface that drops frames is not premium.
+/// 2. **Nothing here competes with the data.** There is no decorative gradient, no glow, no
+///    inner highlight. An earlier version painted a white 22% diagonal sheen across every pane
+///    to suggest a curved surface catching light; on a dashboard that sheen sat directly on
+///    top of the number the screen exists to show. A pane earns its depth from the blur and
+///    the hairline, and then gets out of the way.
+///
+/// 3. **The blur is optional; the layout is not.** When [Motion.glassFallback] is set — a
+///    low-end device, or a user who has asked for reduced transparency — the BackdropFilter is
+///    skipped and the identical box is painted opaque. Same geometry, same padding, same
+///    radius, so nothing reflows and no screen needs a second design. Performance beats the
+///    effect: a premium interface that drops frames is not premium.
 
 /// Tracks glass depth down the tree so nesting can be caught in debug.
 class _GlassDepth extends InheritedWidget {
@@ -45,6 +62,7 @@ class GlassSurface extends StatelessWidget {
     this.borderRadius = Radii.rCard,
     this.padding,
     this.shadows = Shadows.level2,
+    this.border,
     this.onTap,
     this.semanticLabel,
   });
@@ -54,8 +72,22 @@ class GlassSurface extends StatelessWidget {
   final BorderRadius borderRadius;
   final EdgeInsetsGeometry? padding;
   final List<BoxShadow> shadows;
+
+  /// Overrides the default hairline on all four sides. A full-bleed bar wants an edge only
+  /// where it meets content — see [GlassHeader]. Build it from [edgeColor].
+  final BoxBorder? border;
+
   final VoidCallback? onTap;
   final String? semanticLabel;
+
+  /// The hairline colour for a pane in the current theme. Ink on light, white on dark: the
+  /// edge has to move AWAY from the pane's own fill, and the pane's fill is near-white in one
+  /// theme and near-black in the other.
+  static Color edgeColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? Colors.white.withValues(alpha: GlassWeight.darkEdge)
+        : NivoraColors.midnight.withValues(alpha: GlassWeight.lightEdge);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,52 +95,28 @@ class GlassSurface extends StatelessWidget {
     assert(
       depth < 2,
       'Glass nested $depth deep. Glass marks one step of elevation; stacking it reads as fog '
-      'rather than depth. Use a plain Container for the inner surface.',
+      'rather than depth. Use FlatSurface for the inner surface.',
     );
 
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    // On dark surfaces a white tint at the light-mode opacity washes the content out, and the
-    // border has to be brighter than the fill to still read as an edge.
-    final tint = (dark ? Colors.white.withValues(alpha: weight.tint * 0.55)
-                       : Colors.white.withValues(alpha: weight.tint + 0.62));
-    final border = dark
-        ? Colors.white.withValues(alpha: weight.border * 0.30)
-        : Colors.white.withValues(alpha: weight.border);
+    final scheme = Theme.of(context).colorScheme;
+    final edge = border ?? Border.all(color: edgeColor(context), width: Strokes.hairline);
 
+    // The pane. In the fallback path the ONLY difference is that the veil is fully opaque and
+    // the BackdropFilter is skipped — every other dimension is identical, which is the point.
+    final opaque = Motion.glassFallback;
     Widget surface = DecoratedBox(
       decoration: BoxDecoration(
-        color: tint,
+        color: opaque ? scheme.surface : scheme.surface.withValues(alpha: weight.opacity),
         borderRadius: borderRadius,
-        border: Border.all(color: border, width: 1),
-        // A barely-there vertical gradient. This is what gives a flat translucent rectangle the
-        // sense of a curved pane catching light; without it glass looks like a grey box.
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: dark ? 0.06 : 0.22),
-            Colors.white.withValues(alpha: 0.0),
-          ],
-        ),
+        border: edge,
       ),
       child: padding == null ? child : Padding(padding: padding!, child: child),
     );
 
-    if (!Motion.glassFallback) {
+    if (!opaque) {
       surface = BackdropFilter(
         filter: ImageFilter.blur(sigmaX: weight.blur, sigmaY: weight.blur),
         child: surface,
-      );
-    } else {
-      // Opaque equivalent. Same box, no filter — the expensive part is the BackdropFilter,
-      // not the decoration.
-      surface = DecoratedBox(
-        decoration: BoxDecoration(
-          color: dark ? NivoraColors.darkElevated : NivoraColors.surface,
-          borderRadius: borderRadius,
-          border: Border.all(color: Theme.of(context).colorScheme.outline, width: 1),
-        ),
-        child: padding == null ? child : Padding(padding: padding!, child: child),
       );
     }
 
@@ -131,7 +139,60 @@ class GlassSurface extends StatelessWidget {
   }
 }
 
-/// A resting content card.
+/// An opaque surface with a hairline. No blur, no shadow, no elevation claim.
+///
+/// This is the DEFAULT surface in Nivora and glass is the exception, which is the opposite of
+/// how the design reads if you only look at the widget names. Use this for anything that is
+/// simply content on a page: list rows, stat tiles, grouped sections, anything inside a pane.
+class FlatSurface extends StatelessWidget {
+  const FlatSurface({
+    super.key,
+    required this.child,
+    this.borderRadius = Radii.rCard,
+    this.padding,
+    this.onTap,
+    this.semanticLabel,
+  });
+
+  final Widget child;
+  final BorderRadius borderRadius;
+  final EdgeInsetsGeometry? padding;
+  final VoidCallback? onTap;
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    Widget result = Material(
+      color: scheme.surface,
+      borderRadius: borderRadius,
+      child: InkWell(
+        borderRadius: borderRadius,
+        // A null onTap leaves InkWell inert rather than absorbing the gesture.
+        onTap: onTap,
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            borderRadius: borderRadius,
+            // outline (cardBorder, 1.48:1), not outlineVariant (hairline, 1.18:1). This is a
+            // card's edge against the canvas, not a divider between two things already on the
+            // same surface. theme.dart keeps those two jobs on separate tokens for exactly
+            // this decision.
+            border: Border.all(color: scheme.outline, width: Strokes.hairline),
+          ),
+          child: child,
+        ),
+      ),
+    );
+    if (semanticLabel != null) {
+      result = Semantics(label: semanticLabel, container: true, child: result);
+    }
+    return result;
+  }
+}
+
+/// A resting content card. Glass, so use it for the one thing on the screen that is elevated
+/// above the rest — not for every row.
 class GlassCard extends StatelessWidget {
   const GlassCard({super.key, required this.child, this.padding, this.onTap, this.semanticLabel});
   final Widget child;
@@ -150,6 +211,11 @@ class GlassCard extends StatelessWidget {
 }
 
 /// A bar content scrolls beneath. Handles its own top inset so screens do not each re-derive it.
+///
+/// Edged along the bottom only, and unshadowed. A drop shadow under a full-bleed bar is the
+/// cheapest-looking thing in mobile design and it is redundant here: the bar is already a
+/// [GlassWeight.regular] pane, so content visibly dims and blurs as it passes under. One
+/// hairline says "the page starts here" without putting a grey smear over the first row.
 class GlassHeader extends StatelessWidget {
   const GlassHeader({super.key, required this.child, this.padding});
   final Widget child;
@@ -159,15 +225,22 @@ class GlassHeader extends StatelessWidget {
   Widget build(BuildContext context) => GlassSurface(
         weight: GlassWeight.regular,
         borderRadius: BorderRadius.zero,
-        shadows: Shadows.level2,
+        shadows: Shadows.level1,
+        border: Border(
+          bottom: BorderSide(color: GlassSurface.edgeColor(context), width: Strokes.hairline),
+        ),
         padding: (padding ?? const EdgeInsets.symmetric(horizontal: Space.md, vertical: Space.sm))
             .add(EdgeInsets.only(top: MediaQuery.paddingOf(context).top)),
         child: child,
       );
 }
 
-/// One statistic. Not glass by default on purpose: a grid of glass tiles is the "rainbow
-/// dashboard" the brief warns against, so the emphasised variant is opt-in.
+/// One statistic.
+///
+/// Flat by default, on purpose. A grid of glass tiles is the "rainbow dashboard" the brief
+/// warns against: six panes of equal elevation say nothing about which number matters, and the
+/// blur under each one costs a frame to say it. [emphasised] opts a single tile into glass —
+/// use it at most once per screen, for the figure the screen is about.
 class GlassStatCard extends StatelessWidget {
   const GlassStatCard({
     super.key,
@@ -193,13 +266,18 @@ class GlassStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final accent = tone ?? t.colorScheme.primary;
+    // A canonical tone is resolved to this theme's legible value. The icon it paints is a
+    // graphical object either way, but the resolved value is the one that stays readable if a
+    // caller ever passes the same tone to a Text. See NivoraSemantics.resolve.
+    final accent = tone == null ? t.colorScheme.primary : context.tones.resolve(tone!);
+    final semantics = '$label: $value${caption == null ? '' : '. $caption'}';
+
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
           if (icon != null) ...[
-            Icon(icon, size: 16, color: accent),
+            Icon(icon, size: IconSize.sm, color: accent),
             const SizedBox(width: Space.xs),
           ],
           Expanded(
@@ -208,6 +286,7 @@ class GlassStatCard extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: Space.xs),
+        // headlineMedium is tabular — a refreshing column of figures must not shuffle.
         Text(value, style: t.textTheme.headlineMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
         if (caption != null) ...[
           const SizedBox(height: Space.xxs),
@@ -221,29 +300,15 @@ class GlassStatCard extends StatelessWidget {
         weight: GlassWeight.thin,
         padding: const EdgeInsets.all(Space.md),
         onTap: onTap,
-        semanticLabel: '$label: $value${caption == null ? '' : '. $caption'}',
+        semanticLabel: semantics,
         child: body,
       );
     }
-    return Semantics(
-      label: '$label: $value${caption == null ? '' : '. $caption'}',
-      container: true,
-      child: Material(
-        color: t.colorScheme.surface,
-        borderRadius: Radii.rCard,
-        child: InkWell(
-          borderRadius: Radii.rCard,
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.all(Space.md),
-            decoration: BoxDecoration(
-              borderRadius: Radii.rCard,
-              border: Border.all(color: t.colorScheme.outlineVariant),
-            ),
-            child: body,
-          ),
-        ),
-      ),
+    return FlatSurface(
+      padding: const EdgeInsets.all(Space.md),
+      onTap: onTap,
+      semanticLabel: semantics,
+      child: body,
     );
   }
 }
