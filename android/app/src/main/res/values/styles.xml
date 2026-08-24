@@ -1,21 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base theme. No AppCompat dependency: the wrapper never inflates a layout. -->
-    <style name="Theme.NIVORA" parent="@android:style/Theme.Material.Light.NoActionBar">
+    <!--
+      AppCompat parent, because the shell is now our own AppCompatActivity inflating a real view
+      hierarchy. Under the previous TWA the wrapper never inflated anything, so a plain Material
+      theme was enough; MainActivity would crash at onCreate with a non-AppCompat theme.
+    -->
+    <style name="Theme.NIVORA" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:colorBackground">@color/backgroundColor</item>
     </style>
 
     <!--
-      The launcher is transparent so the only thing the user sees between tapping
-      the icon and Chrome taking over is the splash screen, not a white flash.
+      Shown for the fraction of a second between tapping the icon and the WebView painting its
+      first frame. windowBackground is the splash: a colour that matches the web app's own
+      background, so the handoff is invisible rather than a white flash.
+
+      Deliberately NOT a multi-second animated splash. The brief asked for a fast launch and a
+      brand impression, and the honest way to get both is to make the seam disappear.
     -->
     <style name="Theme.NIVORA.Launcher" parent="Theme.NIVORA">
-        <item name="android:windowBackground">@color/backgroundColor</item>
+        <item name="android:windowBackground">@drawable/splash_screen</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>
         <item name="android:windowFullscreen">false</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
-        <item name="android:statusBarColor">@color/colorPrimary</item>
-        <item name="android:navigationBarColor">@color/navigationColor</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- Dark icons on our light background; DayNight flips this in values-night. -->
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

@@ -64,6 +64,7 @@ android {
         // Single source of truth for the origin this app is welded to. Used by
         // the deep-link intent-filter in AndroidManifest.xml.
         manifestPlaceholders["hostName"] = "hostelpro-three.vercel.app"
+        buildConfigField("String", "APP_ORIGIN", "\"https://hostelpro-three.vercel.app\"")
 
         // No ACCESS_NETWORK_STATE / no analytics — the wrapper ships zero code
         // of its own beyond the launcher, so resConfigs stay at the default.
@@ -107,7 +108,9 @@ android {
     }
 
     buildFeatures {
-        buildConfig = false
+        // MainActivity needs BuildConfig.APP_ORIGIN — the single place the shell's
+        // origin is declared, so it cannot drift from the manifest placeholder.
+        buildConfig = true
     }
 
     dependenciesInfo {
@@ -139,13 +142,37 @@ java {
     }
 }
 
+/*
+ * Kotlin 1.8 folded kotlin-stdlib-jdk7/jdk8 INTO kotlin-stdlib. A transitive
+ * kotlinx-coroutines 1.6.4 still asks for the 1.6.21 split artifacts, while the main stdlib
+ * resolves to 1.8.22 — so the same classes arrive twice and :checkReleaseDuplicateClasses
+ * fails the build. Pinning the shims to the resolved stdlib version makes them the empty
+ * forwarding artifacts they are at 1.8.22, which is the fix rather than disabling the check.
+ */
+configurations.all {
+    resolutionStrategy {
+        force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22")
+        force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22")
+    }
+}
+
 dependencies {
     // Google's official Trusted Web Activity support library. It wraps
     // androidx.browser.trusted (TrustedWebActivityIntentBuilder, the
     // TrustedWebActivityService binding used for notification delegation and
     // the Digital Asset Links verification handshake) and adds the splash
     // screen + "manage space" plumbing Play expects.
-    implementation("com.google.androidbrowserhelper:androidbrowserhelper:2.7.3")
+    // The shell is our own WebView Activity now, so androidbrowserhelper (and with it the
+    // handoff to Chrome) is gone. appcompat gives AppCompatActivity + the theme parents;
+    // core-ktx gives WindowCompat/WindowInsetsCompat for the notch and gesture-bar insets.
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    // core, NOT core-ktx: this module is Java-only. core-ktx drags in kotlin-stdlib 1.8.22,
+    // which collides with the kotlin-stdlib-jdk7/jdk8 split artifacts another dependency
+    // still resolves (duplicate classes at :checkReleaseDuplicateClasses). WindowCompat,
+    // WindowInsetsCompat and ViewCompat all live in the Java artifact anyway.
+    implementation("androidx.core:core:1.13.1")
+    implementation("androidx.activity:activity:1.9.3")
+    implementation("androidx.webkit:webkit:1.12.1")
 }
 
 /*

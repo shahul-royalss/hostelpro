@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The launch splash. A layer-list rather than a bitmap so the mark stays centred and unscaled
+  on every density, and so the background colour is the same token the web app paints — the
+  seam between native splash and first web frame is then invisible.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/backgroundColor" />
+    <item>
+        <bitmap
+            android:src="@drawable/splash"
+            android:gravity="center" />
+    </item>
+</layer-list>
