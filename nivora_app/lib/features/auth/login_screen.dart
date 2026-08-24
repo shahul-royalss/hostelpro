@@ -20,6 +20,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _id = TextEditingController();
   final _pw = TextEditingController();
   bool _obscure = true;
+  // Submission state is local on purpose. It used to live in the shared auth provider, which
+  // the router watches — so tapping Sign in read as "still restoring the session" and pushed
+  // the user to the splash screen mid-login.
+  bool _busy = false;
+  String? _error;
 
   @override
   void dispose() {
@@ -31,17 +36,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _submit() async {
     if (!_form.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
-    await ref
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final message = await ref
         .read(authControllerProvider.notifier)
         .signIn(identifier: _id.text, password: _pw.text);
+    // On success the router navigates away and this widget is gone, so guard the setState.
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _error = message;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final phase = ref.watch(authControllerProvider);
-    final busy = phase.isLoading;
-    final error = phase.hasError ? phase.error.toString() : null;
+    final busy = _busy;
+    final error = _error;
 
     return Scaffold(
       body: SafeArea(

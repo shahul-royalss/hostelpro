@@ -21,8 +21,77 @@ const roleHome = <UserRole, String>{
   UserRole.student: '/student',
 };
 
-/// Reachable without a session. Everything else redirects to /login.
-const _publicRoutes = {'/login', '/splash'};
+/// Reachable without a session.
+///
+/// [splashRoute] is deliberately NOT in here. It is a transient holding state, never a
+/// destination, and treating it as "public" is precisely what made the first release build sit
+/// on the splash screen forever: the signed-out branch returned "stay put" for every public
+/// route, so an app with no session held the spinner indefinitely. No crash, no error in the
+/// log, nothing to diagnose — it simply looked like the app would not open.
+const _publicRoutes = {loginRoute};
+
+const splashRoute = '/splash';
+const loginRoute = '/login';
+const mfaRoute = '/mfa';
+const changePasswordRoute = '/change-password';
+
+/// The routing decision, extracted as a pure function so it can be tested without a widget
+/// tree, an emulator or a network. The hang above was invisible to `flutter analyze` and to
+/// every unit test that existed, because the decision was buried in a closure inside a
+/// provider. It is out here now so that "signed out on the splash goes to login" is an
+/// assertion rather than an assumption.
+///
+/// Returns the location to redirect to, or null to stay put.
+String? resolveRedirect({
+  required AsyncValue<AuthPhase> phase,
+  required String here,
+}) {
+  // Hold on the splash ONLY for the very first session restore, which is the case with no
+  // value yet. Later loading states — a token refresh, or the moment between tapping Sign in
+  // and the server answering — keep their previous value, so they no longer yank a user who
+  // is mid-flow back to a spinner.
+  if (phase.isLoading && !phase.hasValue) {
+    return here == splashRoute ? null : splashRoute;
+  }
+
+  final value = phase.value;
+
+  if (value is AuthNeedsMfa) {
+    return here == mfaRoute ? null : mfaRoute;
+  }
+
+  if (value is AuthSignedIn) {
+    final session = value.session;
+
+    // An owed password change outranks everything, including the role home.
+    if (session.needsPasswordChange && here != changePasswordRoute) {
+      return changePasswordRoute;
+    }
+
+    final home = roleHome[session.role]!;
+
+    // Anything that is not a real destination for a signed-in user sends them home. The
+    // splash is listed first because it is the one every cold start passes through.
+    if (here == splashRoute ||
+        here == mfaRoute ||
+        here == '/' ||
+        _publicRoutes.contains(here)) {
+      return home;
+    }
+
+    // Sitting in another role's subtree sends you to your own. This is presentation, not
+    // authorization: a user who defeated it would still be refused every row by row-level
+    // security, which evaluates the JWT server-side.
+    final ownsHere = roleHome.values.any((h) => here == h || here.startsWith('$h/'));
+    final mine = here == home || here.startsWith('$home/');
+    if (ownsHere && !mine) return home;
+    return null;
+  }
+
+  // Signed out, or the restore failed. Either way the only place to be is the login screen —
+  // including when the user is still on the splash.
+  return _publicRoutes.contains(here) ? null : loginRoute;
+}
 
 /// Rebuilds the router's redirect logic whenever auth changes, without rebuilding the router.
 class _AuthRefresh extends ChangeNotifier {
@@ -37,56 +106,23 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(refresh.dispose);
 
   return GoRouter(
-    initialLocation: '/splash',
+    initialLocation: splashRoute,
     refreshListenable: refresh,
     debugLogDiagnostics: false,
 
     /// The ONLY navigation gate. Note what it is and is not: it decides which screens to draw.
-    /// It is not authorization — a user who defeated this would still be refused every row by
-    /// row-level security, because the server evaluates the JWT, not this function.
-    redirect: (context, state) {
-      final phase = ref.read(authControllerProvider);
-      final here = state.matchedLocation;
-
-      // Still restoring a persisted session. Hold on the splash rather than flashing /login,
-      // which is what makes a warm start feel instant instead of like a logout.
-      if (phase.isLoading || phase is AsyncLoading) {
-        return here == '/splash' ? null : '/splash';
-      }
-
-      final value = phase.value;
-
-      if (value is AuthNeedsMfa) {
-        return here == '/mfa' ? null : '/mfa';
-      }
-
-      if (value is AuthSignedIn) {
-        final session = value.session;
-
-        // An owed password change outranks everything, including the role home.
-        if (session.needsPasswordChange && here != '/change-password') {
-          return '/change-password';
-        }
-
-        final home = roleHome[session.role]!;
-        // Leaving a public route, or sitting on another role's subtree, sends you to your own.
-        if (_publicRoutes.contains(here) || here == '/') return home;
-        final ownsHere = roleHome.values.any((h) => here == h || here.startsWith('$h/'));
-        final mine = here == home || here.startsWith('$home/');
-        if (ownsHere && !mine) return home;
-        return null;
-      }
-
-      // Signed out.
-      return _publicRoutes.contains(here) ? null : '/login';
-    },
+    /// It is not authorization — see resolveRedirect.
+    redirect: (context, state) => resolveRedirect(
+      phase: ref.read(authControllerProvider),
+      here: state.matchedLocation,
+    ),
 
     routes: [
-      GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
-      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
-      GoRoute(path: '/mfa', builder: (_, _) => const MfaScreen()),
+      GoRoute(path: splashRoute, builder: (_, _) => const SplashScreen()),
+      GoRoute(path: loginRoute, builder: (_, _) => const LoginScreen()),
+      GoRoute(path: mfaRoute, builder: (_, _) => const MfaScreen()),
       GoRoute(
-        path: '/change-password',
+        path: changePasswordRoute,
         builder: (_, _) => const _Placeholder(title: 'Set a new password'),
       ),
       // One shell per role. Each owns its own navigation, because forcing five roles through

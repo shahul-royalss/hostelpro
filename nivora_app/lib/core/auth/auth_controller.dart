@@ -2,6 +2,7 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 // Supabase exports a type named AuthState too. Ours is AuthPhase precisely so the two
@@ -141,30 +142,41 @@ class AuthController extends AsyncNotifier<AuthPhase> {
   }
 
   /// Sign in with an email OR a phone number (see [resolveLoginEmail]).
-  Future<void> signIn({required String identifier, required String password}) async {
-    state = const AsyncLoading();
+  /// Returns null on success, or a message to show the user.
+  ///
+  /// This deliberately does NOT push the in-flight attempt into the shared auth state. The
+  /// router listens to that state, and a value-less loading value there means "the first
+  /// session restore is still running" — so routing it through here yanked the user off the
+  /// login form and onto the splash screen the moment they tapped Sign in. Submission
+  /// progress belongs to the form; auth phase belongs to the app.
+  Future<String?> signIn({required String identifier, required String password}) async {
     try {
       await _db.auth.signInWithPassword(
         email: resolveLoginEmail(identifier),
         password: password,
       );
       state = AsyncData(await _resolve());
+      return null;
     } on AuthException catch (e) {
+      // The user sees a deliberately vague message; whoever is debugging needs the real one.
+      // debugPrint is stripped in release, so this cannot leak to a device log in production.
+      debugPrint('signIn failed: ${e.runtimeType} status=${e.statusCode} ${e.message}');
       // Deliberately not distinguishing "no such user" from "wrong password": that difference
       // is an account-enumeration oracle, and this app's population is young residents whose
       // phone number is the login.
-      state = AsyncError(_friendly(e), StackTrace.current);
+      return _friendly(e);
     }
   }
 
-  Future<void> verifyMfa({required String factorId, required String code}) async {
-    state = const AsyncLoading();
+  /// Returns null on success, or a message to show. Same reasoning as [signIn].
+  Future<String?> verifyMfa({required String factorId, required String code}) async {
     try {
       final challenge = await _db.auth.mfa.challenge(factorId: factorId);
       await _db.auth.mfa.verify(factorId: factorId, challengeId: challenge.id, code: code);
       state = AsyncData(await _resolve());
+      return null;
     } on AuthException catch (e) {
-      state = AsyncError(_friendly(e), StackTrace.current);
+      return _friendly(e);
     }
   }
 

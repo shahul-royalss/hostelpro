@@ -44,20 +44,38 @@ class _MfaScreenState extends ConsumerState<MfaScreen> {
     super.dispose();
   }
 
+  // Local for the same reason as the login form: the router watches the shared auth state,
+  // so putting an in-flight verification there navigated away from this screen mid-check.
+  bool _busy = false;
+  String? _error;
+
   Future<void> _verify(String code) async {
     final phase = ref.read(authControllerProvider).value;
     if (phase is! AuthNeedsMfa) return;
-    await ref
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final message = await ref
         .read(authControllerProvider.notifier)
         .verifyMfa(factorId: phase.factorId, code: code);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _error = message;
+    });
+    // A rejected code leaves the field holding a value the user must clear to retry.
+    if (message != null) {
+      _controller.clear();
+      _focus.requestFocus();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final phase = ref.watch(authControllerProvider);
-    final busy = phase.isLoading;
-    final error = phase.hasError ? phase.error.toString() : null;
+    final busy = _busy;
+    final error = _error;
     final code = _controller.text;
 
     return Scaffold(
