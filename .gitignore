@@ -71,3 +71,8 @@ skills/mvanhorn/
 # Owner-supplied prototype kept as reference for components/payments/receipt-printer.tsx.
 # Not built and not shipped; excluded from lint. Remove once the port is settled.
 reciept animation/
+
+# Vendored Claude Code skill content — tooling, not part of the product.
+skills/
+# Stray perf probes from tooling runs.
+build/
