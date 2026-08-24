@@ -67,6 +67,7 @@ export const EXPECTED_TABLES = [
   "revenues",
   "rooms",
   "security_alerts",
+  "payment_intents",
   "students",
   "subscriptions",
   "tasks",
@@ -109,6 +110,7 @@ export const RESTORE_ORDER = [
   { table: "announcements" },
   { table: "menus" },
   { table: "notifications" },
+  { table: "payment_intents" },
   { table: "audit_log" },
   { table: "security_alerts" },
 ];

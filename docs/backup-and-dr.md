@@ -186,6 +186,12 @@ Only for a **new** project — skip if you are restoring in place:
 
 1. Run `db/schema.sql` in the Supabase SQL editor.
 2. Run `db/rls-policies.sql`.
+2a. Run every file in `db/migrations/` in filename order. **This is not optional** — the
+   payments feature lives entirely in `db/migrations/2026-08-24-payments.sql`
+   (`payment_intents` plus the five `rz_*` functions), so a rebuild that stops after
+   `rls-policies.sql` produces a database the app boots against but cannot take a payment on.
+   The nightly drift check is what catches this: it compares the live table list against the
+   manifest in `scripts/backup-db.mjs` and fails loudly when they diverge.
 3. Create the three private Storage buckets: `student-docs`, `receipts`, `complaint-photos`.
 4. Confirm the rebuild produced all 20 tables before restoring
    (`select count(*) from information_schema.tables where table_schema = 'public'`).
