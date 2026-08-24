@@ -49,13 +49,15 @@ export function MonthSelector({
     return <SegmentedPills options={options} value={value} onChange={onChange} size="sm" className={className} ariaLabel="Select month" />;
   }
 
+  // The arrows stay 28x28 glyphs; .tap-target (globals.css) grows their hit
+  // area to 44x44 on touch without changing the size of the control.
   return (
-    <div className={cn("inline-flex items-center rounded-full border border-white/70 bg-white/60 p-1 backdrop-blur-md", className)}>
+    <div className={cn("inline-flex items-center rounded-full border border-material-strong bg-material-tint/60 p-1 backdrop-blur-md", className)}>
       <button
         type="button"
         aria-label="Previous month"
         onClick={() => onChange(dateToPeriod(subMonths(current, 1)))}
-        className="rounded-full p-1.5 text-navy transition-colors hover:bg-navy/5"
+        className="tap-target rounded-full p-1.5 text-navy transition-colors hover:bg-navy/5"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
@@ -65,7 +67,7 @@ export function MonthSelector({
         aria-label="Next month"
         disabled={atLimit}
         onClick={() => onChange(dateToPeriod(addMonths(current, 1)))}
-        className="rounded-full p-1.5 text-navy transition-colors hover:bg-navy/5 disabled:opacity-30"
+        className="tap-target rounded-full p-1.5 text-navy transition-colors hover:bg-navy/5 disabled:opacity-30"
       >
         <ChevronRight className="h-4 w-4" />
       </button>

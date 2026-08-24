@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowLeft, KeyRound, LogOut, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Building2, KeyRound, LogOut, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/roles";
 import { NAV, isActive } from "./nav-config";
@@ -20,15 +20,31 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 /**
- * Mobile shell — Warden / Student (mobile-first, PWA-installable).
- * Top app bar (greeting or title + bell) + frosted bottom nav (4–5 items, active in navy,
- * optional raised center action). Content is capped at 480px and centered on larger screens.
+ * Mobile shell — Warden / Student. This is the primary target: the Android app
+ * is a TWA that loads this same deployment fullscreen, so everything here is
+ * sized for a phone first and the 480px cap is only what keeps it honest on a
+ * desktop browser.
+ *
+ * Three things it guarantees, because nothing else can:
+ *
+ *  • SAFE AREAS. Fullscreen means the window really does extend under the
+ *    status bar and the gesture pill. `.app-bar` / `.tab-bar` / `.app-main` in
+ *    globals.css read env(safe-area-inset-*) so the chrome grows into that
+ *    strip and its contents stay out of it.
+ *  • TAP TARGETS. Every control in the chrome is at least 44x44 (Apple HIG) —
+ *    the tab bar rows clear Material's 48dp too.
+ *  • NO LAYOUT SHIFT on navigation. Tabs are flex-1/basis-0 so their widths do
+ *    not depend on the label, the selected pill is absolutely positioned, and
+ *    the only thing that differs between selected and unselected is colour and
+ *    stroke weight. Nothing in the bar reflows when the route changes.
  */
 export function MobileShell({
   role,
   title,
   subtitle,
   avatarName,
+  /** Account context for the avatar menu — where a pushed screen can still check which hostel it is looking at. */
+  hostelName,
   unread = 0,
   banner,
   children,
@@ -44,6 +60,7 @@ export function MobileShell({
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   avatarName?: string;
+  hostelName?: string | null;
   unread?: number;
   banner?: React.ReactNode;
   children: React.ReactNode;
@@ -58,28 +75,44 @@ export function MobileShell({
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-[480px]">
-      {/* Top app bar */}
-      <header className="glass-bar fixed inset-x-0 top-0 z-40 mx-auto flex h-16 max-w-[480px] items-center justify-between border-b px-page-mobile">
-        <div className="flex min-w-0 items-center gap-3">
+      {/* ── Top app bar ─────────────────────────────────────────────────── */}
+      <header className="app-bar material-chrome fixed inset-x-0 top-0 z-40 mx-auto flex max-w-[480px] items-center justify-between gap-2 border-b border-separator">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {backHref ? (
             <button
               type="button"
               aria-label="Back"
               onClick={() => (backHref === "back" ? router.back() : router.push(backHref))}
-              className="-ml-2 rounded-full p-2 text-navy hover:bg-navy/5 active:scale-95"
+              className="-ml-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-navy transition-colors hover:bg-fill-quaternary active:bg-fill-tertiary"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-5 w-5" strokeWidth={2} />
             </button>
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" aria-label="Account menu" className="rounded-full active:scale-95">
+                {/* 32px avatar, 44x44 target — the avatar is not the hit area. */}
+                <button
+                  type="button"
+                  aria-label="Account menu"
+                  className="-ml-1.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-fill-quaternary active:bg-fill-tertiary"
+                >
                   <UserAvatar name={avatarName} size="sm" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuContent align="start" className="w-60">
                 <DropdownMenuLabel className="font-normal">
                   <div className="text-sm font-semibold text-navy">{avatarName}</div>
+                  {/*
+                    The app bar only carries the hostel name on a tab root; from a
+                    pushed screen this menu is where you check it. On demand, so
+                    it never adds to the count of what is on screen at rest.
+                  */}
+                  {hostelName ? (
+                    <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
+                      <Building2 className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{hostelName}</span>
+                    </div>
+                  ) : null}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
@@ -100,52 +133,63 @@ export function MobileShell({
             </DropdownMenu>
           )}
           <div className="min-w-0">
-            <div className="truncate text-[16px] font-bold text-navy leading-tight">{title}</div>
-            {subtitle ? <div className="truncate text-[11px] text-muted">{subtitle}</div> : null}
+            <h1 className="truncate text-headline text-navy">{title}</h1>
+            {subtitle ? <p className="truncate text-caption-2 text-muted">{subtitle}</p> : null}
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="-mr-3 flex shrink-0 items-center">
           {actions}
           <NotificationBell initialUnread={unread} />
         </div>
       </header>
 
-      {/* Content */}
-      <main className={cn("px-page-mobile pt-[80px]", hideNav ? "pb-8" : "pb-[104px]", contentClassName)}>
+      {/* ── Content ─────────────────────────────────────────────────────── */}
+      <main className={cn("app-main app-main-inline", hideNav ? "app-main-flat" : "app-main-tabs", contentClassName)}>
         {banner ? <div className="mb-4">{banner}</div> : null}
         <div className="animate-fade-in">{children}</div>
       </main>
 
-      {/* Bottom nav */}
+      {/* ── Bottom tab bar ──────────────────────────────────────────────── */}
       {!hideNav && (
-        <nav className="glass-bar pb-safe fixed inset-x-0 bottom-0 z-40 mx-auto flex h-[76px] max-w-[480px] items-center justify-around rounded-t-card border-t px-2 shadow-nav">
+        <nav
+          aria-label="Primary"
+          className="tab-bar material-chrome fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-[480px] items-stretch rounded-t-card border-t border-separator shadow-nav"
+        >
           {items.map((item) => {
             const active = isActive(pathname, item);
             const Icon = item.icon;
+
             if (item.center) {
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-label={item.label}
-                  className="relative -top-5 flex h-14 w-14 items-center justify-center rounded-full border-4 border-ivory bg-navy text-white shadow-lg transition-transform active:scale-90"
-                >
-                  <Icon className="h-6 w-6" strokeWidth={2} />
-                </Link>
+                <div key={item.href} className="flex flex-1 basis-0 items-start justify-center">
+                  <Link
+                    href={item.href}
+                    aria-label={item.label}
+                    aria-current={active ? "page" : undefined}
+                    className="press-scale [--press:0.9] relative -top-5 flex h-14 w-14 items-center justify-center rounded-full border-4 border-ivory bg-navy text-white shadow-elev-4 transition-transform"
+                  >
+                    <Icon className="h-6 w-6" strokeWidth={2} />
+                  </Link>
+                </div>
               );
             }
+
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-control px-2.5 py-1.5 transition-all active:scale-90",
-                  active ? "bg-navy text-white shadow-sm" : "text-muted hover:text-navy",
+                  // flex-1/basis-0 → every tab is exactly 1/n of the bar, whatever
+                  // the label says. min-h-12 = 48dp, above HIG's 44pt floor.
+                  "group relative flex min-h-12 flex-1 basis-0 flex-col items-center justify-center gap-1 rounded-control transition-colors",
+                  active ? "text-navy" : "text-muted hover:text-navy",
                 )}
               >
-                <Icon className="h-5 w-5" strokeWidth={active ? 2 : 1.75} />
-                <span className="text-[10px] font-semibold uppercase tracking-wide">{item.label}</span>
+                {/* Absolutely positioned: selection can never move the layout. */}
+                <span aria-hidden className="tab-pill absolute inset-x-1 inset-y-1.5 rounded-control bg-navy/[0.09]" />
+                <Icon className="relative h-[22px] w-[22px]" strokeWidth={active ? 2.25 : 1.75} />
+                <span className="relative text-[11px] font-semibold leading-none">{item.label}</span>
               </Link>
             );
           })}

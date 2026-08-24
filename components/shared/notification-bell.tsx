@@ -61,13 +61,15 @@ export function NotificationBell({ initialUnread = 0, className }: { initialUnre
           type="button"
           aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}
           className={cn(
-            "relative flex h-10 w-10 items-center justify-center rounded-full text-navy transition-colors hover:bg-navy/5 active:scale-95",
+            // 44x44 — Apple HIG's minimum. It was 40x40, which is below both
+            // that and Material's 48dp, and it sits at the very edge of the bar.
+            "relative flex h-11 w-11 items-center justify-center rounded-full text-navy transition-colors hover:bg-fill-quaternary active:bg-fill-tertiary",
             className,
           )}
         >
           <Bell className="h-5 w-5" strokeWidth={1.75} />
           {unread > 0 && (
-            <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red px-1 text-[10px] font-bold text-white ring-2 ring-ivory">
+            <span className="absolute right-1.5 top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-red px-1 text-[10px] font-bold text-white ring-2 ring-ivory">
               {unread > 99 ? "99+" : unread}
             </span>
           )}

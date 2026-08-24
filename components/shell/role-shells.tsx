@@ -72,6 +72,35 @@ export async function DesktopRoleShell({
 }
 
 /**
+ * ONE HOME FOR THE HOSTEL NAME.
+ *
+ * Measured on production with an Android UA before this change: /manager
+ * printed "Sunrise Residency" three times, /warden and /student twice each.
+ *
+ * The rule now, for the whole app:
+ *
+ *   The hostel name belongs to the CHROME, once per screen, and only on a root
+ *   screen. On mobile that is the app-bar subtitle of the tab roots; on desktop
+ *   it is the top bar, where it doubles as the hostel switcher. It is not
+ *   repeated in page bodies, and it is not repeated on a pushed sub-page —
+ *   once you have navigated into "Fees", you already know whose fees.
+ *
+ * Sub-pages kept passing it anyway ("Sunrise Residency", "Aug 2026 · Sunrise
+ * Residency", "3 open · Sunrise Residency"), so the removal happens here, once,
+ * rather than at a dozen call sites that a future page can quietly re-add to.
+ * A subtitle that is *only* the hostel name disappears; one that carries it as
+ * a "·" segment keeps everything else.
+ */
+function withoutHostelName(subtitle: React.ReactNode, hostel?: string | null): React.ReactNode {
+  if (!hostel || typeof subtitle !== "string") return subtitle;
+  const kept = subtitle
+    .split("·")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0 && part !== hostel);
+  return kept.length ? kept.join(" · ") : undefined;
+}
+
+/**
  * Mobile page wrapper for Warden / Student pages.
  * Usage:  <MobilePage role="warden" title="Rooms" backHref="/warden">…</MobilePage>
  * Pass title="greeting" for the home screens ("Good morning, Priya").
@@ -99,13 +128,19 @@ export async function MobilePage({
   const [ctx, unread] = await Promise.all([getHostelContext(), unreadCount()]);
 
   const resolvedTitle = title === "greeting" ? `${greeting()}, ${firstName(user.full_name)}` : title;
-  const resolvedSubtitle = subtitle ?? (title === "greeting" ? ctx?.hostel.name : undefined);
+  const hostelName = ctx?.hostel.name ?? null;
+  // A screen with a back arrow is a pushed screen: it inherits its context from
+  // the root it came from, so the hostel name is stripped there and kept here.
+  const resolvedSubtitle = backHref
+    ? withoutHostelName(subtitle, hostelName)
+    : subtitle ?? (title === "greeting" ? hostelName ?? undefined : undefined);
 
   return (
     <MobileShell
       role={role}
       title={resolvedTitle}
       subtitle={resolvedSubtitle}
+      hostelName={hostelName}
       avatarName={user.full_name}
       unread={unread}
       backHref={backHref}

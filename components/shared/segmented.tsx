@@ -46,7 +46,7 @@ export function SegmentedPills<T extends string>({
       aria-label={ariaLabel}
       className={cn(
         "no-scrollbar flex gap-2 overflow-x-auto",
-        fullWidth && "rounded-full bg-white/60 border border-white/70 p-1 backdrop-blur-md",
+        fullWidth && "rounded-full bg-material-tint/60 border border-material-strong p-1 backdrop-blur-md",
         className,
       )}
     >
@@ -60,12 +60,14 @@ export function SegmentedPills<T extends string>({
             aria-selected={active}
             onClick={() => onChange(opt.value)}
             className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-all active:scale-[0.97]",
+              // .tap-target grows the hit area to 44x44 on touch without
+              // changing the pill's size — a 28px filter chip is the design.
+              "tap-target press-scale [--press:0.97] inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-all",
               size === "sm" ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm",
               fullWidth && "flex-1 justify-center",
               active
                 ? cn(activeTone[opt.tone ?? "navy"], "shadow-sm")
-                : cn("text-muted hover:text-navy", !fullWidth && "bg-white/60 border border-white/70 backdrop-blur-md hover:bg-white/80"),
+                : cn("text-muted hover:text-navy", !fullWidth && "bg-material-tint/60 border border-material-strong backdrop-blur-md hover:bg-material-tint/80"),
             )}
           >
             {opt.label}

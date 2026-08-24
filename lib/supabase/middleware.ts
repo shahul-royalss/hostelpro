@@ -15,6 +15,10 @@ const PUBLIC_PATHS = [
   // verifies an HMAC over the raw body against RAZORPAY_WEBHOOK_SECRET and rejects anything else,
   // which is the real authentication for this endpoint.
   "/api/webhooks/razorpay",
+  // The whole point of these two is to be reachable by someone who CANNOT sign in. Behind the
+  // session gate they redirect to /login, which is exactly where the user already is and stuck.
+  "/forgot-password",
+  "/reset-password",
   "/manifest.webmanifest",
   "/icons",
   "/api/health",

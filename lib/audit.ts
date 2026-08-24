@@ -14,6 +14,12 @@ import { getClientIp, getUserAgent } from "@/lib/rate-limit";
 export type AuditAction =
   | "auth.login.success" | "auth.login.failed" | "auth.login.rate_limited" | "auth.logout"
   | "auth.password.changed" | "auth.password.reauth_failed"
+  // Forgot-password flow (docs/password-reset.md). Both ends are recorded, because they answer
+  // different questions: reset_requested says someone ASKED on behalf of an identifier — stored
+  // as hashIdentifier(), so the trail cannot itself become the list of addresses that were
+  // probed — while reset_completed is the only one of the two that actually rotated a
+  // credential. reset_rate_limited is the shape a mail-bomb or an enumeration sweep makes.
+  | "auth.password.reset_requested" | "auth.password.reset_rate_limited" | "auth.password.reset_completed"
   | "auth.mfa.enrolled" | "auth.mfa.unenrolled" | "auth.mfa.verified" | "auth.mfa.failed"
   | "sa.owner_hostel.create" | "sa.subscription.renew" | "sa.hostel.status" | "sa.owner.password_reset" | "sa.hostel.structure"
   | "owner.staff.create" | "owner.staff.password_reset" | "owner.staff.status"
