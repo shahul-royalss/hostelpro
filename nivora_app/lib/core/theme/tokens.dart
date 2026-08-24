@@ -328,15 +328,25 @@ abstract final class Space {
 // ─────────────────────────────────────────────────────────────────────────────
 
 abstract final class Radii {
+  /// Something too small to have a corner radius in the usual sense: a 10dp legend swatch, a
+  /// bed square on the room grid. Anything larger takes [control] or above.
+  static const tiny = 4.0;
   static const control = 12.0; // buttons, inputs, chips
   static const card = 16.0; // cards, list groups
   static const surface = 20.0; // large panels
   static const sheet = 28.0; // bottom sheets, modals
 
+  /// Fully round ends. Only for things that are genuinely capsule-shaped and never contain a
+  /// second line of text: a progress track, a drag handle. A status pill uses [control] — a
+  /// capsule that wraps looks broken, and status wording is not under our control.
+  static const pill = 999.0;
+
+  static const rTiny = BorderRadius.all(Radius.circular(tiny));
   static const rControl = BorderRadius.all(Radius.circular(control));
   static const rCard = BorderRadius.all(Radius.circular(card));
   static const rSurface = BorderRadius.all(Radius.circular(surface));
   static const rSheetTop = BorderRadius.vertical(top: Radius.circular(sheet));
+  static const rPill = BorderRadius.all(Radius.circular(pill));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -348,6 +358,11 @@ abstract final class IconSize {
   static const sm = 16.0; // beside a label
   static const md = 18.0; // list rows, section headings
   static const lg = 22.0; // app bar, nav
+
+  /// The single glyph over an empty or failed section. One size for both: an empty list and a
+  /// broken one are the same weight of event, and drawing them at 36 and 32 was two people
+  /// guessing rather than a decision.
+  static const xl = 32.0;
 }
 
 /// Every border in the app is one physical hairline. Weight comes from colour, not width.
@@ -463,6 +478,12 @@ abstract final class Motion {
 
   /// Symmetric, for things that move within the screen.
   static const move = Curves.easeInOutCubic;
+
+  /// How long a snackbar carrying a FAILURE stays up. Not an animation — a reading budget.
+  /// Material's default 4s is sized for "Saved"; the sentences this app shows on a refusal are
+  /// a full line ("Bed 3 is already occupied. Choose a free bed.") and a warden reads them
+  /// while talking to somebody.
+  static const readMessage = Duration(seconds: 5);
 
   /// Set true when the device cannot afford real backdrop blur. Glass widgets then paint an
   /// opaque tinted surface instead: the layout is identical, only the filter is skipped, so

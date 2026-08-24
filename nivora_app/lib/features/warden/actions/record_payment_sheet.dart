@@ -7,6 +7,7 @@ import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
 import '../../../shared/glass/glass.dart';
+import '../../payments/payments.dart';
 import '../data/warden_providers.dart';
 import '../widgets/warden_ui.dart';
 import 'sheet_scaffold.dart';
@@ -76,6 +77,14 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
   /// the warden has started typing.
   bool _prefilled = false;
 
+  /// The row `wd_record_payment` RETURNED. Not what was typed into the form.
+  ///
+  /// This is what makes a desk receipt trustworthy: the figures printed on it are the ones the
+  /// database wrote and handed back — including the upsert's new cumulative `amount_paid`,
+  /// which for a top-up is not the number in the amount field at all. Null until the write has
+  /// succeeded, which is also what keeps the form on screen until then.
+  FeePayment? _recorded;
+
   @override
   void dispose() {
     _amount.dispose();
@@ -89,25 +98,34 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
     setState(() => _busy = true);
 
     final repo = ref.read(feeRepositoryProvider);
+    FeePayment? row;
     final ok = await runAction(
       context,
       success: '${money(double.parse(_amount.text.trim()))} from ${widget.studentName}',
-      action: () => repo.recordPayment(
-        studentId: widget.studentId,
-        periodMonth: widget.periodMonth,
-        amount: double.parse(_amount.text.trim()),
-        mode: _mode,
-        paidOn: _paidOn,
-        notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
-      ),
+      action: () async {
+        row = await repo.recordPayment(
+          studentId: widget.studentId,
+          periodMonth: widget.periodMonth,
+          amount: double.parse(_amount.text.trim()),
+          mode: _mode,
+          paidOn: _paidOn,
+          notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+        );
+      },
     );
 
     if (!mounted) return;
     setState(() => _busy = false);
-    if (ok) {
-      refreshFees(ref);
-      if (mounted) Navigator.of(context).pop(true);
-    }
+    if (!ok) return;
+
+    refreshFees(ref);
+    if (!mounted) return;
+
+    // Stay on the sheet and offer the receipt rather than closing straight away. A warden
+    // taking cash at the door usually has the resident standing in front of them, and that is
+    // the one moment a receipt is worth anything. "Done" is right there for the rest of the
+    // time — a busy desk is not made to sit through a receipt it did not ask for.
+    setState(() => _recorded = row);
   }
 
   Future<void> _pickDate() async {
@@ -126,6 +144,20 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final recorded = _recorded;
+
+    if (recorded != null) {
+      return SheetBody(
+        title: widget.studentName,
+        subtitle: 'Rent for ${monthLabel(widget.periodMonth)}',
+        child: _Recorded(
+          row: recorded,
+          studentName: widget.studentName,
+          onDone: () => Navigator.of(context).pop(true),
+        ),
+      );
+    }
+
     final existing = ref.watch(studentMonthFeeProvider(
       (studentId: widget.studentId, periodMonth: widget.periodMonth),
     ));
@@ -222,6 +254,77 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// What the database wrote, and the offer of a receipt for it.
+///
+/// EVERY FIGURE HERE IS FROM [row], the composite `wd_record_payment` returned. Nothing is
+/// echoed back from the form: the amount field held what the warden intended to record, and the
+/// row holds what the ledger now says — which for a second payment in the same month is a
+/// larger, cumulative number, because the RPC's upsert ADDS. Showing the form's number here
+/// would be showing the warden a total the resident's own screen will not agree with.
+class _Recorded extends ConsumerWidget {
+  const _Recorded({required this.row, required this.studentName, required this.onDone});
+
+  final FeePayment row;
+  final String studentName;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context);
+    // Null only if the row came back with nothing received against it, which wd_record_payment
+    // cannot produce — it refuses an amount of zero or less. Guarded anyway, because "offer a
+    // receipt only when there is one" is the rule, not a thing to assume.
+    final receipt = Receipt.forFeePayment(
+      row,
+      payerName: studentName,
+      hostelName: ref.watch(hostelContactsProvider).value?.hostelName,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.check_circle_rounded, size: 22, color: NivoraColors.success),
+            const SizedBox(width: Space.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Payment recorded', style: t.textTheme.titleMedium),
+                  const SizedBox(height: Space.xxs),
+                  Text(
+                    '${money(row.amountPaid)} received for '
+                    '${monthLabel(row.periodMonth)}'
+                    '${row.balance > 0 ? ' · ${money(row.balance)} still outstanding' : ''}.',
+                    style: t.textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: Space.lg),
+        if (receipt != null) ...[
+          FilledButton.icon(
+            onPressed: () => showReceipt(context, receipt),
+            icon: const Icon(Icons.receipt_long_rounded, size: 20),
+            label: const Text('Print a receipt'),
+          ),
+          const SizedBox(height: Space.xs),
+          Text(
+            'Prints on screen. Share it to the resident from there, or save it.',
+            style: t.textTheme.bodySmall,
+          ),
+          const SizedBox(height: Space.md),
+        ],
+        OutlinedButton(onPressed: onDone, child: const Text('Done')),
+      ],
     );
   }
 }

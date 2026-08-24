@@ -74,12 +74,25 @@ class PagedList<T> extends StatelessWidget {
   }
 }
 
+/// The FIRST page, before it lands. Rows, not a spinner: the list already has a known shape
+/// and a skeleton keeps it, where a turning circle replaces the whole screen with a grey void
+/// and then snaps the rows in underneath the warden's thumb.
 class _Spinner extends StatelessWidget {
   const _Spinner();
+
+  static const _rows = 4;
+
   @override
-  Widget build(BuildContext context) => const Padding(
-        padding: EdgeInsets.symmetric(vertical: Space.huge),
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.all(Space.md),
+        child: Column(
+          children: [
+            for (var i = 0; i < _rows; i++) ...[
+              if (i > 0) const SizedBox(height: Space.xs),
+              const SkeletonBlock(lines: 1),
+            ],
+          ],
+        ),
       );
 }
 
@@ -188,14 +201,11 @@ class _LoadMoreFooterState extends State<_LoadMoreFooter> {
     final t = Theme.of(context);
     final error = widget.error;
     if (error == null) {
+      // The load-more indicator IS legitimately a small spinner: the rows above it are
+      // already on screen, so there is nothing to keep the shape of.
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: Space.lg),
-        child: Center(
-          child: SizedBox(
-            width: 20, height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
+        child: Center(child: InlineSpinner()),
       );
     }
     return Padding(

@@ -14,7 +14,7 @@ class ProportionMeter extends StatelessWidget {
     super.key,
     required this.value,
     this.tone,
-    this.height = 8,
+    this.height = Space.xs,
     this.semanticLabel,
   });
 
@@ -31,7 +31,9 @@ class ProportionMeter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final fill = tone ?? theme.colorScheme.primary;
+    // A filled bar is a graphical object, so 3:1 against the track applies to it. Resolving
+    // keeps that true in the dark theme, where the canonical inks were authored for white.
+    final fill = context.tones.resolve(tone ?? theme.colorScheme.primary);
     final track = theme.colorScheme.outlineVariant;
     final target = (value ?? 0).clamp(0.0, 1.0);
 

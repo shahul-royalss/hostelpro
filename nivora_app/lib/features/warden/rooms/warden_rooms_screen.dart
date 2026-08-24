@@ -141,7 +141,7 @@ class _FloorSummary extends StatelessWidget {
     return Text(
       free == 0 ? 'full' : '$free free',
       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: free == 0 ? null : NivoraColors.success,
+            color: free == 0 ? null : context.tones.success,
           ),
     );
   }
@@ -152,9 +152,13 @@ class _RoomTile extends StatelessWidget {
   const _RoomTile({required this.room});
   final RoomOccupancy room;
 
+  /// At 1.0x. Scaled with the text inside it below.
+  static const _tileHeight = 116.0;
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final tones = context.tones;
     final full = room.isFull;
 
     return Semantics(
@@ -172,13 +176,18 @@ class _RoomTile extends StatelessWidget {
             floorNumber: room.floorNumber,
           ),
           child: Container(
-            height: 116,
+            // Scaled with its own text. A fixed 116 was sized against 1.0x type; at 1.4x the
+            // room number, the pips and the "3 free" line together overran it.
+            height: MediaQuery.textScalerOf(context).scale(_tileHeight),
             padding: const EdgeInsets.all(Space.sm),
             decoration: BoxDecoration(
               borderRadius: Radii.rCard,
               border: Border.all(
                 // A room with space says so before you read it.
-                color: full ? t.colorScheme.outlineVariant : NivoraColors.success.withValues(alpha: 0.45),
+                color: full
+                    ? t.colorScheme.outlineVariant
+                    : tones.chipBorder(NivoraColors.success),
+                width: Strokes.hairline,
               ),
             ),
             child: Column(
@@ -195,8 +204,10 @@ class _RoomTile extends StatelessWidget {
                 Text(
                   full ? 'Full' : '${room.free} free',
                   style: t.textTheme.bodySmall?.copyWith(
-                    color: full ? t.colorScheme.onSurfaceVariant : NivoraColors.success,
+                    color: full ? t.colorScheme.onSurfaceVariant : tones.success,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -218,9 +229,13 @@ class _BedPips extends StatelessWidget {
 
   static const _max = 8;
 
+  /// One pip. Small enough that eight fit across a tile, large enough to see.
+  static const _pip = 12.0;
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final free = context.tones.success;
     final shown = capacity > _max ? _max : capacity;
     // Which pips are filled is arbitrary — the RPC gives a count, not a mapping — so they fill
     // from the left. See the class doc on WardenRoomsScreen.
@@ -232,16 +247,14 @@ class _BedPips extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: Space.xxs),
             child: Container(
-              width: 12,
-              height: 12,
+              width: _pip,
+              height: _pip,
               decoration: BoxDecoration(
-                color: i < filled
-                    ? t.colorScheme.primary
-                    : NivoraColors.success.withValues(alpha: 0.14),
-                borderRadius: const BorderRadius.all(Radius.circular(4)),
+                color: i < filled ? t.colorScheme.primary : context.tones.chipFill(free),
+                borderRadius: Radii.rTiny,
                 border: i < filled
                     ? null
-                    : Border.all(color: NivoraColors.success.withValues(alpha: 0.6)),
+                    : Border.all(color: free, width: Strokes.hairline),
               ),
             ),
           ),
@@ -266,7 +279,7 @@ class _Legend extends StatelessWidget {
           filled: true,
         ),
         const SizedBox(width: Space.md),
-        const _LegendItem(label: 'Free', colour: NivoraColors.success, filled: false),
+        _LegendItem(label: 'Free', colour: context.tones.success, filled: false),
       ],
     );
   }
@@ -285,12 +298,12 @@ class _LegendItem extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 12,
-          height: 12,
+          width: _BedPips._pip,
+          height: _BedPips._pip,
           decoration: BoxDecoration(
-            color: filled ? colour : colour.withValues(alpha: 0.14),
-            borderRadius: const BorderRadius.all(Radius.circular(4)),
-            border: filled ? null : Border.all(color: colour.withValues(alpha: 0.6)),
+            color: filled ? colour : context.tones.chipFill(colour),
+            borderRadius: Radii.rTiny,
+            border: filled ? null : Border.all(color: colour, width: Strokes.hairline),
           ),
         ),
         const SizedBox(width: Space.xs),

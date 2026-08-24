@@ -47,11 +47,17 @@ class Skeleton extends StatefulWidget {
   const Skeleton({
     super.key,
     this.width,
-    this.height = 14,
+    this.widthFactor,
+    this.height = Space.md - Space.xxs / 2,
     this.radius = Radii.control,
   });
 
   final double? width;
+
+  /// A share of the available width. A placeholder line pinned to 180dp reads as a short
+  /// phrase on a wide phone and as a full row on a 320dp one; a fraction reads the same on
+  /// both, which is the only thing a placeholder has to do.
+  final double? widthFactor;
   final double height;
   final double radius;
 
@@ -80,7 +86,7 @@ class _SkeletonState extends State<Skeleton> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     final base = Theme.of(context).colorScheme.outlineVariant;
-    final box = Container(
+    Widget box = Container(
       width: widget.width,
       height: widget.height,
       decoration: BoxDecoration(
@@ -88,6 +94,13 @@ class _SkeletonState extends State<Skeleton> with SingleTickerProviderStateMixin
         borderRadius: BorderRadius.circular(widget.radius),
       ),
     );
+    if (widget.widthFactor != null) {
+      box = FractionallySizedBox(
+        alignment: Alignment.centerLeft,
+        widthFactor: widget.widthFactor,
+        child: box,
+      );
+    }
     // A user who has asked the OS to reduce motion has usually asked for a reason. The
     // placeholder still appears; it just stops breathing.
     if (MediaQuery.disableAnimationsOf(context)) return box;
@@ -120,10 +133,10 @@ class SkeletonCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Skeleton(width: 96, height: 10),
+          const Skeleton(widthFactor: 0.35, height: Space.sm - Space.xxs / 2),
           const SizedBox(height: Space.sm),
           for (var i = 0; i < lines; i++) ...[
-            Skeleton(width: i.isEven ? double.infinity : 180, height: 14),
+            Skeleton(widthFactor: i.isEven ? 1 : 0.6),
             if (i != lines - 1) const SizedBox(height: Space.xs),
           ],
         ],
@@ -165,7 +178,9 @@ class EmptyNote extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, size: 18, color: tone ?? t.colorScheme.outline),
+              Icon(icon,
+                  size: IconSize.md,
+                  color: tone == null ? t.colorScheme.outline : context.tones.resolve(tone!)),
               const SizedBox(width: Space.xs),
               Expanded(child: Text(title, style: t.textTheme.titleMedium)),
             ],
@@ -191,20 +206,23 @@ class ErrorNote extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final tones = context.tones;
     final guidance = errorGuidance(error);
     return Container(
       padding: const EdgeInsets.all(Space.md),
       decoration: BoxDecoration(
         borderRadius: Radii.rCard,
-        border: Border.all(color: NivoraColors.error.withValues(alpha: 0.35)),
-        color: NivoraColors.error.withValues(alpha: 0.06),
+        // Both alphas from the one measured place. Canonical #DC3F3F drawn straight onto the
+        // dark theme's elevated surface is 3.79:1 — below the 4.5:1 its own icon needs.
+        border: Border.all(color: tones.chipBorder(NivoraColors.error), width: Strokes.hairline),
+        color: tones.chipFill(NivoraColors.error),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.error_outline_rounded, size: 18, color: NivoraColors.error),
+              Icon(Icons.error_outline_rounded, size: IconSize.md, color: tones.error),
               const SizedBox(width: Space.xs),
               Expanded(child: Text(guidance.title, style: t.textTheme.titleMedium)),
             ],
@@ -219,9 +237,11 @@ class ErrorNote extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: OutlinedButton.icon(
                 onPressed: onRetry,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
+                icon: const Icon(Icons.refresh_rounded, size: IconSize.md),
                 label: const Text('Try again'),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
+                // Width 0 so it hugs its label rather than inheriting the theme's full-bleed
+                // Size.fromHeight; the height stays at the 48 tap target.
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
               ),
             ),
           ],
@@ -242,14 +262,23 @@ class StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final tones = context.tones;
+    // Callers name the meaning with a canonical colour; the paint site picks the value that
+    // is legible on this theme. 0.12 with an unresolved tone measured 3.29:1 at worst.
+    final accent = tones.resolve(tone);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: Space.xs, vertical: Space.xxs / 2),
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.12),
+        color: tones.chipFill(accent),
         borderRadius: Radii.rControl,
-        border: Border.all(color: tone.withValues(alpha: 0.30)),
+        border: Border.all(color: tones.chipBorder(accent), width: Strokes.hairline),
       ),
-      child: Text(label, style: t.textTheme.labelSmall?.copyWith(color: tone)),
+      child: Text(
+        label,
+        style: t.textTheme.labelSmall?.copyWith(color: accent),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 }

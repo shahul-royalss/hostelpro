@@ -147,7 +147,7 @@ class _MonthSummary extends ConsumerWidget {
 
     return AsyncSection<HostelStats?>(
       value: stats,
-      loading: const SizedBox(height: 76),
+      loading: const SkeletonBlock(lines: 1),
       builder: (data) {
         if (data == null) return const SizedBox.shrink();
         final total = data.feesCollected + data.feesPending;
@@ -184,7 +184,7 @@ class _MonthSummary extends ConsumerWidget {
                       Text(
                         money(data.feesPending),
                         style: t.textTheme.titleSmall?.copyWith(
-                          color: data.feesPending > 0 ? NivoraColors.error : null,
+                          color: data.feesPending > 0 ? context.tones.error : null,
                         ),
                       ),
                     ],
@@ -194,12 +194,13 @@ class _MonthSummary extends ConsumerWidget {
               if (ratio != null) ...[
                 const SizedBox(height: Space.sm),
                 ClipRRect(
-                  borderRadius: const BorderRadius.all(Radius.circular(999)),
+                  borderRadius: Radii.rPill,
                   child: LinearProgressIndicator(
                     value: ratio,
-                    minHeight: 6,
-                    backgroundColor: NivoraColors.error.withValues(alpha: 0.15),
-                    valueColor: const AlwaysStoppedAnimation(NivoraColors.success),
+                    minHeight: Space.xs,
+                    // Track = still owed, fill = collected. Both resolved for this theme.
+                    backgroundColor: context.tones.chipFill(NivoraColors.error),
+                    valueColor: AlwaysStoppedAnimation(context.tones.success),
                   ),
                 ),
               ],
@@ -289,7 +290,7 @@ class _LedgerRow extends StatelessWidget {
                 Text(row.fullName,
                     style: t.textTheme.titleMedium,
                     maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 2),
+                const SizedBox(height: Space.xxs / 2),
                 Text(placement,
                     style: t.textTheme.bodySmall,
                     maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -303,7 +304,7 @@ class _LedgerRow extends StatelessWidget {
               Text(
                 row.balance > 0 ? money(row.balance) : money(row.amountPaid),
                 style: t.textTheme.titleSmall?.copyWith(
-                  color: row.balance > 0 ? NivoraColors.error : NivoraColors.success,
+                  color: row.balance > 0 ? context.tones.error : context.tones.success,
                 ),
               ),
               const SizedBox(height: Space.xxs),

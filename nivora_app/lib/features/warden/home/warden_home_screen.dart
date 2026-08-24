@@ -213,6 +213,8 @@ class _AttentionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    // Canonical in, legible out. This figure is the loudest thing on the card.
+    final accent = context.tones.resolve(tone);
     return Semantics(
       button: true,
       label: '$label: $value. $caption',
@@ -223,7 +225,9 @@ class _AttentionCard extends StatelessWidget {
           borderRadius: Radii.rCard,
           onTap: onTap,
           child: Container(
-            height: 118,
+            // A MINIMUM. At 1.4x text scale the eyebrow, the figure and a two-line caption
+            // come to roughly 145dp and the fixed 118 clipped the caption off the bottom.
+            constraints: const BoxConstraints(minHeight: 118),
             padding: const EdgeInsets.all(Space.md),
             decoration: BoxDecoration(
               borderRadius: Radii.rCard,
@@ -234,7 +238,7 @@ class _AttentionCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(icon, size: 15, color: tone),
+                    Icon(icon, size: IconSize.sm, color: accent),
                     const SizedBox(width: Space.xxs),
                     Expanded(
                       child: Text(label.toUpperCase(), style: t.textTheme.labelSmall,
@@ -242,9 +246,10 @@ class _AttentionCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const Spacer(),
-                Text(value, style: t.textTheme.headlineMedium?.copyWith(color: tone)),
-                const SizedBox(height: 2),
+                // Spacer needs a bounded height, which a minHeight no longer gives it.
+                const SizedBox(height: Space.sm),
+                Text(value, style: t.textTheme.headlineMedium?.copyWith(color: accent)),
+                const SizedBox(height: Space.xxs / 2),
                 Text(caption, style: t.textTheme.bodySmall,
                     maxLines: 2, overflow: TextOverflow.ellipsis),
               ],
@@ -333,7 +338,7 @@ class _Occupancy extends ConsumerWidget {
     return AsyncSection<List<RoomOccupancy>>(
       value: rooms,
       onRetry: () => ref.invalidate(roomOccupancyProvider(hostelId)),
-      loading: const SizedBox(height: 96),
+      loading: const SkeletonBlock(lines: 2),
       builder: (list) {
         final beds = list.fold<int>(0, (sum, r) => sum + r.capacity);
         final taken = list.fold<int>(0, (sum, r) => sum + r.occupied);
@@ -364,11 +369,13 @@ class _Occupancy extends ConsumerWidget {
               if (ratio != null) ...[
                 const SizedBox(height: Space.sm),
                 ClipRRect(
-                  borderRadius: const BorderRadius.all(Radius.circular(999)),
+                  borderRadius: Radii.rPill,
                   child: LinearProgressIndicator(
                     value: ratio,
-                    minHeight: 6,
-                    backgroundColor: NivoraColors.success.withValues(alpha: 0.18),
+                    minHeight: Space.xs,
+                    // The TRACK is the free beds and the FILL is the taken ones, so the track
+                    // is the one tinted green. Both alphas from the measured recipe.
+                    backgroundColor: context.tones.chipFill(NivoraColors.success),
                     valueColor: AlwaysStoppedAnimation(t.colorScheme.primary),
                   ),
                 ),
@@ -397,22 +404,23 @@ class _SubscriptionBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final tones = context.tones;
     final expired = stats.subscriptionState == SubscriptionState.expired;
-    final tone = expired ? NivoraColors.error : NivoraColors.warning;
+    final tone = expired ? tones.error : tones.warning;
     final days = stats.subscriptionDaysLeft;
 
     return Container(
       padding: const EdgeInsets.all(Space.sm),
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.10),
+        color: tones.chipFill(tone),
         borderRadius: Radii.rCard,
-        border: Border.all(color: tone.withValues(alpha: 0.35)),
+        border: Border.all(color: tones.chipBorder(tone), width: Strokes.hairline),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(expired ? Icons.lock_outline_rounded : Icons.schedule_rounded,
-              size: 18, color: tone),
+              size: IconSize.md, color: tone),
           const SizedBox(width: Space.xs),
           Expanded(
             child: Column(
@@ -455,12 +463,29 @@ class _SignOutButton extends ConsumerWidget {
   }
 }
 
-/// Holds the height the four cards will occupy, so the screen does not jump when they arrive.
+/// The four cards' own shape, before the figures arrive.
+///
+/// It used to be a 244dp box with a spinner in the middle of it — which is a grey void where
+/// the warden already knows four cards live, and 244 was a guess that stopped being right the
+/// moment anyone raised their text size. Two rows of two placeholders keep the actual layout
+/// on screen and size themselves.
 class _AttentionSkeleton extends StatelessWidget {
   const _AttentionSkeleton();
+
   @override
-  Widget build(BuildContext context) => const SizedBox(
-        height: 244,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+  Widget build(BuildContext context) => const Column(
+        children: [
+          Row(children: [
+            Expanded(child: SkeletonBlock(lines: 2)),
+            SizedBox(width: Space.xs),
+            Expanded(child: SkeletonBlock(lines: 2)),
+          ]),
+          SizedBox(height: Space.xs),
+          Row(children: [
+            Expanded(child: SkeletonBlock(lines: 2)),
+            SizedBox(width: Space.xs),
+            Expanded(child: SkeletonBlock(lines: 2)),
+          ]),
+        ],
       );
 }

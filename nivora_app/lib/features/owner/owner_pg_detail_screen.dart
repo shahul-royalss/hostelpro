@@ -6,6 +6,7 @@ import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../../shared/glass/glass.dart';
 import 'owner_format.dart';
+import 'owner_providers.dart';
 import 'widgets/meter.dart';
 import 'widgets/states.dart';
 
@@ -65,7 +66,7 @@ class OwnerPgDetailScreen extends ConsumerWidget {
                 try {
                   await ref
                       .read(roomOccupancyProvider(hostelId).future)
-                      .timeout(const Duration(seconds: 12));
+                      .timeout(ownerRefreshTimeout);
                 } catch (_) {
                   // Rendered by the body below; rethrowing would make it unhandled.
                 }
@@ -74,12 +75,14 @@ class OwnerPgDetailScreen extends ConsumerWidget {
                 rooms,
                 loading: () => ListView(
                   padding: const EdgeInsets.all(Space.md),
+                  // Heights are the card's own business. Pinning them meant the real
+                  // cards outgrew the placeholder at 1.4x text scale and the page jumped.
                   children: const [
-                    SkeletonCard(lines: 1, height: 96),
+                    SkeletonCard(lines: 1),
                     SizedBox(height: Space.md),
-                    SkeletonCard(lines: 2, height: 160),
+                    SkeletonCard(lines: 2),
                     SizedBox(height: Space.md),
-                    SkeletonCard(lines: 2, height: 160),
+                    SkeletonCard(lines: 2),
                   ],
                 ),
                 error: (error) => ListView(
@@ -240,14 +243,20 @@ class _FloorBlock extends StatelessWidget {
 class _RoomTile extends StatelessWidget {
   const _RoomTile({required this.room});
 
+  /// At 1.0x. Two tiles and their gutter fit a 320dp phone with the page padding on.
+  static const _tileWidth = 104.0;
+
   final RoomOccupancy room;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final tones = context.tones;
     final hasSpace = !room.isFull;
     return SizedBox(
-      width: 104,
+      // Scaled with the text inside it. A fixed 104 was sized against 1.0x type; at 1.4x the
+      // room number and the "3 free" line under it both grew and the tile clipped.
+      width: MediaQuery.textScalerOf(context).scale(_tileWidth),
       child: Material(
         color: t.colorScheme.surface,
         borderRadius: Radii.rCard,
@@ -262,7 +271,7 @@ class _RoomTile extends StatelessWidget {
                 // Vacancy is what an owner is scanning for, so vacancy is what the border
                 // marks. A full room is not a problem and does not get an alarm colour.
                 color: hasSpace
-                    ? NivoraColors.success.withValues(alpha: 0.45)
+                    ? tones.chipBorder(NivoraColors.success)
                     : t.colorScheme.outlineVariant,
               ),
             ),
@@ -278,7 +287,7 @@ class _RoomTile extends StatelessWidget {
                 Text(
                   hasSpace ? '${room.free} free' : 'Full',
                   style: t.textTheme.bodySmall?.copyWith(
-                    color: hasSpace ? NivoraColors.success : null,
+                    color: hasSpace ? tones.success : null,
                   ),
                 ),
               ],
@@ -352,11 +361,11 @@ class _BedSheet extends ConsumerWidget {
         whenAsync(
           beds,
           loading: () => const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Skeleton(width: 200, height: 16),
+              Skeleton(widthFactor: 0.65),
               SizedBox(height: Space.sm),
-              Skeleton(width: 160, height: 16),
+              Skeleton(widthFactor: 0.5),
             ],
           ),
           error: (error) => ErrorNote(
@@ -403,8 +412,8 @@ class _BedRow extends ConsumerWidget {
         children: [
           Icon(
             bed.isFree ? Icons.bed_outlined : Icons.person_rounded,
-            size: 18,
-            color: bed.isFree ? NivoraColors.success : t.colorScheme.outline,
+            size: IconSize.md,
+            color: bed.isFree ? context.tones.success : t.colorScheme.outline,
           ),
           const SizedBox(width: Space.xs),
           Expanded(

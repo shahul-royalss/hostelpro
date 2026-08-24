@@ -80,9 +80,16 @@ String initials(String fullName) {
 /// The rule: red is not "bad", it is "you have to do something". An unpaid fee and an open
 /// complaint are red because they are work; a checked-out resident is grey because they are
 /// simply not here any more.
+///
+/// THE RETURN IS RESOLVED FOR THE CURRENT THEME, not canonical. The switch names the meaning
+/// with [NivoraColors.success] and friends, which is what makes it readable; `context.tones`
+/// then swaps in the value that is legible on THIS theme's surfaces. Skipping that step is
+/// what every status pill in the app was doing, and canonical `success` #188D43 measures
+/// 3.87:1 as text on the dark elevated surface — a fail, in the one place the app uses colour
+/// to carry a state.
 Color toneFor(BuildContext context, WireValue status) {
   final t = Theme.of(context);
-  return switch (status) {
+  return context.tones.resolve(switch (status) {
     FeeStatus.paid => NivoraColors.success,
     FeeStatus.partial => NivoraColors.warning,
     FeeStatus.unpaid => NivoraColors.error,
@@ -98,7 +105,7 @@ Color toneFor(BuildContext context, WireValue status) {
     SubscriptionState.expiring => NivoraColors.warning,
     SubscriptionState.expired => NivoraColors.error,
     _ => t.colorScheme.primary,
-  };
+  });
 }
 
 /// A status, said once, the same way everywhere.
@@ -129,21 +136,28 @@ class StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final tones = context.tones;
     final status = _status;
-    final accent = tone ?? toneFor(context, status!);
+    // A `tone:` handed in from a screen is still canonical, so resolve it here too rather than
+    // trusting the caller. resolve() passes an already-resolved colour through unchanged.
+    final accent = tones.resolve(tone ?? toneFor(context, status!));
     final text = label ?? status!.label;
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: dense ? Space.xs : Space.sm,
-        vertical: dense ? 2 : Space.xxs,
+        vertical: dense ? Space.xxs / 2 : Space.xxs,
       ),
       decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.12),
-        borderRadius: const BorderRadius.all(Radius.circular(999)),
+        // chipFill, not a plausible-looking 0.12. The tint lightens the pane toward the text
+        // sitting on it, so 0.12 measured 3.29:1 at worst — the alphas live in one place
+        // precisely so a chip cannot be drawn at a number nobody measured.
+        color: tones.chipFill(accent),
+        borderRadius: Radii.rControl,
+        border: Border.all(color: tones.chipBorder(accent), width: Strokes.hairline),
       ),
       child: Text(
         text,
-        style: t.textTheme.labelSmall?.copyWith(color: accent, letterSpacing: 0.2),
+        style: t.textTheme.labelSmall?.copyWith(color: accent),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -239,7 +253,7 @@ class EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 36, color: t.colorScheme.onSurfaceVariant),
+          Icon(icon, size: IconSize.xl, color: t.colorScheme.onSurfaceVariant),
           const SizedBox(height: Space.sm),
           Text(title, style: t.textTheme.titleMedium, textAlign: TextAlign.center),
           if (detail != null) ...[
@@ -277,8 +291,9 @@ class FailureState extends StatelessWidget {
                 : failure is AccessDeniedFailure
                     ? Icons.lock_outline_rounded
                     : Icons.error_outline_rounded,
-            size: 32,
-            color: NivoraColors.error,
+            size: IconSize.xl,
+            // Resolved, not canonical: #DC3F3F is 3.79:1 on the dark elevated surface.
+            color: context.tones.error,
           ),
           const SizedBox(height: Space.sm),
           Text(failure.message, style: t.textTheme.bodyMedium, textAlign: TextAlign.center),
@@ -288,6 +303,76 @@ class FailureState extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// A card-shaped placeholder for a section that has not arrived.
+///
+/// The warden kit had no skeleton at all: the summary cards passed `SizedBox(height: 76)` as
+/// their loading state, which is a blank gap that looks exactly like a section that failed
+/// silently. This keeps the card's shape on screen so the page does not jump when the figures
+/// land, and — unlike a spinner — it says WHERE the missing thing will be.
+class SkeletonBlock extends StatefulWidget {
+  const SkeletonBlock({super.key, this.lines = 2});
+
+  final int lines;
+
+  @override
+  State<SkeletonBlock> createState() => _SkeletonBlockState();
+}
+
+class _SkeletonBlockState extends State<SkeletonBlock> with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse =
+      AnimationController(vsync: this, duration: Motion.slow)..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  Widget _bar(BuildContext context, double factor, double height) => FractionallySizedBox(
+        alignment: Alignment.centerLeft,
+        widthFactor: factor,
+        child: Container(
+          height: height,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.outlineVariant,
+            borderRadius: Radii.rControl,
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final body = Container(
+      padding: const EdgeInsets.all(Space.md),
+      decoration: BoxDecoration(
+        borderRadius: Radii.rCard,
+        border: Border.all(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _bar(context, 0.35, Space.sm - Space.xxs / 2),
+          const SizedBox(height: Space.sm),
+          for (var i = 0; i < widget.lines; i++) ...[
+            _bar(context, i.isEven ? 1 : 0.6, Space.md - Space.xxs / 2),
+            if (i != widget.lines - 1) const SizedBox(height: Space.xs),
+          ],
+        ],
+      ),
+    );
+    // Somebody who asked the OS for less motion still gets the placeholder; it just stops
+    // breathing.
+    if (MediaQuery.disableAnimationsOf(context)) return body;
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.45, end: 1)
+          .animate(CurvedAnimation(parent: _pulse, curve: Motion.move)),
+      child: body,
     );
   }
 }
@@ -324,8 +409,43 @@ class _Spinner extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const Padding(
         padding: EdgeInsets.symmetric(vertical: Space.xxl),
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        child: Center(child: CircularProgressIndicator(strokeWidth: InlineSpinner.stroke)),
       );
+}
+
+/// The spinner that stands in for a control while a write is in flight.
+///
+/// It exists because the same `SizedBox(width: 20, height: 20, child:
+/// CircularProgressIndicator(strokeWidth: 2))` had been written out six times across the
+/// warden sheets, at 18 in three of them and 20 in the other three. A busy indicator that
+/// changes size between two sheets is the kind of difference nobody can name and everybody
+/// notices. [replacing] keeps the row from collapsing when the control it stands in for is a
+/// button with a height.
+class InlineSpinner extends StatelessWidget {
+  const InlineSpinner({super.key, this.replacing, this.onFill});
+
+  /// A hairline is invisible on a spinner and 3 reads as a loading screen. 2 is the one this
+  /// app uses, in one place.
+  static const stroke = 2.0;
+
+  /// The height of the control being stood in for, so the layout does not jump.
+  final double? replacing;
+
+  /// Pass `colorScheme.onPrimary` when the spinner sits INSIDE a filled button. The progress
+  /// theme paints `scheme.primary`, which is that button's own fill — so the default spinner
+  /// is indigo on indigo and invisible for the whole of the write it is reporting.
+  final Color? onFill;
+
+  @override
+  Widget build(BuildContext context) {
+    final dot = SizedBox(
+      width: IconSize.lg,
+      height: IconSize.lg,
+      child: CircularProgressIndicator(strokeWidth: stroke, color: onFill),
+    );
+    if (replacing == null) return dot;
+    return SizedBox(height: replacing, child: Center(child: dot));
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -355,7 +475,9 @@ class QuickAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final accent = enabled ? (tone ?? t.colorScheme.primary) : t.colorScheme.onSurfaceVariant;
+    final accent = enabled
+        ? context.tones.resolve(tone ?? t.colorScheme.primary)
+        : t.colorScheme.onSurfaceVariant;
     return Semantics(
       button: true,
       enabled: enabled,
@@ -367,7 +489,10 @@ class QuickAction extends StatelessWidget {
           borderRadius: Radii.rCard,
           onTap: enabled ? onTap : null,
           child: Container(
-            height: 88,
+            // A MINIMUM, not a height. At 1.4x text scale a two-line label needs about 96dp
+            // and a fixed 88 clipped it — the analyzer cannot see an overflow, and the person
+            // it happens to is a warden on a 320dp phone.
+            constraints: const BoxConstraints(minHeight: 88),
             padding: const EdgeInsets.all(Space.md),
             decoration: BoxDecoration(
               borderRadius: Radii.rCard,
@@ -375,16 +500,17 @@ class QuickAction extends StatelessWidget {
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
                   padding: const EdgeInsets.all(Space.xs),
                   decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.12),
+                    color: context.tones.chipFill(accent),
                     borderRadius: Radii.rControl,
                   ),
-                  child: Icon(icon, size: 18, color: accent),
+                  child: Icon(icon, size: IconSize.md, color: accent),
                 ),
+                const SizedBox(height: Space.sm),
                 Text(
                   label,
                   style: t.textTheme.titleSmall?.copyWith(
@@ -446,7 +572,7 @@ class TapRow extends StatelessWidget {
 /// Initials in a circle. No photo: students.photo_url is a private storage KEY, not a URL, and
 /// showing a broken image is worse than showing none.
 class Avatar extends StatelessWidget {
-  const Avatar({super.key, required this.name, this.tone, this.size = 40});
+  const Avatar({super.key, required this.name, this.tone, this.size = Space.xxxl});
   final String name;
   final Color? tone;
   final double size;
@@ -454,13 +580,13 @@ class Avatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final accent = tone ?? t.colorScheme.primary;
+    final accent = context.tones.resolve(tone ?? t.colorScheme.primary);
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.12),
+        color: context.tones.chipFill(accent),
         shape: BoxShape.circle,
       ),
       child: Text(
@@ -487,16 +613,20 @@ class DetailRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 16, color: t.colorScheme.onSurfaceVariant),
+            Icon(icon, size: IconSize.sm, color: t.colorScheme.onSurfaceVariant),
             const SizedBox(width: Space.sm),
           ],
-          SizedBox(
-            width: 108,
-            child: Text(label, style: t.textTheme.bodySmall),
+          // A fixed 108dp label column left the value about 150dp on a 320dp phone, and at
+          // 1.4x text scale a phone number wrapped to three lines beside a one-word label.
+          // Two flexes hand the extra width to the value, which is the half worth reading.
+          Expanded(flex: 4, child: Text(label, style: t.textTheme.bodySmall)),
+          const SizedBox(width: Space.sm),
+          Expanded(
+            flex: 6,
+            child: Text(value, style: t.textTheme.bodyMedium?.copyWith(
+              color: t.colorScheme.onSurface,
+            )),
           ),
-          Expanded(child: Text(value, style: t.textTheme.bodyMedium?.copyWith(
-            color: t.colorScheme.onSurface,
-          ))),
         ],
       ),
     );
@@ -513,17 +643,10 @@ class SheetHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    // No drag handle here. showGlassSheet draws one, on the pane, for every sheet in the app;
+    // this used to draw a second one directly beneath it.
     return Column(
       children: [
-        Container(
-          width: 36,
-          height: 4,
-          margin: const EdgeInsets.only(bottom: Space.md),
-          decoration: BoxDecoration(
-            color: t.colorScheme.outline,
-            borderRadius: const BorderRadius.all(Radius.circular(2)),
-          ),
-        ),
         Row(
           children: [
             Expanded(
@@ -577,11 +700,21 @@ Future<bool> runAction(
   } catch (error) {
     final failure = AppFailure.from(error);
     if (!context.mounted) return false;
+    // The snackbar keeps its themed midnight background (white on it is 18.72:1) and says
+    // "this failed" with an icon instead. Repainting the whole bar #DC3F3F put the message at
+    // 4.35:1 against its own white text — the one message in the app that most needs reading.
+    // The accent is the DARK theme's error ink because the bar is dark in both themes.
     messenger.showSnackBar(SnackBar(
-      content: Text(failure.message),
+      content: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded,
+              size: IconSize.md, color: NivoraColors.errorDark), // 7.35:1 on midnight
+          const SizedBox(width: Space.sm),
+          Expanded(child: Text(failure.message)),
+        ],
+      ),
       behavior: SnackBarBehavior.floating,
-      backgroundColor: NivoraColors.error,
-      duration: const Duration(seconds: 5),
+      duration: Motion.readMessage,
     ));
     return false;
   }

@@ -136,6 +136,13 @@ AsyncValue<List<ActivityItem>> combineActivity(
   return AsyncData(buildActivityFeed(complaints: c.items, notices: n.items));
 }
 
+/// How long a pull-to-refresh waits before it gives up and lets the body draw the failure.
+///
+/// Long enough for a slow 3G handshake, short enough that the spinner is not still turning
+/// when the warden gives up and puts the phone away. It was written out three times as
+/// `Duration(seconds: 12)`; one name means the three screens cannot drift apart.
+const ownerRefreshTimeout = Duration(seconds: 12);
+
 /// Pull-to-refresh. Invalidates exactly what the dashboard draws and nothing else — throwing
 /// the whole provider container away would also drop the session and the router's opinion of
 /// where the user is.

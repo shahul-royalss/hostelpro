@@ -77,19 +77,38 @@ import '../../../shared/glass/glass.dart';
 /// A skeleton rather than a spinner: it keeps the layout the resident already knows and fills
 /// it in, instead of replacing the screen with a grey void and then snapping back.
 class Skeleton extends StatelessWidget {
-  const Skeleton({super.key, this.width, this.height = 14});
+  const Skeleton({
+    super.key,
+    this.width,
+    this.widthFactor,
+    this.height = Space.md - Space.xxs / 2,
+  });
+
   final double? width;
+
+  /// A share of the available width, for a placeholder that has to survive a 320dp screen.
+  /// A fixed 160dp line looked like a paragraph on a wide phone and like a full row on a
+  /// narrow one; a fraction reads as the same placeholder on both.
+  final double? widthFactor;
   final double height;
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.outlineVariant,
-          borderRadius: BorderRadius.circular(Radii.control),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final box = Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.outlineVariant,
+        borderRadius: Radii.rControl,
+      ),
+    );
+    if (widthFactor == null) return box;
+    return FractionallySizedBox(
+      alignment: Alignment.centerLeft,
+      widthFactor: widthFactor,
+      child: box,
+    );
+  }
 }
 
 /// A card-shaped placeholder for a section that has not arrived yet.
@@ -108,10 +127,10 @@ class SkeletonCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Skeleton(width: 90, height: 10),
+            const Skeleton(widthFactor: 0.35, height: Space.sm - Space.xxs / 2),
             const SizedBox(height: Space.sm),
             for (var i = 0; i < lines; i++) ...[
-              Skeleton(width: i.isEven ? double.infinity : 160),
+              Skeleton(widthFactor: i.isEven ? 1 : 0.6),
               if (i != lines - 1) const SizedBox(height: Space.xs),
             ],
           ],
@@ -148,7 +167,9 @@ class EmptyNote extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, size: 18, color: tone ?? NivoraColors.success),
+              Icon(icon,
+                  size: IconSize.md,
+                  color: context.tones.resolve(tone ?? NivoraColors.success)),
               const SizedBox(width: Space.xs),
               Expanded(child: Text(title, style: t.textTheme.titleMedium)),
             ],
@@ -173,20 +194,24 @@ class ErrorNote extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final tones = context.tones;
     final guidance = errorGuidance(error);
     return Container(
       padding: const EdgeInsets.all(Space.md),
       decoration: BoxDecoration(
         borderRadius: Radii.rCard,
-        color: NivoraColors.error.withValues(alpha: 0.06),
-        border: Border.all(color: NivoraColors.error.withValues(alpha: 0.35)),
+        // The tinted panel and its edge come from the one place the alphas were measured.
+        // Canonical #DC3F3F painted here directly measured 3.79:1 as an icon on the dark
+        // theme's elevated surface.
+        color: tones.chipFill(NivoraColors.error),
+        border: Border.all(color: tones.chipBorder(NivoraColors.error), width: Strokes.hairline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.error_outline_rounded, size: 18, color: NivoraColors.error),
+              Icon(Icons.error_outline_rounded, size: IconSize.md, color: tones.error),
               const SizedBox(width: Space.xs),
               Expanded(child: Text(guidance.title, style: t.textTheme.titleMedium)),
             ],
@@ -199,9 +224,12 @@ class ErrorNote extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: OutlinedButton.icon(
                 onPressed: onRetry,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
+                icon: const Icon(Icons.refresh_rounded, size: IconSize.md),
                 label: const Text('Try again'),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
+                // Width 0 so the button hugs its label instead of inheriting the theme's
+                // full-bleed Size.fromHeight. The HEIGHT stays 48: it is still a tap target,
+                // and the 40 that was here is below both Material's and Apple's minimum.
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
               ),
             ),
           ],
@@ -327,21 +355,33 @@ class StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final tones = context.tones;
+    // [feeTone] and [complaintTone] are pure functions with no BuildContext, so what arrives
+    // here is CANONICAL. Resolving at the paint site is the whole point of the tone system:
+    // the caller keeps naming the meaning, this decides what is legible on today's theme.
+    final accent = tones.resolve(tone);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: Space.xs, vertical: Space.xxs),
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.12),
+        color: tones.chipFill(accent),
         borderRadius: Radii.rControl,
-        border: Border.all(color: tone.withValues(alpha: 0.30)),
+        border: Border.all(color: tones.chipBorder(accent), width: Strokes.hairline),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 13, color: tone),
+            Icon(icon, size: IconSize.xs, color: accent),
             const SizedBox(width: Space.xxs),
           ],
-          Text(label.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(color: tone)),
+          Flexible(
+            child: Text(
+              label.toUpperCase(),
+              style: t.textTheme.labelSmall?.copyWith(color: accent),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
@@ -383,16 +423,20 @@ class DetailRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 112, child: Text(label, style: t.textTheme.bodySmall)),
+          // Was a fixed 112dp. On a 320dp phone at 1.4x that left the value about 160dp, and
+          // an address wrapped to five lines beside a one-word label. Flexes hand the extra
+          // width to the half worth reading.
+          Expanded(flex: 4, child: Text(label, style: t.textTheme.bodySmall)),
           const SizedBox(width: Space.sm),
           Expanded(
+            flex: 6,
             // Selectable so a resident can copy their guardian's number or their own address
             // out of the app instead of retyping it.
             child: SelectionArea(
               child: Text(
                 shown.isEmpty ? missing : shown,
                 style: shown.isEmpty
-                    ? t.textTheme.bodyMedium?.copyWith(color: NivoraColors.textMuted)
+                    ? t.textTheme.bodyMedium?.copyWith(color: context.tones.muted)
                     : t.textTheme.bodyLarge,
               ),
             ),

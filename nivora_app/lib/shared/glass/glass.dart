@@ -313,6 +313,41 @@ class GlassStatCard extends StatelessWidget {
   }
 }
 
+/// The grab bar at the top of a sheet.
+///
+/// Drawn here rather than by Material, and the reason is geometry. `showModalBottomSheet`
+/// honours `bottomSheetTheme.showDragHandle`, and when it does it puts a 48dp band ABOVE the
+/// sheet's own child. That works for a sheet whose Material paints the background — the handle
+/// lands on it. Ours does not: the background is transparent so the [GlassSurface] can be the
+/// only pane. Measured, the stock handle sat at y 428–476 while the pane began at y 476, i.e.
+/// a grey pill floating over the dimmed page with 48dp of empty barrier between it and the
+/// sheet it belonged to, on every sheet in the app. Owning it moves it onto the pane and gives
+/// a short phone back those 48dp.
+class _SheetGrip extends StatelessWidget {
+  const _SheetGrip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Drag down to dismiss',
+      child: Center(
+        child: Container(
+          width: Space.xxl + Space.xxs, // 36
+          height: Space.xxs, // 4
+          margin: const EdgeInsets.only(bottom: Space.md),
+          decoration: BoxDecoration(
+            // A control, so 3:1 applies — the same token the stock handle was wired to.
+            color: Theme.of(context).brightness == Brightness.dark
+                ? NivoraColors.darkControlBorder
+                : NivoraColors.controlBorder,
+            borderRadius: Radii.rPill,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Presents a glass bottom sheet. Centralised so every sheet in the app shares the same
 /// geometry, drag handle and inset handling.
 Future<T?> showGlassSheet<T>({
@@ -324,6 +359,8 @@ Future<T?> showGlassSheet<T>({
     context: context,
     isScrollControlled: isScrollControlled,
     backgroundColor: Colors.transparent,
+    // See [_SheetGrip]: the stock handle cannot land on a transparent-background sheet.
+    showDragHandle: false,
     barrierColor: NivoraColors.midnight.withValues(alpha: 0.32),
     builder: (ctx) => Padding(
       // Keeps the sheet above the keyboard without each caller remembering to.
@@ -336,7 +373,14 @@ Future<T?> showGlassSheet<T>({
           left: Space.md, right: Space.md, top: Space.md,
           bottom: Space.md + MediaQuery.paddingOf(ctx).bottom,
         ),
-        child: builder(ctx),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const _SheetGrip(),
+            Flexible(child: builder(ctx)),
+          ],
+        ),
       ),
     ),
   );

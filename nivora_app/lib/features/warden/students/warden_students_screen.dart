@@ -208,7 +208,7 @@ class _StudentRow extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: Space.xxs / 2),
                 Text(
                   '${student.phone} · $placement',
                   style: t.textTheme.bodySmall,

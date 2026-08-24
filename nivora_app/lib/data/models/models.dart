@@ -15,6 +15,7 @@ export 'paged_result.dart';
 // The row-shape coercers themselves stay private to the data layer; only the wire formatters
 // and the error a shape mismatch raises are of any use outside it.
 export 'parse.dart' show RowShapeError, toDateWire, toPeriodMonth;
+export 'payment.dart';
 export 'stats.dart';
 export 'structure.dart';
 export 'student.dart';

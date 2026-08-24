@@ -68,7 +68,7 @@ class OwnerDashboardScreen extends ConsumerWidget {
           // until one of those retries succeeded, and the spinner would turn all afternoon.
           await ref
               .read(hostelStatsProvider(statsQuery).future)
-              .timeout(const Duration(seconds: 12));
+              .timeout(ownerRefreshTimeout);
         } catch (_) {
           // The error is already rendered by the section below; rethrowing here would only
           // turn a handled failure into an unhandled one.
@@ -160,7 +160,7 @@ class _HostelSwitcher extends ConsumerWidget {
     if (list.length < 2) {
       return Row(
         children: [
-          Icon(Icons.apartment_rounded, size: 16, color: t.colorScheme.primary),
+          Icon(Icons.apartment_rounded, size: IconSize.sm, color: t.colorScheme.primary),
           const SizedBox(width: Space.xxs),
           Flexible(
             child: Text(name,
@@ -187,17 +187,18 @@ class _HostelSwitcher extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.apartment_rounded, size: 16, color: t.colorScheme.primary),
+                Icon(Icons.apartment_rounded, size: IconSize.sm, color: t.colorScheme.primary),
                 const SizedBox(width: Space.xs),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 200),
+                // Flexible, not a 200dp cap: at 1.4x scale a capped 200 still overflowed a
+                // 320dp header, because the cap bounds the text and not the row.
+                Flexible(
                   child: Text(name,
                       style: t.textTheme.labelLarge,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ),
                 const SizedBox(width: Space.xxs),
-                const Icon(Icons.expand_more_rounded, size: 18),
+                const Icon(Icons.expand_more_rounded, size: IconSize.md),
               ],
             ),
           ),
@@ -290,20 +291,21 @@ class _SubscriptionBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final tone = notice.severe ? NivoraColors.error : NivoraColors.warning;
+    final tones = context.tones;
+    final tone = notice.severe ? tones.error : tones.warning;
     return Container(
       padding: const EdgeInsets.all(Space.md),
       decoration: BoxDecoration(
         borderRadius: Radii.rCard,
-        color: tone.withValues(alpha: 0.08),
-        border: Border.all(color: tone.withValues(alpha: 0.35)),
+        color: tones.chipFill(tone),
+        border: Border.all(color: tones.chipBorder(tone), width: Strokes.hairline),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             notice.severe ? Icons.lock_clock_rounded : Icons.schedule_rounded,
-            size: 18,
+            size: IconSize.md,
             color: tone,
           ),
           const SizedBox(width: Space.xs),
@@ -389,7 +391,8 @@ class _OccupancyCard extends StatelessWidget {
           Row(
             children: [
               Expanded(child: Text('OCCUPANCY', style: t.textTheme.labelSmall)),
-              Icon(Icons.chevron_right_rounded, size: 18, color: t.colorScheme.outline),
+              Icon(Icons.chevron_right_rounded,
+                  size: IconSize.md, color: t.colorScheme.outline),
             ],
           ),
           const SizedBox(height: Space.xs),
@@ -433,7 +436,8 @@ class _AttentionCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(_icon(item.kind), size: 18, color: _tone(item.kind)),
+                  Icon(_icon(item.kind),
+                      size: IconSize.md, color: context.tones.resolve(_tone(item.kind))),
                   const SizedBox(width: Space.xs),
                   Expanded(
                     child: Column(
@@ -508,7 +512,7 @@ class _CashflowSection extends ConsumerWidget {
             children: [
               whenAsync(
                 series,
-                loading: () => const SizedBox(height: 148, child: Skeleton(height: 148)),
+                loading: () => const Skeleton(height: CashflowChart.plotHeight),
                 error: (error) => ErrorNote(
                   error: error,
                   compact: true,
@@ -550,22 +554,40 @@ class _MonthTotals extends StatelessWidget {
       children: [
         Text('${monthNameOnly(period).toUpperCase()} SO FAR', style: t.textTheme.labelSmall),
         const SizedBox(height: Space.xs),
-        Row(
-          children: [
-            Expanded(
-              child: _Figure(label: 'Booked in', value: money(stats.revenueMonth)),
-            ),
-            Expanded(
-              child: _Figure(label: 'Booked out', value: money(stats.expensesMonth)),
-            ),
-            Expanded(
-              child: _Figure(
+        // Three money figures side by side need about 96dp each before the rupee amount
+        // starts ellipsing, and a truncated ledger figure is worse than no figure at all.
+        // Below that the same three become stacked label/value rows, which is the layout a
+        // 320dp phone at 1.4x wanted anyway.
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final figures = [
+              (label: 'Booked in', value: money(stats.revenueMonth), tone: null),
+              (label: 'Booked out', value: money(stats.expensesMonth), tone: null),
+              (
                 label: 'Net',
                 value: money(net),
                 tone: net < 0 ? NivoraColors.error : NivoraColors.success,
               ),
-            ),
-          ],
+            ];
+            final wide = constraints.maxWidth / figures.length >= 96;
+            if (wide) {
+              return Row(
+                children: [
+                  for (final f in figures)
+                    Expanded(child: _Figure(label: f.label, value: f.value, tone: f.tone)),
+                ],
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final f in figures) ...[
+                  if (f != figures.first) const SizedBox(height: Space.xs),
+                  _Figure(label: f.label, value: f.value, tone: f.tone, inline: true),
+                ],
+              ],
+            );
+          },
         ),
       ],
     );
@@ -573,26 +595,42 @@ class _MonthTotals extends StatelessWidget {
 }
 
 class _Figure extends StatelessWidget {
-  const _Figure({required this.label, required this.value, this.tone});
+  const _Figure({required this.label, required this.value, this.tone, this.inline = false});
 
   final String label;
   final String value;
+
+  /// Canonical, resolved here. Null for a figure whose colour would mean nothing.
   final Color? tone;
+
+  /// Label and value on one line, for the narrow layout.
+  final bool inline;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final accent = tone == null ? null : context.tones.resolve(tone!);
+    final valueText = Text(
+      value,
+      style: t.textTheme.titleSmall?.copyWith(color: accent),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    if (inline) {
+      return Row(
+        children: [
+          Expanded(child: Text(label, style: t.textTheme.bodySmall)),
+          const SizedBox(width: Space.sm),
+          valueText,
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: t.textTheme.bodySmall),
         const SizedBox(height: Space.xxs),
-        Text(
-          value,
-          style: t.textTheme.titleSmall?.copyWith(color: tone),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        valueText,
       ],
     );
   }
@@ -620,13 +658,13 @@ class _ActivitySection extends ConsumerWidget {
           child: whenAsync(
             feed,
             loading: () => const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Skeleton(width: double.infinity, height: 14),
+                Skeleton(),
                 SizedBox(height: Space.sm),
-                Skeleton(width: 220, height: 14),
+                Skeleton(widthFactor: 0.7),
                 SizedBox(height: Space.sm),
-                Skeleton(width: 180, height: 14),
+                Skeleton(widthFactor: 0.55),
               ],
             ),
             error: (error) => ErrorNote(
@@ -674,7 +712,7 @@ class _ActivityRow extends StatelessWidget {
           item.kind == ActivityKind.complaint
               ? Icons.report_problem_rounded
               : Icons.campaign_rounded,
-          size: 18,
+          size: IconSize.md,
           color: t.colorScheme.outline,
         ),
         const SizedBox(width: Space.xs),
@@ -773,11 +811,14 @@ class _DashboardSkeleton extends StatelessWidget {
   Widget build(BuildContext context) => const Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SkeletonCard(lines: 3, height: 168),
+          // No fixed heights. They were sized for 1.0x text and at 1.4x the real cards grow
+          // past them, so the page jumped downward the moment the numbers arrived — the one
+          // thing a skeleton exists to prevent.
+          SkeletonCard(lines: 3),
           SizedBox(height: Space.md),
-          SkeletonCard(lines: 2, height: 132),
+          SkeletonCard(lines: 2),
           SizedBox(height: Space.md),
-          SkeletonCard(lines: 2, height: 120),
+          SkeletonCard(lines: 2),
         ],
       );
 }

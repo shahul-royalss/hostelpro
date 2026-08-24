@@ -207,13 +207,13 @@ class FreeBedPicker extends StatelessWidget {
                       onTap: () => Navigator.of(context).pop(option),
                       child: Row(
                         children: [
-                          const Icon(Icons.bed_outlined, size: 20),
+                          const Icon(Icons.bed_outlined, size: IconSize.lg),
                           const SizedBox(width: Space.sm),
                           Expanded(child: Text(option.label, style: t.textTheme.titleMedium)),
                           if (option.floorNumber != null)
                             Text('Floor ${option.floorNumber}', style: t.textTheme.bodySmall),
                           const SizedBox(width: Space.xs),
-                          const Icon(Icons.chevron_right_rounded, size: 20),
+                          const Icon(Icons.chevron_right_rounded, size: IconSize.lg),
                         ],
                       ),
                     ),
@@ -268,7 +268,7 @@ class _AwaitingBedPicker extends StatelessWidget {
                               ],
                             ),
                           ),
-                          const Icon(Icons.chevron_right_rounded, size: 20),
+                          const Icon(Icons.chevron_right_rounded, size: IconSize.lg),
                         ],
                       ),
                     ),

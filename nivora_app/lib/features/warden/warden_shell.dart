@@ -59,8 +59,10 @@ class WardenShell extends ConsumerWidget {
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (i) => ref.read(wardenTabProvider.notifier).go(i),
-        // 64dp keeps every destination above the 48dp minimum with room for the label.
-        height: 64,
+        // 64dp keeps every destination above the 48dp minimum with room for the label — at
+        // 1.0x. NavigationBar honours this height literally, so at 1.4x the label was clipped
+        // against the icon; scaling it and capping the growth keeps the bar off the content.
+        height: MediaQuery.textScalerOf(context).scale(64).clamp(64.0, 88.0),
         backgroundColor: t.colorScheme.surface,
         indicatorColor: t.colorScheme.primary.withValues(alpha: 0.12),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,

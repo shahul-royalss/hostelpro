@@ -42,8 +42,8 @@ class _StudentSheet extends ConsumerWidget {
       loading: const SheetBody(
         title: 'Resident',
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: Space.xxl),
-          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          padding: EdgeInsets.symmetric(vertical: Space.md),
+          child: SkeletonBlock(lines: 3),
         ),
       ),
       builder: (row) {
@@ -248,8 +248,7 @@ class _FeeHistory extends ConsumerWidget {
       loading: const Padding(
         padding: EdgeInsets.symmetric(vertical: Space.md),
         child: Center(
-          child: SizedBox(width: 18, height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2)),
+          child: InlineSpinner(),
         ),
       ),
       builder: (page) {
@@ -267,11 +266,18 @@ class _FeeHistory extends ConsumerWidget {
                 padding: const EdgeInsets.only(bottom: Space.xxs),
                 child: Row(
                   children: [
-                    SizedBox(
-                      width: 108,
-                      child: Text(monthLabel(row.periodMonth), style: t.textTheme.bodyMedium),
-                    ),
+                    // Flex rather than a fixed 108: "September 2026" at 1.4x is wider than
+                    // that, and the amount beside it was the half getting squeezed.
                     Expanded(
+                      flex: 4,
+                      child: Text(monthLabel(row.periodMonth),
+                          style: t.textTheme.bodyMedium,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    const SizedBox(width: Space.xs),
+                    Expanded(
+                      flex: 5,
                       child: Text(
                         row.balance > 0
                             ? '${money(row.amountPaid)} of ${money(row.amountDue)}'
@@ -310,20 +316,23 @@ class _Action extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final accent = tone ?? t.colorScheme.primary;
+    final accent = context.tones.resolve(tone ?? t.colorScheme.primary);
     return Material(
-      color: accent.withValues(alpha: 0.10),
+      color: context.tones.chipFill(accent),
       borderRadius: Radii.rControl,
       child: InkWell(
         borderRadius: Radii.rControl,
         onTap: onTap,
         child: Container(
-          height: 64,
+          // Minimum, not fixed: at 1.4x the icon and its label are taller than 64.
+          constraints: const BoxConstraints(minHeight: 64),
+          padding: const EdgeInsets.symmetric(vertical: Space.xs, horizontal: Space.xxs),
           alignment: Alignment.center,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 20, color: accent),
+              Icon(icon, size: IconSize.lg, color: accent),
               const SizedBox(height: Space.xxs),
               Text(
                 label,

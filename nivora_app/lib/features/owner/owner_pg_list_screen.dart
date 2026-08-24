@@ -32,7 +32,7 @@ class OwnerPgListScreen extends ConsumerWidget {
       onRefresh: () async {
         ref.invalidate(myHostelsProvider);
         try {
-          await ref.read(myHostelsProvider.future).timeout(const Duration(seconds: 12));
+          await ref.read(myHostelsProvider.future).timeout(ownerRefreshTimeout);
         } catch (_) {
           // Shown in the body below.
         }
@@ -140,7 +140,8 @@ class _PgCard extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(width: Space.xs),
-                  Icon(Icons.chevron_right_rounded, color: t.colorScheme.outline),
+                  Icon(Icons.chevron_right_rounded,
+                      size: IconSize.lg, color: t.colorScheme.outline),
                 ],
               ),
               const SizedBox(height: Space.sm),
@@ -166,11 +167,11 @@ class _PgCard extends ConsumerWidget {
               whenAsync(
                 stats,
                 loading: () => const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Skeleton(width: double.infinity, height: 8),
+                    Skeleton(height: Space.xs),
                     SizedBox(height: Space.xs),
-                    Skeleton(width: 220, height: 13),
+                    Skeleton(widthFactor: 0.7),
                   ],
                 ),
                 error: (error) => ErrorNote(error: error, compact: true),
@@ -195,6 +196,7 @@ class _PgFigures extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final tones = context.tones;
     final notice = subscriptionNotice(stats);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -212,7 +214,9 @@ class _PgFigures extends StatelessWidget {
           const SizedBox(height: Space.xxs),
           Text(
             '${countLabel(stats.openComplaints, 'complaint')} still open.',
-            style: t.textTheme.bodySmall?.copyWith(color: NivoraColors.warning),
+            // Resolved: canonical #A96D08 as 13px body text on the dark elevated surface
+            // measures 3.83:1, and this line is the one that says money is missing.
+            style: t.textTheme.bodySmall?.copyWith(color: tones.warning),
           ),
         ],
         if (notice != null) ...[
@@ -220,7 +224,7 @@ class _PgFigures extends StatelessWidget {
           Text(
             notice.title,
             style: t.textTheme.bodySmall?.copyWith(
-              color: notice.severe ? NivoraColors.error : NivoraColors.warning,
+              color: notice.severe ? tones.error : tones.warning,
             ),
           ),
         ],

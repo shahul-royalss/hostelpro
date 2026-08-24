@@ -148,22 +148,14 @@ class _LeaveRowState extends ConsumerState<_LeaveRow> {
           ],
           const SizedBox(height: Space.sm),
           if (_busy)
-            const SizedBox(
-              height: 40,
-              child: Center(
-                child: SizedBox(width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
-              ),
-            )
+            const InlineSpinner(replacing: 48)
           else
             Row(
               children: [
                 Expanded(
+                  // Approve is the primary action and the theme already says what that looks
+                  // like. Repainting it #188D43 put white on green at 4.26:1.
                   child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: NivoraColors.success,
-                      minimumSize: const Size.fromHeight(40),
-                    ),
                     onPressed: () => _decide(LeaveStatus.approved),
                     child: const Text('Approve'),
                   ),
@@ -171,10 +163,9 @@ class _LeaveRowState extends ConsumerState<_LeaveRow> {
                 const SizedBox(width: Space.xs),
                 Expanded(
                   child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(40),
-                      foregroundColor: NivoraColors.error,
-                    ),
+                    // Here the colour DOES carry meaning — this is the destructive half of a
+                    // pair — so it stays, resolved for the theme (5.83:1 light, 6.98:1 dark).
+                    style: OutlinedButton.styleFrom(foregroundColor: context.tones.error),
                     onPressed: () => _decide(LeaveStatus.rejected),
                     child: const Text('Reject'),
                   ),
@@ -300,11 +291,13 @@ class _VisitorRowState extends ConsumerState<_VisitorRow> {
           ),
           const SizedBox(width: Space.xs),
           if (_busy)
-            const SizedBox(width: 20, height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2))
+            const InlineSpinner()
           else
+            // Width 96 so it hugs its label instead of inheriting the theme's full-bleed
+            // minimum; the height goes back to 48, which is the tap target a warden signing
+            // somebody out one-handed in a doorway actually needs.
             OutlinedButton(
-              style: OutlinedButton.styleFrom(minimumSize: const Size(96, 40)),
+              style: OutlinedButton.styleFrom(minimumSize: const Size(96, 48)),
               onPressed: _checkOut,
               child: const Text('Sign out'),
             ),

@@ -5,6 +5,8 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme/tokens.dart';
 import '../../shared/glass/glass.dart';
+import '../manager/manager_shell.dart';
+import '../super_admin/sa_shell.dart';
 import '../warden/warden_shell.dart';
 import '../owner/owner_tabs.dart';
 import '../student/student_section.dart';
@@ -39,10 +41,14 @@ const _tabs = <UserRole, List<({String label, IconData icon})>>{
     (label: 'Tasks', icon: Icons.checklist_rounded),
     (label: 'Menu', icon: Icons.restaurant_rounded),
   ],
+  // Security is the fourth because the console has a reader now: security_alerts is where
+  // app.detect_suspicious_activity() files the patterns it finds in the audit trail, and until
+  // this tab existed nothing in either app ever looked at them. See SaShell.
   UserRole.superAdmin: [
     (label: 'Overview', icon: Icons.grid_view_rounded),
     (label: 'Hostels', icon: Icons.apartment_rounded),
     (label: 'Subscriptions', icon: Icons.card_membership_rounded),
+    (label: 'Security', icon: Icons.shield_rounded),
   ],
 };
 
@@ -64,6 +70,8 @@ class _RoleShellState extends ConsumerState<RoleShell> {
     // the roles still to come, and each takes this same one-line exit as it lands. The tab list
     // in [_tabs] remains the readable index of what every role's navigation is.
     if (widget.role == UserRole.warden) return const WardenShell();
+    if (widget.role == UserRole.superAdmin) return const SaShell();
+    if (widget.role == UserRole.manager) return const ManagerShell();
 
     final t = Theme.of(context);
     final session = ref.watch(sessionProvider);

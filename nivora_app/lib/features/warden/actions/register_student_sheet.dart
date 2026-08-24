@@ -267,13 +267,14 @@ class _RegisterStudentSheetState extends ConsumerState<_RegisterStudentSheet> {
             Container(
               padding: const EdgeInsets.all(Space.sm),
               decoration: BoxDecoration(
-                color: NivoraColors.info.withValues(alpha: 0.10),
+                color: context.tones.chipFill(NivoraColors.info),
                 borderRadius: Radii.rControl,
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.info_outline_rounded, size: 16, color: NivoraColors.info),
+                  Icon(Icons.info_outline_rounded,
+                      size: IconSize.sm, color: context.tones.info),
                   const SizedBox(width: Space.xs),
                   Expanded(
                     child: Text(
@@ -289,10 +290,10 @@ class _RegisterStudentSheetState extends ConsumerState<_RegisterStudentSheet> {
             const SizedBox(height: Space.md),
             FilledButton(
               onPressed: _busy ? null : _submit,
+              // onPrimary, not the progress theme's colour — that is scheme.primary, which is
+              // the button's own fill, so the spinner was indigo on indigo.
               child: _busy
-                  ? const SizedBox(
-                      width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? InlineSpinner(onFill: Theme.of(context).colorScheme.onPrimary)
                   : const Text('Register resident'),
             ),
           ],

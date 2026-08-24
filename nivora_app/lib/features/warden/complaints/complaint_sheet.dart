@@ -46,11 +46,13 @@ class _ComplaintSheet extends ConsumerWidget {
     return AsyncSection<Complaint?>(
       value: complaint,
       onRetry: () => ref.invalidate(complaintProvider(complaintId)),
+      // A skeleton, not a spinner. A sheet that opens onto a turning circle throws away
+      // the shape the warden is about to read and then snaps it in.
       loading: const SheetBody(
         title: 'Complaint',
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: Space.xxl),
-          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          padding: EdgeInsets.symmetric(vertical: Space.md),
+          child: SkeletonBlock(lines: 3),
         ),
       ),
       builder: (row) {
@@ -136,7 +138,8 @@ class _LoadedState extends ConsumerState<_Loaded> {
               padding: const EdgeInsets.only(top: Space.xs),
               child: Row(
                 children: [
-                  Icon(Icons.image_outlined, size: 16, color: t.colorScheme.onSurfaceVariant),
+                  Icon(Icons.image_outlined,
+                      size: IconSize.sm, color: t.colorScheme.onSurfaceVariant),
                   const SizedBox(width: Space.xs),
                   Expanded(
                     child: Text(
@@ -189,7 +192,7 @@ class _Workflow extends StatelessWidget {
           if (i > 0)
             Expanded(
               child: Container(
-                height: 2,
+                height: Space.xxs / 2,
                 margin: const EdgeInsets.symmetric(horizontal: Space.xxs),
                 color: i <= reached
                     ? toneFor(context, _order[i])
@@ -199,22 +202,24 @@ class _Workflow extends StatelessWidget {
           Column(
             children: [
               Container(
-                width: 24,
-                height: 24,
+                width: Space.xl,
+                height: Space.xl,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: i <= reached
-                      ? toneFor(context, _order[i]).withValues(alpha: 0.16)
+                      ? context.tones.chipFill(toneFor(context, _order[i]))
                       : Colors.transparent,
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: i <= reached
                         ? toneFor(context, _order[i])
                         : t.colorScheme.outlineVariant,
+                    width: Strokes.hairline,
                   ),
                 ),
                 child: i < reached
-                    ? Icon(Icons.check_rounded, size: 14, color: toneFor(context, _order[i]))
+                    ? Icon(Icons.check_rounded,
+                        size: IconSize.xs, color: toneFor(context, _order[i]))
                     : null,
               ),
               const SizedBox(height: Space.xxs),
@@ -248,15 +253,8 @@ class _Buttons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (busy) {
-      return const SizedBox(
-        height: 48,
-        child: Center(
-          child: SizedBox(width: 20, height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2)),
-        ),
-      );
-    }
+    // 48 is the filled button's own height, so the row does not jump while the write runs.
+    if (busy) return const InlineSpinner(replacing: 48);
 
     return switch (status) {
       ComplaintStatus.open => Row(
@@ -264,7 +262,7 @@ class _Buttons extends StatelessWidget {
             Expanded(
               child: FilledButton.icon(
                 onPressed: () => onMove(ComplaintStatus.inProgress),
-                icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                icon: const Icon(Icons.play_arrow_rounded, size: IconSize.md),
                 label: const Text('Start work'),
               ),
             ),
@@ -274,15 +272,17 @@ class _Buttons extends StatelessWidget {
             ),
           ],
         ),
+      // No green repaint. A FilledButton is ALREADY "the main action here"; painting it
+      // #188D43 added no meaning and put its own white label at 4.26:1, under the 4.5:1 a
+      // 15px button label needs. The theme's indigo measures 5.98:1.
       ComplaintStatus.inProgress => FilledButton.icon(
-          style: FilledButton.styleFrom(backgroundColor: NivoraColors.success),
           onPressed: onResolve,
-          icon: const Icon(Icons.check_rounded, size: 18),
+          icon: const Icon(Icons.check_rounded, size: IconSize.md),
           label: const Text('Mark resolved'),
         ),
       ComplaintStatus.resolved => OutlinedButton.icon(
           onPressed: () => onMove(ComplaintStatus.open),
-          icon: const Icon(Icons.replay_rounded, size: 18),
+          icon: const Icon(Icons.replay_rounded, size: IconSize.md),
           label: const Text('Reopen'),
         ),
     };
@@ -321,7 +321,7 @@ class _RaisedBy extends ConsumerWidget {
               ],
             ),
           ),
-          const Icon(Icons.chevron_right_rounded, size: 20),
+          const Icon(Icons.chevron_right_rounded, size: IconSize.lg),
         ],
       ),
     );
@@ -343,10 +343,7 @@ class _Timeline extends ConsumerWidget {
       onRetry: () => ref.invalidate(complaintTimelineProvider(complaintId)),
       loading: const Padding(
         padding: EdgeInsets.symmetric(vertical: Space.md),
-        child: Center(
-          child: SizedBox(width: 18, height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2)),
-        ),
+        child: SkeletonBlock(lines: 2),
       ),
       builder: (list) {
         if (list.isEmpty) {
@@ -361,9 +358,9 @@ class _Timeline extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(top: 6, right: Space.sm),
+                      width: Space.xs,
+                      height: Space.xs,
+                      margin: const EdgeInsets.only(top: Space.xxs, right: Space.sm),
                       decoration: BoxDecoration(
                         color: toneFor(context, event.status),
                         shape: BoxShape.circle,
@@ -435,7 +432,6 @@ class _ResolutionNoteSheetState extends State<_ResolutionNoteSheet> {
           ),
           const SizedBox(height: Space.lg),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: NivoraColors.success),
             onPressed: () => Navigator.of(context).pop(_note.text.trim()),
             child: const Text('Mark resolved'),
           ),

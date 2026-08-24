@@ -109,14 +109,14 @@ class _ComplaintRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: Space.xxxl,
+            height: Space.xxxl,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: tone.withValues(alpha: 0.12),
+              color: context.tones.chipFill(tone),
               borderRadius: Radii.rControl,
             ),
-            child: Icon(categoryIcon(complaint.category), size: 20, color: tone),
+            child: Icon(categoryIcon(complaint.category), size: IconSize.lg, color: tone),
           ),
           const SizedBox(width: Space.sm),
           Expanded(
@@ -129,7 +129,7 @@ class _ComplaintRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: Space.xxs / 2),
                 Text(
                   '${complaint.category.label} · ${age(complaint.createdAt)}',
                   style: t.textTheme.bodySmall,

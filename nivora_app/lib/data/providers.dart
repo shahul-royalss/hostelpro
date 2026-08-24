@@ -11,6 +11,7 @@ import 'repositories/fee_repository.dart';
 import 'repositories/finance_repository.dart';
 import 'repositories/hostel_repository.dart';
 import 'repositories/notice_repository.dart';
+import 'repositories/payment_repository.dart';
 import 'repositories/room_repository.dart';
 import 'repositories/student_repository.dart';
 import 'repositories/task_repository.dart';
@@ -74,6 +75,33 @@ final financeRepositoryProvider = Provider<FinanceRepository>(
 final dashboardRepositoryProvider = Provider<DashboardRepository>(
   (ref) => DashboardRepository(ref.watch(supabaseClientProvider)),
 );
+
+/// Rent paid inside the app. public.payment_intents + the razorpay-order Edge Function.
+///
+/// TYPED BY THE INTERFACE, not by the class, unlike every other repository here. The payment
+/// state machine is the one piece of this app whose interesting states are all about money that
+/// has moved but has not landed, and those are worth holding down in `flutter test` — which
+/// needs a fake in this slot. See RentPayments.
+final paymentRepositoryProvider = Provider<RentPayments>(
+  (ref) => PaymentRepository(ref.watch(supabaseClientProvider)),
+);
+
+/// The native Razorpay checkout.
+///
+/// A PROVIDER SO IT CAN BE REPLACED. `razorpay_flutter` talks over a MethodChannel, and a
+/// widget test has no platform on the other end of one — constructing the real plugin in a test
+/// makes the payment flow untestable and the failure looks like a hang rather than a mistake.
+/// Overriding this with a fake lets the whole state machine (order, checkout, confirmation,
+/// failure, cancellation) run in `flutter test`, which is where it is actually verified.
+///
+/// autoDispose with an explicit teardown: the plugin's event handlers are registered on an
+/// emitter the instance owns, so an instance that is dropped without [RazorpayCheckout.dispose]
+/// keeps delivering results to widgets that no longer exist.
+final razorpayCheckoutProvider = Provider.autoDispose<RazorpayCheckout>((ref) {
+  final checkout = PluginRazorpayCheckout();
+  ref.onDispose(checkout.dispose);
+  return checkout;
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SESSION-DERIVED KEYS

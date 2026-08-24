@@ -90,7 +90,7 @@ class _RoomSheet extends ConsumerWidget {
                   ),
                   const SizedBox(width: Space.xs),
                   if (free > 0)
-                    StatusPill.text(label: '$free free', tone: NivoraColors.success),
+                    StatusPill.text(label: '$free free', tone: context.tones.success),
                 ],
               ),
               const SizedBox(height: Space.md),
@@ -141,7 +141,7 @@ class _BedRow extends ConsumerWidget {
         onTap: () => showFillBedSheet(context, ref, bed: bed, bedLabel: label),
         child: Row(
           children: [
-            _BedChip(number: bed.bedNumber, tone: NivoraColors.success, filled: false),
+            _BedChip(number: bed.bedNumber, tone: context.tones.success, filled: false),
             const SizedBox(width: Space.sm),
             Expanded(
               child: Column(
@@ -149,14 +149,14 @@ class _BedRow extends ConsumerWidget {
                 children: [
                   Text('Bed ${bed.bedNumber}', style: t.textTheme.titleMedium),
                   Text('Free', style: t.textTheme.bodySmall?.copyWith(
-                    color: NivoraColors.success,
+                    color: context.tones.success,
                   )),
                 ],
               ),
             ),
             FilledButton.tonal(
               onPressed: () => showFillBedSheet(context, ref, bed: bed, bedLabel: label),
-              style: FilledButton.styleFrom(minimumSize: const Size(88, 40)),
+              style: FilledButton.styleFrom(minimumSize: const Size(88, 48)),
               child: const Text('Assign'),
             ),
           ],
@@ -242,14 +242,17 @@ class _BedChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    // Filled and hollow are the same chip drawn two ways: one has the tint, the other has
+    // the edge. Both alphas come from the measured recipe rather than from 0.14 and 0.5,
+    // which were two numbers nobody could re-derive.
     return Container(
-      width: 40,
-      height: 40,
+      width: Space.xxxl,
+      height: Space.xxxl,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: filled ? 0.14 : 0.0),
+        color: filled ? context.tones.chipFill(tone) : null,
         borderRadius: Radii.rControl,
-        border: Border.all(color: tone.withValues(alpha: filled ? 0.0 : 0.5), width: 1.5),
+        border: filled ? null : Border.all(color: tone, width: Strokes.hairline),
       ),
       child: Text('$number', style: t.textTheme.titleSmall?.copyWith(color: tone)),
     );

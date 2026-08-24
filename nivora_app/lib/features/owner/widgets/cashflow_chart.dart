@@ -20,13 +20,22 @@ import 'states.dart';
 class CashflowChart extends StatelessWidget {
   const CashflowChart({super.key, required this.days});
 
+  /// The plot's height, exported so the loading skeleton can stand in at exactly this size and
+  /// the card does not jump when the series arrives.
+  static const plotHeight = 148.0;
+
+  /// A chart line has to be visible at arm's length on a cheap panel; a hairline is not.
+  static const _lineWidth = 2.0;
+
   final List<FinanceDay> days;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final inTone = NivoraColors.success;
-    final outTone = NivoraColors.warning;
+    // Resolved: the two series are the only thing carrying meaning on this chart, and the
+    // canonical inks were authored against white.
+    final inTone = context.tones.success;
+    final outTone = context.tones.warning;
 
     if (days.isEmpty) {
       return const EmptyNote(
@@ -56,18 +65,21 @@ class CashflowChart extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        // Wrap, not Row: at 1.4x text scale on a 320dp phone the two legends and the peak
+        // figure are wider than the card, and a Row would have clipped the figure.
+        Wrap(
+          spacing: Space.md,
+          runSpacing: Space.xxs,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             _LegendDot(color: inTone, label: 'Money in'),
-            const SizedBox(width: Space.md),
             _LegendDot(color: outTone, label: 'Money out'),
-            const Spacer(),
             Text('Busiest day ${moneyShort(peak)}', style: t.textTheme.bodySmall),
           ],
         ),
         const SizedBox(height: Space.sm),
         SizedBox(
-          height: 148,
+          height: plotHeight,
           child: LineChart(
             LineChartData(
               minX: 0,
@@ -88,11 +100,12 @@ class CashflowChart extends StatelessWidget {
                 horizontalInterval: ceiling / 2,
                 getDrawingHorizontalLine: (_) => FlLine(
                   color: t.colorScheme.outlineVariant,
-                  strokeWidth: 1,
+                  strokeWidth: Strokes.hairline,
                 ),
               ),
               lineBarsData: [
-                _series(days.map((d) => d.revenue).toList(growable: false), inTone, fill: true),
+                _series(days.map((d) => d.revenue).toList(growable: false), inTone,
+                    fill: context.tones.chipFill(inTone)),
                 _series(days.map((d) => d.expense).toList(growable: false), outTone),
               ],
             ),
@@ -110,21 +123,18 @@ class CashflowChart extends StatelessWidget {
     );
   }
 
-  LineChartBarData _series(List<double> values, Color color, {bool fill = false}) {
+  LineChartBarData _series(List<double> values, Color color, {Color? fill}) {
     return LineChartBarData(
       spots: [
         for (var i = 0; i < values.length; i++) FlSpot(i.toDouble(), values[i]),
       ],
       color: color,
-      barWidth: 2,
+      barWidth: _lineWidth,
       isCurved: false,
       isStrokeCapRound: true,
       isStrokeJoinRound: true,
       dotData: const FlDotData(show: false),
-      belowBarData: BarAreaData(
-        show: fill,
-        color: color.withValues(alpha: 0.12),
-      ),
+      belowBarData: BarAreaData(show: fill != null, color: fill),
     );
   }
 }
