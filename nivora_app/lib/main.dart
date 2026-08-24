@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/config/env.dart';
@@ -11,6 +12,12 @@ import 'core/theme/tokens.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // The typeface is bundled (see pubspec.yaml), so nothing should ever be fetched. Turning
+  // runtime fetching off makes that a guarantee rather than an intention: if a weight is ever
+  // used without shipping its file, google_fonts throws in debug instead of quietly downloading
+  // it in production. A first launch on a bad connection then still looks like Nivora.
+  GoogleFonts.config.allowRuntimeFetching = false;
 
   // Only the URL and the ANON key ever reach the client. The anon key is public by design —
   // it grants nothing on its own, because every table is behind row-level security. The

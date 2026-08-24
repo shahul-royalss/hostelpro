@@ -74,6 +74,21 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # THE TYPEFACE SHIPS WITH THE APP, it is not fetched.
+  #
+  # google_fonts downloads from fonts.gstatic.com at RUNTIME by default and caches the result.
+  # That means the very first launch on a new phone needs a working network just to render the
+  # intended type — and if it does not have one, the app silently falls back to the system font
+  # and looks like a different product. That is precisely the launch a client sees in a meeting
+  # room on bad wifi. Declaring the files here makes google_fonts resolve them from the bundle
+  # instead, and GoogleFonts.config.allowRuntimeFetching = false in main.dart turns any missed
+  # font into a loud failure in debug rather than a silent download in production.
+  #
+  # Four weights because the type scale uses exactly four. Adding a fifth to a TextStyle without
+  # adding its file here reintroduces the download for that one weight.
+  assets:
+    - google_fonts/
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
