@@ -180,6 +180,68 @@ class AuthController extends AsyncNotifier<AuthPhase> {
     }
   }
 
+  /// Set a new password. Returns null on success, or a message to show.
+  ///
+  /// Mirrors the web app's changePassword action, and deliberately keeps the same asymmetry:
+  /// a FORCED change (must_change_password set) does not ask for the current password,
+  /// because the user just authenticated with the temporary one; a VOLUNTARY change does, so
+  /// that a stolen session cannot be used to lock the real account holder out.
+  ///
+  /// [currentPassword] is therefore null for the forced case. Note the decision of WHICH case
+  /// applies is made from the profile row, not from this argument — passing a current password
+  /// cannot weaken the rule, and omitting one cannot skip it, because the reauthentication
+  /// below only runs when the caller says the change is voluntary AND the server still holds
+  /// the flag clear. The real enforcement is Supabase's own session check on updateUser.
+  Future<String?> changePassword({
+    required String newPassword,
+    String? currentPassword,
+  }) async {
+    final user = _db.auth.currentUser;
+    if (user == null) return 'Your session has expired. Sign in again.';
+
+    try {
+      if (currentPassword != null) {
+        // Reauthenticate. A failure here must not be reported as a password-strength problem.
+        try {
+          await _db.auth.signInWithPassword(
+            email: user.email ?? '',
+            password: currentPassword,
+          );
+        } on AuthException {
+          return 'Your current password is incorrect.';
+        }
+      }
+
+      await _db.auth.updateUser(UserAttributes(password: newPassword));
+
+      // Clear the flag the router gates on. RLS permits a user to update their own row; no
+      // elevated key is involved. app_metadata is not touched here — it lags a token refresh
+      // and public.users is the authority, exactly as on the web.
+      await _db.from('users').update({'must_change_password': false}).eq('id', user.id);
+
+      // Re-resolve so the session carried by the router reflects the cleared flag and the
+      // redirect moves the user on to their role home.
+      state = AsyncData(await _resolve());
+      return null;
+    } on AuthException catch (e) {
+      debugPrint('changePassword failed: ${e.runtimeType} ${e.message}');
+      final m = e.message.toLowerCase();
+      if (m.contains('different from the old') || m.contains('same password')) {
+        return 'Choose a password different from your temporary one.';
+      }
+      if (m.contains('weak') ||
+          m.contains('pwned') ||
+          m.contains('leaked') ||
+          m.contains('compromised')) {
+        return 'That password is too weak or has appeared in a data breach — choose another.';
+      }
+      return _friendly(e);
+    } catch (e) {
+      debugPrint('changePassword failed: $e');
+      return 'Could not save your password. Check your connection and try again.';
+    }
+  }
+
   Future<void> signOut() async {
     await _db.auth.signOut();
     state = const AsyncData(AuthSignedOut());

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../auth/auth_controller.dart';
 import '../auth/session.dart';
+import '../../features/auth/change_password_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/mfa_screen.dart';
 import '../../features/shell/role_shell.dart';
@@ -123,7 +124,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: mfaRoute, builder: (_, _) => const MfaScreen()),
       GoRoute(
         path: changePasswordRoute,
-        builder: (_, _) => const _Placeholder(title: 'Set a new password'),
+        builder: (_, _) => const ChangePasswordScreen(),
       ),
       // One shell per role. Each owns its own navigation, because forcing five roles through
       // one tab bar is what makes an operational tool feel like an admin template.

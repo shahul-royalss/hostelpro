@@ -5,6 +5,9 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme/tokens.dart';
 import '../../shared/glass/glass.dart';
+import '../warden/warden_shell.dart';
+import '../owner/owner_tabs.dart';
+import '../student/student_section.dart';
 
 /// Per-role navigation. Each role gets the tabs its job needs — the brief's point that forcing
 /// every role through one navigation is what makes an operational tool feel generic.
@@ -56,6 +59,12 @@ class _RoleShellState extends ConsumerState<RoleShell> {
 
   @override
   Widget build(BuildContext context) {
+    // A role whose screens are built owns its own shell: its tabs need per-screen headers,
+    // badges and a selected index that other screens can move. The placeholder below stays for
+    // the roles still to come, and each takes this same one-line exit as it lands. The tab list
+    // in [_tabs] remains the readable index of what every role's navigation is.
+    if (widget.role == UserRole.warden) return const WardenShell();
+
     final t = Theme.of(context);
     final session = ref.watch(sessionProvider);
     final tabs = _tabs[widget.role] ?? const [];
@@ -87,29 +96,7 @@ class _RoleShellState extends ConsumerState<RoleShell> {
               ],
             ),
           ),
-          Expanded(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(Space.xl),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      tabs.isEmpty ? 'No navigation for this role' : tabs[_index].label,
-                      style: t.textTheme.headlineMedium,
-                    ),
-                    const SizedBox(height: Space.xs),
-                    Text(
-                      'This screen is not built yet. The shell, theme, routing and\n'
-                      'authentication are — see the migration status in the repo.',
-                      style: t.textTheme.bodyMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          Expanded(child: _body(t, tabs)),
         ],
       ),
       bottomNavigationBar: tabs.isEmpty
@@ -127,6 +114,46 @@ class _RoleShellState extends ConsumerState<RoleShell> {
                   NavigationDestination(icon: Icon(tab.icon), label: tab.label),
               ],
             ),
+    );
+  }
+
+  /// The screen behind the selected tab.
+  ///
+  /// Each role's feature directory exposes ONE function that maps a tab index to a screen, and
+  /// this is where those are plugged in. Anything a feature has not built yet returns null and
+  /// falls through to the placeholder below, which says so rather than rendering an empty page
+  /// that looks finished.
+  Widget _body(ThemeData t, List<({String label, IconData icon})> tabs) {
+    if (widget.role == UserRole.owner) {
+      final screen = ownerTabScreen(_index);
+      if (screen != null) return screen;
+    }
+    // The student app keeps its own widget rather than a per-index function: it holds the tabs
+    // already visited in an IndexedStack, so moving between Home and Fees does not refetch the
+    // same rent row or lose a scroll position. See StudentSection.
+    if (widget.role == UserRole.student) {
+      return StudentSection(tabIndex: _index);
+    }
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(Space.xl),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              tabs.isEmpty ? 'No navigation for this role' : tabs[_index].label,
+              style: t.textTheme.headlineMedium,
+            ),
+            const SizedBox(height: Space.xs),
+            Text(
+              'This screen is not built yet. The shell, theme, routing and\n'
+              'authentication are — see the migration status in the repo.',
+              style: t.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -19,7 +19,7 @@ abstract final class NivoraType {
   static TextTheme textTheme(Color primary, Color secondary) {
     final base = GoogleFonts.interTextTheme();
     return base.copyWith(
-      // Page titles. One per screen.
+      // PagedResult titles. One per screen.
       displaySmall: base.displaySmall?.copyWith(
         fontSize: 32, height: 1.15, fontWeight: FontWeight.w600, letterSpacing: -0.6, color: primary,
       ),
