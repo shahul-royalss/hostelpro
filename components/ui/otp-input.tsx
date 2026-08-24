@@ -129,7 +129,7 @@ const OtpInput = React.forwardRef<HTMLInputElement, OtpInputProps>(function OtpI
       <motion.div
         animate={shake}
         aria-hidden="true"
-        className={cn("flex items-center gap-2 sm:gap-2.5", className)}
+        className={cn("flex w-full items-center justify-center gap-1.5 sm:gap-2.5", className)}
       >
         {slots.map((digit, i) => {
           const isActive = focused && !disabled && i === activeIndex;
@@ -140,7 +140,7 @@ const OtpInput = React.forwardRef<HTMLInputElement, OtpInputProps>(function OtpI
               animate={reducedMotion ? undefined : { scale: isActive ? 1.04 : 1 }}
               transition={SPRING}
               className={cn(
-                "relative flex h-14 w-full min-w-0 max-w-[3.25rem] flex-1 items-center justify-center",
+                "relative flex h-14 min-w-[2.25rem] max-w-[3.25rem] shrink basis-11 grow items-center justify-center",
                 "rounded-control border bg-white/70 text-2xl font-semibold tabular-nums text-navy",
                 "shadow-glass transition-colors",
                 isFilled ? "border-navy/40" : "border-input",

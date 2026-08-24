@@ -26,6 +26,7 @@ export function MfaChallengeForm({ next }: { next?: string }) {
 
   const [code, setCode] = React.useState("");
   const formRef = React.useRef<HTMLFormElement>(null);
+  const codeFieldRef = React.useRef<HTMLInputElement>(null);
   // Changing this replays the shake when the SAME error comes back twice — otherwise the second
   // wrong code looks identical to the first and the field appears not to have responded.
   const [attempt, setAttempt] = React.useState(0);
@@ -34,15 +35,23 @@ export function MfaChallengeForm({ next }: { next?: string }) {
     if (error) setAttempt((n) => n + 1);
   }, [error]);
 
-  const submit = React.useCallback(() => {
-    if (pending) return;
-    formRef.current?.requestSubmit();
-  }, [pending]);
+  const submit = React.useCallback(
+    (completed?: string) => {
+      if (pending) return;
+      // Authoritative: `completed` is the value OtpInput just finished with. React state has not
+      // flushed yet at this point, so reading it here would submit the previous keystroke.
+      if (completed && codeFieldRef.current) codeFieldRef.current.value = completed;
+      formRef.current?.requestSubmit();
+    },
+    [pending],
+  );
 
   return (
     <form ref={formRef} action={action} className="flex flex-col gap-5" noValidate>
       {next ? <input type="hidden" name="next" value={next} /> : null}
-      <input type="hidden" name="code" value={code} />
+      {/* defaultValue, not value: submit() writes the completed code straight onto this node,
+          and a controlled value would be reverted by the next render before the POST. */}
+      <input ref={codeFieldRef} type="hidden" name="code" defaultValue={code} />
 
       <div className="flex flex-col items-center gap-3">
         <Label htmlFor="otp-0" className="self-start">
@@ -52,7 +61,12 @@ export function MfaChallengeForm({ next }: { next?: string }) {
           id="otp-0"
           length={6}
           value={code}
-          onChange={setCode}
+          onChange={(v) => {
+            setCode(v);
+            // The field is uncontrolled (see the hidden input), so mirror every keystroke onto it.
+            // Without this, clicking "Verify" after a manual edit would post the initial value.
+            if (codeFieldRef.current) codeFieldRef.current.value = v;
+          }}
           onComplete={submit}
           invalid={Boolean(error)}
           shakeKey={attempt}
