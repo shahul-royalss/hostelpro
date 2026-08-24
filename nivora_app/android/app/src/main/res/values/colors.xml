@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- theme_color from app/manifest.ts -->
+    <color name="colorPrimary">#F6F4EF</color>
+    <color name="navigationColor">#F6F4EF</color>
+    <!-- background_color from app/manifest.ts -->
+    <color name="backgroundColor">#F6F4EF</color>
+    <!--
+      The plate behind the adaptive launcher icon, referenced only by
+      mipmap-anydpi-v26/ic_launcher.xml and ic_launcher_round.xml.
+
+      This was #1C2B45 when the icon was the old placeholder — a white house drawn on
+      navy. The real logo (nivoralogo.png) inverts that: the N-house mark is a dark navy
+      gradient, measured at roughly #0B1D33, so on a navy plate it all but disappears.
+      Ivory is the ground the logo was drawn for, and it matches background_color and
+      theme_color in app/manifest.ts, so the launcher icon and the app it opens agree.
+
+      Regenerate the icon layers with: node scripts/gen-icons.mjs
+    -->
+    <color name="ic_launcher_background">#F6F4EF</color>
+</resources>

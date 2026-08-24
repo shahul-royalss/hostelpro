@@ -16,16 +16,25 @@ Future<void> main() async {
   // it grants nothing on its own, because every table is behind row-level security. The
   // service-role key must never appear in this app; it is server-only and would hand any
   // decompiler full database access.
-  await Supabase.initialize(
-    url: Env.supabaseUrl,
-    // Renamed from anonKey in supabase_flutter 2.17; same value, same guarantees.
-    publishableKey: Env.supabaseAnonKey,
-    authOptions: const FlutterAuthClientOptions(
-      // Persisted to the platform keystore/keychain by supabase_flutter, which is what lets a
-      // warm start reach the home screen without a network round trip.
-      authFlowType: AuthFlowType.pkce,
-    ),
-  );
+  // Startup must never die silently. The first release build shipped without the INTERNET
+  // permission (Flutter only adds it to the debug/profile manifests), so this call threw and the
+  // process ended before drawing a frame — the app simply "did not open", with nothing on screen
+  // to say why. Now any startup failure renders an explanation instead of a black rectangle.
+  try {
+    await Supabase.initialize(
+      url: Env.supabaseUrl,
+      // Renamed from anonKey in supabase_flutter 2.17; same value, same guarantees.
+      publishableKey: Env.supabaseAnonKey,
+      authOptions: const FlutterAuthClientOptions(
+        // Persisted to the platform keystore by supabase_flutter, which is what lets a warm
+        // start reach the home screen without a network round trip.
+        authFlowType: AuthFlowType.pkce,
+      ),
+    );
+  } catch (e) {
+    runApp(_StartupFailure(error: e.toString()));
+    return;
+  }
 
   runApp(const ProviderScope(child: NivoraApp()));
 }
@@ -87,6 +96,52 @@ class _NivoraAppState extends ConsumerState<NivoraApp> {
           child: child!,
         );
       },
+    );
+  }
+}
+
+
+/// Shown when the app cannot start at all. Deliberately depends on nothing — no theme, no
+/// providers, no network — because whatever it is reporting may be the reason those are absent.
+class _StartupFailure extends StatelessWidget {
+  const _StartupFailure({required this.error});
+  final String error;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: const Color(0xFFF6F8FC),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('Nivora could not start',
+                    style: TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
+                const SizedBox(height: 8),
+                const Text(
+                  'This is usually a connection problem. Check your network and reopen the app.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: Color(0xFF667085)),
+                ),
+                const SizedBox(height: 20),
+                // The raw message, small. A user will not read it; the person they send a
+                // screenshot to will, and that is the difference between a bug report and a
+                // guessing game.
+                Text(error,
+                    textAlign: TextAlign.center,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF98A2B3))),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
