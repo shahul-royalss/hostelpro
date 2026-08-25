@@ -44,7 +44,7 @@ class _ComplaintDetailSheet extends ConsumerWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(complaintIcon(complaint.category), size: 20, color: t.colorScheme.primary),
+                Icon(complaintIcon(complaint.category), size: IconSize.lg, color: t.colorScheme.primary),
                 const SizedBox(width: Space.xs),
                 Expanded(child: Text(complaint.title, style: t.textTheme.titleLarge)),
                 const SizedBox(width: Space.xs),

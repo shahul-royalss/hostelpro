@@ -20,6 +20,32 @@ final wardenRepositoryProvider = Provider<WardenRepository>(
   (ref) => WardenRepository(ref.watch(supabaseClientProvider)),
 );
 
+/// Registering a resident, TYPED BY THE INTERFACE rather than by the class.
+///
+/// Everything else the warden does is a read, or a write whose outcome is a row the next read
+/// returns. This one mints a credential that exists exactly once, and its interesting states —
+/// four fields rejected at once, a phone number already taken, a bed occupied between loading
+/// the picker and pressing Register, a rollback that itself failed — are the states worth
+/// holding down in `flutter test`, which needs a fake in this slot. See StudentRegistrations,
+/// and RentPayments / SaPlatformWrites, which are this shape for the same reason.
+final wardenRegistrationsProvider = Provider<StudentRegistrations>(
+  (ref) => ref.watch(wardenRepositoryProvider),
+);
+
+/// The camera / photo picker the ID proof comes from.
+///
+/// A PROVIDER SO IT CAN BE REPLACED, exactly as `razorpayCheckoutProvider` is. `image_picker`
+/// talks over a MethodChannel and a widget test has no platform on the other end of one — the
+/// real plugin in a test makes the registration sheet hang rather than fail, which is the worst
+/// of both. Overriding this is what lets the whole flow, up to and including the password
+/// dialog, run in `flutter test`.
+///
+/// Not autoDispose and no teardown: `ImagePicker` registers no listeners and owns nothing that
+/// outlives a call, unlike the Razorpay checkout.
+final documentCaptureProvider = Provider<DocumentCapture>(
+  (ref) => PluginDocumentCapture(),
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // LEAVES AND VISITORS
 // ─────────────────────────────────────────────────────────────────────────────

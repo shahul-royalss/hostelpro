@@ -132,7 +132,7 @@ class _RaiseComplaintSheetState extends ConsumerState<_RaiseComplaintSheet> {
                                 _category = category;
                                 _failure = null;
                               }),
-                      avatar: Icon(complaintIcon(category), size: 16),
+                      avatar: Icon(complaintIcon(category), size: IconSize.sm),
                       label: Text(category.label),
                       shape: const RoundedRectangleBorder(borderRadius: Radii.rControl),
                     ),

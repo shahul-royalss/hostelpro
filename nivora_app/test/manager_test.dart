@@ -10,11 +10,14 @@
 // reaches for the network from inside the test binary. Nothing under test depends on the
 // typeface — only on the scale's slot names, which the stock theme has too.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
+import 'package:mobile/core/theme/tokens.dart';
 import 'package:mobile/data/models/models.dart';
 import 'package:mobile/data/providers.dart';
 import 'package:mobile/features/manager/data/manager_models.dart';
@@ -24,6 +27,7 @@ import 'package:mobile/features/manager/home/manager_home_screen.dart';
 import 'package:mobile/features/manager/manager_shell.dart';
 import 'package:mobile/features/manager/menu/manager_menu_screen.dart';
 import 'package:mobile/features/manager/tasks/manager_tasks_screen.dart';
+import 'package:mobile/features/manager/tasks/task_sheet.dart';
 import 'package:mobile/features/manager/widgets/manager_ui.dart';
 import 'package:mobile/features/shell/role_shell.dart';
 
@@ -499,6 +503,295 @@ void main() {
       expect(find.text('Nothing waiting on you'), findsOneWidget);
     });
   });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  //
+  // THE DEFECT CLASS THESE EXIST FOR. `provider.value` is null while a read is in flight, null
+  // when it failed and null when RLS refused it. Every screen in this role branched on that
+  // null, so three different facts drew one picture: a dash, or a blank, or no badge — each of
+  // which a person reads as "nothing to report". The analyzer cannot see any of it, and a test
+  // that stubs the provider with data cannot either. So these stub it with a FAILURE and with a
+  // read that never answers, and check that the two look different from each other and from a
+  // genuine zero.
+  //
+  // The rule: loading, empty, failed and refused are four states and must look different.
+  group('loading, empty, failed and refused do not share a face', () {
+    // OfflineFailure is retryable; AccessDeniedFailure is not. AppFailure already draws that
+    // line, and the screens are supposed to honour it rather than always offering a button.
+    const offline = OfflineFailure('Cannot reach Nivora. Check your connection and try again.');
+    const refused = AccessDeniedFailure('You do not have access to that.');
+
+    // ── the read-only banner: the safety message ────────────────────────────
+    testWidgets('a hostel-status read that FAILED says so instead of drawing nothing',
+        (tester) async {
+      await _pumpHome(tester, hostelError: offline);
+
+      // Before: null hostel, no banner, an ordinary-looking screen on a hostel that may be
+      // suspended — and the manager finds out when a save is refused.
+      expect(find.text('Could not check whether this hostel is read-only'), findsOneWidget);
+      expect(find.textContaining('Cannot reach Nivora'), findsWidgets);
+      // Retryable, so the retry is drawn — and it is wired to hostelProvider, which
+      // pull-to-refresh could not reach before this change.
+      expect(find.widgetWithText(OutlinedButton, 'Try again'), findsOneWidget);
+    });
+
+    testWidgets('a REFUSED hostel read says so and offers no retry it cannot honour',
+        (tester) async {
+      await _pumpHome(tester, hostelError: refused);
+
+      expect(find.text('Could not check whether this hostel is read-only'), findsOneWidget);
+      expect(find.textContaining('You do not have access'), findsWidgets);
+      // A button that will be refused again teaches people the buttons do nothing.
+      expect(find.widgetWithText(OutlinedButton, 'Try again'), findsNothing);
+    });
+
+    testWidgets('a hostel row that came back EMPTY is not the same as one that failed',
+        (tester) async {
+      await _pumpHome(tester, hostelMissing: true);
+
+      expect(find.text('This hostel is not visible to your account'), findsOneWidget);
+      // Not the failure wording, and not the read-only warning either.
+      expect(find.text('Could not check whether this hostel is read-only'), findsNothing);
+      expect(find.text('This hostel is read-only'), findsNothing);
+    });
+
+    testWidgets('while the status is still being checked the screen says that, not nothing',
+        (tester) async {
+      await _pumpHome(tester, hostelPending: true);
+
+      expect(find.text('Checking this hostel'), findsOneWidget);
+      expect(find.text('Could not check whether this hostel is read-only'), findsNothing);
+      expect(find.text('This hostel is read-only'), findsNothing);
+    });
+
+    testWidgets('an active hostel is the ONLY thing that earns a blank strip', (tester) async {
+      await _pumpHome(tester);
+      expect(find.byType(NoticeStrip), findsNothing);
+    });
+
+    testWidgets('a lapsed subscription still reads exactly as it did', (tester) async {
+      await _pumpHome(tester, hostelStatus: HostelStatus.readonly);
+
+      expect(find.text('This hostel is read-only'), findsOneWidget);
+      expect(find.textContaining('subscription has lapsed'), findsOneWidget);
+      expect(find.byType(NoticeStrip), findsOneWidget);
+    });
+
+    // ── the two figures on the home screen ──────────────────────────────────
+    testWidgets('a job count that FAILED is not drawn as a dash', (tester) async {
+      await _pumpHome(tester, loadError: offline);
+
+      // The old tile printed '—' and captioned it 'Counting' forever.
+      expect(find.text('Not available'), findsOneWidget);
+      expect(find.text('—'), findsNothing);
+      expect(find.text('Counting'), findsNothing);
+      // And it must not have quietly claimed the good news either.
+      expect(find.text('None late'), findsNothing);
+    });
+
+    testWidgets('a job count still COUNTING shows a dash and claims nothing', (tester) async {
+      await _pumpHome(tester, loadPending: true);
+
+      expect(find.text('—'), findsOneWidget);
+      expect(find.text('Counting'), findsOneWidget);
+      // The bug in the old tone expression: while counting, `overdue > 0` was false, so the
+      // tile said "None late" in success green on the strength of no data at all.
+      expect(find.text('None late'), findsNothing);
+      expect(find.text('Not available'), findsNothing);
+    });
+
+    testWidgets("a failed finance read does not print a dash for today's spend",
+        (tester) async {
+      await _pumpHome(tester, financeError: offline);
+
+      expect(find.text('—'), findsNothing);
+      expect(find.text('₹400'), findsNothing);
+      expect(find.text('Not available'), findsOneWidget);
+      // The month block underneath is an AsyncSection and already failed loudly; the point
+      // here is that the tile above it stopped disagreeing with it.
+      expect(find.textContaining('Cannot reach Nivora'), findsWidgets);
+    });
+
+    testWidgets('a day the server genuinely had nothing for is its own fourth state',
+        (tester) async {
+      // The read SUCCEEDED and still has no row for today. That is not loading, not a
+      // failure, and — because rpc_daily_finance zero-fills — not a spend of zero either.
+      await _pumpHome(
+        tester,
+        window: FinanceWindow(
+          days: [FinanceDay(day: DateTime(2026, 8, 4), revenue: 1000, expense: 400)],
+          monthStart: DateTime(2026, 8),
+          trendStart: DateTime(2026, 7, 23),
+          today: DateTime(2026, 8, 5),
+        ),
+      );
+
+      expect(find.text('No figure for today'), findsOneWidget);
+      expect(find.text('Not available'), findsNothing);
+      expect(find.text('Booked against today'), findsNothing);
+    });
+
+    testWidgets('a real zero is still printed as a figure, never as a dash', (tester) async {
+      await _pumpHome(
+        tester,
+        window: FinanceWindow(
+          days: [FinanceDay(day: DateTime(2026, 8, 5), revenue: 0, expense: 0)],
+          monthStart: DateTime(2026, 8),
+          trendStart: DateTime(2026, 7, 23),
+          today: DateTime(2026, 8, 5),
+        ),
+      );
+
+      expect(find.text('₹0'), findsWidgets);
+      expect(find.text('No figure for today'), findsNothing);
+    });
+
+    // ── the tasks header ────────────────────────────────────────────────────
+    testWidgets('a failed count in the Tasks header is not silence', (tester) async {
+      await _pumpTasks(tester, loadError: offline);
+
+      expect(find.textContaining('Job count unavailable'), findsOneWidget);
+      expect(find.text('Nothing open'), findsNothing);
+    });
+
+    testWidgets('a count still in flight leaves the header blank, not wrong', (tester) async {
+      await _pumpTasks(tester, loadPending: true);
+
+      expect(find.textContaining('Job count unavailable'), findsNothing);
+      expect(find.text('Nothing open'), findsNothing);
+      expect(find.textContaining('jobs open'), findsNothing);
+    });
+
+    testWidgets('a genuine zero says "Nothing open" and nothing else', (tester) async {
+      await _pumpTasks(tester, load: const TaskLoad(open: 0, overdue: 0), tasks: const []);
+
+      expect(find.text('Nothing open'), findsOneWidget);
+      expect(find.textContaining('Job count unavailable'), findsNothing);
+    });
+
+    // ── the Tasks tab badge ─────────────────────────────────────────────────
+    testWidgets('an overdue count that FAILED is not pixel-identical to zero', (tester) async {
+      await _pumpShell(tester, loadError: offline);
+
+      expect(find.descendant(of: find.byType(Badge), matching: find.text('!')), findsOneWidget);
+    });
+
+    testWidgets('a real zero draws no badge at all', (tester) async {
+      await _pumpShell(tester, load: const TaskLoad(open: 3, overdue: 0));
+
+      expect(find.byType(Badge), findsNothing);
+    });
+
+    testWidgets('a real count still draws the number', (tester) async {
+      await _pumpShell(tester, load: const TaskLoad(open: 9, overdue: 3));
+
+      expect(find.descendant(of: find.byType(Badge), matching: find.text('3')), findsOneWidget);
+      expect(find.descendant(of: find.byType(Badge), matching: find.text('!')), findsNothing);
+    });
+
+    testWidgets('a count still in flight draws no badge and no mark', (tester) async {
+      await _pumpShell(tester, loadPending: true);
+
+      expect(find.byType(Badge), findsNothing);
+    });
+
+    // ── names on the task sheet ─────────────────────────────────────────────
+    testWidgets('a colleague RLS no longer returns still reads as before', (tester) async {
+      // The lookup SUCCEEDED and has no row for this user — deactivated, or no longer
+      // readable. That is the case the plain fallback was written for, and it keeps it.
+      await _openTaskSheet(tester, names: const {});
+
+      expect(find.text('The owner'), findsOneWidget);
+      expect(find.text('Name unavailable'), findsNothing);
+    });
+
+    testWidgets('a name lookup that FAILED does not name somebody anyway', (tester) async {
+      await _openTaskSheet(tester, namesError: offline);
+
+      expect(find.text('Name unavailable'), findsWidgets);
+      // "Raised by: The owner" on the strength of a failed read is a claim about a person
+      // made from no data at all.
+      expect(find.text('The owner'), findsNothing);
+    });
+
+    testWidgets('a name still being looked up says so', (tester) async {
+      await _openTaskSheet(tester, namesPending: true);
+
+      expect(find.text('Looking up the name…'), findsWidgets);
+      expect(find.text('The owner'), findsNothing);
+      expect(find.text('Name unavailable'), findsNothing);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  //
+  // tokens.dart is the single source for colour, spacing, radius, icon size and duration.
+  // These are the values manager_ui.dart had inlined where warden_ui.dart — the copy that was
+  // already correct — reads the token.
+  group('manager_ui paints through tokens, not through literals', () {
+    testWidgets('a status pill takes the control radius, not a hardcoded 999', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: Pill(status: TaskStatus.pending))),
+      );
+
+      final box = tester
+          .widget<Container>(
+              find.descendant(of: find.byType(Pill), matching: find.byType(Container)))
+          .decoration! as BoxDecoration;
+      // tokens.dart reserves Radii.pill for shapes that can never take a second line. A status
+      // pill takes control — which is also what warden_ui's StatusPill uses.
+      expect(box.borderRadius, Radii.rControl);
+    });
+
+    testWidgets('an empty section and a failed one share one token icon size', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Column(children: [
+              EmptyNote(icon: Icons.check_circle_outline_rounded, title: 'Nothing here'),
+              FailureNote(error: OfflineFailure('offline')),
+            ]),
+          ),
+        ),
+      );
+
+      // 36 and 32 were two people guessing. IconSize.xl is the decision.
+      final sizes = tester.widgetList<Icon>(find.byType(Icon)).map((i) => i.size);
+      expect(sizes, everyElement(IconSize.xl));
+      expect(sizes.length, 2);
+    });
+
+    testWidgets('a quick action and a detail row use the token icon sizes', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(children: [
+              QuickAction(icon: Icons.add, label: 'Add', onTap: () {}),
+              const DetailRow(label: 'Raised by', value: 'Priya', icon: Icons.person_outline),
+            ]),
+          ),
+        ),
+      );
+
+      expect(
+        tester.widget<Icon>(find.descendant(
+                of: find.byType(QuickAction), matching: find.byType(Icon)))
+            .size,
+        IconSize.md,
+      );
+      expect(
+        tester.widget<Icon>(
+            find.descendant(of: find.byType(DetailRow), matching: find.byType(Icon))).size,
+        IconSize.sm,
+      );
+    });
+
+    test('a failure snackbar is given the reading budget the token names', () {
+      // runAction used a bare Duration(seconds: 5) where Motion.readMessage is defined for
+      // exactly this. The token is the assertion: if it moves, the snackbar moves with it.
+      expect(Motion.readMessage, const Duration(seconds: 5));
+    });
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -673,20 +966,120 @@ void _tallView(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
-Future<void> _pumpHome(
+/// A read that never answers. The point of the class: "still loading" has to be reachable in a
+/// test, or the state that is supposed to look different from a failure cannot be checked.
+Future<T> _pending<T>() => Completer<T>().future;
+
+/// The task sheet, opened the way a manager opens it. The name map is the read under test.
+Future<void> _openTaskSheet(
   WidgetTester tester, {
-  TaskLoad load = const TaskLoad(open: 4, overdue: 2),
-  List<Task>? tasks,
-  HostelStatus hostelStatus = HostelStatus.active,
+  Map<String, String>? names,
+  Object? namesError,
+  bool namesPending = false,
 }) async {
   _tallView(tester);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         ..._baseOverrides,
-        hostelProvider.overrideWith((ref, id) => _hostel(hostelStatus)),
-        taskLoadProvider.overrideWith((ref, id) => load),
+        staffNamesProvider.overrideWith((ref, id) {
+          if (namesPending) return _pending<Map<String, String>>();
+          if (namesError != null) return Future<Map<String, String>>.error(namesError);
+          return names ?? const <String, String>{};
+        }),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              // t1 is assigned to the signed-in manager and raised by the owner, so
+              // "Assigned to" says "You" and "Raised by" exercises the name map.
+              onPressed: () => showTaskSheet(context, task: _tasks().first),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.text('open'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
+/// The whole shell, because the Tasks badge is the one thing on it that reports a number and
+/// the IndexedStack keeps every tab alive. Every read the four tabs make is stubbed, so this
+/// stays a test about the badge.
+Future<void> _pumpShell(
+  WidgetTester tester, {
+  TaskLoad load = const TaskLoad(open: 4, overdue: 2),
+  Object? loadError,
+  bool loadPending = false,
+}) async {
+  _tallView(tester);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        ..._baseOverrides,
+        hostelProvider.overrideWith((ref, id) => _hostel(HostelStatus.active)),
+        taskLoadProvider.overrideWith((ref, id) {
+          if (loadPending) return _pending<TaskLoad>();
+          if (loadError != null) return Future<TaskLoad>.error(loadError);
+          return load;
+        }),
         managerFinanceProvider.overrideWith((ref, id) => _window()),
+        tasksProvider.overrideWith2(
+          (_) => _FakeTasks(const TaskQuery(hostelId: _hostelId), _tasks()),
+        ),
+        managerExpensesProvider.overrideWith2(
+          (_) => _FakeExpenses(const ExpenseQuery(hostelId: _hostelId), _expenses()),
+        ),
+        menuDayProvider.overrideWith(() => _PinnedDay(MenuDay.wed)),
+        weeklyMenuProvider.overrideWith((ref, id) => _menu()),
+      ],
+      child: const MaterialApp(home: ManagerShell()),
+    ),
+  );
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+  expect(_statsWereRead, isFalse);
+}
+
+Future<void> _pumpHome(
+  WidgetTester tester, {
+  TaskLoad load = const TaskLoad(open: 4, overdue: 2),
+  List<Task>? tasks,
+  HostelStatus hostelStatus = HostelStatus.active,
+  FinanceWindow? window,
+  // Each of the three reads on this screen can be made to fail, to stall, or (for the hostel)
+  // to come back empty — the four outcomes the screen has to tell apart.
+  Object? hostelError,
+  bool hostelMissing = false,
+  bool hostelPending = false,
+  Object? loadError,
+  bool loadPending = false,
+  Object? financeError,
+}) async {
+  _tallView(tester);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        ..._baseOverrides,
+        hostelProvider.overrideWith((ref, id) {
+          if (hostelPending) return _pending<Hostel?>();
+          if (hostelError != null) return Future<Hostel?>.error(hostelError);
+          if (hostelMissing) return null;
+          return _hostel(hostelStatus);
+        }),
+        taskLoadProvider.overrideWith((ref, id) {
+          if (loadPending) return _pending<TaskLoad>();
+          if (loadError != null) return Future<TaskLoad>.error(loadError);
+          return load;
+        }),
+        managerFinanceProvider.overrideWith((ref, id) {
+          if (financeError != null) return Future<FinanceWindow>.error(financeError);
+          return window ?? _window();
+        }),
         // A family override replaces every instance at once and is handed no argument, so the
         // fake carries a stand-in key. Nothing reads it — fetchPage is overridden.
         tasksProvider.overrideWith2(
@@ -745,13 +1138,19 @@ Future<void> _pumpTasks(
   WidgetTester tester, {
   TaskLoad load = const TaskLoad(open: 2, overdue: 1),
   List<Task>? tasks,
+  Object? loadError,
+  bool loadPending = false,
 }) async {
   _tallView(tester);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         ..._baseOverrides,
-        taskLoadProvider.overrideWith((ref, id) => load),
+        taskLoadProvider.overrideWith((ref, id) {
+          if (loadPending) return _pending<TaskLoad>();
+          if (loadError != null) return Future<TaskLoad>.error(loadError);
+          return load;
+        }),
         tasksProvider.overrideWith2(
           (_) => _FakeTasks(const TaskQuery(hostelId: _hostelId), tasks ?? _tasks()),
         ),

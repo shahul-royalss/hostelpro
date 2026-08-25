@@ -1,6 +1,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
@@ -61,6 +62,10 @@ class RentCard extends StatelessWidget {
     }
 
     final tone = feeTone(rent.status);
+    // [feeTone] is context-free, so what it returns is CANONICAL — legible as a shape in both
+    // themes and as nothing else. The hero figure below is 32px TYPE, so it is painted with the
+    // resolved value; [StatusPill] still gets the canonical one and resolves it for itself.
+    final accent = context.tones.resolve(tone);
     final owes = rent.balance > 0;
 
     return GlassCard(
@@ -91,7 +96,7 @@ class RentCard extends StatelessWidget {
           // and it is not "what is my rent".
           Text(
             rupees(owes ? rent.balance : rent.amountPaid),
-            style: t.textTheme.headlineLarge?.copyWith(color: owes ? tone : null),
+            style: t.textTheme.headlineLarge?.copyWith(color: owes ? accent : null),
           ),
           const SizedBox(height: Space.xxs),
           Text(owes ? 'still to pay' : 'paid in full', style: t.textTheme.bodyMedium),
@@ -110,7 +115,7 @@ class RentCard extends StatelessWidget {
             const SizedBox(height: Space.md),
             FilledButton.icon(
               onPressed: onPay,
-              icon: const Icon(Icons.account_balance_wallet_rounded, size: 20),
+              icon: const Icon(Icons.account_balance_wallet_rounded, size: IconSize.md),
               label: const Text('Pay rent'),
             ),
           ],
@@ -218,6 +223,9 @@ class _Cell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    // Canonical in, resolved at the paint site: this is 14px type, and the canonical reds and
+    // ambers are only rated as graphics.
+    final accent = tone == null ? null : context.tones.resolve(tone!);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -225,7 +233,7 @@ class _Cell extends StatelessWidget {
         const SizedBox(height: Space.xxs),
         Text(
           value,
-          style: t.textTheme.titleSmall?.copyWith(color: tone),
+          style: t.textTheme.titleSmall?.copyWith(color: accent),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -245,8 +253,23 @@ class RoomBedCard extends StatelessWidget {
   final String? roomNumber;
   final int? bedNumber;
 
-  /// How many other residents share the room. Null while that read is still in flight.
-  final int? roommates;
+  /// Who else is in the room — as the read that answers it, not as a number.
+  ///
+  /// An [AsyncValue] and not an `int?` because null could not tell three different facts apart:
+  /// the read is still in flight, it came back empty, and it failed. Those are three different
+  /// sentences, and "you have the room to yourself" is very nearly the opposite of "we could not
+  /// find out" — while a line that simply vanishes reads as the first one.
+  ///
+  /// THE WHOLE VALUE, NOT A MAPPED COUNT. `roommates.whenData((m) => m.length)` looked like the
+  /// tidy way to hand this a number and it is a trap: `whenData` dispatches on the RUNTIME TYPE,
+  /// and Riverpod 3 represents a failed read that it is still retrying as an `AsyncLoading` that
+  /// CARRIES the error. `whenData` takes the loading branch for it and returns a bare
+  /// `AsyncLoading`, throwing the error away — so the card would show a placeholder for a read
+  /// that had already failed, for the whole ~38 seconds the default ten-retry backoff takes.
+  ///
+  /// Null (the parameter itself) means this card is not drawing the line at all, which is what
+  /// Profile does: the full roommate list sits directly beneath it there and owns that failure.
+  final AsyncValue<List<Roommate>>? roommates;
 
   @override
   Widget build(BuildContext context) {
@@ -270,7 +293,7 @@ class RoomBedCard extends StatelessWidget {
     return OutlineCard(
       child: Row(
         children: [
-          Icon(Icons.meeting_room_rounded, size: 22, color: t.colorScheme.primary),
+          Icon(Icons.meeting_room_rounded, size: IconSize.lg, color: t.colorScheme.primary),
           const SizedBox(width: Space.sm),
           Expanded(
             child: Column(
@@ -284,20 +307,51 @@ class RoomBedCard extends StatelessWidget {
                       : 'Room $roomNumber · Bed $bedNumber',
                   style: t.textTheme.titleMedium,
                 ),
-                if (roommates != null) ...[
-                  const SizedBox(height: Space.xxs),
-                  Text(
-                    roommates == 0
-                        ? 'You have the room to yourself'
-                        : 'Sharing with ${countLabel(roommates!, 'other resident')}',
-                    style: t.textTheme.bodySmall,
-                  ),
-                ],
+                ?_sharing(context),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  /// The sharing line, in whichever state the roommate read is actually in.
+  ///
+  /// Four outcomes, four appearances. In flight is a placeholder the size of the line it will
+  /// become; an empty room is stated out loud; a failure says so and points at the
+  /// pull-to-refresh every screen that draws this card already has; and a refusal is said
+  /// plainly, with no retry affordance for something retrying cannot fix.
+  ///
+  /// Branched by hand rather than through `when`, because the precedence matters and the flags
+  /// bury it: A KNOWN FAILURE OUTRANKS A STALE COUNT. If a refresh failed, the number this
+  /// device is holding is no longer something the card can vouch for, and stating it anyway is
+  /// the quiet kind of wrong — it looks exactly like a fact.
+  Widget? _sharing(BuildContext context) {
+    final mates = roommates;
+    if (mates == null) return null;
+    final t = Theme.of(context);
+
+    final Widget line;
+    if (mates.hasError) {
+      line = Text(
+        errorGuidance(mates.error!).canRetry
+            ? 'Could not check who else is in this room. Pull down to try again.'
+            : 'Who else is in this room is not available to you.',
+        style: t.textTheme.bodySmall?.copyWith(color: context.tones.muted),
+      );
+    } else if (mates.hasValue) {
+      final count = mates.requireValue.length;
+      line = Text(
+        count == 0
+            ? 'You have the room to yourself'
+            : 'Sharing with ${countLabel(count, 'other resident')}',
+        style: t.textTheme.bodySmall,
+      );
+    } else {
+      line = const Skeleton(widthFactor: 0.6, height: Space.sm - Space.xxs / 2);
+    }
+
+    return Padding(padding: const EdgeInsets.only(top: Space.xxs), child: line);
   }
 }

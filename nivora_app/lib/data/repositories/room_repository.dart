@@ -33,15 +33,30 @@ final class RoomRepository extends Repository {
 
   /// Beds in one room, in bed-number order.
   ///
-  /// A student may call this for their OWN room only; the beds policy narrows it to
-  /// `room_id = (their room)`. Asking for another room returns an empty list, not an error.
+  /// ═══ AN EMPTY RESULT IS NOT AN EMPTY ROOM. THERE IS NO SUCH THING AS AN EMPTY ROOM ═══
+  /// public.rooms.capacity is `check (capacity between 1 and 12)` (db/schema.sql:145) and
+  /// app.rooms_capacity_sync creates one bed row per unit of capacity on insert and on every
+  /// capacity change (db/schema.sql:701). Every room that exists therefore has at least one bed,
+  /// always. Rooms are not soft-deleted either, so there is no lingering husk to explain it.
+  ///
+  /// So zero rows means the room is not reachable from this account: a student's beds policy
+  /// narrows to `room_id = (their own room)`, and asking about anyone else's room is answered
+  /// with silence rather than with 42501. The room sheet drew that silence as "This room has no
+  /// beds", complete with an explanation of how bed rows follow capacity — a confident,
+  /// well-written sentence about a room the reader is simply not allowed to look at.
   Future<List<Bed>> bedsInRoom(String roomId) => guard(() async {
         final rows = await db
             .from('beds')
             .select(Bed.columns)
             .eq('room_id', roomId)
             .order('bed_number', ascending: true);
-        return rows.map(Bed.fromJson).toList(growable: false);
+        return rowsOrMissing(
+          rows,
+          missing: 'That room is not one this account can open.',
+          why: 'beds for room $roomId came back empty; rooms.capacity >= 1 and '
+              'app.rooms_capacity_sync guarantee a bed row for every room that exists, so the '
+              'room is either gone or outside this caller\'s policy',
+        ).map(Bed.fromJson).toList(growable: false);
       });
 
   /// Every unoccupied bed in the hostel — what a warden picks from when registering someone.

@@ -1,6 +1,15 @@
 library;
 
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../data/models/models.dart';
+// The row-shape coercers are not in the models barrel — see the note there. Imported directly,
+// exactly as warden_models.dart does, so a wrong key in the function's response names itself.
+import '../../../data/models/parse.dart';
 import '../../../data/repositories/repository.dart';
 import 'warden_models.dart';
 
@@ -18,68 +27,214 @@ import 'warden_models.dart';
 /// make an accidental cross-tenant write fail loudly instead of quietly; what actually refuses
 /// it is `students_update`, `leaves_update` and the visitors policies in rls-policies.sql, plus
 /// app.hostel_writable() which turns every one of them off when the subscription lapses.
-final class WardenRepository extends Repository {
+final class WardenRepository extends Repository implements StudentRegistrations {
   const WardenRepository(super.db);
 
   // ───────────────────────────────────────────────────────────────────────────
   // RESIDENTS
   // ───────────────────────────────────────────────────────────────────────────
 
-  /// Register a resident. Warden only, and blocked once the subscription lapses.
+  /// Register a resident — roster row, bed, fee ledger AND the login they sign in with.
   ///
-  /// THIS DOES NOT CREATE A LOGIN, and that is a deliberate limit of the mobile client rather
-  /// than an oversight. The web app calls public.wd_register_student, whose first argument is
-  /// `p_user_id uuid — freshly created auth user id`: it expects the caller to have already
-  /// minted an auth account through the Admin API, which needs the SERVICE-ROLE key. That key
-  /// is server-only and must never be compiled into an APK, so this app cannot mint one and
-  /// therefore cannot call that RPC honestly.
+  /// ═══ THIS DOES CREATE A LOGIN, AND THE PHONE STILL HOLDS NO PRIVILEGED KEY ═══
+  /// public.wd_register_student takes `p_user_id uuid — freshly created auth user id`, so
+  /// somebody has to have called auth.admin.createUser first, and that needs the SERVICE-ROLE
+  /// key. That key bypasses RLS for the whole project and can never be inside an APK — an APK
+  /// is a zip file, and a key compiled into one is a published key.
   ///
-  /// What it does instead is the plain INSERT that `students_insert` admits — a resident record
-  /// with user_id null. The schema explicitly allows it (students.user_id is nullable, and
-  /// app.students_identity_guard only checks the link when it is non-null), and the result is
-  /// the true state of affairs: the person is on the roster, in a bed, and on the fee ledger,
-  /// but has no app login until one is created from the web console. The registration screen
-  /// says exactly that rather than implying credentials were issued.
+  /// So the app does not mint the account: it asks a server that can. `warden-register-student`
+  /// is an ordinary HTTPS POST to a Deno process on Supabase, signed with this session's access
+  /// token, and it holds the service-role key at its end. It verifies the bearer token with
+  /// GoTrue, reads the caller's ROLE and HOSTEL from public.users (never from the body, never
+  /// from the JWT's app_metadata), creates the auth user, writes the documents into the private
+  /// bucket, and then calls wd_register_student AS THE WARDEN so the RPC's own
+  /// app.has_role_in(hostel,'warden') and app.hostel_writable(hostel) guards still run and
+  /// `created_by` is the real person. The phone asks; the server decides.
   ///
-  /// Bed placement happens through [bedId] on this same insert: app.students_bed_guard fills in
-  /// room_id from the bed and refuses one that is occupied or belongs to another hostel, and
-  /// app.students_bed_sync flips the bed to occupied. That is why the bed is set here rather
-  /// than by a follow-up update — an insert that succeeded and a bed update that failed would
-  /// leave a resident who exists but is nowhere.
-  Future<Student> registerStudent({
-    required String hostelId,
-    required String fullName,
-    required String phone,
-    required double monthlyFee,
-    DateTime? dateOfJoining,
-    String? bedId,
-    String? email,
-    String? guardianName,
-    String? guardianPhone,
-    String? permanentAddress,
-  }) =>
-      guard(() async {
-        final row = await db
-            .from('students')
-            .insert({
-              'hostel_id': hostelId,
-              'full_name': fullName,
-              'phone': phone,
-              'monthly_fee': monthlyFee,
-              // Omitted rather than defaulted to today in Dart: the column already defaults to
-              // current_date, and the server's date is the one the ledger is keyed against.
-              if (dateOfJoining != null) 'date_of_joining': toDateWire(dateOfJoining),
-              'bed_id': ?bedId,
-              'email': ?email,
-              'guardian_name': ?guardianName,
-              'guardian_phone': ?guardianPhone,
-              'permanent_address': ?permanentAddress,
-              'created_by': ?db.auth.currentUser?.id,
-            })
-            .select(Student.columns)
-            .single();
-        return Student.fromJson(row);
-      });
+  /// NO BROWSER AND NO WEBVIEW ANYWHERE ON THIS PATH. That was the point of moving it: until
+  /// now this method did a plain INSERT with user_id null, so the resident landed on the roster
+  /// with no way to sign in and somebody had to finish the job in the web console.
+  ///
+  /// ═══ THE HOSTEL IS NOT A PARAMETER, DELIBERATELY ═══
+  /// There is no hostelId in [StudentRegistration] because the function accepts none. A warden
+  /// belongs to exactly one hostel, so users.hostel_id is the tenant for the login, the uploads
+  /// and the rows — there is nothing here to get wrong or to abuse.
+  ///
+  /// ═══ ONE OPERATION, SO THERE IS NEVER A RESIDENT WHO IS NOWHERE ═══
+  /// [StudentRegistration.bedId] is required and travels in the same call. The RPC inserts the
+  /// students row WITH bed_id set, app.students_bed_guard fills in room_id and refuses a bed
+  /// that is occupied or belongs to another hostel, and app.students_bed_sync flips the bed to
+  /// occupied — all inside one statement. A registration that succeeded followed by a bed
+  /// assignment that failed would leave a person on the roster with nowhere to sleep, and this
+  /// shape makes that state unreachable rather than merely unlikely.
+  ///
+  /// ═══ THE PASSWORD COMES BACK ONCE ═══
+  /// [RegisteredStudent.credentials] is generated by the function, returned in one response
+  /// marked `Cache-Control: no-store`, and written to no table, no log and no audit row. This
+  /// app does not persist it either. Show it, let the warden copy it, and lose it — see
+  /// StudentCredentialsDialog, which is why that dialog is hard to dismiss by accident.
+  ///
+  /// ═══ REJECTION IS A RETURN, NOT A THROW ═══
+  /// A form the server refused is an ordinary outcome of pressing Register, and the sheet needs
+  /// the per-field messages to put back under the fields that own them. Everything that is NOT
+  /// about the input — no signal, session ended, not permitted, subscription lapsed, the server
+  /// fell over mid-rollback — still throws [AppFailure], because none of it is something the
+  /// warden can fix in a text box.
+  @override
+  Future<RegistrationOutcome> registerStudent(StudentRegistration draft) async {
+    final FunctionResponse response;
+    try {
+      response = await db.functions.invoke('warden-register-student', body: draft.toJson());
+    } on FunctionException catch (error, stack) {
+      final rejection = _rejectionFrom(error);
+      if (rejection != null) return rejection;
+      Error.throwWithStackTrace(_failureFrom(error), stack);
+    } catch (error, stack) {
+      Error.throwWithStackTrace(AppFailure.from(error), stack);
+    }
+
+    final envelope = response.data;
+    if (envelope is! Map) {
+      throw RowShapeError('warden-register-student', '(body)', 'expected a JSON object envelope');
+    }
+    final data = envelope['data'];
+    if (data is! Map) {
+      throw RowShapeError(
+        'warden-register-student',
+        'data',
+        'the function answered without a student id — check its logs',
+      );
+    }
+    return RegistrationSucceeded(RegisteredStudent.fromJson(data.cast<String, dynamic>()));
+  }
+
+  /// A refusal the warden can act on in the form, or null if this was not one.
+  ///
+  /// THREE SHAPES ARRIVE HERE AND ALL THREE ARE ABOUT THE INPUT:
+  ///
+  ///   1. a 400 (or 413) carrying `fieldErrors` — the Validator accumulated every bad field, or
+  ///      storage.ts refused a file. Keys are flat and match [StudentRegistration.toJson]:
+  ///      'fullName', 'phone', 'bedId', 'idProofType', 'photo', 'idProof'.
+  ///   2. a 409 that names one field's problem in prose. `createStudentAuthUser` raises "A
+  ///      student with this phone number already has an account." and dbError() raises "A
+  ///      student with this phone number is already registered." (students_phone_active_key) or
+  ///      "That bed is already occupied. Choose a free bed." (students_one_active_per_bed) —
+  ///      none of them carry fieldErrors, so the field is inferred from the sentence.
+  ///   3. a 400 with no fieldErrors but a message written for a person: every `raise ... using
+  ///      errcode = 'P0001'` in the schema reaches dbError() and comes back verbatim, which is
+  ///      how app.students_bed_guard says "Bed 3 is already occupied" BY BED NUMBER.
+  ///
+  /// Inferring the field from words is inexact, and the fallback is deliberately harmless: an
+  /// unrecognised sentence becomes a banner over the form rather than a message pinned under a
+  /// field it may not be about.
+  static RegistrationRejected? _rejectionFrom(FunctionException error) {
+    final details = error.details;
+    if (details is! Map) return null;
+    final message = _messageFrom(details);
+
+    final raw = details['fieldErrors'];
+    final fields = <String, String>{};
+    if (raw is Map) {
+      for (final entry in raw.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        if (key is! String) continue;
+        if (value is List && value.isNotEmpty && value.first is String) {
+          fields[key] = value.first as String;
+        } else if (value is String) {
+          fields[key] = value;
+        }
+      }
+    }
+    if (fields.isNotEmpty) {
+      return RegistrationRejected(message ?? 'Please fix the highlighted fields.', fieldErrors: fields);
+    }
+
+    if (message == null) return null;
+    // 403 is never an input problem — it is "not you", "not your hostel", or "the subscription
+    // lapsed", and each of those is a different conversation. They go to [_failureFrom].
+    if (error.status != 400 && error.status != 409) return null;
+
+    return RegistrationRejected(message, fieldErrors: _fieldFromMessage(message));
+  }
+
+  /// Which field a prose conflict is about. 'bed' is checked BEFORE 'phone' because the bed
+  /// messages never mention a phone number while a duplicate-phone message never mentions a bed.
+  static Map<String, String> _fieldFromMessage(String message) {
+    final text = message.toLowerCase();
+    if (text.contains('bed')) return {'bedId': message};
+    if (text.contains('phone')) return {'phone': message};
+    if (text.contains('email')) return {'email': message};
+    return const {};
+  }
+
+  /// Everything that is not about the input, in the sealed type the rest of the data layer
+  /// throws — so the sheet's existing error handling covers it without a special case.
+  static AppFailure _failureFrom(FunctionException error) {
+    final message = _messageFrom(error.details);
+
+    if (error is FunctionsFetchException || error.status == 0) {
+      return OfflineFailure(
+        'Cannot reach Nivora. The resident was NOT registered — check your connection and try again.',
+        technical: error.toString(),
+      );
+    }
+
+    return switch (error.status) {
+      401 => SignedOutFailure(
+          message ?? 'Your session has ended. Sign in again to continue.',
+          technical: error.toString(),
+        ),
+      // Three different 403s share a status and must not share a sentence. assertWritable()
+      // sends "Subscription expired — the hostel is read-only until it is renewed." and "This
+      // hostel is suspended. Contact NIVORA support."; wd_register_student raises "Subscription
+      // expired — hostel is read-only." with SQLSTATE 42501. All of them are the lapsed-billing
+      // conversation, which is the owner's to have, not the warden's — [ReadOnlyFailure] is the
+      // type the rest of the app already renders that way.
+      403 when _isBillingRefusal(message) => ReadOnlyFailure(
+          message ?? 'This hostel is read-only until the subscription is renewed.',
+          technical: error.toString(),
+        ),
+      403 => AccessDeniedFailure(
+          message ?? 'Only a warden can register a resident.',
+          technical: error.toString(),
+        ),
+      404 => NotFoundFailure(
+          message ?? 'That bed could not be found. Reload and pick another.',
+          technical: error.toString(),
+        ),
+      // The limiter on this endpoint fails CLOSED on purpose — it mints a credential, so a
+      // limiter it cannot consult refuses rather than waves through. Both 429 and 503 mean
+      // "not now", and retrying is the right move, so both are retryable.
+      429 => ServerFailure(
+          message ?? 'Too many accounts created just now. Wait a minute and try again.',
+          technical: error.toString(),
+        ),
+      // 500 is where the rollback report arrives. Its own message names the orphaned auth user
+      // id and says what has to be done about it, which is more useful than anything this file
+      // could invent — so it is passed through verbatim.
+      _ => ServerFailure(
+          message ?? 'Nivora could not finish registering that resident. Check the roster '
+              'before trying again.',
+          technical: error.toString(),
+        ),
+    };
+  }
+
+  static bool _isBillingRefusal(String? message) {
+    if (message == null) return false;
+    final text = message.toLowerCase();
+    return text.contains('subscription') || text.contains('read-only') || text.contains('suspended');
+  }
+
+  /// The function's own `{ ok: false, error: "..." }` body, when there is one.
+  static String? _messageFrom(Object? details) {
+    if (details is Map) {
+      final error = details['error'];
+      if (error is String && error.trim().isNotEmpty) return error.trim();
+    }
+    return null;
+  }
 
   /// Put a resident in a bed, move them to another, or take them out of one ([bedId] null).
   ///
@@ -245,4 +400,281 @@ final class WardenRepository extends Repository {
           throw const ConflictFailure('That visitor is already checked out.');
         }
       });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REGISTERING A RESIDENT
+//
+// The payload, the two outcomes, and the seam a test needs.
+//
+// WHY THIS ONE WRITE HAS AN INTERFACE IN FRONT OF IT. Every other method on
+// [WardenRepository] is exercised through the provider that holds its answer. This one mints a
+// credential that exists exactly once, and its interesting states — a validator rejecting four
+// fields at once, a phone number already taken, a bed occupied between loading the list and
+// pressing Register, a rollback that itself failed — are precisely the states worth holding
+// down in `flutter test`. A test needs a stand-in for them. Same shape and same reasoning as
+// `RentPayments` in the payment repository and `SaPlatformWrites` in the Super Admin's.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// public.students.id_proof_type, and ID_PROOF_TYPES in warden-register-student/index.ts.
+///
+/// The wire values ARE the display strings — the column is free text and the web app stores
+/// exactly these words, so a phone that stored 'aadhaar' would file the same document under a
+/// second spelling nobody's report groups with the first.
+enum IdProofType implements WireValue {
+  aadhaar('Aadhaar'),
+  pan('PAN'),
+  passport('Passport'),
+  drivingLicence('Driving licence'),
+  voterId('Voter ID'),
+  other('Other');
+
+  const IdProofType(this.wire);
+
+  @override
+  final String wire;
+
+  @override
+  String get label => wire;
+}
+
+/// One file on its way to the private bucket, held as bytes because that is what has to be
+/// base64-encoded into the request body.
+///
+/// NO PATH, DELIBERATELY. A `File` would tie this to dart:io and make the whole registration
+/// path untestable off a device; bytes are what the wire needs and what a test can supply.
+final class CapturedDocument {
+  const CapturedDocument({required this.bytes, required this.name});
+
+  final Uint8List bytes;
+
+  /// The picker's own file name, for the "Aadhaar.jpg · 214 KB" line under the button. It is
+  /// NOT sent: storage.ts chooses the object's path and sniffs its real type from the leading
+  /// bytes, because a name and a declared MIME type are claims, not evidence.
+  final String name;
+
+  int get sizeBytes => bytes.length;
+
+  /// The per-file ceiling storage.ts enforces after decoding. Checked here too so a warden
+  /// learns their scan is too big before four megabytes crawl up a stairwell 3G connection.
+  static const maxBytes = 3 * 1024 * 1024;
+
+  bool get isTooLarge => sizeBytes > maxBytes;
+
+  String get sizeLabel {
+    if (sizeBytes < 1024) return '$sizeBytes B';
+    if (sizeBytes < 1024 * 1024) return '${(sizeBytes / 1024).round()} KB';
+    return '${(sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  String toBase64() => base64Encode(bytes);
+}
+
+/// Everything warden-register-student accepts, in the order docs/edge-functions.md §7 lists it.
+/// Every field here is required by that function except [email] and [photo].
+///
+/// THERE IS NO hostelId AND THERE MUST NOT BE. The function accepts none — see
+/// [WardenRepository.registerStudent].
+final class StudentRegistration {
+  const StudentRegistration({
+    required this.fullName,
+    required this.phone,
+    required this.dateOfJoining,
+    required this.guardianName,
+    required this.guardianPhone,
+    required this.permanentAddress,
+    required this.idProofType,
+    required this.idProof,
+    required this.bedId,
+    required this.monthlyFee,
+    this.email,
+    this.photo,
+  });
+
+  final String fullName;
+
+  /// Already normalised to ten digits. This becomes the resident's LOGIN ID, so the
+  /// normalisation is not cosmetic: studentLoginEmail() maps it to a synthetic address that
+  /// both clients have to derive identically or the account cannot be signed in to.
+  final String phone;
+  final String? email;
+  final DateTime dateOfJoining;
+  final String guardianName;
+  final String guardianPhone;
+  final String permanentAddress;
+  final IdProofType idProofType;
+
+  /// Mandatory — spec §6.4 step 3, and index.ts rejects the payload without it.
+  final CapturedDocument idProof;
+  final CapturedDocument? photo;
+
+  /// Required, and in this call rather than a follow-up. See [WardenRepository.registerStudent].
+  final String bedId;
+  final double monthlyFee;
+
+  /// The exact body §7 documents. Optional keys are OMITTED rather than sent as null — the
+  /// files already make this the largest request the app sends, and `optionalString` treats a
+  /// missing key and a null identically.
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'fullName': fullName,
+        'phone': phone,
+        if (email != null) 'email': email,
+        'dateOfJoining': toDateWire(dateOfJoining),
+        'guardianName': guardianName,
+        'guardianPhone': guardianPhone,
+        'permanentAddress': permanentAddress,
+        'idProofType': idProofType.wire,
+        'bedId': bedId,
+        'monthlyFee': monthlyFee,
+        if (photo != null) 'photoBase64': photo!.toBase64(),
+        'idProofBase64': idProof.toBase64(),
+      };
+}
+
+/// The credentials the function generated. Shown once, stored nowhere.
+final class StudentCredentials {
+  const StudentCredentials({
+    required this.name,
+    required this.loginId,
+    required this.password,
+  });
+
+  final String name;
+
+  /// The resident's PHONE NUMBER. Students sign in by phone, not by email — the synthetic
+  /// address the auth user actually carries is an implementation detail neither client shows.
+  final String loginId;
+  final String password;
+
+  factory StudentCredentials.fromJson(Map<String, dynamic> row) {
+    const src = 'warden-register-student';
+    return StudentCredentials(
+      name: reqString(row, src, 'name'),
+      loginId: reqString(row, src, 'loginId'),
+      password: reqString(row, src, 'password'),
+    );
+  }
+}
+
+/// What a successful registration produced.
+final class RegisteredStudent {
+  const RegisteredStudent({
+    required this.studentId,
+    required this.credentials,
+    this.roomId,
+  });
+
+  final String studentId;
+
+  /// A convenience for the next screen. The function reads it AFTER the resident exists and
+  /// swallows a failure to do so, so null means "could not look it up", never "no room".
+  final String? roomId;
+
+  /// Never null on this endpoint, unlike sa-create-owner's existing-owner branch: registering a
+  /// resident always mints their login.
+  final StudentCredentials credentials;
+
+  factory RegisteredStudent.fromJson(Map<String, dynamic> data) {
+    const src = 'warden-register-student';
+    final creds = data['credentials'];
+    if (creds is! Map) {
+      throw RowShapeError(
+        src,
+        'credentials',
+        'the login was created but its password was not returned',
+      );
+    }
+    return RegisteredStudent(
+      studentId: reqString(data, src, 'studentId'),
+      roomId: optString(data, 'roomId'),
+      credentials: StudentCredentials.fromJson(creds.cast<String, dynamic>()),
+    );
+  }
+}
+
+/// What pressing "Register resident" produced.
+///
+/// TWO OUTCOMES, NOT A THROW AND A RETURN — see [WardenRepository.registerStudent].
+sealed class RegistrationOutcome {
+  const RegistrationOutcome();
+}
+
+final class RegistrationSucceeded extends RegistrationOutcome {
+  const RegistrationSucceeded(this.student);
+  final RegisteredStudent student;
+}
+
+final class RegistrationRejected extends RegistrationOutcome {
+  const RegistrationRejected(this.message, {this.fieldErrors = const {}});
+
+  /// Safe to show as a banner over the form.
+  final String message;
+
+  /// Keyed by the flat names index.ts uses, which are the keys [StudentRegistration.toJson]
+  /// writes. One message per field — the Validator accumulates a list and the first is the one
+  /// that explains the rest.
+  final Map<String, String> fieldErrors;
+}
+
+/// The one write on a warden screen that mints a credential, behind an interface so a test can
+/// stand in for it.
+abstract interface class StudentRegistrations {
+  /// Create the resident, their bed placement and their login in one server-side operation.
+  ///
+  /// Returns [RegistrationRejected] when the server refused the INPUT; throws [AppFailure] for
+  /// everything else.
+  Future<RegistrationOutcome> registerStudent(StudentRegistration draft);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE DOCUMENT CAPTURE
+//
+// Lives beside the repository because it is the other half of the same boundary — one side
+// collects the bytes, the other posts them — exactly as `RazorpayCheckout` sits beside the
+// payment repository for the same reason.
+//
+// BEHIND AN INTERFACE BECAUSE IT IS A MethodChannel. `image_picker` asks the platform for a
+// camera or a photo picker, and a widget test has no platform on the other end of one:
+// constructing the real thing in a test turns the registration flow into a hang rather than a
+// mistake. Tests override `documentCaptureProvider`.
+//
+// AND NO BROWSER. The picker opens Android's own photo picker or the camera activity. There is
+// no upload page, no signed-URL hand-off and no "finish this on the website" — the bytes go
+// into the same JSON body as the rest of the form.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Where a document came from. Two entry points because a warden at the desk photographs the
+/// card in front of them, and a warden entering a record later already has the scan.
+enum CaptureSource { camera, gallery }
+
+/// Picks one image and hands back its bytes. One implementation for the device, one for tests.
+abstract interface class DocumentCapture {
+  /// Completes with null when the person backed out of the picker — which is not an error and
+  /// must not be reported as one.
+  Future<CapturedDocument?> pick(CaptureSource source);
+}
+
+/// The real one.
+///
+/// THE COMPRESSION IS NOT OPTIONAL. A modern phone camera produces 4–8 MB per frame and
+/// storage.ts refuses anything over 3 MB after decoding, so an uncompressed capture would fail
+/// at the server after the whole file had already been pushed up whatever connection a
+/// stairwell offers. `maxWidth` and `imageQuality` are applied by the plugin natively, before
+/// the bytes ever reach Dart — 1600px at quality 70 is a legible photograph of an ID card at
+/// roughly 200–400 KB. docs/edge-functions.md §7 says to compress on the device; this is that.
+final class PluginDocumentCapture implements DocumentCapture {
+  PluginDocumentCapture([ImagePicker? picker]) : _picker = picker ?? ImagePicker();
+
+  final ImagePicker _picker;
+
+  @override
+  Future<CapturedDocument?> pick(CaptureSource source) async {
+    final file = await _picker.pickImage(
+      source: source == CaptureSource.camera ? ImageSource.camera : ImageSource.gallery,
+      maxWidth: 1600,
+      imageQuality: 70,
+    );
+    if (file == null) return null;
+    return CapturedDocument(bytes: await file.readAsBytes(), name: file.name);
+  }
 }

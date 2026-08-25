@@ -30,7 +30,7 @@ class SaShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
     final index = ref.watch(saTabProvider);
-    final openAlerts = ref.watch(saOpenAlertCountProvider).value;
+    final openAlerts = ref.watch(saOpenAlertCountProvider);
 
     return Scaffold(
       body: IndexedStack(
@@ -58,7 +58,7 @@ class SaShell extends ConsumerWidget {
           const NavigationDestination(
               icon: Icon(Icons.card_membership_rounded), label: 'Subscriptions'),
           NavigationDestination(
-            icon: _Badged(count: openAlerts, child: const Icon(Icons.shield_rounded)),
+            icon: _Badged(alerts: openAlerts, child: const Icon(Icons.shield_rounded)),
             label: 'Security',
           ),
         ],
@@ -67,20 +67,33 @@ class SaShell extends ConsumerWidget {
   }
 }
 
-/// A count on a tab icon, shown only when there is something to count.
+/// A count on a tab icon — and, when the count could not be read, a mark that says so.
 ///
-/// A badge reading "0" is visual noise that trains people to ignore badges; the absence of one
-/// is the message. Null — still loading, or the count could not be read — is likewise nothing
-/// rather than a zero, because a security console that silently reads zero is worse than one
-/// that says nothing.
+/// A badge reading "0" is visual noise that trains people to ignore badges, so zero draws
+/// nothing and the absence of a badge is the message. STILL LOADING draws nothing either: a
+/// number that appears a moment later is not worth a placeholder.
+///
+/// A FAILED READ IS THE THIRD CASE AND IT USED TO LOOK LIKE THE FIRST. Folding it into "no
+/// badge" means the tab bar shows exactly what it shows on the best possible day — nothing to
+/// answer for — at the moment the console cannot tell whether there is. This draws a "?"
+/// instead: not a count, not silence, and the Security tab it points at carries the failure in
+/// full with a retry on it.
 class _Badged extends StatelessWidget {
-  const _Badged({required this.count, required this.child});
-  final int? count;
+  const _Badged({required this.alerts, required this.child});
+  final AsyncValue<int> alerts;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final value = count;
+    if (alerts.hasError && !alerts.hasValue) {
+      return Badge(
+        label: const Text('?'),
+        // Default badge colours: whatever this theme guarantees is legible on a badge. A tinted
+        // one hand-mixed here is the kind of thing that reads as white-on-amber in dark mode.
+        child: child,
+      );
+    }
+    final value = alerts.value;
     if (value == null || value <= 0) return child;
     return Badge.count(count: value, child: child);
   }

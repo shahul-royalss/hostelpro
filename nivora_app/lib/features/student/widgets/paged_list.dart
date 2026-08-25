@@ -47,15 +47,24 @@ class StudentPagedList<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // EVERY STATE OF THIS SCREEN IS AN ALWAYS-SCROLLABLE LIST, and that is load-bearing twice
+    // over. A [RefreshIndicator] only fires for a child that reports an over-scroll, so a state
+    // drawn as a plain box makes pull-to-refresh — the one gesture that could rescue a screen
+    // that failed to load — silently inert; and default physics refuse to over-scroll content
+    // that already fits, which three skeletons on a phone do. The failure state is therefore
+    // spelled out here rather than delegated to [AsyncSection], whose panel is a Container:
+    // this list is the one place where "which widget draws the error" changes what the user
+    // can DO about it.
     return RefreshIndicator(
       onRefresh: onRefresh,
-      child: AsyncSection<PagedResult<T>>(
-        value: value,
-        onRetry: onRefresh,
-        // The loading and failure states are scrollable too, or pull-to-refresh — the one
-        // gesture that could rescue a screen that failed to load — would not be available on it.
-        loading: ListView(
+      // The same two flags [AsyncSection] uses: keep the rows a resident is reading on screen
+      // through a pull-to-refresh instead of blanking the list under them.
+      child: value.when(
+        skipLoadingOnRefresh: true,
+        skipLoadingOnReload: true,
+        loading: () => ListView(
           padding: _padding,
+          physics: const AlwaysScrollableScrollPhysics(),
           children: const [
             SkeletonCard(lines: 2),
             SizedBox(height: Space.xs),
@@ -64,7 +73,17 @@ class StudentPagedList<T> extends StatelessWidget {
             SkeletonCard(lines: 2),
           ],
         ),
-        builder: (page) {
+        // The failure, and nothing else — no [header]. The loudest thing on a screen that
+        // failed to load should be the failure, not the primary action sitting on top of it.
+        // [ErrorNote] decides for itself whether a Try again button belongs; the pull gesture
+        // works either way, so the "pull down to refresh" its non-retryable copy suggests is
+        // now a real instruction rather than one this list used to ignore.
+        error: (error, _) => ListView(
+          padding: _padding,
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [ErrorNote(error: error, onRetry: onRefresh)],
+        ),
+        data: (page) {
           if (page.isEmpty) {
             return ListView(
               padding: _padding,
@@ -194,7 +213,11 @@ class _LoadMoreFooterState extends State<_LoadMoreFooter> {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: Space.lg),
         child: Center(
-          child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+          child: SizedBox(
+            width: IconSize.lg,
+            height: IconSize.lg,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
         ),
       );
     }

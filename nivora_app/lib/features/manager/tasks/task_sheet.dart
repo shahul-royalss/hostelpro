@@ -72,9 +72,20 @@ class _TaskSheetState extends ConsumerState<_TaskSheet> {
     final task = widget.task;
     final session = ref.watch(sessionProvider);
     final hostelId = ref.watch(currentHostelIdProvider);
-    final names = hostelId == null
-        ? const <String, String>{}
-        : ref.watch(staffNamesProvider(hostelId)).value ?? const <String, String>{};
+    // The same discard as everywhere else in this role: `.value ?? {}` made a name that is
+    // still arriving, a name lookup that FAILED and a colleague who has genuinely been
+    // deactivated all come out as the same empty map — and the fallbacks below then state
+    // "The owner" as a fact. Keeping the AsyncValue lets a name we could not read say so
+    // instead of guessing, while a colleague RLS no longer returns keeps the plain wording
+    // that was written for exactly that case.
+    final staff = hostelId == null ? null : ref.watch(staffNamesProvider(hostelId));
+    final names = staff?.value ?? const <String, String>{};
+    // hasValue first, as AsyncSection does it.
+    final unresolved = staff == null || staff.hasValue
+        ? null
+        : staff.hasError
+            ? 'Name unavailable'
+            : 'Looking up the name…';
 
     final due = task.dueDate;
     final description = task.description?.trim();
@@ -98,14 +109,16 @@ class _TaskSheetState extends ConsumerState<_TaskSheet> {
             // RLS returns no other. Saying "you" is shorter and truer than repeating a name.
             value: task.assignedTo == session?.userId
                 ? 'You'
-                : names[task.assignedTo] ?? 'Someone else',
+                : names[task.assignedTo] ?? unresolved ?? 'Someone else',
           ),
           DetailRow(
             icon: Icons.outbox_rounded,
             label: 'Raised by',
             // A name is only available while that colleague is active and readable. A missing
-            // one is said as "The owner", never printed as a uuid.
-            value: names[task.createdBy] ?? 'The owner',
+            // one is said as "The owner", never printed as a uuid — but only once the lookup
+            // has actually come back. Naming the owner on the strength of a failed read is a
+            // claim about a person, made from no data at all.
+            value: names[task.createdBy] ?? unresolved ?? 'The owner',
           ),
           DetailRow(
             icon: Icons.event_rounded,

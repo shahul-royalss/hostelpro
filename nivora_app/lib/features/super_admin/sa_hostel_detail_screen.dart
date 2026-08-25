@@ -64,12 +64,30 @@ class SaHostelDetailScreen extends ConsumerWidget {
         error: (e) => SaError(error: e, onRetry: () => ref.invalidate(saHostelProvider(hostelId))),
         data: (hostel) {
           if (hostel == null) {
-            return const SaEmpty(
-              icon: Icons.apartment_rounded,
-              title: 'Hostel not found',
-              message: 'It has been removed, or this account cannot read platform data. '
-                  'Go back and pick it again from the list.',
-            );
+            // rpc_sa_hostels ends in `where app.is_super_admin()`, so no row is either "gone"
+            // or "not permitted" — and the old copy said both in one breath, which told the
+            // reader neither. The dashboard read decides which one it is.
+            return switch (saEmptyVerdict(ref.watch(saStatsProvider))) {
+              SaEmptyVerdict.pending => const SaSkeletonCard(lines: 2, height: 120),
+              SaEmptyVerdict.unverified => SaUnverified(
+                  title: 'This hostel did not come back',
+                  message: 'The platform read returned no row for it, and the dashboard read '
+                      'that would say whether this account can see platform data at all could '
+                      'not be reached. A hostel that has been removed and a hostel this '
+                      'account is not admitted to look the same from here.',
+                  onRetry: () {
+                    ref.invalidate(saStatsProvider);
+                    ref.invalidate(saHostelProvider(hostelId));
+                  },
+                ),
+              SaEmptyVerdict.refused => const SaNotPermitted(),
+              SaEmptyVerdict.confirmed => const SaEmpty(
+                  icon: Icons.apartment_rounded,
+                  title: 'Hostel not found',
+                  message: 'This account can read platform data, and the platform has no such '
+                      'hostel — it has been removed. Go back and pick another from the list.',
+                ),
+            };
           }
           return _Detail(hostel: hostel);
         },
@@ -337,10 +355,13 @@ class _StructureCard extends ConsumerWidget {
         error: (e) => SaError(error: e, compact: true),
         data: (value) {
           if (value == null) {
+            // Not "this hostel has no floors" — a scaffolded hostel with nothing in it still
+            // returns a row. No row means the read did not land: removed, or not admitted.
             return const SaEmpty(
               icon: Icons.layers_outlined,
-              title: 'Structure unavailable',
-              message: 'public.hostels returned nothing for this id.',
+              title: 'Structure did not load',
+              message: 'The hostel record came back with no row in it, which is not the same '
+                  'as a hostel with no rooms. Pull down to read it again.',
               compact: true,
             );
           }
@@ -386,10 +407,16 @@ class _OperatingCard extends ConsumerWidget {
       ),
       data: (value) {
         if (value == null) {
+          // NOT A QUIET MONTH. rpc_hostel_stats is a single `select` of scalar subqueries, so a
+          // hostel with nothing happening in it comes back as a ROW OF ZEROES; no row at all
+          // means the read did not produce one. Drawing zeroes here would be inventing figures,
+          // and titling it "no activity" would be inventing a month.
           return const SaEmpty(
             icon: Icons.query_stats_rounded,
-            title: 'No figures for this month',
-            message: 'rpc_hostel_stats returned nothing for this hostel.',
+            title: 'Figures did not load',
+            message: 'The server returned no figures row for this hostel. A month with nothing '
+                'in it still comes back as zeroes, so this is a read that did not land rather '
+                'than a quiet month. Pull down to try it again.',
           );
         }
         return Column(

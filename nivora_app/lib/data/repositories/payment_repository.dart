@@ -47,6 +47,11 @@ abstract interface class RentPayments {
   Future<PaymentIntent?> intentForOrder(String orderId);
 
   /// Follow one order until the server has a verdict, or until the window closes.
+  ///
+  /// THE STREAM HAS TWO ENDINGS AND THEY ARE NOT THE SAME FACT. It closes normally only after
+  /// a terminal verdict has been yielded. If the window closes first it ends with an
+  /// [AppFailure] whose [AppFailure.sideEffect] is [SideEffect.unknown] — see
+  /// [settlementUpdates].
   Stream<PaymentIntent> watchSettlement(
     String orderId, {
     Duration interval,
@@ -121,47 +126,18 @@ final class PaymentRepository extends Repository implements RentPayments {
   /// Yields every state it observes, so the UI can move from "confirming" to "received" to
   /// "credited" as the server does, rather than sitting on a spinner and then jumping.
   ///
-  /// THE STREAM ENDS WITHOUT A VERDICT IF [timeout] ELAPSES. That is not an error and must not
-  /// be drawn as one: a webhook that has not arrived in forty seconds usually arrives in five
-  /// minutes, and the money is not lost either way. The caller's job at that point is to say so
-  /// honestly. See RentPaymentController.
+  /// Ends in one of two ways, and they mean opposite things. See [settlementUpdates].
   @override
   Stream<PaymentIntent> watchSettlement(
     String orderId, {
     Duration interval = const Duration(seconds: 2),
     Duration timeout = const Duration(seconds: 40),
-  }) async* {
-    final deadline = DateTime.now().add(timeout);
-    PaymentIntentStatus? lastStatus;
-    bool lastCredited = false;
-
-    while (DateTime.now().isBefore(deadline)) {
-      PaymentIntent? intent;
-      try {
-        intent = await intentForOrder(orderId);
-      } on AppFailure {
-        // A dropped poll is not a verdict. Keep waiting: the money's fate is decided on the
-        // server whether or not this phone can currently reach it.
-        intent = null;
-      }
-
-      if (intent != null && (intent.status != lastStatus || intent.isSettled != lastCredited)) {
-        lastStatus = intent.status;
-        lastCredited = intent.isSettled;
-        yield intent;
-
-        // Terminal states. `captured` is NOT terminal until it is credited — that second step
-        // is a separate transaction and is exactly the gap a resident deserves to be told about.
-        if (intent.isSettled ||
-            intent.status == PaymentIntentStatus.failed ||
-            intent.status == PaymentIntentStatus.expired) {
-          return;
-        }
-      }
-
-      await Future<void>.delayed(interval);
-    }
-  }
+  }) =>
+      settlementUpdates(
+        poll: () => intentForOrder(orderId),
+        interval: interval,
+        timeout: timeout,
+      );
 
   /// Turns an Edge Function failure into the same sealed [AppFailure] the rest of the data
   /// layer throws.
@@ -219,6 +195,132 @@ final class PaymentRepository extends Repository implements RentPayments {
     }
     return null;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SETTLEMENT WATCH
+//
+// Pulled out of [PaymentRepository.watchSettlement] as a plain function over a poll callback,
+// for one reason: the two ways this loop can end are the difference between telling a resident
+// their money is safe and telling them nothing at all, and a state machine that important has
+// to be testable without a network, a device or a Razorpay account.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Polls [poll] until the server reaches a verdict, or until [timeout] elapses.
+///
+/// ═══ TWO ENDINGS. THEY ARE NOT THE SAME FACT AND MUST NOT BE THE SAME SIGNAL ═══
+/// This used to close the stream identically whichever happened, which put "the server told us
+/// this payment failed and nothing was charged" and "we gave up waiting and genuinely do not
+/// know whether ₹9,000 left your account" through the same `onDone`. The listener could only
+/// tell them apart by inspecting the state it had already moved to — which works right up until
+/// a state moves for any other reason, and then a resident is told a payment failed when nobody
+/// knows that.
+///
+///   · DONE  — a terminal verdict was yielded first. Settled, failed or expired: the server has
+///             decided, the last event on the stream is that decision, and it is safe to act on.
+///   · ERROR — the window closed with no verdict. The error is an [AppFailure] carrying
+///             [SideEffect.unknown], which is the whole point of it: the payment may still be
+///             settling. NOTHING HAS FAILED. Do not say it has, do not zero the balance, and do
+///             not offer a bare "Pay again" that could take the money twice.
+///
+/// A dropped poll along the way is neither ending — the money's fate is decided on a server
+/// whether or not this phone can reach it — so those are swallowed and retried, and only
+/// remembered so the final message can say whether we ever got through at all.
+///
+/// `captured` is NOT terminal until it is credited: crediting the fee ledger is a second
+/// transaction, and the gap between the two is exactly what a resident deserves to be told
+/// about rather than shown a spinner through.
+Stream<PaymentIntent> settlementUpdates({
+  required Future<PaymentIntent?> Function() poll,
+  Duration interval = const Duration(seconds: 2),
+  Duration timeout = const Duration(seconds: 40),
+}) async* {
+  final deadline = DateTime.now().add(timeout);
+  PaymentIntentStatus? lastStatus;
+  var lastCredited = false;
+
+  // Whether the server answered even once. "We never got through" and "we got through and it
+  // kept saying it had not heard from the bank" are different things to tell a resident.
+  var everAnswered = false;
+  AppFailure? lastPollFailure;
+
+  while (DateTime.now().isBefore(deadline)) {
+    PaymentIntent? intent;
+    try {
+      intent = await poll();
+      everAnswered = true;
+      lastPollFailure = null;
+    } on AppFailure catch (failure) {
+      // A dropped poll is not a verdict. Keep waiting.
+      lastPollFailure = failure;
+      intent = null;
+    }
+
+    if (intent != null && (intent.status != lastStatus || intent.isSettled != lastCredited)) {
+      lastStatus = intent.status;
+      lastCredited = intent.isSettled;
+      yield intent;
+
+      if (intent.isSettled ||
+          intent.status == PaymentIntentStatus.failed ||
+          intent.status == PaymentIntentStatus.expired) {
+        // The ONLY normal close. Reaching here means the last event was the verdict.
+        return;
+      }
+    }
+
+    await Future<void>.delayed(interval);
+  }
+
+  throw _unresolved(
+    everAnswered: everAnswered,
+    lastStatus: lastStatus,
+    lastCredited: lastCredited,
+    lastPollFailure: lastPollFailure,
+    timeout: timeout,
+  );
+}
+
+/// The verdictless ending, worded for whichever of the three shapes it actually took.
+///
+/// All three carry [SideEffect.unknown]; they differ in what the resident should do next, and
+/// that is worth three sentences rather than one. They are retryable in the sense that CHECKING
+/// AGAIN can work — never in the sense that paying again can.
+AppFailure _unresolved({
+  required bool everAnswered,
+  required PaymentIntentStatus? lastStatus,
+  required bool lastCredited,
+  required AppFailure? lastPollFailure,
+  required Duration timeout,
+}) {
+  final waited = '${timeout.inSeconds}s';
+
+  if (!everAnswered) {
+    return OfflineFailure(
+      'We could not reach Nivora to confirm this payment. It may still have gone through — '
+      'check your payment history before paying again.',
+      technical: 'no poll of payment_intents succeeded in $waited'
+          '${lastPollFailure == null ? '' : '; last: $lastPollFailure'}',
+      sideEffect: SideEffect.unknown,
+    );
+  }
+
+  if (lastStatus == PaymentIntentStatus.captured && !lastCredited) {
+    return ServerFailure(
+      'Razorpay has your payment, but it has not been credited to your rent ledger yet. '
+      'Nothing is lost — check your payment history in a few minutes.',
+      technical: 'intent stayed captured-but-uncredited for $waited; rz_credit_fee has not run',
+      sideEffect: SideEffect.unknown,
+    );
+  }
+
+  return ServerFailure(
+    'Nivora has not had confirmation from the bank yet. This usually arrives within a few '
+    'minutes — check your payment history before paying again.',
+    technical: 'no terminal payment_intents verdict in $waited '
+        '(last status: ${lastStatus?.name ?? 'no intent row yet'})',
+    sideEffect: SideEffect.unknown,
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

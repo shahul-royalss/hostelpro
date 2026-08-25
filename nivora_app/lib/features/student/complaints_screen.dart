@@ -76,7 +76,7 @@ class _RaiseButton extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: Space.xs),
       child: FilledButton.icon(
         onPressed: () => raiseComplaint(context, me),
-        icon: const Icon(Icons.add_rounded, size: 20),
+        icon: const Icon(Icons.add_rounded, size: IconSize.md),
         label: const Text('Raise a complaint'),
       ),
     );

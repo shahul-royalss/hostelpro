@@ -642,12 +642,29 @@ class _ReviewStep extends ConsumerWidget {
     // which is what the server needs, and the name/email shown here must come from the same
     // list the admin chose from rather than from a copy that could drift.
     SaOwnerOption? picked;
+
+    /// What to print where the owner's name should be when the lookup came back with nothing.
+    ///
+    /// A DASH IS THE WRONG ANSWER HERE. This is the last screen before an owner login and a
+    /// hostel are created under that account, and "—" in the Name, Email and Phone rows reads
+    /// as "this owner has no name on record" rather than as "we could not re-read who this is".
+    /// The list is refetched after every successful create, so a second hostel in one sitting
+    /// is exactly when it is in flight.
+    String? gap;
     if (!newOwner) {
-      for (final owner in ref.watch(saOwnersProvider).value ?? const <SaOwnerOption>[]) {
+      final owners = ref.watch(saOwnersProvider);
+      for (final owner in owners.value ?? const <SaOwnerOption>[]) {
         if (owner.id == draft.ownerUserId) {
           picked = owner;
           break;
         }
+      }
+      if (picked == null) {
+        gap = owners.hasValue
+            ? 'Not in the owner list any more'
+            : owners.hasError
+                ? 'The owner list could not be read'
+                : 'Still reading the owner list…';
       }
     }
 
@@ -669,13 +686,13 @@ class _ReviewStep extends ConsumerWidget {
                   ('Phone', draft.ownerPhone),
                 ]
               : [
-                  ('Account', picked?.fullName ?? '—'),
-                  ('Email (login)', picked?.email ?? '—'),
-                  ('Phone', picked?.phone ?? '—'),
+                  ('Account', picked?.fullName ?? gap ?? '—'),
+                  ('Email (login)', picked?.email ?? gap ?? '—'),
+                  ('Phone', picked?.phone ?? gap ?? '—'),
                   (
                     'Hostels',
                     picked == null
-                        ? '—'
+                        ? (gap ?? '—')
                         : '${count(picked.hostelCount)} → ${count(picked.hostelCount + 1)} '
                             'after this',
                   ),

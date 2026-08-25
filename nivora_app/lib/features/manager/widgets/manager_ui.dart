@@ -154,7 +154,10 @@ class Pill extends StatelessWidget {
       decoration: BoxDecoration(
         color: tones.chipFill(canonical),
         border: Border.all(color: tones.chipBorder(canonical), width: Strokes.hairline),
-        borderRadius: const BorderRadius.all(Radius.circular(999)),
+        // rControl, not a hardcoded 999 and not Radii.rPill. tokens.dart reserves the pill
+        // radius for things that are genuinely capsule-shaped and can never take a second
+        // line; a status pill takes [Radii.control], which is also what warden_ui's twin uses.
+        borderRadius: Radii.rControl,
       ),
       child: Text(
         label ?? _status!.label,
@@ -259,7 +262,7 @@ class EmptyNote extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 36, color: t.colorScheme.onSurfaceVariant),
+          Icon(icon, size: IconSize.xl, color: t.colorScheme.onSurfaceVariant),
           const SizedBox(height: Space.sm),
           Text(title, style: t.textTheme.titleMedium, textAlign: TextAlign.center),
           if (detail != null) ...[
@@ -297,7 +300,7 @@ class FailureNote extends StatelessWidget {
                 : failure is AccessDeniedFailure
                     ? Icons.lock_outline_rounded
                     : Icons.error_outline_rounded,
-            size: 32,
+            size: IconSize.xl,
             color: context.tones.error,
           ),
           const SizedBox(height: Space.sm),
@@ -350,6 +353,233 @@ class Spinner extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: Space.xxl),
         child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       );
+}
+
+/// A short, coloured strip at the top of a screen. One geometry for every kind of notice, so
+/// "we are checking", "here is a warning" and "we could not check" occupy the same space and
+/// differ only in the two things that carry the meaning: the colour and the words.
+///
+/// [tone] is a CANONICAL token ([NivoraColors.warning] and friends); it is resolved here.
+class NoticeStrip extends StatelessWidget {
+  const NoticeStrip({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.tone,
+    this.detail,
+    this.action,
+    this.actionLabel,
+    this.busy = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? detail;
+
+  /// Canonical, not resolved. See NivoraSemantics.resolve.
+  final Color tone;
+
+  /// Drawn only when there is something a retry could actually change.
+  final VoidCallback? action;
+  final String? actionLabel;
+
+  /// Replaces the icon with a spinner, for the "we do not know yet" face.
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final ink = context.tones.resolve(tone);
+    return Container(
+      padding: const EdgeInsets.all(Space.md),
+      decoration: BoxDecoration(
+        color: context.tones.chipFill(tone),
+        border: Border.all(color: context.tones.chipBorder(tone), width: Strokes.hairline),
+        borderRadius: Radii.rCard,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          busy
+              ? SizedBox(
+                  width: IconSize.md,
+                  height: IconSize.md,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: ink),
+                )
+              : Icon(icon, size: IconSize.md, color: ink),
+          const SizedBox(width: Space.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: t.textTheme.titleSmall?.copyWith(color: ink)),
+                if (detail != null) ...[
+                  const SizedBox(height: Space.xxs),
+                  Text(detail!, style: t.textTheme.bodySmall),
+                ],
+                if (action != null) ...[
+                  const SizedBox(height: Space.xs),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton(
+                      onPressed: action,
+                      child: Text(actionLabel ?? 'Try again'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The figure a stat tile draws once a read has actually produced one.
+///
+/// Returned by [AsyncStat.figure] rather than assembled at the call site, so a screen cannot
+/// accidentally compute a caption or a tone from data it does not have yet.
+class StatFigure {
+  const StatFigure({required this.value, this.caption, this.tone});
+
+  /// Already formatted. A dash here means the DATA said nothing, not that it is still coming.
+  final String value;
+  final String? caption;
+
+  /// Canonical, resolved by GlassStatCard. Null leaves the tile in the neutral accent, which
+  /// is the honest choice when the data does not imply a state.
+  final Color? tone;
+}
+
+/// A stat tile whose figure comes from an [AsyncValue] — with a DIFFERENT FACE PER OUTCOME.
+///
+/// The bug this class exists to make impossible: `provider.value` is null while a read is in
+/// flight AND after it failed, so a tile written as `v == null ? '—' : format(v)` draws the
+/// same dash for "still counting" and for "we never got an answer" — and a dash where a number
+/// belongs is read as a zero. "No overdue jobs" and "we could not reach the server" lead to
+/// opposite actions.
+///
+/// Four outcomes, four faces:
+///   · loading — the tile's own layout with a dash and [loadingCaption], no tone. A tone would
+///     claim a state ("None late", in green) that nothing has established yet.
+///   · loaded  — whatever [figure] returns, including a dash where the DATA is genuinely absent.
+///   · failed  — [_FailedStat]: the failure's own sentence, and a retry only where one can work.
+///   · refused — the same, but AppFailure has already classified it, so it says "you do not have
+///     access to that" with a padlock and offers no retry.
+///
+/// `hasValue` is checked before `hasError` for the same reason [AsyncSection] does it: a
+/// refresh that fails must not blank a figure that is already on screen.
+class AsyncStat<T> extends StatelessWidget {
+  const AsyncStat({
+    super.key,
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.figure,
+    this.loadingCaption,
+    this.emphasised = false,
+    this.onTap,
+    this.onRetry,
+  });
+
+  final AsyncValue<T> value;
+  final String label;
+  final IconData icon;
+  final StatFigure Function(T data) figure;
+  final String? loadingCaption;
+  final bool emphasised;
+  final VoidCallback? onTap;
+
+  /// Wired to whatever re-reads the provider behind [value]. Omit it where nothing on this
+  /// screen can retry — [_FailedStat] then draws no button rather than a dead one.
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    if (value.hasValue) {
+      final f = figure(value.requireValue);
+      return GlassStatCard(
+        label: label,
+        value: f.value,
+        caption: f.caption,
+        icon: icon,
+        tone: f.tone,
+        emphasised: emphasised,
+        onTap: onTap,
+      );
+    }
+    if (value.hasError) {
+      return _FailedStat(label: label, error: value.error!, onRetry: onRetry);
+    }
+    return GlassStatCard(
+      label: label,
+      value: '—',
+      caption: loadingCaption,
+      icon: icon,
+      emphasised: emphasised,
+      onTap: onTap,
+    );
+  }
+}
+
+/// The face a stat tile wears when its read failed.
+///
+/// Deliberately NOT a number-shaped tile: no headline figure, no dash in the figure slot. A
+/// reader glancing at the row has to be able to tell at that glance that this one is not a
+/// measurement. Flat rather than glass even when the tile it replaces was emphasised — the
+/// emphasis exists to draw the eye to a figure, and there is no figure.
+class _FailedStat extends StatelessWidget {
+  const _FailedStat({required this.label, required this.error, this.onRetry});
+
+  final String label;
+  final Object error;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final failure = AppFailure.from(error);
+    final ink = context.tones.error;
+    final canRetry = onRetry != null && failure.isRetryable;
+
+    return FlatSurface(
+      padding: const EdgeInsets.all(Space.md),
+      semanticLabel: '$label: not available. ${failure.message}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(
+              failure is OfflineFailure
+                  ? Icons.wifi_off_rounded
+                  : failure is AccessDeniedFailure
+                      ? Icons.lock_outline_rounded
+                      : Icons.error_outline_rounded,
+              size: IconSize.sm,
+              color: ink,
+            ),
+            const SizedBox(width: Space.xs),
+            Expanded(
+              child: Text(label.toUpperCase(),
+                  style: t.textTheme.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+          ]),
+          const SizedBox(height: Space.xs),
+          Text('Not available', style: t.textTheme.titleSmall?.copyWith(color: ink)),
+          const SizedBox(height: Space.xxs),
+          Text(failure.message,
+              style: t.textTheme.bodySmall, maxLines: 3, overflow: TextOverflow.ellipsis),
+          // No button where retrying cannot help: AccessDeniedFailure will refuse again, and a
+          // control that does nothing teaches people the controls do nothing.
+          if (canRetry) ...[
+            const SizedBox(height: Space.xs),
+            TextButton(onPressed: onRetry, child: const Text('Try again')),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -450,7 +680,7 @@ class QuickAction extends StatelessWidget {
                     color: accent.withValues(alpha: 0.12),
                     borderRadius: Radii.rControl,
                   ),
-                  child: Icon(icon, size: 18, color: accent),
+                  child: Icon(icon, size: IconSize.md, color: accent),
                 ),
                 Text(
                   label,
@@ -485,7 +715,7 @@ class DetailRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 16, color: t.colorScheme.onSurfaceVariant),
+            Icon(icon, size: IconSize.sm, color: t.colorScheme.onSurfaceVariant),
             const SizedBox(width: Space.sm),
           ],
           SizedBox(width: 112, child: Text(label, style: t.textTheme.bodySmall)),
@@ -629,7 +859,7 @@ Future<bool> runAction(
       content: Text(failure.message),
       behavior: SnackBarBehavior.floating,
       backgroundColor: errorColour,
-      duration: const Duration(seconds: 5),
+      duration: Motion.readMessage,
     ));
     return false;
   }

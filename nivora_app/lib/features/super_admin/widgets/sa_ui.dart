@@ -21,7 +21,15 @@ import '../data/sa_models.dart';
 /// trade; what is shared lives in shared/glass and core/theme, and both are used here.
 ///
 /// Nothing below hardcodes a colour, a radius, a duration or a spacing value. They all come
-/// from core/theme/tokens.dart.
+/// from core/theme/tokens.dart — including the tint behind the not-showing-data panels, which
+/// goes through NivoraSemantics.chipFill/chipBorder rather than an alpha typed in by eye. A
+/// literal alpha is a light-theme alpha painted twice: the dark theme needs a different one to
+/// land on the same contrast ratio, and only the token knows that.
+///
+/// The claim is about tokens, not about every number in the file. An intrinsic dimension that
+/// belongs to one widget and to nothing else — the 116dp label column in [SaDetailRow], the 8dp
+/// track in [SaMeter] — is stated where it is used, because a token nobody else can spend is
+/// not a token.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FORMATTERS
@@ -401,7 +409,7 @@ class SaPill extends StatelessWidget {
     final t = Theme.of(context);
     final tones = context.tones;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: Space.xs, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: Space.xs, vertical: Space.xxs),
       decoration: BoxDecoration(
         color: tones.chipFill(tone),
         borderRadius: Radii.rControl,
@@ -411,8 +419,8 @@ class SaPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 12, color: tones.resolve(tone)),
-            const SizedBox(width: 4),
+            Icon(icon, size: IconSize.xs, color: tones.resolve(tone)),
+            const SizedBox(width: Space.xxs),
           ],
           Text(label, style: t.textTheme.labelSmall?.copyWith(color: tones.resolve(tone))),
         ],
@@ -475,9 +483,9 @@ class SaReadOnlyBand extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.all(compact ? Space.sm : Space.md),
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.08),
+        color: context.tones.chipFill(tone),
         borderRadius: Radii.rCard,
-        border: Border.all(color: tone.withValues(alpha: 0.32)),
+        border: Border.all(color: context.tones.chipBorder(tone)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -597,7 +605,15 @@ class SaMeter extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// THE THREE NOT-SHOWING-DATA STATES
+// THE NOT-SHOWING-DATA STATES — loading, empty, failed, unverified, refused
+//
+// FIVE, AND EACH ONE LOOKS DIFFERENT, because they lead to opposite actions. "No overdue
+// tasks" and "we could not reach the server" are not the same sentence; a dash where a number
+// should be is read as a zero; and a panel that quietly fails to draw tells the reader nothing
+// is wrong when something is. A skeleton pulses, an empty state is plain, a failure is drawn in
+// error tone with a retry, an unverified answer is drawn in info tone with a way to resolve it,
+// and a refusal is drawn in warning tone with no retry at all — because retrying a refusal
+// cannot work, and an affordance that cannot work is a lie with a button on it.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Draws one async section: skeleton, error, or content.
@@ -763,14 +779,15 @@ class SaError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final tone = context.tones.error;
+    final tones = context.tones;
+    final tone = tones.error;
     final guidance = saErrorGuidance(error);
     return Container(
       padding: const EdgeInsets.all(Space.md),
       decoration: BoxDecoration(
         borderRadius: Radii.rCard,
-        border: Border.all(color: tone.withValues(alpha: 0.35)),
-        color: tone.withValues(alpha: 0.06),
+        border: Border.all(color: tones.chipBorder(tone)),
+        color: tones.chipFill(tone),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -852,6 +869,127 @@ class SaError extends StatelessWidget {
   };
 }
 
+/// What an empty answer from a Super Admin read actually means.
+///
+/// WHY THIS IS A FOUR-VALUED TYPE AND NOT A BOOLEAN. rpc_sa_dashboard and rpc_sa_hostels both
+/// end in `where app.is_super_admin()`, so a refusal arrives as ZERO ROWS rather than as a 403.
+/// A single empty result therefore cannot tell "not permitted" from "nothing on the platform" —
+/// the console decides by corroborating with a second read, the dashboard, and that second read
+/// is itself a read: it can be in flight, and it can fail.
+///
+/// THE BUG THIS TYPE EXISTS TO MAKE UNWRITEABLE was
+///
+///     emptyIsRefusal: stats.value == null && !stats.isLoading
+///
+/// which is equally true of a dashboard that FAILED and one that was refused. A platform admin
+/// whose connection dropped for one request was told they are not allowed to see their own
+/// platform — wrong, and alarming in a way "we could not reach the server" is not.
+enum SaEmptyVerdict {
+  /// The corroborating read has not answered yet, so nothing can be concluded and nothing is
+  /// claimed. Drawn as the loading state it is.
+  pending,
+
+  /// The corroborating read failed. Refused and genuinely-empty cannot be told apart from here,
+  /// and picking either would be a claim about the platform, or about this account, that
+  /// nothing on the device supports. Drawn as [SaUnverified].
+  unverified,
+
+  /// The corroborating read also came back with nothing: this account is not the Super Admin.
+  /// Drawn as [SaNotPermitted].
+  refused,
+
+  /// The corroborating read returned real figures, so this account can see platform data and
+  /// the emptiness in front of it is the truth. Only here may an empty state be drawn.
+  confirmed,
+}
+
+/// Reads the verdict off the corroborating provider — `saStatsProvider` at every call site.
+///
+/// A VALUE BEATS A FAILED REFRESH. If the dashboard answered once, that answer is still the best
+/// evidence about who this account is; a refresh that timed out afterwards has not changed it,
+/// and demoting a known answer to "we cannot tell" on every dropped packet would make the
+/// console flicker between two explanations of the same screen.
+SaEmptyVerdict saEmptyVerdict(AsyncValue<Object?> corroborating) {
+  if (corroborating.hasValue) {
+    return corroborating.value == null ? SaEmptyVerdict.refused : SaEmptyVerdict.confirmed;
+  }
+  if (corroborating.hasError) return SaEmptyVerdict.unverified;
+  return SaEmptyVerdict.pending;
+}
+
+/// Nothing came back, and the read that would have said why did not come back either.
+///
+/// Says only what is known. The two explanations it is caught between — an empty platform and a
+/// refused account — lead to opposite actions, so naming one of them at random is worse than
+/// naming neither, and drawing this as an empty list is naming one of them at random.
+///
+/// The retry is not decoration: [onRetry] re-runs the corroborating read together with the list,
+/// which is the only thing that can turn this state into an answer.
+class SaUnverified extends StatelessWidget {
+  const SaUnverified({
+    super.key,
+    required this.title,
+    required this.message,
+    required this.onRetry,
+    this.action,
+  });
+
+  final String title;
+  final String message;
+
+  /// Required, deliberately. This state exists because a read can be repeated; a panel that says
+  /// "we could not check" and offers no way to check is a dead end wearing an explanation.
+  final VoidCallback onRetry;
+
+  /// A second way out where one exists — clearing the filters, when filters are on.
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final tones = context.tones;
+    final tone = tones.info;
+    return Container(
+      padding: const EdgeInsets.all(Space.md),
+      decoration: BoxDecoration(
+        borderRadius: Radii.rCard,
+        border: Border.all(color: tones.chipBorder(tone)),
+        color: tones.chipFill(tone),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.help_outline_rounded, size: IconSize.md, color: tone),
+              const SizedBox(width: Space.xs),
+              Expanded(child: Text(title, style: t.textTheme.titleMedium)),
+            ],
+          ),
+          const SizedBox(height: Space.xxs),
+          Text(message, style: t.textTheme.bodySmall),
+          const SizedBox(height: Space.sm),
+          // Wrap rather than Row: two buttons and a 360dp phone is the case where a Row overflows
+          // and the recovery the panel is built around goes off the edge of the screen.
+          Wrap(
+            spacing: Space.xs,
+            runSpacing: Space.xs,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: IconSize.sm),
+                label: const Text('Check again'),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
+              ),
+              ?action,
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// The one state that is neither loading, empty nor broken: the RPC answered, with nothing,
 /// because the caller is not the Super Admin.
 ///
@@ -868,8 +1006,8 @@ class SaNotPermitted extends StatelessWidget {
       padding: const EdgeInsets.all(Space.md),
       decoration: BoxDecoration(
         borderRadius: Radii.rCard,
-        border: Border.all(color: context.tones.warning.withValues(alpha: 0.35)),
-        color: context.tones.warning.withValues(alpha: 0.06),
+        border: Border.all(color: context.tones.chipBorder(context.tones.warning)),
+        color: context.tones.chipFill(context.tones.warning),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -941,7 +1079,7 @@ class _SaCopyButtonState extends State<SaCopyButton> {
     if (!mounted) return;
     setState(() => _copied = true);
     // Long enough to be read, short enough that a second copy is obviously a second copy.
-    await Future<void>.delayed(const Duration(milliseconds: 1600));
+    await Future<void>.delayed(Motion.confirmed);
     if (mounted) setState(() => _copied = false);
   }
 

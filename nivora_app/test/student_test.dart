@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:mobile/core/theme/theme.dart';
+import 'package:mobile/core/theme/tokens.dart';
 import 'package:mobile/data/models/models.dart';
 import 'package:mobile/features/student/student_section.dart';
 import 'package:mobile/features/student/complaints_screen.dart';
@@ -13,6 +15,7 @@ import 'package:mobile/features/student/widgets/common.dart';
 import 'package:mobile/features/student/widgets/complaint.dart';
 import 'package:mobile/features/student/widgets/format.dart';
 import 'package:mobile/features/student/widgets/notice.dart';
+import 'package:mobile/features/student/widgets/paged_list.dart';
 import 'package:mobile/features/student/widgets/rent.dart';
 
 /// What the student screens PRESENT, tested without a network.
@@ -100,6 +103,40 @@ Future<void> show(WidgetTester tester, Widget child) async {
   );
   await tester.pump();
 }
+
+/// The same widget on the DARK theme, for the tone assertions below.
+///
+/// The canonical semantic colours are rated as graphics only, so anything that paints one as
+/// TYPE has to send it through `context.tones.resolve()` first — and a widget handed a
+/// canonical `tone:` by a context-free `switch` is exactly where that gets forgotten. Light
+/// mode barely catches it: `resolve()` maps #DC3F3F to #B93434 there, two reds that look alike.
+/// On dark the resolved value is #F48080, which is nothing like the canonical one, so the
+/// assertion is unambiguous and a regression is visible rather than arguable.
+Future<void> showDark(WidgetTester tester, Widget child) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: NivoraTheme.dark(),
+      home: Scaffold(body: SingleChildScrollView(child: child)),
+    ),
+  );
+  await tester.pump();
+}
+
+/// Every colour the same figure is painted in.
+///
+/// A set rather than a single answer, because these widgets print one rupee figure more than
+/// once — the hero and the "Rent for the month" line, or the PAID and PENDING cells, which are
+/// the same number whenever half the rent is in. The theme puts an explicit colour on all of
+/// them, so "the first one with a colour" picks the wrong widget; what the assertion actually
+/// wants to know is whether the RESOLVED tone is among them and the canonical one is not.
+Set<Color?> paintedColoursOf(WidgetTester tester, String text) =>
+    tester.widgetList<Text>(find.text(text)).map((w) => w.style?.color).toSet();
+
+/// N roommates, because the card counts them rather than naming them.
+List<Roommate> _mates(int n) => [
+      for (var i = 0; i < n; i++)
+        Roommate(studentId: 'r$i', fullName: 'Resident $i', phone: '900000000$i', bedNumber: i),
+    ];
 
 void main() {
   // ───────────────────────────────────────────────────────────────────────────
@@ -297,7 +334,10 @@ void main() {
 
   group('RoomBedCard', () {
     testWidgets('names the room and the bed', (tester) async {
-      await show(tester, const RoomBedCard(roomNumber: '101', bedNumber: 3, roommates: 2));
+      await show(
+        tester,
+        RoomBedCard(roomNumber: '101', bedNumber: 3, roommates: AsyncData(_mates(2))),
+      );
 
       expect(find.text('Room 101 · Bed 3'), findsOneWidget);
       expect(find.text('Sharing with 2 other residents'), findsOneWidget);
@@ -308,6 +348,216 @@ void main() {
 
       expect(find.text('Not assigned yet'), findsOneWidget);
       expect(find.textContaining('warden'), findsOneWidget);
+    });
+
+    // ── the sharing line: four states, four appearances ──────────────────────
+    //
+    // `st_my_roommates()` can be in flight, come back empty, fail, or be refused, and those
+    // four lead somewhere different. An empty room and an unreachable server are not the same
+    // news, and a line that silently disappears on failure is read as "nobody else is in here".
+
+    testWidgets('a room to yourself is stated, not left blank', (tester) async {
+      await show(
+        tester,
+        RoomBedCard(roomNumber: '101', bedNumber: 3, roommates: AsyncData(_mates(0))),
+      );
+
+      expect(find.text('You have the room to yourself'), findsOneWidget);
+    });
+
+    testWidgets('while the roommate read is in flight, the line is a placeholder',
+        (tester) async {
+      await show(
+        tester,
+        const RoomBedCard(roomNumber: '101', bedNumber: 3, roommates: AsyncLoading()),
+      );
+
+      // Room and bed came from a DIFFERENT read and are already known — the card must not hold
+      // them back waiting for the count.
+      expect(find.text('Room 101 · Bed 3'), findsOneWidget);
+      expect(find.byType(Skeleton), findsOneWidget);
+      expect(find.textContaining('Sharing with'), findsNothing);
+      expect(find.text('You have the room to yourself'), findsNothing);
+    });
+
+    testWidgets('a failed roommate read says so, and points at a gesture that works',
+        (tester) async {
+      await show(
+        tester,
+        RoomBedCard(
+          roomNumber: '101',
+          bedNumber: 3,
+          roommates: AsyncError(const OfflineFailure('no route to host'), StackTrace.empty),
+        ),
+      );
+
+      expect(find.text('Room 101 · Bed 3'), findsOneWidget);
+      expect(
+        find.text('Could not check who else is in this room. Pull down to try again.'),
+        findsOneWidget,
+      );
+      // A failed secondary read must never be dressed as an empty room.
+      expect(find.text('You have the room to yourself'), findsNothing);
+      expect(find.byType(Skeleton), findsNothing);
+    });
+
+    testWidgets('a refusal is said plainly and offers no retry', (tester) async {
+      // RLS said no. Inviting the resident to pull down again would teach them to repeat a
+      // gesture that cannot ever work.
+      await show(
+        tester,
+        RoomBedCard(
+          roomNumber: '101',
+          bedNumber: 3,
+          roommates: AsyncError(const AccessDeniedFailure('42501'), StackTrace.empty),
+        ),
+      );
+
+      expect(find.text('Who else is in this room is not available to you.'), findsOneWidget);
+      expect(find.textContaining('Pull down'), findsNothing);
+      expect(find.text('You have the room to yourself'), findsNothing);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  group('canonical tones are resolved before they are painted as type', () {
+    testWidgets('the rent hero figure uses the dark theme text red, not the canonical one',
+        (tester) async {
+      await showDark(tester, const RentCard(periodMonth: '2026-08', row: unpaidRow));
+
+      // ₹6,200 appears twice: the hero, and the "Rent for the month" line. Only the hero is
+      // tinted, and it is the largest figure on the student home screen.
+      final colours = paintedColoursOf(tester, '₹6,200');
+      expect(colours, contains(NivoraColors.errorDark),
+          reason: 'the hero figure must be resolved for the current theme');
+      expect(colours, isNot(contains(NivoraColors.error)),
+          reason: 'canonical #DC3F3F is rated as a graphic, and this is 32px type');
+    });
+
+    testWidgets('a pending fee cell is resolved too', (tester) async {
+      await showDark(
+        tester,
+        FeePaymentTile(
+          payment: FeePayment(
+            id: 'f1',
+            hostelId: 'h',
+            studentId: 's',
+            periodMonth: '2026-08',
+            amountDue: 6000,
+            amountPaid: 3000,
+            status: FeeStatus.partial,
+            createdAt: DateTime.utc(2026, 8, 16),
+            updatedAt: DateTime.utc(2026, 8, 16),
+          ),
+        ),
+      );
+
+      // The PENDING cell carries the tone; DUE and PAID are plain.
+      final colours = paintedColoursOf(tester, '₹3,000');
+      expect(colours, contains(NivoraColors.warningDark));
+      expect(colours, isNot(contains(NivoraColors.warning)));
+    });
+
+    testWidgets('the complaint timeline dot matches the pill it belongs to', (tester) async {
+      await showDark(
+        tester,
+        ComplaintTimeline(
+          events: [
+            ComplaintEvent(
+              id: 'e1',
+              hostelId: 'h',
+              complaintId: 'c1',
+              status: ComplaintStatus.open,
+              createdAt: DateTime.utc(2026, 8, 10, 19, 35),
+            ),
+          ],
+        ),
+      );
+
+      final dot = tester.widget<Container>(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Container &&
+              w.decoration is BoxDecoration &&
+              (w.decoration! as BoxDecoration).shape == BoxShape.circle,
+        ),
+      );
+      expect((dot.decoration! as BoxDecoration).color, NivoraColors.warningDark);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  group('StudentPagedList keeps pull-to-refresh reachable', () {
+    Future<bool> pulled(WidgetTester tester, AsyncValue<PagedResult<Notice>> value) async {
+      var refreshed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NivoraTheme.light(),
+          home: Scaffold(
+            body: StudentPagedList<Notice>(
+              value: value,
+              itemBuilder: (_, _) => const SizedBox.shrink(),
+              onLoadMore: () async => null,
+              onRefresh: () async => refreshed = true,
+              empty: const EmptyNote(icon: Icons.campaign_outlined, title: 'No notices yet'),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      // A thumb, dragging the list down far enough to trip the RefreshIndicator.
+      await tester.drag(find.byType(ListView), const Offset(0, 300), touchSlopY: 0);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      return refreshed;
+    }
+
+    testWidgets('while it is loading', (tester) async {
+      // Three skeletons do not fill a phone, so without AlwaysScrollableScrollPhysics the
+      // position has a maxScrollExtent of 0, refuses the over-scroll, and the gesture is inert.
+      expect(await pulled(tester, const AsyncLoading()), isTrue);
+    });
+
+    testWidgets('and after it has failed', (tester) async {
+      // The failure panel used to be a plain Container, so there was nothing to over-scroll.
+      // On a NotFoundFailure — whose copy is literally "Pull down to refresh" — the screen was
+      // giving an instruction it could not carry out.
+      expect(
+        await pulled(
+          tester,
+          AsyncError<PagedResult<Notice>>(const NotFoundFailure('gone'), StackTrace.empty),
+        ),
+        isTrue,
+      );
+    });
+
+    testWidgets('a failure is drawn once, and never as the empty state', (tester) async {
+      var refreshed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: NivoraTheme.light(),
+          home: Scaffold(
+            body: StudentPagedList<Notice>(
+              value: AsyncError(const OfflineFailure('offline'), StackTrace.empty),
+              header: const Text('RAISE A COMPLAINT'),
+              itemBuilder: (_, _) => const SizedBox.shrink(),
+              onLoadMore: () async => null,
+              onRefresh: () async => refreshed = true,
+              empty: const EmptyNote(icon: Icons.campaign_outlined, title: 'No notices yet'),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(ErrorNote), findsOneWidget);
+      expect(find.text('No connection'), findsOneWidget);
+      // The empty state's copy must never be reachable from a failure.
+      expect(find.text('No notices yet'), findsNothing);
+      // And the primary action does not sit on top of the failure.
+      expect(find.text('RAISE A COMPLAINT'), findsNothing);
+      expect(refreshed, isFalse);
     });
   });
 

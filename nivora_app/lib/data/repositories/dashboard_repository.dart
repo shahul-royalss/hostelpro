@@ -22,9 +22,26 @@ final class DashboardRepository extends Repository {
   ///
   /// SECURITY INVOKER: the counts run under the caller's RLS. For staff that is the whole
   /// hostel. For a STUDENT it is the single row they can see, which makes every number here
-  /// meaningless — so student screens must not call this. Returns null when the function comes
-  /// back empty, which should not happen for a hostel that exists.
-  Future<HostelStats?> hostelStats({
+  /// meaningless — so student screens must not call this.
+  ///
+  /// NEVER NULL, AND THE OLD NULL BRANCH WAS UNREACHABLE. rpc_hostel_stats is a `select` of
+  /// scalar subqueries with no FROM clause (db/schema.sql:1331), so Postgres returns exactly
+  /// one row for every possible argument — including a hostel id that does not exist. Zero rows
+  /// is therefore not "an empty hostel", it is this client talking to a function it was not
+  /// built against, which is a [RowShapeError] and reaches the screen as a failure rather than
+  /// as a dashboard of dashes.
+  ///
+  /// ═══ WHAT THIS METHOD STILL CANNOT TELL YOU — REPORTED, NOT FIXED HERE ═══
+  /// Because it is SECURITY INVOKER over tables and the row is produced whatever RLS says, a
+  /// hostel the caller cannot see comes back as a full row of ZEROES rather than as nothing at
+  /// all: 0 beds, 0 residents, ₹0 collected. That is indistinguishable from a hostel that was
+  /// created an hour ago and has not been set up yet, and no amount of client-side reading can
+  /// separate them — app.subscription_state is SECURITY DEFINER and answers for hostels the
+  /// caller cannot otherwise see, so even the subscription fields look plausible. The fix is a
+  /// server one (`where app.can_read_hostel(p_hostel_id)` on the function, which would turn the
+  /// case into zero rows and let [rpcRowOrRefusal] name it); it is a schema change and so is out
+  /// of scope for this pass. Screens must not treat all-zero stats as proof of an empty hostel.
+  Future<HostelStats> hostelStats({
     required String hostelId,
     String? periodMonth,
   }) =>
@@ -34,7 +51,16 @@ final class DashboardRepository extends Repository {
           'p_period_month': ?periodMonth,
         });
         final row = rpcRow(data, 'rpc_hostel_stats');
-        return row == null ? null : HostelStats.fromJson(row);
+        if (row == null) {
+          throw RowShapeError(
+            'rpc_hostel_stats',
+            '(result)',
+            'zero rows, but the function selects scalar subqueries with no FROM clause and so '
+                'always yields exactly one — the deployed function is not the one in '
+                'db/schema.sql',
+          );
+        }
+        return HostelStats.fromJson(row);
       });
 
   /// Unread notifications for the signed-in user — the number on the bell.
@@ -52,19 +78,37 @@ final class DashboardRepository extends Repository {
 
   /// Platform-wide totals. Super Admin only.
   ///
-  /// The function ends in `where app.is_super_admin()`, so ANY OTHER ROLE GETS ZERO ROWS rather
-  /// than a 403. Null therefore means "not permitted", and must never be rendered as a platform
-  /// with no hostels on it.
-  Future<SaStats?> superAdminStats() => guard(() async {
+  /// The function ends in `where app.is_super_admin()` (db/schema.sql:1391), so ANY OTHER ROLE
+  /// GETS ZERO ROWS rather than a 403. A super admin, by contrast, always gets exactly one row
+  /// — the body is scalar subqueries with no FROM — so emptiness has one meaning and one only:
+  /// THIS CALLER IS NOT A SUPER ADMIN.
+  ///
+  /// It used to be returned as null, which every screen is free to read as "the platform has no
+  /// hostels, no owners and no residents". That is the same picture a brand-new deployment
+  /// draws, and it is drawn for the person whose job is to notice when it is wrong. It is now a
+  /// refusal, which is not retryable, so no screen offers a Try again that could never work.
+  Future<SaStats> superAdminStats() => guard(() async {
         final data = await db.rpc('rpc_sa_dashboard');
-        final row = rpcRow(data, 'rpc_sa_dashboard');
-        return row == null ? null : SaStats.fromJson(row);
+        return SaStats.fromJson(rpcRowOrRefusal(
+          data,
+          'rpc_sa_dashboard',
+          refusal: 'Platform figures are only visible to a Nivora super admin.',
+        ));
       });
 
   /// Every hostel on the platform with its owner and subscription. Super Admin only.
   ///
   /// PAGINATED, because this list is the one that grows with the business rather than with any
-  /// one customer. Same emptiness-means-refusal caveat as [superAdminStats].
+  /// one customer.
+  ///
+  /// ═══ STILL AMBIGUOUS, AND DELIBERATELY LEFT SO — REPORTED, NOT FIXED HERE ═══
+  /// An empty first page means EITHER "you are not a super admin" (the same `where
+  /// app.is_super_admin()` as above) OR "the platform genuinely has no hostels yet", and unlike
+  /// [superAdminStats] this function cannot tell them apart from its own result: zero rows is a
+  /// legitimate answer for a real super admin on day one. Disambiguating would mean a second
+  /// round trip to rpc_sa_dashboard, which is a data-access change rather than a presentation
+  /// one. Until then a screen showing this list should take its "not permitted" verdict from
+  /// [superAdminStats], which is unambiguous, rather than from this list being short.
   Future<PagedResult<SaHostelRow>> superAdminHostels({
     int page = 0,
     int pageSize = PagedResult.defaultPageSize,

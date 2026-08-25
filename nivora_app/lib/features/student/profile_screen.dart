@@ -61,10 +61,14 @@ class _Profile extends ConsumerWidget {
           AsyncSection<FeeLedgerRow?>(
             value: rent,
             onRetry: () => ref.invalidate(myRentThisMonthProvider),
+            // NO `roommates:` HERE, unlike Home. The roommate read has its own section
+            // immediately below, and it is the better one: it names the people rather than
+            // counting them. Passing the count as well would draw one read twice — a summary
+            // line and a list of the same names on a good day, and on a bad one the same
+            // failure said twice in a row.
             builder: (row) => RoomBedCard(
               roomNumber: row?.roomNumber,
               bedNumber: row?.bedNumber,
-              roommates: roommates.value?.length,
             ),
           ),
 
@@ -72,6 +76,9 @@ class _Profile extends ConsumerWidget {
           AsyncSection<List<Roommate>>(
             value: roommates,
             onRetry: () => ref.invalidate(roommatesProvider),
+            // Sized like the card it becomes, so "still fetching your roommates" does not look
+            // like the one-line "No roommates listed" that means the opposite.
+            loading: const SkeletonCard(lines: 2),
             builder: (mates) => _Roommates(mates: mates),
           ),
 
@@ -143,7 +150,11 @@ class _Identity extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: t.colorScheme.primary.withValues(alpha: 0.12),
+            // The tint comes from the one place the alphas were measured. 0.12 was invented
+            // here, beside a chipFill that is 0.08 on light and 0.10 on dark — and it is the
+            // dark number that matters, because a tint lightens a dark fill toward the text
+            // sitting on it, which is why the measured value is the smaller one.
+            color: context.tones.chipFill(t.colorScheme.primary),
           ),
           child: Text(_initials(me.fullName), style: t.textTheme.titleLarge),
         ),

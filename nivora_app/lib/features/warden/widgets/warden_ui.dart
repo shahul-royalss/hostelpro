@@ -698,24 +698,35 @@ Future<bool> runAction(
     ));
     return true;
   } catch (error) {
-    final failure = AppFailure.from(error);
     if (!context.mounted) return false;
-    // The snackbar keeps its themed midnight background (white on it is 18.72:1) and says
-    // "this failed" with an icon instead. Repainting the whole bar #DC3F3F put the message at
-    // 4.35:1 against its own white text — the one message in the app that most needs reading.
-    // The accent is the DARK theme's error ink because the bar is dark in both themes.
-    messenger.showSnackBar(SnackBar(
-      content: Row(
-        children: [
-          const Icon(Icons.error_outline_rounded,
-              size: IconSize.md, color: NivoraColors.errorDark), // 7.35:1 on midnight
-          const SizedBox(width: Space.sm),
-          Expanded(child: Text(failure.message)),
-        ],
-      ),
-      behavior: SnackBarBehavior.floating,
-      duration: Motion.readMessage,
-    ));
+    showFailureSnack(context, error);
     return false;
   }
+}
+
+/// Says that something failed, in the words the database or the Edge Function used.
+///
+/// SPLIT OUT OF [runAction] rather than copied, because a second caller appeared: registering a
+/// resident cannot go through runAction — it needs the RESULT of the write (the one-time
+/// password) and it has an outcome that is neither success nor exception (a rejection the
+/// server explained field by field). Two snackbars that drift apart in colour or duration is
+/// exactly the difference nobody can name and everybody notices.
+void showFailureSnack(BuildContext context, Object error) {
+  final failure = AppFailure.from(error);
+  // The snackbar keeps its themed midnight background (white on it is 18.72:1) and says "this
+  // failed" with an icon instead. Repainting the whole bar #DC3F3F put the message at 4.35:1
+  // against its own white text — the one message in the app that most needs reading. The accent
+  // is the DARK theme's error ink because the bar is dark in both themes.
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Row(
+      children: [
+        const Icon(Icons.error_outline_rounded,
+            size: IconSize.md, color: NivoraColors.errorDark), // 7.35:1 on midnight
+        const SizedBox(width: Space.sm),
+        Expanded(child: Text(failure.message)),
+      ],
+    ),
+    behavior: SnackBarBehavior.floating,
+    duration: Motion.readMessage,
+  ));
 }

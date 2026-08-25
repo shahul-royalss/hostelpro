@@ -38,12 +38,75 @@ List<Map<String, dynamic>> rpcRows(Object? data, String fn) {
 
 /// The single row a one-row RPC came back with, or null.
 ///
-/// Null is a real answer here, not an error. Several RPCs end in `where app.is_super_admin()`,
-/// which returns zero rows to everyone else — a refusal expressed as emptiness. Callers must
-/// not read that as "the platform is empty".
+/// PREFER [rpcRowOrRefusal] OR [rpcRowOrMissing]. This function hands back the bare null that
+/// this whole file exists to get rid of: at the call site it means "refused", "not there" and
+/// "the function changed shape" all at once, and every screen that has ever branched on it has
+/// picked one of the three and drawn that. Use it only where a caller genuinely has all three
+/// answers already — there is one such place left, in the Super Admin feature.
 Map<String, dynamic>? rpcRow(Object? data, String fn) {
   final rows = rpcRows(data, fn);
   return rows.isEmpty ? null : rows.first;
+}
+
+/// The row from an RPC WHOSE EMPTINESS IS A REFUSAL, never an absence of data.
+///
+/// Several functions in db/schema.sql end in `where app.is_super_admin()` (rpc_sa_dashboard,
+/// rpc_sa_onboarding_series). Postgres answers a caller who fails that predicate with zero
+/// rows, not with 42501 — the refusal arrives dressed as emptiness, and PostgREST has no way to
+/// tell us otherwise. So the meaning has to be restored here, at the only place that knows the
+/// function's own WHERE clause. A platform admin console that renders this as "0 hostels, 0
+/// owners, ₹0" is telling its reader their business evaporated.
+///
+/// [refusal] is shown to the user, so write it as the plain sentence it is: nobody is at fault,
+/// and there is nothing to retry.
+Map<String, dynamic> rpcRowOrRefusal(
+  Object? data,
+  String fn, {
+  required String refusal,
+}) {
+  final row = rpcRow(data, fn);
+  if (row != null) return row;
+  throw AccessDeniedFailure(
+    refusal,
+    technical: '$fn returned zero rows — its WHERE clause excluded this caller',
+  );
+}
+
+/// The row from an RPC WHOSE EMPTINESS MEANS THE CALLER HAS NO SUCH THING, not that the thing
+/// is empty.
+///
+/// The distinction from [rpcRowOrRefusal] is who the answer is about: a refusal is about the
+/// caller's role, an absence is about the record. Both are dead ends — [NotFoundFailure] is not
+/// retryable either — but they are different sentences, and a screen that says "ask your warden
+/// to check your registration" when the honest answer is "this console is staff-only" sends
+/// someone to bother the wrong person.
+Map<String, dynamic> rpcRowOrMissing(
+  Object? data,
+  String fn, {
+  required String missing,
+}) {
+  final row = rpcRow(data, fn);
+  if (row != null) return row;
+  throw NotFoundFailure(
+    missing,
+    technical: '$fn returned zero rows for this caller',
+  );
+}
+
+/// Rows from a read WHERE AN EMPTY RESULT IS NOT A POSSIBLE ANSWER.
+///
+/// For most lists, empty means empty and that is a perfectly good thing for a screen to draw.
+/// This is for the handful where the schema guarantees at least one row for anything that
+/// exists at all — so zero rows says something about the CALLER's reach, not about the data.
+/// Passing a query here is a claim about db/schema.sql; [why] is where that claim gets written
+/// down, and it travels into the failure's technical text so the next person can check it.
+List<Map<String, dynamic>> rowsOrMissing(
+  List<Map<String, dynamic>> rows, {
+  required String missing,
+  required String why,
+}) {
+  if (rows.isNotEmpty) return rows;
+  throw NotFoundFailure(missing, technical: why);
 }
 
 /// The row returned by an RPC declared `returns <composite>` — for example wd_record_payment,

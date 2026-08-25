@@ -35,7 +35,7 @@ class NoticeTile extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.campaign_rounded, size: 18, color: t.colorScheme.primary),
+              Icon(Icons.campaign_rounded, size: IconSize.md, color: t.colorScheme.primary),
               const SizedBox(width: Space.xs),
               Expanded(
                 child: Text(

@@ -82,6 +82,11 @@ class _SaHostelsScreenState extends ConsumerState<SaHostelsScreen> {
     final query = ref.watch(saHostelFilterProvider);
     final list = ref.watch(saHostelListProvider(query));
 
+    // What an empty page from rpc_sa_hostels means, corroborated by rpc_sa_dashboard. This used
+    // to be `stats.value == null && !stats.isLoading`, which is also true of a dashboard that
+    // FAILED — so a platform admin whose connection dropped was told they were not permitted.
+    final verdict = saEmptyVerdict(ref.watch(saStatsProvider));
+
     return SaScreen(
       title: 'Hostels',
       scrollable: false,
@@ -148,8 +153,13 @@ class _SaHostelsScreenState extends ConsumerState<SaHostelsScreen> {
                   ref.read(saHostelFilterProvider.notifier).clear();
                   setState(() {});
                 },
-                emptyIsRefusal: ref.watch(saStatsProvider).value == null &&
-                    !ref.watch(saStatsProvider).isLoading,
+                verdict: verdict,
+                // Both reads, because either one being stale is what leaves this screen unable
+                // to say what its own emptiness means.
+                onRecheck: () {
+                  ref.invalidate(saStatsProvider);
+                  ref.invalidate(saHostelListProvider(query));
+                },
               ),
             ),
           ),
@@ -212,7 +222,8 @@ class _HostelList extends ConsumerWidget {
     required this.query,
     required this.scroll,
     required this.onClearFilters,
-    required this.emptyIsRefusal,
+    required this.verdict,
+    required this.onRecheck,
   });
 
   final PagedResult<SaHostelRow> page;
@@ -220,9 +231,13 @@ class _HostelList extends ConsumerWidget {
   final ScrollController scroll;
   final VoidCallback onClearFilters;
 
-  /// True when rpc_sa_dashboard ALSO came back empty, which together mean "not the Super Admin"
-  /// rather than "no hostels". One empty result cannot tell those apart; two can.
-  final bool emptyIsRefusal;
+  /// What an empty page MEANS, read off rpc_sa_dashboard: still being decided, undecidable, a
+  /// refusal, or a real emptiness. One empty result cannot tell those apart; two can, and a
+  /// dashboard that FAILED can tell nothing at all. See [SaEmptyVerdict].
+  final SaEmptyVerdict verdict;
+
+  /// Re-runs both reads. The only exit from [SaEmptyVerdict.unverified].
+  final VoidCallback onRecheck;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -230,30 +245,54 @@ class _HostelList extends ConsumerWidget {
       return ListView(
         padding: const EdgeInsets.all(Space.md),
         children: [
-          if (emptyIsRefusal)
-            const SaNotPermitted()
-          else if (query.isFiltered)
-            SaEmpty(
-              icon: Icons.search_off_rounded,
-              title: 'No hostel matches that',
-              message: 'Nothing on the platform matches the current search and filters.',
-              action: OutlinedButton.icon(
-                onPressed: onClearFilters,
-                icon: const Icon(Icons.filter_alt_off_rounded, size: IconSize.sm),
-                label: const Text('Clear filters'),
+          switch (verdict) {
+            // The dashboard has not answered yet, so neither has this screen. A skeleton says
+            // "still working", which is the one honest thing available before the answer lands.
+            SaEmptyVerdict.pending => const SaSkeletonCard(lines: 2, height: 150),
+
+            // The list is empty and the read that would explain it failed. Nothing is claimed
+            // about the platform or about this account, and the way out is on the panel.
+            SaEmptyVerdict.unverified => SaUnverified(
+                title: 'No hostels came back, and we cannot say why',
+                message: 'The platform list answered with nothing in it, and the dashboard '
+                    'figures this console checks that against could not be read. Until that '
+                    'read succeeds, an empty platform and an account that is not permitted to '
+                    'see one look identical from here.',
+                onRetry: onRecheck,
+                action: query.isFiltered
+                    ? OutlinedButton.icon(
+                        onPressed: onClearFilters,
+                        icon: const Icon(Icons.filter_alt_off_rounded, size: IconSize.sm),
+                        label: const Text('Clear filters'),
+                      )
+                    : null,
               ),
-            )
-          else
-            SaEmpty(
-              icon: Icons.apartment_rounded,
-              title: 'No hostels yet',
-              message: 'The first one appears here the moment it is created.',
-              action: FilledButton.icon(
-                onPressed: () => Navigator.of(context).push(CreateWizardScreen.route()),
-                icon: const Icon(Icons.add_rounded, size: IconSize.sm),
-                label: const Text('Create owner & hostel'),
-              ),
-            ),
+
+            SaEmptyVerdict.refused => const SaNotPermitted(),
+
+            // Only here is the emptiness a fact, so only here is an empty state drawn.
+            SaEmptyVerdict.confirmed => query.isFiltered
+                ? SaEmpty(
+                    icon: Icons.search_off_rounded,
+                    title: 'No hostel matches that',
+                    message: 'Nothing on the platform matches the current search and filters.',
+                    action: OutlinedButton.icon(
+                      onPressed: onClearFilters,
+                      icon: const Icon(Icons.filter_alt_off_rounded, size: IconSize.sm),
+                      label: const Text('Clear filters'),
+                    ),
+                  )
+                : SaEmpty(
+                    icon: Icons.apartment_rounded,
+                    title: 'No hostels yet',
+                    message: 'The first one appears here the moment it is created.',
+                    action: FilledButton.icon(
+                      onPressed: () => Navigator.of(context).push(CreateWizardScreen.route()),
+                      icon: const Icon(Icons.add_rounded, size: IconSize.sm),
+                      label: const Text('Create owner & hostel'),
+                    ),
+                  ),
+          },
         ],
       );
     }

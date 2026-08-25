@@ -67,28 +67,43 @@ class _Home extends ConsumerWidget {
           const SizedBox(height: Space.md),
 
           // The rent card first, always. It is the reason this app gets opened.
+          //
+          // ONE READ, ONE SECTION, EVEN THOUGH IT DRAWS TWO CARDS. The rent and the room both
+          // come out of the same `rpc_fee_ledger` row, so one failure is one fact and gets one
+          // panel. Two [AsyncSection]s bound to the same [AsyncValue] used to stack the
+          // identical error twice, one under the other, on the first screen a resident sees.
           AsyncSection<FeeLedgerRow?>(
             value: rent,
             onRetry: () => ref.invalidate(myRentThisMonthProvider),
-            loading: const SkeletonCard(lines: 4),
-            builder: (row) => RentCard(
-              periodMonth: month,
-              row: row,
-              onPay: row == null
-                  ? null
-                  : () => showPayRentSheet(context, periodMonth: month, rent: row),
+            loading: const Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SkeletonCard(lines: 4),
+                SizedBox(height: Space.sm),
+                SkeletonCard(lines: 1),
+              ],
             ),
-          ),
-
-          const SizedBox(height: Space.sm),
-          AsyncSection<FeeLedgerRow?>(
-            value: rent,
-            onRetry: () => ref.invalidate(myRentThisMonthProvider),
-            loading: const SkeletonCard(lines: 1),
-            builder: (row) => RoomBedCard(
-              roomNumber: row?.roomNumber,
-              bedNumber: row?.bedNumber,
-              roommates: roommates.value?.length,
+            builder: (row) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                RentCard(
+                  periodMonth: month,
+                  row: row,
+                  onPay: row == null
+                      ? null
+                      : () => showPayRentSheet(context, periodMonth: month, rent: row),
+                ),
+                const SizedBox(height: Space.sm),
+                RoomBedCard(
+                  roomNumber: row?.roomNumber,
+                  bedNumber: row?.bedNumber,
+                  // The roommate count is a SEPARATE read and keeps its own states. The whole
+                  // AsyncValue goes across, not `roommates.value?.length`, which collapsed
+                  // "still loading" and "st_my_roommates() failed" into the same silence and so
+                  // deleted the line outright when the read failed.
+                  roommates: roommates,
+                ),
+              ],
             ),
           ),
 
@@ -110,8 +125,15 @@ class _Greeting extends StatelessWidget {
   const _Greeting({required this.name, required this.hostelName});
   final String name;
 
-  /// Null while the contact card is still loading. The greeting renders without it rather than
-  /// holding the whole screen for one line of text.
+  /// The hostel's name, or nothing.
+  ///
+  /// Null covers three things and renders identically in all of them: the contact card is still
+  /// loading, the read failed, and the resident has no readable hostel record. That is a
+  /// deliberate exception to the rule the rest of this screen follows, and it is safe for one
+  /// reason only — a withheld subtitle states nothing, so there is no wrong action to take on
+  /// it. Profile draws the same card with a real failure panel, which is where the question
+  /// "why can I not see my hostel" gets answered. What this must never do is print a name it
+  /// does not have.
   final String? hostelName;
 
   @override
@@ -142,7 +164,7 @@ class _QuickActions extends StatelessWidget {
         Expanded(
           child: FilledButton.icon(
             onPressed: () => raiseComplaint(context, me),
-            icon: const Icon(Icons.add_comment_rounded, size: 20),
+            icon: const Icon(Icons.add_comment_rounded, size: IconSize.md),
             label: const Text('Complaint'),
           ),
         ),
@@ -150,7 +172,7 @@ class _QuickActions extends StatelessWidget {
         Expanded(
           child: OutlinedButton.icon(
             onPressed: () => _open(context, 'Notices', const StudentNoticesScreen()),
-            icon: const Icon(Icons.campaign_rounded, size: 20),
+            icon: const Icon(Icons.campaign_rounded, size: IconSize.md),
             label: const Text('Notices'),
           ),
         ),
@@ -180,7 +202,13 @@ class _OpenComplaints extends ConsumerWidget {
   ///
   /// `hasMore` means the server had another page, so the count on this device is a FLOOR rather
   /// than a total. It says "20+" in that case instead of stating a figure it cannot back up.
-  static String? _openCaption(PagedResult<Complaint>? page) {
+  ///
+  /// SILENT UNLESS THE READ SUCCEEDED. While it is in flight there is no count to state. When
+  /// it FAILED there is none either, and `.value` does not go null on a failed refresh — it
+  /// keeps the last page — so reading it directly would have left "1 complaint still open"
+  /// standing as a heading over the panel that says the list could not be read.
+  static String? _openCaption(AsyncValue<PagedResult<Complaint>> complaints) {
+    final page = complaints.hasError ? null : complaints.value;
     if (page == null) return null;
     if (page.hasMore) return '${page.items.length}+ still open';
     if (page.isEmpty) return 'Nothing open';
@@ -199,7 +227,7 @@ class _OpenComplaints extends ConsumerWidget {
       children: [
         SectionHeading(
           title: 'Your complaints',
-          caption: _openCaption(complaints.value),
+          caption: _openCaption(complaints),
           trailing: TextButton(
             onPressed: () => _open(context, 'Complaints', const StudentComplaintsScreen()),
             child: const Text('See all'),

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../data/manager_models.dart';
 import '../data/manager_providers.dart';
 import '../widgets/manager_ui.dart';
 import '../widgets/paged_list.dart';
@@ -50,16 +51,11 @@ class ManagerTasksScreen extends ConsumerWidget {
       openOnly: filter.openOnly,
     );
     final page = ref.watch(tasksProvider(query));
-    final load = ref.watch(taskLoadProvider(hostelId)).value;
+    final load = ref.watch(taskLoadProvider(hostelId));
 
     return ManagerScreen(
       title: 'Tasks',
-      subtitle: load == null
-          ? null
-          : load.isClear
-              ? 'Nothing open'
-              : '${plural(load.open, 'job', 'jobs')} open'
-                  '${load.overdue > 0 ? ' · ${load.overdue} late' : ''}',
+      subtitle: _loadLine(load),
       child: PagedList<Task>(
         value: page,
         onRefresh: () async {
@@ -85,6 +81,30 @@ class ManagerTasksScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The counts under the title — and what they say when there are none to give.
+///
+/// This is the third place taskLoadProvider is read, and it threw its error away like the
+/// other two: `.value` is null while counting AND when the count failed, so a header that
+/// could not be produced looked exactly like a header that was still coming. The list below
+/// draws its own failure, but the list and the count are different reads: the page can arrive
+/// while the two HEAD requests behind the count do not.
+///
+/// Null is still "counting" — an absent subtitle for a moment is honest, and there is nowhere
+/// quieter to put it. "Job count unavailable" is a fourth string that no successful read can
+/// produce, so it cannot be confused with "Nothing open". The retry is pull-to-refresh on the
+/// list below, which invalidates taskLoadProvider along with the page.
+String? _loadLine(AsyncValue<TaskLoad> load) {
+  // hasValue first: a failed refresh must not blank a count already on screen.
+  if (load.hasValue) {
+    final l = load.requireValue;
+    if (l.isClear) return 'Nothing open';
+    return '${plural(l.open, 'job', 'jobs')} open'
+        '${l.overdue > 0 ? ' · ${l.overdue} late' : ''}';
+  }
+  if (load.hasError) return 'Job count unavailable — pull down to try again';
+  return null;
 }
 
 class _Filters extends ConsumerWidget {

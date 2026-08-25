@@ -12,9 +12,19 @@ final class HostelRepository extends Repository {
 
   /// The hostel a session is attached to.
   ///
-  /// Returns null when the row is not visible. That is not necessarily "deleted": RLS
-  /// (`app.can_read_hostel`) hides other tenants' hostels entirely, so an id from the wrong
-  /// place looks exactly like a missing one — which is the intended behaviour.
+  /// ═══ NULL HERE HAS EXACTLY ONE MEANING, AND IT IS KEPT ═══
+  /// "This row is not visible to this account." public.hostels has no soft delete (no
+  /// deleted_at — db/schema.sql:94), so the row is either there for you or it is not, and RLS
+  /// (`app.can_read_hostel`) is designed to make "another tenant's" and "gone" identical from
+  /// out here. There is no client-side reading that separates them, so a thrown failure would
+  /// be inventing a distinction the server refuses to draw.
+  ///
+  /// It stays nullable for a second reason: null is not the ambiguous state on this call. A
+  /// FAILED read already throws (via [guard]) and a LOADING one is the provider's AsyncLoading,
+  /// so the three that mattered are already three different things — and the screens that read
+  /// it word the null case as the plain, unalarming sentence the rule asks for rather than as
+  /// an error with a retry that could not help. Turning it into a throw would take that wording
+  /// away and replace it with an alarm.
   Future<Hostel?> byId(String hostelId) => guard(() async {
         final row = await db
             .from('hostels')
@@ -39,10 +49,27 @@ final class HostelRepository extends Repository {
   /// Goes through st_hostel_contacts() rather than joining public.users, because students
   /// cannot read that table at all (§4.8). The function resolves the caller's hostel itself,
   /// so there is nothing to pass and nothing to get wrong.
-  Future<HostelContacts?> contacts() => guard(() async {
+  ///
+  /// ═══ ZERO ROWS IS ABOUT THE CALLER, NOT ABOUT THE HOSTEL ═══
+  /// SECURITY DEFINER, and its only filter is
+  /// `h.id = coalesce(app.user_hostel_id(), <the caller's student row's hostel>)`
+  /// (db/schema.sql:1267). A hostel that resolves ALWAYS produces a row — hostels.name is NOT
+  /// NULL, and every other column is allowed to be blank — so there is no such thing as "this
+  /// hostel has no contact card". Zero rows means the coalesce found nothing: the caller is not
+  /// staff at a hostel and has no live resident row either.
+  ///
+  /// That used to return null, which the profile screen drew as "Hostel details unavailable —
+  /// pull down to try again". Pulling down cannot conjure a hostel assignment, so the screen was
+  /// offering a recovery that does not exist. [NotFoundFailure] is not retryable, and it carries
+  /// the sentence that actually helps.
+  Future<HostelContacts> contacts() => guard(() async {
         final data = await db.rpc('st_hostel_contacts');
-        final row = rpcRow(data, 'st_hostel_contacts');
-        return row == null ? null : HostelContacts.fromJson(row);
+        return HostelContacts.fromJson(rpcRowOrMissing(
+          data,
+          'st_hostel_contacts',
+          missing: 'Your account is not attached to a hostel, so there are no contact details '
+              'to show. Ask your warden to check your registration.',
+        ));
       });
 
   /// Owner-only edit of the hostel rules text.

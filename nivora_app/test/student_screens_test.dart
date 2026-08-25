@@ -11,6 +11,7 @@ import 'package:mobile/features/student/notices_screen.dart';
 import 'package:mobile/features/student/raise_complaint_sheet.dart';
 import 'package:mobile/features/student/profile_screen.dart';
 import 'package:mobile/features/student/student_providers.dart';
+import 'package:mobile/features/student/widgets/common.dart';
 
 import 'student_test.dart' show partialRow, unpaidRow;
 
@@ -99,6 +100,15 @@ class _FakeNotices extends NoticesNotifier {
   Future<PagedResult<Notice>> fetchPage(int page) async => one(items);
 }
 
+/// The same family provider, refusing. Used to prove a failed read looks like a failed read.
+class _FailingComplaints extends ComplaintsNotifier {
+  _FailingComplaints(super.query, this.failure);
+  final AppFailure failure;
+
+  @override
+  Future<PagedResult<Complaint>> fetchPage(int page) async => throw failure;
+}
+
 Future<void> showScreen(
   WidgetTester tester,
   Widget screen, {
@@ -109,6 +119,13 @@ Future<void> showScreen(
   List<Complaint> complaints = const [],
   List<Notice> notices = const [],
   PagedResult<FeePayment>? history,
+
+  /// A read that FAILS rather than returning nothing. The two look identical to any code that
+  /// branches on `provider.value == null`, and they are not the same event: "no roommates" and
+  /// "we could not find out" send a resident to different places.
+  AppFailure? rentFailure,
+  AppFailure? roommatesFailure,
+  AppFailure? complaintsFailure,
 }) async {
   // A tall viewport, because these are lazily-built lists: on a 600dp test window the sections
   // below the fold are never built, and "the notice is not on screen" would look identical to
@@ -124,8 +141,14 @@ Future<void> showScreen(
         // Pinned so a test is not a different test in September.
         currentPeriodMonthProvider.overrideWithValue('2026-08'),
         myStudentProvider.overrideWith((ref) async => resident ? _me : null),
-        myRentThisMonthProvider.overrideWith((ref) async => rent),
-        roommatesProvider.overrideWith((ref) async => _roommates),
+        myRentThisMonthProvider.overrideWith((ref) async {
+          if (rentFailure != null) throw rentFailure;
+          return rent;
+        }),
+        roommatesProvider.overrideWith((ref) async {
+          if (roommatesFailure != null) throw roommatesFailure;
+          return _roommates;
+        }),
         hostelContactsProvider.overrideWith((ref) async => _contacts),
         studentFeeHistoryProvider
             .overrideWith((ref, id) async => history ?? one<FeePayment>(const [])),
@@ -133,7 +156,10 @@ Future<void> showScreen(
         // fakes carry a stand-in key. Nothing reads it: fetchPage is overridden, and the key
         // only exists so the real notifier can build a query.
         complaintsProvider.overrideWith2(
-            (_) => _FakeComplaints(const ComplaintQuery(hostelId: 'h'), complaints)),
+          (_) => complaintsFailure == null
+              ? _FakeComplaints(const ComplaintQuery(hostelId: 'h'), complaints)
+              : _FailingComplaints(const ComplaintQuery(hostelId: 'h'), complaintsFailure),
+        ),
         noticesProvider.overrideWith2((_) => _FakeNotices('h', notices)),
         // THE TRIPWIRE. Present on every screen test in this file, checked in tearDown.
         hostelStatsProvider.overrideWith((ref, query) {
@@ -342,6 +368,101 @@ void main() {
     await tester.tap(find.text('Send to my warden'));
     await tester.pumpAndSettle();
     expect(find.text('Give your complaint a short title'), findsOneWidget);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // A FAILURE MUST LOOK LIKE A FAILURE — once, in the right place, at the right volume.
+  //
+  // `provider.value` is null while a read is in flight AND when it failed AND when RLS hid the
+  // row. Every test below exists because some piece of this screen used to collapse two of
+  // those three into one picture, and the analyzer cannot see any of it.
+
+  testWidgets('one failed ledger read draws one error panel, not two', (tester) async {
+    // Home draws the rent card and the room card from the SAME `rpc_fee_ledger` row. They were
+    // two AsyncSections bound to one AsyncValue, so a single failed read stacked the identical
+    // panel twice — the first thing a resident sees, visibly broken.
+    await showScreen(
+      tester,
+      const StudentHomeScreen(),
+      rentFailure: const ServerFailure('502'),
+    );
+
+    expect(find.byType(ErrorNote), findsOneWidget);
+    expect(find.text('Nivora is busy'), findsOneWidget);
+    // And it must not be mistaken for the "no ledger row for you this month" state, which is a
+    // real and completely different answer.
+    expect(find.text('No rent record yet'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a failed roommate read does not silently delete the sharing line',
+      (tester) async {
+    // `roommates.value?.length` swallowed this: the line just disappeared, which reads as a
+    // room with nobody else in it.
+    await showScreen(
+      tester,
+      const StudentHomeScreen(),
+      rent: partialRow,
+      roommatesFailure: const OfflineFailure('no route to host'),
+    );
+
+    // The room and bed came from the ledger and are unaffected.
+    expect(find.text('Room 101 · Bed 3'), findsOneWidget);
+    expect(
+      find.text('Could not check who else is in this room. Pull down to try again.'),
+      findsOneWidget,
+    );
+    expect(find.text('You have the room to yourself'), findsNothing);
+    // One failed secondary read is not a reason to put a panel over the rent card.
+    expect(find.byType(ErrorNote), findsNothing);
+  });
+
+  testWidgets('a failed complaints read leaves no count standing over it', (tester) async {
+    // The heading counts what is open. A count is a claim, and there is nothing to back it up
+    // when the read that produced it failed.
+    await showScreen(
+      tester,
+      const StudentHomeScreen(),
+      rent: partialRow,
+      complaintsFailure: const ServerFailure('502'),
+    );
+
+    expect(find.text('Your complaints'), findsOneWidget);
+    expect(find.byType(ErrorNote), findsOneWidget);
+    expect(find.textContaining('still open'), findsNothing);
+    // "Nothing open" is the answer for a SUCCESSFUL read that came back empty.
+    expect(find.text('Nothing open'), findsNothing);
+    expect(find.text('Nothing outstanding'), findsNothing);
+  });
+
+  testWidgets('a refusal is not dressed up as a retry', (tester) async {
+    // 42501 from `st_my_roommates()`. Retrying cannot change an RLS decision, so the copy must
+    // not send a resident back to a gesture that will refuse them again.
+    await showScreen(
+      tester,
+      const StudentHomeScreen(),
+      rent: partialRow,
+      roommatesFailure: const AccessDeniedFailure('insufficient_privilege'),
+    );
+
+    expect(find.text('Who else is in this room is not available to you.'), findsOneWidget);
+    expect(find.textContaining('Pull down'), findsNothing);
+  });
+
+  testWidgets('profile states one roommate failure, in one place', (tester) async {
+    // Profile draws the roommate read twice over — a count on the room card and the list
+    // beneath it. Only the list, which is the richer of the two, owns the failure.
+    await showScreen(
+      tester,
+      const StudentProfileScreen(),
+      rent: partialRow,
+      roommatesFailure: const ServerFailure('502'),
+    );
+
+    expect(find.byType(ErrorNote), findsOneWidget);
+    expect(find.text('Room 101 · Bed 3'), findsOneWidget);
+    // "No roommates listed" means the read SUCCEEDED and the room is empty.
+    expect(find.text('No roommates listed'), findsNothing);
   });
 
   testWidgets('an account with no resident row is told so, not shown an error',

@@ -339,10 +339,18 @@ class _Onboarding extends ConsumerWidget {
           ),
           data: (points) {
             if (points.isEmpty) {
+              // NOT "no history yet", which is what this used to say. rpc_sa_onboarding_series
+              // is a generate_series over twelve months with a count per month and
+              // `where app.is_super_admin()` on the end: a Super Admin gets twelve rows on the
+              // day the platform is created, because a month with nothing in it is still a row.
+              // NO rows at all is the refusal, and only the refusal. Said plainly rather than
+              // as a second alarm — the hero above has already said it in full.
               return const SaEmpty(
-                icon: Icons.show_chart_rounded,
-                title: 'No onboarding history',
-                message: 'This appears once the first hostel is created.',
+                icon: Icons.lock_outline_rounded,
+                title: 'Onboarding history withheld',
+                message: 'The server returns twelve months for the Super Admin whether or not '
+                    'anything happened in them, so nothing coming back means this account was '
+                    'not given the series — not that the platform is new.',
               );
             }
             final peak = points.fold<int>(0, (m, p) => p.hostels > m ? p.hostels : m);
@@ -430,7 +438,7 @@ class _Bar extends StatelessWidget {
               height: (_plotHeight * fraction).clamp(2.0, _plotHeight),
               decoration: BoxDecoration(
                 color: tone,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.tiny)),
               ),
             ),
             const SizedBox(height: Space.xxs),

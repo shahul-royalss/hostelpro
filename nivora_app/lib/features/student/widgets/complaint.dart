@@ -39,7 +39,7 @@ class ComplaintTile extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(complaintIcon(complaint.category), size: 18, color: t.colorScheme.primary),
+              Icon(complaintIcon(complaint.category), size: IconSize.md, color: t.colorScheme.primary),
               const SizedBox(width: Space.xs),
               Expanded(
                 child: Text(
@@ -112,7 +112,12 @@ class _Step extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final tone = complaintTone(event.status);
+    final tones = context.tones;
+    // [complaintTone] is a context-free switch, so this arrives CANONICAL. The same status is
+    // drawn as a resolved accent by the [StatusPill] at the top of the detail sheet, and this
+    // dot sits a few hundred pixels below it — unresolved, the two would be different colours
+    // for one meaning on one screen in dark mode.
+    final accent = tones.resolve(complaintTone(event.status));
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -127,9 +132,11 @@ class _Step extends StatelessWidget {
                   width: 10,
                   height: 10,
                   decoration: BoxDecoration(
-                    color: tone,
+                    color: accent,
                     shape: BoxShape.circle,
-                    border: Border.all(color: tone.withValues(alpha: 0.35), width: 3),
+                    // The halo alpha comes from the measured chip recipe rather than the 0.35
+                    // that was invented here: same tone, same decorative weight, one place.
+                    border: Border.all(color: tones.chipBorder(accent), width: 3),
                   ),
                 ),
                 if (!isLast)

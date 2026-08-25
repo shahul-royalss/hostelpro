@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/providers.dart';
+import 'data/manager_models.dart';
 import 'data/manager_providers.dart';
 import 'expenses/manager_expenses_screen.dart';
 import 'home/manager_home_screen.dart';
@@ -34,11 +35,13 @@ class ManagerShell extends ConsumerWidget {
     final hostelId = ref.watch(currentHostelIdProvider);
 
     // Already fetched by the home screen under the same key, so the badge costs nothing extra.
-    // Null while it loads, and null is drawn as NO badge rather than as a zero: a badge reading
-    // "0" is noise that trains people to ignore badges.
-    final overdue = hostelId == null
-        ? null
-        : ref.watch(taskLoadProvider(hostelId)).value?.overdue;
+    //
+    // THE WHOLE AsyncValue, not `.value?.overdue`. That expression is null while the count is
+    // in flight, null when the count FAILED and null when RLS refused it — and all three drew
+    // exactly what a genuine zero draws: no badge. A tab that silently stops reporting late
+    // jobs is indistinguishable from a tab with no late jobs, which is the reading that lets
+    // work sit past its date for a week.
+    final load = hostelId == null ? null : ref.watch(taskLoadProvider(hostelId));
 
     return Scaffold(
       body: IndexedStack(
@@ -63,7 +66,7 @@ class ManagerShell extends ConsumerWidget {
           const NavigationDestination(
               icon: Icon(Icons.trending_down_rounded), label: 'Expenses'),
           NavigationDestination(
-            icon: _Badged(count: overdue, child: const Icon(Icons.checklist_rounded)),
+            icon: _Badged(load: load, child: const Icon(Icons.checklist_rounded)),
             label: 'Tasks',
           ),
           const NavigationDestination(icon: Icon(Icons.restaurant_rounded), label: 'Menu'),
@@ -73,20 +76,43 @@ class ManagerShell extends ConsumerWidget {
   }
 }
 
-/// A count on a tab icon, shown only when there is something to count.
+/// A count on a tab icon — and, when the count could not be read, a mark that says so.
 ///
 /// The badge is the OVERDUE figure, not the open one: a manager with a healthy list of four
 /// jobs does not need a red dot following them around, and a badge that is always lit stops
 /// meaning anything.
+///
+/// FOUR STATES, THREE FACES. A real zero and a count still in flight both draw no badge —
+/// those two are safe to share, because a badge that appears a moment late costs nothing and
+/// "0" is noise. A count that FAILED draws "!" instead: not a number, so it cannot be read as
+/// one, and tapping through to Tasks lands on a header that now names the failure.
 class _Badged extends StatelessWidget {
-  const _Badged({required this.count, required this.child});
-  final int? count;
+  const _Badged({required this.load, required this.child});
+
+  /// Null when there is no hostel on the account, so there is nothing to count in the first
+  /// place — distinct from a count that failed.
+  final AsyncValue<TaskLoad>? load;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final value = count;
-    if (value == null || value <= 0) return child;
-    return Badge.count(count: value, child: child);
+    final value = load;
+    if (value == null) return child;
+
+    // hasValue first, so a failed refresh does not replace a count that is already correct.
+    if (value.hasValue) {
+      final overdue = value.requireValue.overdue;
+      if (overdue <= 0) return child;
+      return Badge.count(count: overdue, child: child);
+    }
+
+    if (value.hasError) {
+      return Semantics(
+        label: 'Overdue jobs unknown: the count could not be read',
+        child: Badge(label: const Text('!'), child: child),
+      );
+    }
+
+    return child; // still counting
   }
 }

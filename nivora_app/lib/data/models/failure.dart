@@ -4,6 +4,24 @@ import 'dart:async';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Whether the operation a failure interrupted is known NOT to have taken effect.
+///
+/// WHY THIS IS NOT A DETAIL. "We confirmed nothing happened" and "we stopped waiting and do not
+/// know" are opposite messages. The first lets a resident tap Pay again; the second must not,
+/// because the first attempt may be settling on a server this phone cannot currently see. There
+/// is no third option and there is no defaulting to the comfortable one — a request that was
+/// refused, or that never left the handset, is [none]; a request whose answer never arrived is
+/// [unknown], and every screen downstream has to say so out loud.
+enum SideEffect {
+  /// Nothing changed on the server. The request was refused, rejected, or never landed.
+  none,
+
+  /// The request may or may not have taken effect. Never render this as "nothing happened",
+  /// never offer a plain "try again" that would repeat a side effect, and never show a figure
+  /// derived from the assumption that it failed.
+  unknown,
+}
+
 /// What went wrong, in terms a screen can act on.
 ///
 /// THE POINT OF THIS FILE. "Something went wrong" is the worst sentence in software. The four
@@ -16,8 +34,21 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// In particular 42501 is `insufficient_privilege`. It means "you do not have access to that",
 /// and every write RPC in db/schema.sql raises it deliberately. Rendering it as a crash trains
 /// staff to file bugs about permissions working correctly.
+///
+/// ═══ THE FOUR STATES A SCREEN HAS TO TELL APART ═══
+/// LOADING, EMPTY, FAILED and REFUSED are four different facts and must not draw the same
+/// picture. Three of them live here: a failure that is [isRetryable] is FAILED, one that is
+/// [isRefusal] is REFUSED, one that [isAbsence] is the thing genuinely not being there. EMPTY
+/// is the fourth and is NOT a failure at all — it is a successful read with no rows, and the
+/// only way a repository is allowed to say it. Which is why a repository must never hand back
+/// an empty list or a bare null for a row the server refused: doing so spends the one signal
+/// that means "there are none of these" on a fact that is nothing like it.
 sealed class AppFailure implements Exception {
-  const AppFailure(this.message, {this.technical});
+  const AppFailure(
+    this.message, {
+    this.technical,
+    this.sideEffect = SideEffect.none,
+  });
 
   /// Safe and useful to put in front of a user, verbatim.
   final String message;
@@ -25,8 +56,23 @@ sealed class AppFailure implements Exception {
   /// The underlying driver text. For logs and bug reports; never for the UI.
   final String? technical;
 
+  /// Whether the thing being attempted is known not to have happened. See [SideEffect].
+  final SideEffect sideEffect;
+
   /// True when trying the same thing again could plausibly work.
   bool get isRetryable => this is OfflineFailure || this is ServerFailure;
+
+  /// The server said no and meant it. Retrying cannot help and a retry button must not be
+  /// drawn; the honest screen is a plain sentence about who to ask.
+  bool get isRefusal => this is AccessDeniedFailure || this is ReadOnlyFailure;
+
+  /// The row is not there for this caller — deleted, another tenant's, or hidden by a policy.
+  /// NOT the same as a query that legitimately matched nothing, which is not a failure at all.
+  bool get isAbsence => this is NotFoundFailure;
+
+  /// WE DO NOT KNOW WHETHER IT HAPPENED. The loudest thing this class can say, and the one a
+  /// screen is most tempted to round down to "nothing happened". See [SideEffect.unknown].
+  bool get outcomeIsUnknown => sideEffect == SideEffect.unknown;
 
   @override
   String toString() => '$runtimeType: $message${technical == null ? '' : ' ($technical)'}';
@@ -47,7 +93,20 @@ sealed class AppFailure implements Exception {
       );
     }
 
-    if (error is TimeoutException || _looksOffline(error)) {
+    // A TIMEOUT IS NOT THE SAME AS A DEAD SOCKET, even though both end up offline-shaped. A
+    // request that was sent and never answered may well have been applied; one that could not
+    // resolve a host or was refused at the socket never reached Postgres at all. The transport
+    // classification is identical, the [SideEffect] is not, and for a write that difference is
+    // the difference between "tap it again" and "go and look before you tap it again".
+    if (error is TimeoutException) {
+      return OfflineFailure(
+        'Nivora did not answer in time. Check your connection and try again.',
+        technical: error.toString(),
+        sideEffect: SideEffect.unknown,
+      );
+    }
+
+    if (_looksOffline(error)) {
       return OfflineFailure(
         'Cannot reach Nivora. Check your connection and try again.',
         technical: error.toString(),
@@ -195,47 +254,47 @@ sealed class AppFailure implements Exception {
 
 /// No usable network. The request never reached the server, so nothing changed.
 final class OfflineFailure extends AppFailure {
-  const OfflineFailure(super.message, {super.technical});
+  const OfflineFailure(super.message, {super.technical, super.sideEffect = SideEffect.none});
 }
 
 /// RLS said no. Retrying will not help; the user needs a different account or a role change.
 final class AccessDeniedFailure extends AppFailure {
-  const AccessDeniedFailure(super.message, {super.technical});
+  const AccessDeniedFailure(super.message, {super.technical, super.sideEffect = SideEffect.none});
 }
 
 /// Hard rule §4.4 — the hostel's subscription lapsed, so reads still work and writes do not.
 final class ReadOnlyFailure extends AppFailure {
-  const ReadOnlyFailure(super.message, {super.technical});
+  const ReadOnlyFailure(super.message, {super.technical, super.sideEffect = SideEffect.none});
 }
 
 /// The row is gone, or RLS hides it so completely it may as well be.
 final class NotFoundFailure extends AppFailure {
-  const NotFoundFailure(super.message, {super.technical});
+  const NotFoundFailure(super.message, {super.technical, super.sideEffect = SideEffect.none});
 }
 
 /// A uniqueness rule was hit — usually someone else got there first.
 final class ConflictFailure extends AppFailure {
-  const ConflictFailure(super.message, {super.technical});
+  const ConflictFailure(super.message, {super.technical, super.sideEffect = SideEffect.none});
 }
 
 /// The server rejected the values. The message comes from the database and is user-facing.
 final class InvalidInputFailure extends AppFailure {
-  const InvalidInputFailure(super.message, {super.technical});
+  const InvalidInputFailure(super.message, {super.technical, super.sideEffect = SideEffect.none});
 }
 
 /// The session is no longer valid. The router signs the user out on this.
 final class SignedOutFailure extends AppFailure {
-  const SignedOutFailure(super.message, {super.technical});
+  const SignedOutFailure(super.message, {super.technical, super.sideEffect = SideEffect.none});
 }
 
 /// The server failed on its own account. Worth one retry.
 final class ServerFailure extends AppFailure {
-  const ServerFailure(super.message, {super.technical});
+  const ServerFailure(super.message, {super.technical, super.sideEffect = SideEffect.none});
 }
 
 /// Everything else, including a client/database shape disagreement (see RowShapeError).
 final class UnexpectedFailure extends AppFailure {
-  const UnexpectedFailure(super.message, {super.technical});
+  const UnexpectedFailure(super.message, {super.technical, super.sideEffect = SideEffect.none});
 }
 
 /// Runs a database call and converts anything it throws into an [AppFailure].

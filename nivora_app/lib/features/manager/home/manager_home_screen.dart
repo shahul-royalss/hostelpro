@@ -50,17 +50,23 @@ class ManagerHomeScreen extends ConsumerWidget {
       );
     }
 
-    final hostel = ref.watch(hostelProvider(hostelId)).value;
+    // The WHOLE AsyncValue, not `.value`. A failed hostels read and an active hostel both
+    // produce a null Hostel, and this screen's safety banner hangs off that difference.
+    final hostel = ref.watch(hostelProvider(hostelId));
     final load = ref.watch(taskLoadProvider(hostelId));
     final finance = ref.watch(managerFinanceProvider(hostelId));
     final firstName = (session?.fullName ?? '').split(' ').first;
 
     return ManagerScreen(
       title: firstName.isEmpty ? 'Today' : 'Hello, $firstName',
-      subtitle: hostel?.name,
+      subtitle: hostel.value?.name,
       actions: const [_SignOutButton()],
       child: RefreshIndicator(
         onRefresh: () async {
+          // The hostel row is refreshed here too. Before, pull-to-refresh could not clear a
+          // failed status read, so the one retry gesture on the screen could not reach the
+          // one message on it that is about safety.
+          ref.invalidate(hostelProvider(hostelId));
           ref.invalidate(taskLoadProvider(hostelId));
           ref.invalidate(managerFinanceProvider(hostelId));
           ref.invalidate(tasksProvider);
@@ -69,14 +75,7 @@ class ManagerHomeScreen extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.huge),
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            // hostels.status is kept in step with the subscription by app.subscription_state
-            // and the nightly sweep, so this is the same flag every write is checked against.
-            // Saying it here means the manager hears it before a save is refused, not after.
-            if (hostel != null && hostel.status != HostelStatus.active)
-              Padding(
-                padding: const EdgeInsets.only(bottom: Space.sm),
-                child: _ReadOnlyBanner(status: hostel.status),
-              ),
+            _HostelStatus(hostelId: hostelId, hostel: hostel),
 
             _Attention(hostelId: hostelId, load: load, finance: finance),
 
@@ -96,6 +95,14 @@ class ManagerHomeScreen extends ConsumerWidget {
 }
 
 /// The two counts and today's spend, side by side.
+///
+/// BOTH TILES GO THROUGH [AsyncStat] RATHER THAN READING `.value`. `load.value` is null while
+/// the two HEAD requests are in flight, null when they failed, and null when RLS refused them
+/// — three facts, one dash, and a dash in a figure slot is read as a zero. "Nothing is late"
+/// and "we never got an answer" are opposite instructions to the person holding the phone.
+///
+/// The old code also chose the tile's TONE from that same null: while counting, the caption
+/// read "None late" in success green. It was reassurance the server had not given.
 class _Attention extends ConsumerWidget {
   const _Attention({required this.hostelId, required this.load, required this.finance});
 
@@ -105,40 +112,54 @@ class _Attention extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tasks = load.value;
-    final today = finance.value?.todayOut;
-
     return Row(
+      // start, NOT stretch: this Row sits in a ListView, so its height is unbounded and
+      // stretch asks a child to be infinitely tall. The two tiles no longer have to be the
+      // same height anyway — a failed tile is deliberately not shaped like a figure.
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: GlassStatCard(
+          child: AsyncStat<TaskLoad>(
+            value: load,
             // Emphasised — the one glass tile on the screen, on the figure the screen is about.
             emphasised: true,
             label: 'Jobs open',
-            value: tasks == null ? '—' : '${tasks.open}',
-            caption: tasks == null
-                ? 'Counting'
-                : tasks.overdue > 0
-                    ? '${tasks.overdue} past their date'
-                    : 'None late',
             icon: Icons.checklist_rounded,
-            tone: tasks != null && tasks.overdue > 0
-                ? NivoraColors.error
-                : NivoraColors.success,
+            loadingCaption: 'Counting',
             onTap: () => ref.read(managerTabProvider.notifier).go(2),
+            onRetry: () => ref.invalidate(taskLoadProvider(hostelId)),
+            figure: (tasks) => StatFigure(
+              value: '${tasks.open}',
+              caption: tasks.overdue > 0 ? '${tasks.overdue} past their date' : 'None late',
+              tone: tasks.overdue > 0 ? NivoraColors.error : NivoraColors.success,
+            ),
           ),
         ),
         const SizedBox(width: Space.sm),
         Expanded(
-          child: GlassStatCard(
+          child: AsyncStat<FinanceWindow>(
+            value: finance,
             label: 'Spent today',
-            // A dash, never a zero, while the figure is still in flight or missing. Zero is a
-            // claim; a dash is the truth about what is known so far.
-            value: today == null ? '—' : money(today),
-            caption: 'Booked against today',
             icon: Icons.trending_down_rounded,
-            tone: NivoraColors.warning,
+            loadingCaption: 'Adding up',
             onTap: () => ref.read(managerTabProvider.notifier).go(1),
+            onRetry: () => ref.invalidate(managerFinanceProvider(hostelId)),
+            figure: (window) {
+              final today = window.todayOut;
+              // rpc_daily_finance zero-fills every day in the range, so a hostel that spent
+              // nothing today comes back as 0 and is drawn as ₹0 — a real figure. A NULL here
+              // means the reply did not contain today at all, which is a fourth thing again:
+              // the read worked, and it still has nothing to say about today. It gets its own
+              // words and the neutral accent, so it cannot be mistaken for a spend of zero.
+              if (today == null) {
+                return const StatFigure(value: '—', caption: 'No figure for today');
+              }
+              return StatFigure(
+                value: money(today),
+                caption: 'Booked against today',
+                tone: NivoraColors.warning,
+              );
+            },
           ),
         ),
       ],
@@ -395,52 +416,88 @@ class _NextUpRow extends StatelessWidget {
   }
 }
 
-/// Says the hostel is read-only BEFORE a save is refused rather than after.
+/// Whether this hostel can be written to — INCLUDING WHEN WE DO NOT KNOW.
 ///
-/// The refusal itself is the server's: every insert policy goes through app.hostel_writable,
-/// and an expired subscription raises 42501 with a sentence written for the user. This banner
-/// does not decide anything — it repeats a status the manager can already read, early enough
-/// to be useful.
-class _ReadOnlyBanner extends StatelessWidget {
-  const _ReadOnlyBanner({required this.status});
-  final HostelStatus status;
+/// THE MOST IMPORTANT WIDGET ON THIS SCREEN, and it used to be the quietest. It was written as
+/// `if (hostel != null && hostel.status != active)` over `hostelProvider(id).value`. That null
+/// is three different facts: the read is still in flight, the read FAILED, or the row came
+/// back empty because RLS hid it. All three drew nothing at all — an ordinary screen, on a
+/// suspended or lapsed hostel, with the manager finding out only when a save was refused an
+/// hour later. A safety message that fails silently is worse than no safety message, because
+/// its absence is read as an all-clear.
+///
+/// So the read's own outcome is now on the screen. Four faces, and only one of them is blank:
+///   · loaded, active            — nothing. The all-clear, and the only honest way to earn it.
+///   · loaded, suspended/lapsed  — the warning, in the same words as before.
+///   · loaded, no row            — plain, unalarming: the row is not visible to this account.
+///   · failed                    — says the check itself did not happen, and offers the retry.
+///   · still loading             — says it is checking, so the blank is not mistaken for a pass.
+///
+/// hostels.status is kept in step with the subscription by app.subscription_state and the
+/// nightly sweep, so the loaded case repeats the same flag every write is checked against.
+/// This widget decides nothing; the refusal is the server's (app.hostel_writable, 42501).
+class _HostelStatus extends ConsumerWidget {
+  const _HostelStatus({required this.hostelId, required this.hostel});
+
+  final String hostelId;
+  final AsyncValue<Hostel?> hostel;
 
   @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final tone = context.tones.warning;
-    return Container(
-      padding: const EdgeInsets.all(Space.md),
-      decoration: BoxDecoration(
-        color: context.tones.chipFill(NivoraColors.warning),
-        border: Border.all(color: context.tones.chipBorder(NivoraColors.warning)),
-        borderRadius: Radii.rCard,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.lock_clock_rounded, size: IconSize.md, color: tone),
-          const SizedBox(width: Space.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('This hostel is read-only',
-                    style: t.textTheme.titleSmall?.copyWith(color: tone)),
-                const SizedBox(height: Space.xxs),
-                Text(
-                  status == HostelStatus.suspended
-                      ? 'The hostel is suspended. Expenses, menu changes and task updates will '
-                          'be refused until the owner sorts it out.'
-                      : 'The subscription has lapsed. You can still read everything; new '
-                          'entries will be refused until the owner renews.',
-                  style: t.textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final strip = _strip(ref);
+    if (strip == null) return const SizedBox.shrink();
+    return Padding(padding: const EdgeInsets.only(bottom: Space.sm), child: strip);
+  }
+
+  /// hasValue before hasError, as AsyncSection does it: a refresh that fails must not replace a
+  /// status we already know with "could not check".
+  Widget? _strip(WidgetRef ref) {
+    if (hostel.hasValue) {
+      final row = hostel.requireValue;
+      if (row == null) {
+        // The select returned nothing. Not "no hostels exist" — this manager's own row was not
+        // handed back, which is either an assignment that has been removed or a policy that no
+        // longer matches. Plain wording, no alarm colour: there is nothing here for the manager
+        // to fix, and it must still never be silent.
+        return const NoticeStrip(
+          icon: Icons.help_outline_rounded,
+          tone: NivoraColors.info,
+          title: 'This hostel is not visible to your account',
+          detail: 'Its details did not come back, so this screen cannot tell you whether new '
+              'entries will be accepted. Ask the owner to check your assignment.',
+        );
+      }
+      if (row.status == HostelStatus.active) return null;
+      return NoticeStrip(
+        icon: Icons.lock_clock_rounded,
+        tone: NivoraColors.warning,
+        title: 'This hostel is read-only',
+        detail: row.status == HostelStatus.suspended
+            ? 'The hostel is suspended. Expenses, menu changes and task updates will be '
+                'refused until the owner sorts it out.'
+            : 'The subscription has lapsed. You can still read everything; new entries will '
+                'be refused until the owner renews.',
+      );
+    }
+
+    if (hostel.hasError) {
+      final failure = AppFailure.from(hostel.error!);
+      return NoticeStrip(
+        icon: Icons.error_outline_rounded,
+        tone: NivoraColors.error,
+        title: 'Could not check whether this hostel is read-only',
+        detail: '${failure.message} Until it loads, treat a refused save as possible — the '
+            'hostel may be suspended or its subscription may have lapsed.',
+        action: failure.isRetryable ? () => ref.invalidate(hostelProvider(hostelId)) : null,
+      );
+    }
+
+    return const NoticeStrip(
+      busy: true,
+      icon: Icons.lock_clock_rounded,
+      tone: NivoraColors.info,
+      title: 'Checking this hostel',
+      detail: 'Confirming that new entries will be accepted.',
     );
   }
 }

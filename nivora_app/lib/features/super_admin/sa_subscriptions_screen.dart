@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
+import '../../data/providers.dart';
 import '../../shared/glass/glass.dart';
 import 'data/sa_providers.dart';
 import 'sa_hostel_detail_screen.dart';
@@ -72,6 +73,12 @@ class _SaSubscriptionsScreenState extends ConsumerState<SaSubscriptionsScreen> {
     final query = SaHostelQuery(subState: filter);
     final list = ref.watch(saHostelListProvider(query));
 
+    // The same corroboration the Hostels tab does, for the same reason: this tab is the same
+    // rpc_sa_hostels read, so an account that is not the Super Admin gets an empty list here
+    // too — and "Nothing has lapsed. Every hostel can still be written to." is a sentence about
+    // the platform that a refused account has no business being shown as if it were true.
+    final verdict = saEmptyVerdict(ref.watch(saStatsProvider));
+
     return SaScreen(
       title: 'Subscriptions',
       subtitle: 'One subscription per hostel',
@@ -103,6 +110,11 @@ class _SaSubscriptionsScreenState extends ConsumerState<SaSubscriptionsScreen> {
                 query: query,
                 filter: filter,
                 scroll: _scroll,
+                verdict: verdict,
+                onRecheck: () {
+                  ref.invalidate(saStatsProvider);
+                  ref.invalidate(saHostelListProvider(query));
+                },
               ),
             ),
           ),
@@ -163,6 +175,8 @@ class _SubscriptionList extends ConsumerWidget {
     required this.query,
     required this.filter,
     required this.scroll,
+    required this.verdict,
+    required this.onRecheck,
   });
 
   final PagedResult<SaHostelRow> page;
@@ -170,30 +184,63 @@ class _SubscriptionList extends ConsumerWidget {
   final SubscriptionState? filter;
   final ScrollController scroll;
 
+  /// What an empty page means here, from rpc_sa_dashboard. Same shape as the Hostels tab,
+  /// deliberately: the two tabs read the same function, so they must be able to be empty in the
+  /// same four ways. See [SaEmptyVerdict].
+  final SaEmptyVerdict verdict;
+
+  /// Re-runs both reads. The only exit from [SaEmptyVerdict.unverified].
+  final VoidCallback onRecheck;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (page.isEmpty) {
       return ListView(
         padding: const EdgeInsets.all(Space.md),
         children: [
-          SaEmpty(
-            icon: filter == SubscriptionState.expired
-                ? Icons.check_circle_outline_rounded
-                : Icons.card_membership_rounded,
-            title: switch (filter) {
-              SubscriptionState.expired => 'Nothing has lapsed',
-              SubscriptionState.expiring => 'Nothing is close to lapsing',
-              SubscriptionState.active => 'No active subscriptions',
-              null => 'No subscriptions yet',
-            },
-            message: switch (filter) {
-              SubscriptionState.expired =>
-                'Every hostel on the platform can still be written to.',
-              SubscriptionState.expiring =>
-                'No hostel is inside the fifteen-day window.',
-              _ => 'A subscription is created with the hostel, in the create wizard.',
-            },
-          ),
+          switch (verdict) {
+            SaEmptyVerdict.pending => const SaSkeletonCard(lines: 2, height: 140),
+
+            // "Nothing has lapsed" is a claim about every hostel on the platform. It cannot be
+            // made from a list that came back empty for a reason nobody can name.
+            SaEmptyVerdict.unverified => SaUnverified(
+                title: 'No subscriptions came back, and we cannot say why',
+                message: 'This tab reads the same platform list as the Hostels tab, and the '
+                    'dashboard figures it checks that against could not be read. A platform '
+                    'with nothing lapsed and an account that is not permitted to see the '
+                    'platform both look like this.',
+                onRetry: onRecheck,
+                action: filter == null
+                    ? null
+                    : OutlinedButton.icon(
+                        onPressed: () =>
+                            ref.read(saSubscriptionFilterProvider.notifier).set(null),
+                        icon: const Icon(Icons.filter_alt_off_rounded, size: IconSize.sm),
+                        label: const Text('Show all'),
+                      ),
+              ),
+
+            SaEmptyVerdict.refused => const SaNotPermitted(),
+
+            SaEmptyVerdict.confirmed => SaEmpty(
+                icon: filter == SubscriptionState.expired
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.card_membership_rounded,
+                title: switch (filter) {
+                  SubscriptionState.expired => 'Nothing has lapsed',
+                  SubscriptionState.expiring => 'Nothing is close to lapsing',
+                  SubscriptionState.active => 'No active subscriptions',
+                  null => 'No subscriptions yet',
+                },
+                message: switch (filter) {
+                  SubscriptionState.expired =>
+                    'Every hostel on the platform can still be written to.',
+                  SubscriptionState.expiring =>
+                    'No hostel is inside the fifteen-day window.',
+                  _ => 'A subscription is created with the hostel, in the create wizard.',
+                },
+              ),
+          },
         ],
       );
     }

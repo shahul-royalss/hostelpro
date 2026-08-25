@@ -214,7 +214,7 @@ class _Offer extends ConsumerWidget {
       children: [
         FilledButton.icon(
           onPressed: onPay,
-          icon: const Icon(Icons.lock_rounded, size: 20),
+          icon: const Icon(Icons.lock_rounded, size: IconSize.md),
           // The figure comes from the ledger row. The SERVER decides what is actually charged —
           // this app cannot name a price to Razorpay even if it wanted to — so if the two ever
           // disagree the payment is refused rather than taken at the wrong amount.
@@ -326,7 +326,7 @@ class _Verdict extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 22, color: tone),
+            Icon(icon, size: IconSize.lg, color: tone),
             const SizedBox(width: Space.sm),
             Expanded(
               child: Column(
@@ -357,7 +357,7 @@ class _Verdict extends StatelessWidget {
         if (receipt != null) ...[
           FilledButton.icon(
             onPressed: () => showReceipt(context, receipt!),
-            icon: const Icon(Icons.receipt_long_rounded, size: 20),
+            icon: const Icon(Icons.receipt_long_rounded, size: IconSize.md),
             label: const Text('Get your receipt'),
           ),
           const SizedBox(height: Space.xs),
@@ -406,7 +406,7 @@ class _Retry extends ConsumerWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 22, color: tone),
+            Icon(icon, size: IconSize.lg, color: tone),
             const SizedBox(width: Space.sm),
             Expanded(
               child: Column(
@@ -432,7 +432,7 @@ class _Retry extends ConsumerWidget {
         if (onRetry != null) ...[
           FilledButton.icon(
             onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded, size: 20),
+            icon: const Icon(Icons.refresh_rounded, size: IconSize.md),
             label: const Text('Try again'),
           ),
           const SizedBox(height: Space.xs),
@@ -460,7 +460,7 @@ class _TestModeNote extends StatelessWidget {
     final tone = context.tones.warning;
     return Row(
       children: [
-        Icon(Icons.science_outlined, size: 18, color: tone),
+        Icon(Icons.science_outlined, size: IconSize.md, color: tone),
         const SizedBox(width: Space.xs),
         Expanded(
           child: Text(
@@ -489,7 +489,7 @@ class _DeskRoute extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.storefront_rounded, size: 20, color: t.colorScheme.primary),
+          Icon(Icons.storefront_rounded, size: IconSize.md, color: t.colorScheme.primary),
           const SizedBox(width: Space.sm),
           Expanded(
             child: Column(

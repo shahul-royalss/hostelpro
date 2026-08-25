@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/theme/tokens.dart';
+import '../../data/providers.dart';
 import '../../shared/glass/glass.dart';
 import 'data/sa_models.dart';
 import 'data/sa_providers.dart';
@@ -39,6 +40,12 @@ class SaSecurityScreen extends ConsumerWidget {
     final filter = ref.watch(saAlertFilterProvider);
     final alerts = ref.watch(saAlertsProvider(filter.openOnly));
 
+    // security_alerts has a SELECT policy and no write policy, so a caller it does not admit
+    // reads ZERO ROWS rather than being refused — the same shape as the platform RPCs. An empty
+    // security log and a security log this account cannot read are very different sentences to
+    // put in front of a platform administrator, so the dashboard corroborates here too.
+    final verdict = saEmptyVerdict(ref.watch(saStatsProvider));
+
     return SaScreen(
       title: 'Security',
       subtitle: 'Patterns the audit trail flagged',
@@ -68,7 +75,15 @@ class SaSecurityScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              data: (rows) => _AlertList(alerts: rows, filter: filter),
+              data: (rows) => _AlertList(
+                alerts: rows,
+                filter: filter,
+                verdict: verdict,
+                onRecheck: () {
+                  ref.invalidate(saStatsProvider);
+                  ref.invalidate(saAlertsProvider(filter.openOnly));
+                },
+              ),
             ),
           ),
         ],
@@ -104,10 +119,26 @@ class _Filters extends ConsumerWidget {
 }
 
 class _AlertList extends ConsumerWidget {
-  const _AlertList({required this.alerts, required this.filter});
+  const _AlertList({
+    required this.alerts,
+    required this.filter,
+    required this.verdict,
+    required this.onRecheck,
+  });
 
   final List<SecurityAlert> alerts;
   final AlertFilter filter;
+
+  /// What an empty read of security_alerts means, corroborated by rpc_sa_dashboard.
+  ///
+  /// LOWER STAKES THAN THE HOSTELS TAB, AND STILL WORTH GETTING RIGHT. "Nothing outstanding" is
+  /// the sentence a platform admin most wants to be true and least wants to be a rendering
+  /// accident: an empty security console is either the quietest possible good news or the
+  /// loudest possible bad news, and those cannot share a screen.
+  final SaEmptyVerdict verdict;
+
+  /// Re-runs both reads. The only exit from [SaEmptyVerdict.unverified].
+  final VoidCallback onRecheck;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -115,15 +146,37 @@ class _AlertList extends ConsumerWidget {
       return ListView(
         padding: const EdgeInsets.all(Space.md),
         children: [
-          SaEmpty(
-            icon: Icons.shield_outlined,
-            title: filter.openOnly ? 'Nothing outstanding' : 'No alerts on record',
-            message: filter.openOnly
-                ? 'Every alert the detector has raised has been acknowledged. Switch to All '
-                    'to read the history.'
-                : 'The detector has not recognised a suspicious pattern yet. This stays empty '
-                    'while nothing unusual is happening, which is the point of it.',
-          ),
+          switch (verdict) {
+            SaEmptyVerdict.pending => const SaSkeletonCard(lines: 2, height: 130),
+
+            SaEmptyVerdict.unverified => SaUnverified(
+                title: 'The alert log came back empty, and we cannot say why',
+                message: 'No alerts were returned, and the dashboard read this console checks '
+                    'that against could not be read either. A quiet week and a log this '
+                    'account cannot see look the same from here, so neither is being claimed.',
+                onRetry: onRecheck,
+                action: filter.openOnly
+                    ? OutlinedButton.icon(
+                        onPressed: () =>
+                            ref.read(saAlertFilterProvider.notifier).set(AlertFilter.all),
+                        icon: const Icon(Icons.history_rounded, size: IconSize.sm),
+                        label: const Text('Read the history'),
+                      )
+                    : null,
+              ),
+
+            SaEmptyVerdict.refused => const SaNotPermitted(),
+
+            SaEmptyVerdict.confirmed => SaEmpty(
+                icon: Icons.shield_outlined,
+                title: filter.openOnly ? 'Nothing outstanding' : 'No alerts on record',
+                message: filter.openOnly
+                    ? 'Every alert the detector has raised has been acknowledged. Switch to All '
+                        'to read the history.'
+                    : 'The detector has not recognised a suspicious pattern yet. This stays '
+                        'empty while nothing unusual is happening, which is the point of it.',
+              ),
+          },
         ],
       );
     }

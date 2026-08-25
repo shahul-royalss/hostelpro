@@ -479,6 +479,12 @@ abstract final class Motion {
   /// Symmetric, for things that move within the screen.
   static const move = Curves.easeInOutCubic;
 
+  /// How long an inline confirmation stays on the control that produced it — the "Copied" that
+  /// replaces a copy button's label, and anything else that swaps a label and swaps it back.
+  /// Not an animation either: long enough to be read, short enough that a second tap reads as a
+  /// second confirmation rather than as the first one still hanging around.
+  static const confirmed = Duration(milliseconds: 1600);
+
   /// How long a snackbar carrying a FAILURE stays up. Not an animation — a reading budget.
   /// Material's default 4s is sized for "Saved"; the sentences this app shows on a refusal are
   /// a full line ("Bed 3 is already occupied. Choose a free bed.") and a warden reads them

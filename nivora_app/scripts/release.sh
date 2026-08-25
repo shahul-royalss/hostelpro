@@ -39,8 +39,53 @@ say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 die() { printf '\n\033[31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
 
 say "Gates"
-flutter analyze | tail -1 | grep -q "No issues found" || die "analyzer is not clean"
-flutter test 2>&1 | tail -1 | grep -q "All tests passed" || die "tests are not passing"
+# Captured rather than piped, for the pipefail reason documented under "Verifying" below, and
+# because the actual counts are worth printing: "316 passed" tells you something that a silent
+# success does not.
+analyze_out="$(flutter analyze 2>&1 || true)"
+case "$analyze_out" in
+  *"No issues found"*) printf '  analyzer clean\n' ;;
+  *) printf '%s\n' "$analyze_out" | tail -20; die "analyzer is not clean" ;;
+esac
+
+test_out="$(flutter test 2>&1 || true)"
+case "$test_out" in
+  *"All tests passed"*) printf '  %s\n' "$(printf '%s' "$test_out" | tail -1 | sed 's/^[0-9:]* //')" ;;
+  *) printf '%s\n' "$test_out" | tail -25; die "tests are not passing" ;;
+esac
+
+say "Preparing a build tree outside OneDrive"
+# WHY BUILD ELSEWHERE, and why THIS way rather than the way I tried first.
+#
+# OneDrive holds handles on files inside nivora_app/build while it uploads them, and Gradle
+# deletes and recreates those directories constantly. The lock is not transient enough to
+# retry through: four consecutive attempts died on the same path.
+#
+# The first attempt at a fix pointed Gradle's output somewhere OneDrive does not watch. That
+# broke Flutter's contract — the tool looks for its artifact at build/app/outputs/ by
+# convention, did not find it, and reported whatever stale file was sitting there instead. A
+# build that lies about what it built is worse than one that fails.
+#
+# So instead: copy the SOURCE to a plain directory outside the synced tree and build there.
+# Flutter's layout is untouched, build/ is exactly where it expects, and OneDrive has nothing
+# to do with any of it. The repository stays the source of truth; only the compile moves.
+WORK="${NIVORA_WORK_DIR:-/c/nivora-work}"
+if [[ "$APP_DIR" == *OneDrive* ]]; then
+  printf '  repo is inside OneDrive — building in %s\n' "$WORK"
+  # Derived directories are deliberately not copied: they are what OneDrive was fighting over,
+  # and they regenerate. Done with tar rather than rsync, which Git Bash does not ship.
+  rm -rf "$WORK"
+  mkdir -p "$WORK"
+  ( cd "$APP_DIR" && tar -cf - \
+      --exclude='./build' --exclude='./.dart_tool' --exclude='./.gradle' \
+      --exclude='./android/.gradle' --exclude='./ios/Pods' \
+      --exclude='*.apk' --exclude='*.aab' . ) \
+    | ( cd "$WORK" && tar -xf - ) \
+    || die "could not copy the project to $WORK"
+  cd "$WORK"
+else
+  printf '  repo is outside OneDrive — building in place\n'
+fi
 
 say "Building"
 # A OneDrive lock is transient: it releases once the upload finishes. Clearing the directories
@@ -48,17 +93,25 @@ say "Building"
 # merely hides the problem behind a stale artifact.
 build_with_retry() {
   local what="$1" attempt
-  for attempt in 1 2 3; do
-    rm -rf build/app/intermediates/assets \
-           build/app/intermediates/merged_native_libs \
-           build/app/intermediates/native_symbol_tables 2>/dev/null || true
+  for attempt in 1 2 3 4; do
+    # Clear ALL intermediates, not a hand-picked list. The first version of this named three
+    # directories and the very next failure was in a fourth (flutter/release/native_assets/
+    # jniLibs) — there is no stable set, because which directory loses the race depends on what
+    # OneDrive happens to be uploading at that instant. Intermediates are derived by definition,
+    # so deleting the lot costs build time and nothing else.
+    rm -rf build/app/intermediates 2>/dev/null || true
     if flutter build "$what" --release; then
       return 0
     fi
-    printf '  attempt %s of 3 failed (likely a sync lock) — retrying\n' "$attempt"
-    sleep 5
+    # Back off further each time: the lock lasts as long as the upload does, and a 5-second
+    # retry into a large upload just fails again.
+    printf '  attempt %s of 4 failed (likely a OneDrive sync lock) — waiting %ss\n' \
+           "$attempt" "$((attempt * 15))"
+    sleep "$((attempt * 15))"
   done
-  die "$what build failed three times — is OneDrive syncing this folder?"
+  die "$what failed four times. OneDrive is holding files in nivora_app/build.
+     Fix it properly: exclude that folder from sync, or move the repo out of OneDrive.
+     Pausing OneDrive for the duration of a build also works as a stopgap."
 }
 
 build_with_retry apk
@@ -79,24 +132,49 @@ done
 
 say "Verifying the things that have been wrong before"
 
+# A NOTE ON HOW THESE ARE WRITTEN, because the obvious form is broken here.
+#
+# This script runs under `set -o pipefail`, and the natural spelling
+#
+#     unzip -l "$APK" | grep -q "something"
+#
+# FAILS WHEN IT SUCCEEDS. `grep -q` exits the moment it matches, which closes the pipe; the
+# producer — still writing a 65MB listing — dies of SIGPIPE; pipefail then reports the whole
+# pipeline as failed. The check reports a problem precisely because there wasn't one. That
+# cost a release run here before it was understood.
+#
+# So every check below captures its producer's output FIRST and searches the string after. No
+# pipes into short-circuiting readers, and no false alarms.
+badging="$("$BT/aapt2.exe" dump badging "$APK" 2>/dev/null || true)"
+certs="$("$BT/apksigner.bat" verify --print-certs "$APK" 2>/dev/null || true)"
+entries="$(unzip -l "$APK" 2>/dev/null || true)"
+
 # 1. Signed with the real upload key, not Flutter's debug fallback. A debug-signed artifact is
 #    rejected by Play, and the template silently falls back when signing is misconfigured.
-"$BT/apksigner.bat" verify --print-certs "$APK" 2>/dev/null | grep -q "CN=HostelPro" \
-  || die "APK is not signed with the upload key (debug fallback?)"
+case "$certs" in
+  *"CN=HostelPro"*) ;;
+  *) die "APK is not signed with the upload key (debug fallback?)" ;;
+esac
 
 # 2. Named Nivora. It shipped once as "mobile" — the Flutter PROJECT name, straight to the
 #    launcher, because android:label was never changed.
-"$BT/aapt2.exe" dump badging "$APK" 2>/dev/null | grep -q "application-label:'Nivora'" \
-  || die "launcher label is not Nivora"
+case "$badging" in
+  *"application-label:'Nivora'"*) ;;
+  *) die "launcher label is not Nivora" ;;
+esac
 
 # 3. Real phones are ARM. A build missing arm64-v8a installs on nothing anyone owns.
-"$BT/aapt2.exe" dump badging "$APK" 2>/dev/null | grep -q "arm64-v8a" \
-  || die "arm64-v8a is missing"
+case "$badging" in
+  *"arm64-v8a"*) ;;
+  *) die "arm64-v8a is missing" ;;
+esac
 
 # 4. The typeface must ship. google_fonts fetches at runtime by default, and an app that
 #    downloads its own font renders as the system font on a first launch with no network.
-unzip -l "$APK" | grep -q "google_fonts/Inter-Regular.ttf" \
-  || die "Inter is not bundled — the app would download its font on first launch"
+case "$entries" in
+  *"google_fonts/Inter-Regular.ttf"*) ;;
+  *) die "Inter is not bundled — the app would download its font on first launch" ;;
+esac
 
 # 5. NO SECRETS ON THE DEVICE. An APK is a zip anyone can unpack. The service-role key bypasses
 #    every RLS policy; the Razorpay secret authorises money movement. Neither may be in here.
@@ -105,17 +183,17 @@ unzip -o -q "$APK" -d "$TMP" 'assets/flutter_assets/*' 2>/dev/null || true
 if grep -rqE 'service_role|rzp_(live|test)_[A-Za-z0-9]{10,}:' "$TMP" 2>/dev/null; then
   die "a secret may be embedded in the bundle — inspect before shipping"
 fi
-# Written as an `if` rather than `grep ... && die`: under `set -e` the AND-list form makes a
-# CLEAN result (grep exits 1 because it found nothing) the script's exit status, so the good
-# case would abort the release. A check that fails when it passes is worse than no check.
 if grep -rq "RAZORPAY_KEY_SECRET" lib/ 2>/dev/null; then
   die "Razorpay secret referenced in client source"
 fi
 
 # 6. Nothing may open a browser: the product requirement is that every flow stays in the app.
-if grep -rnE "^[^/]*\b(launchUrl|launchUrlString|WebViewController|InAppWebView)\b" lib/ 2>/dev/null; then
+if grep -rnE "^[^/]*(launchUrl|launchUrlString|WebViewController|InAppWebView)" lib/ 2>/dev/null; then
   die "a browser/WebView escape is present in client code"
 fi
+
+printf '  signature, label, ABIs, bundled font, no secrets, no browser escape — all pass
+'
 
 say "Staging"
 mkdir -p "$DIST"
