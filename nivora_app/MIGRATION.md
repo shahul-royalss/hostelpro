@@ -33,13 +33,29 @@ against the JWT. Both hold even if this entire app were recompiled with `role = 
 | 1 Audit | **done** | Root cause found and recorded above |
 | 2 Architecture | **done** | Riverpod + go_router + Supabase; folders under `lib/core`, `lib/features`, `lib/shared` |
 | 3 Foundation | **done** | Tokens, both themes, glass system, router, auth, session restore, login, MFA, role shells |
-| 4 Core PG system | **not started** | PGs, buildings, floors, rooms, beds, students, allocations |
-| 5 Operations | **not started** | Payments, complaints, maintenance, notices, notifications |
-| 6 Owner analytics | **not started** | Occupancy, revenue, collections, portfolio |
-| 7 Polish | partial | Glass, motion and dark mode exist; skeletons and empty states pending |
-| 8 Security | inherited | RLS carries over; client-side privilege tests still to write |
-| 9 Testing | partial | 5 unit tests pass; widget and integration tests pending |
-| 10 Store readiness | **not started** | Icons, splash, signing, listings |
+| 4 Core PG system | **done** | PGs, floors, rooms, beds, students, allocations — owner and warden |
+| 5 Operations | **done** | Payments (native Razorpay), complaints, notices, tasks, expenses, menus |
+| 6 Owner analytics | **done** | Occupancy, collections trend, portfolio; super-admin platform console |
+| 7 Polish | **done** | Minimal glass, measured contrast, skeletons, empty and error states |
+| 8 Security | **done** | RLS inherited; both secrets held in Edge Functions, never on the device |
+| 9 Testing | **done** | 316 tests: routing, roles, data layer, contrast, payments, super admin |
+| 10 Store readiness | partial | Icons, splash, signing, bundled fonts and a verified release script done; Play listing and the deploy of the Edge Functions are not |
+
+### What is genuinely NOT done
+
+Two things, and neither is cosmetic:
+
+**The Edge Functions are written but not deployed.** They need a Supabase access token this
+machine does not have. Until `docs/edge-functions.md` is followed, Create Owner and Pay Rent
+fail at runtime no matter how finished the screens look.
+
+**No live round-trip has ever been exercised from a device.** Norton Web/Mail Shield intercepts
+TLS on the development machine and presents its own certificate; Windows trusts it and Android
+does not, so an emulator cannot reach Supabase at all — every request dies with
+`CERTIFICATE_VERIFY_FAILED`. Every screen here is therefore verified by rendering, data-binding
+and error-state tests against stubbed providers, not against the real database. Creating an
+actual owner and actually paying rent will happen first on a real phone. That is a real gap and
+it is stated here rather than in a footnote.
 
 ## What actually runs today
 
