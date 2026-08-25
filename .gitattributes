@@ -1,0 +1,34 @@
+# Line endings.
+#
+# This machine has core.autocrlf=true, which rewrites checked-out files to CRLF. For most files
+# that is harmless. For these it is not, and the failure is remote from the cause:
+#
+#   *.sh   a shell script with CRLF endings dies with "bad interpreter: /usr/bin/env bash^M"
+#          on Linux and in CI. It works fine on the machine that committed it, which is what
+#          makes it expensive to diagnose.
+#   Dockerfile, *.bash, gradlew — same class of problem.
+#   *.pem, *.ttf and other binaries must never be line-ending-translated at all.
+#
+# `* text=auto` keeps normal source normalised to LF in the repository while still checking out
+# CRLF on Windows where that is wanted.
+* text=auto
+
+*.sh        text eol=lf
+*.bash      text eol=lf
+gradlew     text eol=lf
+Dockerfile  text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# Binary — never touch the bytes.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.webp  binary
+*.ttf   binary
+*.otf   binary
+*.jks   binary
+*.keystore binary
+*.apk   binary
+*.aab   binary
+*.pem   binary
