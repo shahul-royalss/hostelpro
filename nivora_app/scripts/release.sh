@@ -2,32 +2,31 @@
 #
 # Build the release APK and AAB, verify them, and stage them in dist/.
 #
-# WHY THIS EXISTS — a near-miss worth preventing permanently.
+# WHY THIS EXISTS — two failures this project actually had.
 #
-# This repo lives inside OneDrive. OneDrive holds file handles while it uploads; Gradle deletes
-# and recreates its output directories constantly; the two race and the build dies with
-# AccessDeniedException on a different directory each run. android/build.gradle.kts therefore
-# honours NIVORA_BUILD_DIR to move the output out of the synced tree.
+# 1. A BUILD THAT LIED ABOUT WHAT IT BUILT. This repo sits inside OneDrive, which holds file
+#    handles while it uploads while Gradle deletes and recreates its output directories. They
+#    race, and a build dies with AccessDeniedException on a different directory each run. The
+#    obvious fix — point the Gradle output somewhere OneDrive does not watch — is worse than the
+#    problem: `flutter build apk` looks for its artifact at build/app/outputs/flutter-apk/ by
+#    convention, and if the real output moved, it reports whatever stale file already sits
+#    there. Two consecutive builds printed the same size while the real artifact was elsewhere.
+#    So the output stays where Flutter expects it, this script clears the directories that lose
+#    the race, retries a lock, and then REFUSES ANY ARTIFACT OLDER THAN THIS RUN.
 #
-# The trap: `flutter build apk` STILL PRINTS "Built build\app\outputs\flutter-apk\app-release.apk"
-# — the conventional path — while the real artifact lands under $NIVORA_BUILD_DIR. If a stale
-# file happens to exist at the conventional path, that message is actively misleading, and it is
-# very easy to ship a build from the wrong day. That happened once here: a 65MB APK from the
-# previous afternoon sat next to a fresh 67MB one, and the older file was the one about to be
-# delivered.
+# 2. Six specific things that have each shipped broken here at least once. They are checked
+#    below, and none of them is hypothetical.
 #
-# So: this script never trusts the printed path. It locates the artifact, refuses anything not
-# produced by THIS run, and checks the things that have actually been wrong before.
+# The durable fix for (1) is to exclude nivora_app/build from OneDrive sync, or move the repo
+# out of OneDrive entirely. Both remove the race instead of working around it.
 #
-# Usage:  ./scripts/release.sh          (from nivora_app/)
+# Usage:  bash scripts/release.sh          (from nivora_app/)
 
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 APP_DIR="$PWD"
 DIST="$(cd .. && pwd)/dist"
-: "${NIVORA_BUILD_DIR:=C:/nivora-build}"
-export NIVORA_BUILD_DIR
 export PATH="/c/Users/shahu/flutter/bin:$PATH"
 : "${ANDROID_HOME:=/c/Users/shahu/AppData/Local/Android/Sdk}"
 export ANDROID_HOME ANDROID_SDK_ROOT="$ANDROID_HOME"
@@ -43,21 +42,32 @@ say "Gates"
 flutter analyze | tail -1 | grep -q "No issues found" || die "analyzer is not clean"
 flutter test 2>&1 | tail -1 | grep -q "All tests passed" || die "tests are not passing"
 
-say "Building (output -> $NIVORA_BUILD_DIR)"
-# OneDrive re-grabs each directory as Gradle creates it, so clear the two that lose the race
-# most often rather than doing a full clean, which costs several minutes.
-rm -rf "$NIVORA_BUILD_DIR/app/intermediates/assets" \
-       "$NIVORA_BUILD_DIR/app/intermediates/merged_native_libs" 2>/dev/null || true
-flutter build apk --release
-flutter build appbundle --release
+say "Building"
+# A OneDrive lock is transient: it releases once the upload finishes. Clearing the directories
+# that lose the race and retrying is the honest response — unlike relocating the output, which
+# merely hides the problem behind a stale artifact.
+build_with_retry() {
+  local what="$1" attempt
+  for attempt in 1 2 3; do
+    rm -rf build/app/intermediates/assets \
+           build/app/intermediates/merged_native_libs \
+           build/app/intermediates/native_symbol_tables 2>/dev/null || true
+    if flutter build "$what" --release; then
+      return 0
+    fi
+    printf '  attempt %s of 3 failed (likely a sync lock) — retrying\n' "$attempt"
+    sleep 5
+  done
+  die "$what build failed three times — is OneDrive syncing this folder?"
+}
 
-# Find the artifacts wherever they actually are, newest first — never where the log claims.
-APK="$(find "$NIVORA_BUILD_DIR" build -name 'app-release.apk' -print0 2>/dev/null \
-        | xargs -0 ls -t 2>/dev/null | head -1)"
-AAB="$(find "$NIVORA_BUILD_DIR" build -name 'app-release.aab' -print0 2>/dev/null \
-        | xargs -0 ls -t 2>/dev/null | head -1)"
-[ -n "$APK" ] || die "no APK found"
-[ -n "$AAB" ] || die "no AAB found"
+build_with_retry apk
+build_with_retry appbundle
+
+APK="build/app/outputs/flutter-apk/app-release.apk"
+AAB="build/app/outputs/bundle/release/app-release.aab"
+[ -f "$APK" ] || die "no APK at $APK"
+[ -f "$AAB" ] || die "no AAB at $AAB"
 
 say "Freshness"
 for f in "$APK" "$AAB"; do
@@ -95,7 +105,12 @@ unzip -o -q "$APK" -d "$TMP" 'assets/flutter_assets/*' 2>/dev/null || true
 if grep -rqE 'service_role|rzp_(live|test)_[A-Za-z0-9]{10,}:' "$TMP" 2>/dev/null; then
   die "a secret may be embedded in the bundle — inspect before shipping"
 fi
-grep -rq "RAZORPAY_KEY_SECRET" lib/ 2>/dev/null && die "Razorpay secret referenced in client source"
+# Written as an `if` rather than `grep ... && die`: under `set -e` the AND-list form makes a
+# CLEAN result (grep exits 1 because it found nothing) the script's exit status, so the good
+# case would abort the release. A check that fails when it passes is worse than no check.
+if grep -rq "RAZORPAY_KEY_SECRET" lib/ 2>/dev/null; then
+  die "Razorpay secret referenced in client source"
+fi
 
 # 6. Nothing may open a browser: the product requirement is that every flow stays in the app.
 if grep -rnE "^[^/]*\b(launchUrl|launchUrlString|WebViewController|InAppWebView)\b" lib/ 2>/dev/null; then
