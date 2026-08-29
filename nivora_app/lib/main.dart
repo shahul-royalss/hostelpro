@@ -59,24 +59,26 @@ class _NivoraAppState extends ConsumerState<NivoraApp> {
     _decideGlassBudget();
   }
 
-  /// Decide once whether this device can afford real backdrop blur.
+  /// Release builds never blur. Decided by a field report, not a heuristic.
   ///
-  /// Blur is the most expensive thing in the design system, and the brief is explicit that
-  /// performance wins. Rather than guess from a device model list that rots, this samples the
-  /// actual frame budget: if the platform reports a low refresh rate or the first frames are
-  /// already slow, glass falls back to an opaque surface with identical geometry.
+  /// The first version of this gated BackdropFilter on screen resolution (skip above ~2.5MP),
+  /// reasoning that more pixels means a costlier blur pass. A real device proved the heuristic
+  /// BACKWARDS: the phones that hurt most are budget handsets with 720p screens and weak GPUs —
+  /// which sat under the threshold and kept the most expensive effect in the design system
+  /// running on the least capable hardware. The product owner's report from such a phone was
+  /// "stuck, lag". No resolution number distinguishes a weak GPU from a strong one, and a
+  /// device-model list rots, so release stops guessing: glass always renders as its opaque
+  /// fallback, which was designed with IDENTICAL geometry precisely so this switch costs no
+  /// layout shift, only the blur.
+  ///
+  /// Debug keeps real blur so the glass path stays exercised and designable. If blur ever
+  /// returns to release, it must be behind a measured frame-time probe, not a spec sheet.
   void _decideGlassBudget() {
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final view = View.of(context);
-      // devicePixelRatio * logical size approximates how many pixels a full-screen blur costs.
-      final size = view.physicalSize;
-      final megapixels = (size.width * size.height) / 1000000;
-      // A blur pass over more than ~2.5MP on a low-tier GPU is where dropped frames start.
-      // Paired with a debug override so the fallback path is testable, not theoretical.
-      final expensive = megapixels > 2.5 && !kDebugMode;
-      if (expensive != Motion.glassFallback) {
-        setState(() => Motion.glassFallback = expensive);
+      final fallback = !kDebugMode;
+      if (fallback != Motion.glassFallback) {
+        setState(() => Motion.glassFallback = fallback);
       }
     });
   }
