@@ -56,7 +56,11 @@ const SECRET_PATTERNS = [
 // constant - it comes from .env.local - and allowlisting its value blinded this scanner to
 // the one secret that actually mattered. Never allowlist a value that appears in .env.local;
 // the check below enforces that independently of any pattern or allowlist.
-const ALLOW = /Owner@12345|Manager@12345|Warden@12345|Student@12345|ChangeMe!2026|NewPass@2026|AuditPass1|your-default-host|example\.com|placeholder|PASSWORD_MIN_LENGTH|password:\s*["']?\$\{|p_password|passwordStrength/i;
+// Tx7-quiet-lamp and Sage-7413-Kite are the fake "generated password" fixtures the
+// show-once credentials-dialog tests assert on (owner_staff_test, warden_register_student_test).
+// They exist nowhere but those tests. The env-value check below still runs independently of
+// this list, so even a real secret pasted here would be caught the moment it matched .env.local.
+const ALLOW = /Owner@12345|Manager@12345|Warden@12345|Student@12345|ChangeMe!2026|NewPass@2026|AuditPass1|Tx7-quiet-lamp|Sage-7413-Kite|your-default-host|example\.com|placeholder|PASSWORD_MIN_LENGTH|password:\s*["']?\$\{|p_password|passwordStrength/i;
 
 /**
  * Shape-independent leak check: take the ACTUAL secret values out of .env.local and look for
@@ -80,6 +84,13 @@ function envSecretValues() {
       // Only credential-bearing keys. SUPER_ADMIN_EMAIL / _NAME are identifiers, not
       // secrets, and they legitimately appear in the README and the seed defaults.
       if (!/PASSWORD|SECRET|KEY|TOKEN|CREDENTIAL|DSN|PRIVATE/i.test(key)) continue;
+      // RAZORPAY_KEY_ID is the one KEY that is publishable BY DESIGN: it identifies the
+      // merchant to Checkout and ships inside the APK, so finding it in a tracked file is the
+      // intended state, not a leak. This exemption is deliberately the narrowest possible —
+      // exact key name AND the key-id shape. It cannot mask the actual Razorpay secret,
+      // which is a bare random string that never carries the rzp_ prefix, and
+      // RAZORPAY_KEY_SECRET / RAZORPAY_WEBHOOK_SECRET remain fully enforced.
+      if (key === "RAZORPAY_KEY_ID" && /^rzp_(test|live)_[A-Za-z0-9]+$/.test(val)) continue;
       if (val.length < 8) continue;
       out.push({ key, val });
     }
