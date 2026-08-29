@@ -92,26 +92,59 @@ say "Building"
 # that lose the race and retrying is the honest response — unlike relocating the output, which
 # merely hides the problem behind a stale artifact.
 build_with_retry() {
-  local what="$1" attempt
-  for attempt in 1 2 3 4; do
-    # Clear ALL intermediates, not a hand-picked list. The first version of this named three
-    # directories and the very next failure was in a fourth (flutter/release/native_assets/
-    # jniLibs) — there is no stable set, because which directory loses the race depends on what
-    # OneDrive happens to be uploading at that instant. Intermediates are derived by definition,
-    # so deleting the lot costs build time and nothing else.
+  local what="$1" attempt out
+  for attempt in 1 2 3; do
     rm -rf build/app/intermediates 2>/dev/null || true
-    if flutter build "$what" --release; then
-      return 0
+    out="$(flutter build "$what" --release 2>&1)" && { printf '%s
+' "$out" | tail -2; return 0; }
+
+    # DIAGNOSE BEFORE RETRYING. The first version of this loop assumed every failure was a
+    # OneDrive lock and slept its way through four attempts of an error that was never going
+    # to change. A retry is only the right response to a TRANSIENT failure; classifying first
+    # costs one grep and saves four minutes of confident waiting.
+    if printf '%s' "$out" | grep -qE "PKIX path|certificate_unknown|unable to find valid certification"; then
+      # Norton (or any TLS-intercepting antivirus) is answering Gradle's dependency downloads
+      # with its own certificate, which the JVM does not trust. Everything this project needs
+      # is already in ~/.gradle from previous builds, so --offline both proves the diagnosis
+      # and completes the build. gradlew is invoked directly because `flutter build` exposes
+      # no offline flag; the artifacts land in the same place.
+      printf '  TLS interception detected (PKIX failure) — retrying from the local cache with --offline
+'
+      printf '  Durable fix for this machine: import the interceptor root into the JVM truststore, e.g.
+'
+      printf '    keytool -importcert -alias norton-root -file <norton-root.pem> -cacerts -storepass changeit
+'
+      local task; task=$([ "$what" = apk ] && echo assembleRelease || echo bundleRelease)
+      # TWO lessons encoded here, both paid for:
+      #  - JAVA_HOME must be Android Studio's JBR (JDK 21). `flutter build` selects it
+      #    automatically, but a direct gradlew call inherits the system JDK — 26 on this
+      #    machine — whose jlink breaks AGP's JdkImageTransform. Every "offline cache is
+      #    broken" conclusion drawn before setting this was actually a wrong-JDK failure.
+      #  - The output is captured in full and printed on failure. Three separate debugging
+      #    rounds here were spent re-running builds because a `| tail -3` had already
+      #    discarded the one line that named the real problem.
+      local jbr="C:\Program Files\Android\Android Studio\jbr"
+      local gout
+      gout="$(cd android && JAVA_HOME="$jbr" ./gradlew "$task" --offline 2>&1)"         && { printf '%s
+' "$gout" | tail -3; return 0; }
+      printf '%s
+' "$gout" | grep -B4 -A12 "What went wrong" | head -20
+      die "$what failed offline too (full error above)"
     fi
-    # Back off further each time: the lock lasts as long as the upload does, and a 5-second
-    # retry into a large upload just fails again.
-    printf '  attempt %s of 4 failed (likely a OneDrive sync lock) — waiting %ss\n' \
-           "$attempt" "$((attempt * 15))"
-    sleep "$((attempt * 15))"
+
+    if printf '%s' "$out" | grep -qE "AccessDeniedException|Unable to delete director|cannot access the file"; then
+      printf '  attempt %s of 3: sync lock — waiting %ss
+' "$attempt" "$((attempt * 15))"
+      sleep "$((attempt * 15))"
+      continue
+    fi
+
+    # Neither known transient cause: retrying would just repeat it. Show the error and stop.
+    printf '%s
+' "$out" | grep -B2 -A8 "What went wrong" | head -14
+    die "$what failed with an error retries cannot fix (see above)"
   done
-  die "$what failed four times. OneDrive is holding files in nivora_app/build.
-     Fix it properly: exclude that folder from sync, or move the repo out of OneDrive.
-     Pausing OneDrive for the duration of a build also works as a stopgap."
+  die "$what failed three times on sync locks. Exclude nivora_app/build from OneDrive sync, or pause OneDrive for the build."
 }
 
 build_with_retry apk
