@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/auth/auth_controller.dart';
+import '../core/auth/session.dart';
+import '../core/perf/session_keep_alive.dart';
 import 'models/models.dart';
 import 'repositories/complaint_repository.dart';
 import 'repositories/dashboard_repository.dart';
@@ -26,6 +28,18 @@ import 'repositories/task_repository.dart';
 /// how to cache, key and refresh those calls, and nothing else. Screens know neither. That is
 /// what lets a screen be tested by overriding one provider, and what stops a query string
 /// ending up inside a widget build method.
+///
+/// LIFETIME POLICY — read this before adding or changing `autoDispose` below (the feature
+/// provider files follow the same rule). A provider that BACKS A TAB — a list, a dashboard, a
+/// ledger: anything an IndexedStack child watches — stays `autoDispose` but calls
+/// `holdForSession(ref)` (core/perf/session_keep_alive.dart) first thing in its build. That
+/// holds the data for the shell's lifetime, so a tab revisit renders instantly from the held
+/// value and a background refresh updates it in place, never blanking back to a skeleton. The
+/// hold cannot leak across a boundary: family keys carry the hostelId, so a hostel switch is a
+/// different cache entry, and holdForSession drops everything on sign-out or a change of user.
+/// A provider scoped to a SHEET OR DETAIL — one resident, one room's beds, one complaint —
+/// keeps plain `autoDispose` with no hold, so browsing twenty residents does not pin twenty
+/// rows of PII for the whole session.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLIENT + REPOSITORIES
@@ -304,8 +318,16 @@ abstract class PagedNotifier<T> extends AsyncNotifier<PagedResult<T>> {
   /// Guards against a scroll listener firing twice before the first request lands.
   bool _loadingMore = false;
 
+  /// Whether this instance's pages are held for the signed-in session (the lifetime policy at
+  /// the top of this file). True for every tab-backing list; overridden false for transient
+  /// variants — a live search, say — that would otherwise pin one cache entry per keystroke.
+  bool get holdWhileSignedIn => true;
+
   @override
-  Future<PagedResult<T>> build() => fetchPage(0);
+  Future<PagedResult<T>> build() {
+    if (holdWhileSignedIn) holdForSession(ref);
+    return fetchPage(0);
+  }
 
   /// Appends the next page. Safe to call on every scroll event: it is a no-op while a request
   /// is in flight and at the end of the list.
@@ -342,6 +364,12 @@ final studentsProvider =
 class StudentsNotifier extends PagedNotifier<Student> {
   StudentsNotifier(this.query);
   final StudentQuery query;
+
+  /// The unfiltered list is the tab; a typed search is a keystroke-keyed variant that must
+  /// still die with its listeners, or every string the warden half-types stays cached (and is
+  /// a page of resident PII) until sign-out.
+  @override
+  bool get holdWhileSignedIn => query.search == null || query.search!.isEmpty;
 
   @override
   Future<PagedResult<Student>> fetchPage(int page) =>
@@ -484,6 +512,7 @@ class SaHostelsNotifier extends PagedNotifier<SaHostelRow> {
 /// Headline numbers for a staff dashboard. public.rpc_hostel_stats.
 final hostelStatsProvider =
     FutureProvider.autoDispose.family<HostelStats?, StatsQuery>((ref, query) {
+  holdForSession(ref);
   return ref.watch(dashboardRepositoryProvider).hostelStats(
         hostelId: query.hostelId,
         periodMonth: query.periodMonth,
@@ -491,18 +520,25 @@ final hostelStatsProvider =
 });
 
 /// The hostel row itself. public.hostels.
-final hostelProvider = FutureProvider.family<Hostel?, String>((ref, hostelId) {
+///
+/// Was a plain (never-disposed) provider; now held per session instead, so the cached row
+/// cannot survive a sign-out into the next login.
+final hostelProvider = FutureProvider.autoDispose.family<Hostel?, String>((ref, hostelId) {
+  holdForSession(ref);
   return ref.watch(hostelRepositoryProvider).byId(hostelId);
 });
 
-/// Storeys. public.floors.
-final floorsProvider = FutureProvider.family<List<Floor>, String>((ref, hostelId) {
+/// Storeys. public.floors. Session-held, same reasoning as [hostelProvider].
+final floorsProvider =
+    FutureProvider.autoDispose.family<List<Floor>, String>((ref, hostelId) {
+  holdForSession(ref);
   return ref.watch(hostelRepositoryProvider).floors(hostelId);
 });
 
 /// The room grid with live occupancy. public.rpc_room_occupancy.
 final roomOccupancyProvider =
     FutureProvider.autoDispose.family<List<RoomOccupancy>, String>((ref, hostelId) {
+  holdForSession(ref);
   return ref.watch(roomRepositoryProvider).occupancy(hostelId);
 });
 
@@ -525,26 +561,36 @@ final studentProvider =
 });
 
 /// The signed-in resident's own record. public.students.
-final myStudentProvider = FutureProvider<Student?>((ref) {
-  // Rebuilds on sign-in and sign-out rather than serving the previous person's row.
-  ref.watch(sessionProvider);
+///
+/// Session-held: rebuilds on sign-in and a change of user, and is dropped on sign-out, rather
+/// than serving the previous person's row — holdForSession watches the signed-in user id.
+final myStudentProvider = FutureProvider.autoDispose<Student?>((ref) {
+  holdForSession(ref);
   return ref.watch(studentRepositoryProvider).me();
 });
 
 /// Roommates, names and phones only. public.st_my_roommates.
 final roommatesProvider = FutureProvider.autoDispose<List<Roommate>>((ref) {
+  holdForSession(ref);
   return ref.watch(studentRepositoryProvider).roommates();
 });
 
 /// Who to call about what. public.st_hostel_contacts.
-final hostelContactsProvider = FutureProvider<HostelContacts?>((ref) {
-  ref.watch(sessionProvider);
+final hostelContactsProvider = FutureProvider.autoDispose<HostelContacts?>((ref) {
+  holdForSession(ref);
   return ref.watch(hostelRepositoryProvider).contacts();
 });
 
 /// One resident's payment history. public.fee_payments.
+///
+/// Held ONLY for a resident's own shell, where it backs the Fees tab and RLS means the one id
+/// they can read is their own. For staff this is a per-resident detail behind a sheet, and
+/// stays plain autoDispose so browsing residents does not pin every history until sign-out.
 final studentFeeHistoryProvider =
     FutureProvider.autoDispose.family<PagedResult<FeePayment>, String>((ref, studentId) {
+  if (ref.watch(sessionProvider.select((s) => s?.role)) == UserRole.student) {
+    holdForSession(ref);
+  }
   return ref.watch(feeRepositoryProvider).forStudent(studentId: studentId);
 });
 
@@ -563,6 +609,7 @@ final complaintTimelineProvider =
 /// Revenue against expense, day by day. public.rpc_daily_finance.
 final dailyFinanceProvider =
     FutureProvider.autoDispose.family<List<FinanceDay>, FinanceRangeQuery>((ref, query) {
+  holdForSession(ref);
   return ref.watch(financeRepositoryProvider).daily(
         hostelId: query.hostelId,
         from: query.from,
@@ -571,8 +618,8 @@ final dailyFinanceProvider =
 });
 
 /// The number on the notification bell. public.rpc_unread_count.
-final unreadCountProvider = FutureProvider<int>((ref) {
-  ref.watch(sessionProvider);
+final unreadCountProvider = FutureProvider.autoDispose<int>((ref) {
+  holdForSession(ref);
   return ref.watch(dashboardRepositoryProvider).unreadCount();
 });
 
@@ -581,5 +628,6 @@ final unreadCountProvider = FutureProvider<int>((ref) {
 /// Null means "not permitted", never "no hostels": the RPC returns zero rows to anyone who is
 /// not a Super Admin. See DashboardRepository.superAdminStats.
 final saStatsProvider = FutureProvider.autoDispose<SaStats?>((ref) {
+  holdForSession(ref);
   return ref.watch(dashboardRepositoryProvider).superAdminStats();
 });

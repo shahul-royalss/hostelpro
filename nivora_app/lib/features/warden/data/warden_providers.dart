@@ -2,6 +2,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/perf/session_keep_alive.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
 import 'warden_models.dart';
@@ -51,6 +52,10 @@ final documentCaptureProvider = Provider<DocumentCapture>(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Leave requests awaiting a decision. public.leaves.
+///
+/// Plain autoDispose — the lifetime policy's sheet/detail case, not its tab case: the queue is
+/// only watched while the leave sheet is open, and the number the home card shows comes from
+/// rpc_hostel_stats, not from here.
 final pendingLeavesProvider =
     FutureProvider.autoDispose.family<List<LeaveRequest>, String>((ref, hostelId) {
   return ref.watch(wardenRepositoryProvider).leaves(hostelId: hostelId);
@@ -60,8 +65,14 @@ final pendingLeavesProvider =
 ///
 /// Deliberately NOT the same figure as HostelStats.visitorsToday — see
 /// WardenRepository.visitorsOnSite. The two are labelled differently everywhere they appear.
+///
+/// Held for the session (the lifetime policy in lib/data/providers.dart): the home tab watches
+/// this directly, so it must render from the held value and refresh behind it rather than
+/// blanking. The family key is the hostelId, so a different hostel is a different cache entry,
+/// and holdForSession drops the data on sign-out or a change of user.
 final visitorsOnSiteProvider =
     FutureProvider.autoDispose.family<List<VisitorLog>, String>((ref, hostelId) {
+  holdForSession(ref);
   return ref.watch(wardenRepositoryProvider).visitorsOnSite(hostelId: hostelId);
 });
 

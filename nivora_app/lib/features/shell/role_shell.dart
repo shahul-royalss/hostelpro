@@ -132,9 +132,13 @@ class _RoleShellState extends ConsumerState<RoleShell> {
   /// falls through to the placeholder below, which says so rather than rendering an empty page
   /// that looks finished.
   Widget _body(ThemeData t, List<({String label, IconData icon})> tabs) {
+    // The owner's section owns its bodies the way the student's does — an IndexedStack over
+    // the tabs actually visited — and additionally warms the unvisited tabs' data in the
+    // background so a tap lands on drawn numbers, not a skeleton. The tabs nothing has built
+    // yet (Students, Payments) still show this shell's placeholder, passed in so the copy and
+    // the label stay in one place. See OwnerSection.
     if (widget.role == UserRole.owner) {
-      final screen = ownerTabScreen(_index);
-      if (screen != null) return screen;
+      return OwnerSection(tabIndex: _index, placeholder: (_) => _placeholder(t, tabs));
     }
     // The student app keeps its own widget rather than a per-index function: it holds the tabs
     // already visited in an IndexedStack, so moving between Home and Fees does not refetch the
@@ -142,6 +146,11 @@ class _RoleShellState extends ConsumerState<RoleShell> {
     if (widget.role == UserRole.student) {
       return StudentSection(tabIndex: _index);
     }
+    return _placeholder(t, tabs);
+  }
+
+  /// The "not built yet" page, for any tab slot no feature has claimed.
+  Widget _placeholder(ThemeData t, List<({String label, IconData icon})> tabs) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(Space.xl),

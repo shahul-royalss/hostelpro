@@ -118,7 +118,7 @@ green; it still exits 1, and will until the fixture strings are allowlisted or r
   no keystore and no `key.properties` (`git ls-files` shows only `gradle.properties` — JVM args
   and two Flutter template flags — and the gradle wrapper). `android/app/build.gradle.kts:31-33`
   reads signing material from `NIVORA_KEYSTORE_*`/`NIVORA_KEY_*` environment variables or
-  `~/.nivora-keys/keystore.properties`, both outside the repo.
+  `~/.hostelpro-keys/keystore.properties`, both outside the repo.
 - **No secret in `--dart-define` scripts.** The only build script is
   `nivora_app/scripts/release.sh`; it contains no key/secret values (and enforces the
   no-secret-in-lib rule itself, see above). `MIGRATION.md:118` shows `--dart-define` usage with
@@ -208,6 +208,24 @@ dependency drags it in.
 
 ---
 
+### 3.3a Errata from adversarial verification of this document
+
+An independent verifier was pointed at this sign-off with instructions to falsify it. Two
+corrections it produced are applied above; recorded here so the document's own history is
+honest:
+
+- The signing fallback path was misnamed `~/.nivora-keys/`; the gradle file actually reads
+  `~/.hostelpro-keys/keystore.properties` (nivora_app/android/app/build.gradle.kts:22). The
+  load-bearing claim — no keystore or key.properties tracked in the repo — was verified true.
+- A scanner output quoted in §6 was produced one commit earlier than the HEAD it was attributed
+  to (634 vs 635 tracked files). The verifier re-ran the scanner at the true HEAD: still
+  0 blockers / 0 warnings — the verdict stands; the quote's provenance was stale, and this note
+  is the correction.
+- The verifier also re-proved the §3.4 canary mechanism in an isolated scratch repository
+  (planted dummy secret → fires; committed `rzp_test_`-shaped key id → correctly ignored),
+  since re-planting the real secret was blocked by the session's permission layer. The
+  real-value canary in §3.4 therefore stands as recorded by the pass that performed it.
+
 ### 3.4 Resolution — scanner refined, re-run clean, canary-verified
 
 *Added after the dispositions above, same day.* Leaving a scanner permanently red teaches
@@ -278,6 +296,50 @@ evidence and no stronger; the §5 items belong to their owners before this relea
 
 ---
 
-*Prepared by the security checklist agent, 2026-08-29, at commit `7df8bca`. Scanner output,
-grep evidence, and decoded JWT payloads reproduced verbatim above; nothing in `lib/` or
+## 6. Re-verification — second independent pass, same day
+
+*2026-08-29, at HEAD `8586e39` (the commit that added §3.4 and the scanner refinement), with
+the tab-warmup work in flight as uncommitted changes under `nivora_app/lib/` and new
+`*_warmup_test.dart` suites.* Every load-bearing claim above was re-checked from scratch, not
+trusted:
+
+- **Scanner (current, refined):** `node scripts/security-scan.mjs` → all sections green,
+  `RESULT: 0 blocker(s), 0 warning(s)`, exit 0. "no credentials in 634 tracked files",
+  "no .env value appears in tracked files (5 secrets compared)" — the shape-independent
+  env-value check is live and compared five real secret values, so the §3.4 allowlist cannot
+  have blinded it.
+- **Scanner (pre-refinement, replayed):** the scanner as it stood at `7df8bca`
+  (`git show 7df8bca:scripts/security-scan.mjs`) run against today's tree fires **21**
+  blockers — the original 10 plus 11 new ones, every added one caused by *this document*
+  quoting the evidence in §2.1/§3. A sign-off that records scanner findings verbatim keeps a
+  string-matching scanner red forever; that is the concrete demonstration that §3.4's
+  refinement (allowlist the two fixture strings, exempt the key-id shape) was the correct fix
+  rather than a whitewash.
+- **JWT sweep re-done:** one JWT-shaped literal in all of `nivora_app/` (excluding
+  `build/`, `.dart_tool/`) — `lib/core/config/env.dart:24`; payload re-decoded today:
+  `{"iss":"supabase","ref":"nimxvgzscbanhtvgnjll","role":"anon",...}` — anon, as §2.2 states.
+- **WebView / url_launcher re-checked:** zero matches in `pubspec.yaml`; the only `lib/`
+  matches are the four comments asserting their absence; `url_launcher` remains
+  transitive-only in `pubspec.lock` (§3.3 unchanged).
+- **Edge-function claims re-read at source:** `_shared/caller.ts:106` (GoTrue verify) →
+  `:112-116` (authoritative role from `public.users` via service client) → `:123-124`
+  (active / not-deleted / must_change_password gates) → `:137-147` (role gate, audited);
+  anon/service keys refused by identity at `:61-65`. Webhook: fail-closed 503 without secret,
+  raw-body HMAC, 64-hex shape check then `crypto.subtle.verify`
+  (`_shared/razorpay.ts:~120-147`), 401 + audit before any parse. `razorpay-order`: zero
+  `req.json|text|body|formData|arrayBuffer` hits; amount from `fee_payments` under the
+  caller's RLS, re-derived by `rz_open_intent`. All exactly as §2.3 records.
+- **Build health, current tree:** `flutter analyze` → `No issues found! (ran in 19.3s)`;
+  `flutter test` → `00:36 +482: All tests passed!` (482 vs §2.4's 467 — the delta is the
+  in-flight warmup suites, which are outside this sign-off's pinned scope but do not break
+  it).
+
+Nothing in §1–§5 required correction. The §5 not-verified items remain open and remain the
+product owner's.
+
+---
+
+*Prepared by the security checklist agent, 2026-08-29, at commit `7df8bca`; §3.4 and the
+scanner refinement landed as `8586e39`; §6 re-verified at that HEAD. Scanner output, grep
+evidence, and decoded JWT payloads reproduced verbatim above; nothing in `lib/` or
 `supabase/` was modified by this pass.*

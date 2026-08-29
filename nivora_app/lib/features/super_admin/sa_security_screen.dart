@@ -317,6 +317,11 @@ class _SaAlertCardState extends ConsumerState<SaAlertCard> {
                 const SizedBox(width: Space.xs),
                 FilledButton.tonalIcon(
                   onPressed: _busy ? null : _acknowledge,
+                  // The app theme's FilledButton minimum is Size.fromHeight(48) — full width,
+                  // right for a form's primary action, but INFINITE inside this Row, whose
+                  // unbounded width made the first real alert row ever rendered crash the
+                  // console. Bounded here; the 48dp tap height is kept.
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
                   icon: _busy
                       ? const SizedBox(
                           height: 16,

@@ -2,6 +2,8 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/auth_controller.dart';
+import '../../../core/perf/session_keep_alive.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
 import 'sa_models.dart';
@@ -58,7 +60,12 @@ abstract final class SaTabs {
 /// Subscriptions tab already filtered to `expired` is what makes the number and the list agree.
 class SaTab extends Notifier<int> {
   @override
-  int build() => 0;
+  int build() {
+    // Rebuilt to Overview when the signed-in user changes. UI state is small, but "which tab
+    // was open" is still the previous admin's context and has no business greeting the next.
+    ref.watch(sessionProvider.select((s) => s?.userId));
+    return 0;
+  }
   void go(int index) => state = index;
 }
 
@@ -112,7 +119,14 @@ final class SaHostelQuery {
 /// rebuild the list widget to be noticed.
 class SaHostelFilter extends Notifier<SaHostelQuery> {
   @override
-  SaHostelQuery build() => const SaHostelQuery();
+  SaHostelQuery build() {
+    // Reset on user change. The fetched DATA is already session-scoped (holdForSession), but a
+    // filter is UI state and used to survive sign-out — including the typed search string,
+    // which can contain an owner's name or email the previous admin was looking up. A filter
+    // outliving the person who typed it is a small leak; small leaks are still leaks.
+    ref.watch(sessionProvider.select((s) => s?.userId));
+    return const SaHostelQuery();
+  }
 
   void search(String? text) {
     final trimmed = (text ?? '').trim();
@@ -145,6 +159,18 @@ class SaHostelListNotifier extends PagedNotifier<SaHostelRow> {
   SaHostelListNotifier(this.query);
   final SaHostelQuery query;
 
+  /// The lifetime policy at the top of lib/data/providers.dart, applied to this family.
+  ///
+  /// The DEFAULT query backs two tabs at once (Hostels unfiltered, and Subscriptions with no
+  /// state picked narrows to the same value-equal key), and the enum-filtered variants are the
+  /// Overview's "3 expired — tap to see which" landing pages; all of those are bounded in
+  /// number and are held for the session so a revisit renders instantly. A LIVE SEARCH is not:
+  /// every distinct string is its own family member, and holding each one would pin a cache
+  /// entry per settled keystroke until sign-out. Search results therefore keep plain
+  /// autoDispose and die with their screen.
+  @override
+  bool get holdWhileSignedIn => (query.search ?? '').trim().isEmpty;
+
   @override
   Future<PagedResult<SaHostelRow>> fetchPage(int page) =>
       ref.read(saRepositoryProvider).hostels(
@@ -162,7 +188,12 @@ final saHostelProvider =
 });
 
 /// Hostels onboarded per month, last twelve. public.rpc_sa_onboarding_series.
+///
+/// Backs the Overview — session-held per the lifetime policy, so a pull-to-refresh redraws the
+/// chart in place rather than blanking it, and the series is dropped the moment the admin
+/// signs out.
 final saOnboardingProvider = FutureProvider.autoDispose<List<OnboardingPoint>>((ref) {
+  holdForSession(ref);
   return ref.watch(saRepositoryProvider).onboardingSeries();
 });
 
@@ -177,7 +208,11 @@ final saOnboardingProvider = FutureProvider.autoDispose<List<OnboardingPoint>>((
 /// filtered one should not find the other silently narrowed underneath them.
 class SaSubscriptionFilter extends Notifier<SubscriptionState?> {
   @override
-  SubscriptionState? build() => null;
+  SubscriptionState? build() {
+    // Reset on user change — same reasoning as SaHostelFilter.
+    ref.watch(sessionProvider.select((s) => s?.userId));
+    return null;
+  }
   void set(SubscriptionState? value) => state = value;
 }
 
@@ -196,11 +231,15 @@ final saSubscriptionHistoryProvider =
 
 /// Owner accounts and how many hostels each holds. public.users + public.hostels.
 ///
-/// NOT autoDispose: the wizard reads it on step one and the review step reads the picked row
-/// again three steps later, and refetching between them would let the summary panel disagree
-/// with what was chosen. Invalidated after a successful create, which is the only thing that
-/// changes it from inside this app.
-final saOwnersProvider = FutureProvider<List<SaOwnerOption>>((ref) {
+/// SESSION-HELD, NOT PLAIN: the wizard reads it on step one and the review step reads the
+/// picked row again three steps later, and refetching between them would let the summary panel
+/// disagree with what was chosen — holdForSession keeps that guarantee for as long as the
+/// admin is signed in. It used to be a never-disposed FutureProvider, which kept the same
+/// promise but also kept every owner's name and email cached PAST sign-out; the hold gives the
+/// wizard the identical in-session behaviour and drops the list with the session. Invalidated
+/// after a successful create, which is the only thing that changes it from inside this app.
+final saOwnersProvider = FutureProvider.autoDispose<List<SaOwnerOption>>((ref) {
+  holdForSession(ref);
   return ref.watch(saRepositoryProvider).owners();
 });
 
@@ -221,7 +260,11 @@ enum AlertFilter {
 
 class SaAlertFilter extends Notifier<AlertFilter> {
   @override
-  AlertFilter build() => AlertFilter.open;
+  AlertFilter build() {
+    // Reset on user change — same reasoning as SaHostelFilter.
+    ref.watch(sessionProvider.select((s) => s?.userId));
+    return AlertFilter.open;
+  }
   void set(AlertFilter value) => state = value;
 }
 
@@ -245,7 +288,18 @@ class SaAlertsNotifier extends AsyncNotifier<List<SecurityAlert>> {
   final bool openOnly;
 
   @override
-  Future<List<SecurityAlert>> build() =>
+  Future<List<SecurityAlert>> build() {
+    // Session-held (two family members at most — openOnly is a bool), so the console the
+    // TabWarmer warmed at sign-in is still warm when the Security tab is finally tapped, and
+    // an acknowledge-then-revisit renders the stamped list instantly instead of refetching
+    // from blank. Dropped outright on sign-out.
+    holdForSession(ref);
+    return fetch();
+  }
+
+  /// The one read, apart from [build] so a test can substitute rows while the lifetime logic
+  /// above still runs for real.
+  Future<List<SecurityAlert>> fetch() =>
       ref.read(saRepositoryProvider).securityAlerts(openOnly: openOnly);
 
   /// Marks one alert as seen and stamps the row locally.
@@ -282,7 +336,13 @@ class SaAlertsNotifier extends AsyncNotifier<List<SecurityAlert>> {
 ///
 /// Counted from the rows the console itself would show, capped the same way, so the badge and
 /// the list can never disagree. Zero is drawn as "nothing outstanding", never as an empty badge.
-final saOpenAlertCountProvider = FutureProvider<int>((ref) async {
+///
+/// WAS A PLAIN, NEVER-DISPOSED FutureProvider, which meant the previous admin's count could
+/// survive a sign-out into the next login. Session-held instead: identical behaviour while
+/// signed in (the shell's badge watches it continuously anyway), dropped the moment the
+/// session ends.
+final saOpenAlertCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  holdForSession(ref);
   final alerts = await ref.watch(saRepositoryProvider).securityAlerts(openOnly: true);
   return alerts.length;
 });

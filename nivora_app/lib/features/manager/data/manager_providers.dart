@@ -2,6 +2,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/perf/session_keep_alive.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
 import 'manager_models.dart';
@@ -13,6 +14,15 @@ import 'manager_repository.dart';
 /// Anything the shared file already exposes is used from there and NOT redeclared:
 /// financeRepositoryProvider, taskRepositoryProvider, tasksProvider, hostelProvider,
 /// currentHostelIdProvider and sessionProvider all come straight off lib/data.
+///
+/// LIFETIMES follow the policy at the top of lib/data/providers.dart. The providers that BACK
+/// A TAB — the task counts, the finance window, the weekly menu, and the two paged ledgers —
+/// call `holdForSession` (the paged ones inherit it from PagedNotifier), so ManagerShell's
+/// warm-up (see its initState) is not wasted and a revisited tab renders instantly from the
+/// held value while any refresh happens behind it. The holds cannot leak: every one is a
+/// family keyed by hostelId, so a different hostel is a different cache entry, and
+/// holdForSession itself drops everything on sign-out or a change of user. The staff lookups
+/// stay plain autoDispose — they back the task SHEET, not a tab.
 ///
 /// ── ONE DELIBERATE ABSENCE: rpc_hostel_stats ────────────────────────────────────────────
 ///
@@ -152,6 +162,11 @@ final class ExpenseQuery {
 /// The shared `expensesProvider` is keyed on a hostel id alone and cannot carry the category
 /// filter this screen needs, so the manager has its own notifier over the SAME repository
 /// method. No second query path to the table, just a second cache key.
+///
+/// PagedNotifier's default hold applies to every category variant too, and that is bounded on
+/// purpose: the key space is one hostel times ExpenseCategory.values plus "All" — seven
+/// entries at most, unlike a search box's per-keystroke keys, which is the case the
+/// holdWhileSignedIn override exists for.
 final managerExpensesProvider = AsyncNotifierProvider.autoDispose
     .family<ManagerExpensesNotifier, PagedResult<Expense>, ExpenseQuery>(
   ManagerExpensesNotifier.new,
@@ -190,8 +205,13 @@ class ManagerRevenuesNotifier extends PagedNotifier<Revenue> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// How many jobs are open and how many are late. public.tasks, counted by Postgres.
+///
+/// Session-held: this one figure is read by the home tile, the Tasks-tab header AND the badge
+/// on the navigation bar — one family instance, one pair of HEAD requests, and the badge rides
+/// on whatever fetch is already live rather than making its own.
 final taskLoadProvider =
     FutureProvider.autoDispose.family<TaskLoad, String>((ref, hostelId) {
+  holdForSession(ref);
   final now = DateTime.now();
   return ref.watch(managerRepositoryProvider).taskCounts(
         hostelId: hostelId,
@@ -213,6 +233,7 @@ const trendDays = 14;
 /// rebuild and refetch the series on every frame.
 final managerFinanceProvider =
     FutureProvider.autoDispose.family<FinanceWindow, String>((ref, hostelId) async {
+  holdForSession(ref);
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final monthStart = DateTime(now.year, now.month);
@@ -233,9 +254,10 @@ final managerFinanceProvider =
   );
 });
 
-/// The mess menu for the week. public.menus.
+/// The mess menu for the week. public.menus. Session-held: it backs the Menu tab.
 final weeklyMenuProvider =
     FutureProvider.autoDispose.family<WeeklyMenu, String>((ref, hostelId) {
+  holdForSession(ref);
   return ref.watch(managerRepositoryProvider).weeklyMenu(hostelId);
 });
 

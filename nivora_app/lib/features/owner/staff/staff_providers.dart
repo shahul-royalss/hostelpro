@@ -2,6 +2,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/perf/session_keep_alive.dart';
 import '../../../data/providers.dart';
 import 'staff_models.dart';
 import 'staff_repository.dart';
@@ -21,9 +22,14 @@ final ownerStaffWritesProvider = Provider<OwnerStaffWrites>(
 
 /// Every manager and warden of one PG. public.users, under RLS.
 ///
-/// autoDispose and keyed by hostel: an owner switching between two PGs must not see the first
-/// one's staff under the second one's name for the length of a frame, and leaving the screen
-/// should not hold a list of people's contact details in memory.
+/// TAB-BACKING, SO SESSION-HELD — the lifetime policy at the top of lib/data/providers.dart.
+/// This list is what the owner's More tab renders, and it is in the shell's warm-up list
+/// (see OwnerSection in owner_tabs.dart), so it calls `holdForSession`: a revisit renders
+/// instantly from the held roster, and a refresh updates it in place instead of blanking to a
+/// skeleton. The hold cannot show one PG's staff under another's name even for a frame: the
+/// family is keyed by hostelId, so a switch reads a different cache entry altogether — and
+/// holdForSession drops everything on sign-out or a change of user, so a roster of contact
+/// details never survives into the next login.
 ///
 /// AN EMPTY LIST IS AMBIGUOUS AND THE SCREEN SAYS SO. `users_select` returns rows to an owner
 /// only for a hostel `app.can_read_hostel()` admits, so zero rows means either "this PG has no
@@ -31,5 +37,6 @@ final ownerStaffWritesProvider = Provider<OwnerStaffWrites>(
 /// the screen leads with it, but the empty state is phrased so it is also true of the second.
 final ownerStaffProvider =
     FutureProvider.autoDispose.family<List<StaffMember>, String>((ref, hostelId) {
+  holdForSession(ref);
   return ref.watch(ownerStaffRepositoryProvider).staff(hostelId);
 });

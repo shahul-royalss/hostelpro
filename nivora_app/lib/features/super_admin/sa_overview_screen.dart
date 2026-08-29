@@ -434,11 +434,17 @@ class _Bar extends StatelessWidget {
               maxLines: 1,
             ),
             const SizedBox(height: Space.xxs),
-            Container(
-              height: (_plotHeight * fraction).clamp(2.0, _plotHeight),
-              decoration: BoxDecoration(
-                color: tone,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.tiny)),
+            // Flexible, because the column's 88dp budget also has to fit the two labels, whose
+            // heights are the font's business, not ours. At full _plotHeight the peak month's
+            // bar could exceed what is left and paint an overflow stripe across the chart; a
+            // loose fit lets that one bar give up the couple of pixels instead.
+            Flexible(
+              child: Container(
+                height: (_plotHeight * fraction).clamp(2.0, _plotHeight),
+                decoration: BoxDecoration(
+                  color: tone,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.tiny)),
+                ),
               ),
             ),
             const SizedBox(height: Space.xxs),

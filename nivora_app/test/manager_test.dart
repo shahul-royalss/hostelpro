@@ -929,6 +929,14 @@ class _FakeExpenses extends ManagerExpensesNotifier {
   Future<PagedResult<Expense>> fetchPage(int page) async => _one(items);
 }
 
+class _FakeRevenues extends ManagerRevenuesNotifier {
+  _FakeRevenues(super.hostelId, this.items);
+  final List<Revenue> items;
+
+  @override
+  Future<PagedResult<Revenue>> fetchPage(int page) async => _one(items);
+}
+
 /// Pins the menu screen to one day, so the test is not a different test on Sunday.
 class _PinnedDay extends MenuDayState {
   _PinnedDay(this.day);
@@ -1034,6 +1042,9 @@ Future<void> _pumpShell(
         managerExpensesProvider.overrideWith2(
           (_) => _FakeExpenses(const ExpenseQuery(hostelId: _hostelId), _expenses()),
         ),
+        // The shell's background warm-up reaches the revenues list too, even though no test
+        // here ever shows it — unstubbed, the warmer would touch the real repository.
+        managerRevenuesProvider.overrideWith2((_) => _FakeRevenues(_hostelId, const [])),
         menuDayProvider.overrideWith(() => _PinnedDay(MenuDay.wed)),
         weeklyMenuProvider.overrideWith((ref, id) => _menu()),
       ],

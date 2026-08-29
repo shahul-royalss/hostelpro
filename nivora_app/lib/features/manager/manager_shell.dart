@@ -3,6 +3,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/perf/tab_warmer.dart';
 import '../../data/providers.dart';
 import 'data/manager_models.dart';
 import 'data/manager_providers.dart';
@@ -19,20 +20,89 @@ import 'tasks/manager_tasks_screen.dart';
 /// the kind of small betrayal that makes people stop using a tool — and re-fetching three pages
 /// of expenses to undo it costs the hostel's data allowance as well as the manager's patience.
 ///
+/// A TAB IS BUILT ON FIRST VISIT, BUT ITS DATA IS ALREADY THERE. The old shell built all four
+/// screens in the mount frame, which put six requests on the wire at once — the home screen's
+/// own reads queueing behind the menu's on a phone radio. Now the mount frame builds home
+/// alone (plus the badge's count), and a [TabWarmer] starts every other tab's first-page read
+/// in the background, staggered, once home has had its head start. The warmed providers call
+/// `holdForSession` (see manager_providers.dart), so by the time a tab is tapped its data is
+/// sitting in the cache and the first build renders it synchronously — no skeleton, no
+/// spinner. A skeleton on a tab tap after the shell has been up for a moment is a bug, and
+/// test/manager_warmup_test.dart pins exactly that.
+///
 /// THE SELECTED TAB IS A PROVIDER, not local state, so the home screen's counts can open the
 /// list they counted. See managerTabProvider.
 ///
 /// The labels and their ORDER match features/shell/role_shell.dart exactly. That file is where
 /// a reader goes to learn what a role's navigation is, and two files disagreeing about which
 /// tab is third is a bug that only shows up as a mis-routed tap.
-class ManagerShell extends ConsumerWidget {
+class ManagerShell extends ConsumerStatefulWidget {
   const ManagerShell({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ManagerShell> createState() => _ManagerShellState();
+}
+
+class _ManagerShellState extends ConsumerState<ManagerShell> {
+  /// The four bodies, in navigation order. Index 0 is home and is always built.
+  static const _screens = <Widget>[
+    ManagerHomeScreen(),
+    ManagerExpensesScreen(),
+    ManagerTasksScreen(),
+    ManagerMenuScreen(),
+  ];
+
+  /// Tabs that have been shown at least once, and are kept built (state, scroll, filters)
+  /// from then on. Home is born visited.
+  final _visited = <int>{0};
+
+  TabWarmer? _warmer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Order = tap likelihood. HOME IS NOT IN THE LIST: its screen is built in this same
+    // frame and its watches dispatch before the first warmer fires (TabWarmer gives it a
+    // full interval's head start). The last two are belt and braces — the badge below and
+    // the home screen already hold those exact family instances live, so warming them is a
+    // join on the in-flight fetch, never a second request.
+    _warmer = TabWarmer([
+      // Tasks tab: the badge sends people here. Same TaskQuery the home screen's "Next up"
+      // uses, but on a short viewport that section can sit below the fold and never mount,
+      // so the tab cannot lean on it having fetched.
+      _warm((id) => ref.read(tasksProvider(TaskQuery(hostelId: id, openOnly: true)).future)),
+      // Expenses tab, default view: money out, all categories.
+      _warm((id) => ref.read(managerExpensesProvider(ExpenseQuery(hostelId: id)).future)),
+      // Menu tab: the whole week in one request.
+      _warm((id) => ref.read(weeklyMenuProvider(id).future)),
+      // The "Money in" segment of the Expenses tab — not built until the segment is tapped,
+      // so nothing else ever fetches it.
+      _warm((id) => ref.read(managerRevenuesProvider(id).future)),
+      _warm((id) => ref.read(taskLoadProvider(id).future)),
+      _warm((id) => ref.read(managerFinanceProvider(id).future)),
+    ])..start();
+  }
+
+  @override
+  void dispose() {
+    _warmer?.cancel();
+    super.dispose();
+  }
+
+  /// Reads the hostel at FIRE time, not at mount: a warmer that runs after sign-out (or on an
+  /// account with no hostel) must quietly do nothing rather than fetch under a stale key.
+  Warmer _warm(Future<Object?> Function(String hostelId) read) => () {
+        final id = ref.read(currentHostelIdProvider);
+        if (id == null) return null;
+        return read(id);
+      };
+
+  @override
+  Widget build(BuildContext context) {
     final t = Theme.of(context);
     final index = ref.watch(managerTabProvider);
     final hostelId = ref.watch(currentHostelIdProvider);
+    _visited.add(index);
 
     // Already fetched by the home screen under the same key, so the badge costs nothing extra.
     //
@@ -46,11 +116,9 @@ class ManagerShell extends ConsumerWidget {
     return Scaffold(
       body: IndexedStack(
         index: index,
-        children: const [
-          ManagerHomeScreen(),
-          ManagerExpensesScreen(),
-          ManagerTasksScreen(),
-          ManagerMenuScreen(),
+        children: [
+          for (var i = 0; i < _screens.length; i++)
+            _visited.contains(i) ? _screens[i] : const SizedBox.shrink(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
