@@ -45,6 +45,10 @@ class OwnerStaffScreen extends ConsumerWidget {
     return Scaffold(
       body: Column(
         children: [
+          // staff-directory.png's bar: the screen's name set in `primary` at headline weight,
+          // with the property it belongs to underneath. The mockup's hamburger and avatar are
+          // not drawn — this screen is a tab inside the shell's own chrome, not a page with
+          // its own navigation.
           GlassHeader(
             child: Row(
               children: [
@@ -52,10 +56,15 @@ class OwnerStaffScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('STAFF ACCOUNTS', style: t.textTheme.labelSmall),
+                      Text(
+                        'Staff accounts',
+                        style: t.textTheme.titleLarge?.copyWith(color: t.colorScheme.primary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       Text(
                         hostelName ?? 'Your PG',
-                        style: t.textTheme.titleLarge,
+                        style: t.textTheme.bodySmall,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -155,7 +164,9 @@ class _StaffBody extends ConsumerWidget {
               'only their own part of it.',
               style: t.textTheme.bodyMedium,
             ),
-            const SizedBox(height: Space.md),
+            const SizedBox(height: Space.lg),
+            // 4:536's own section label for this block.
+            const SectionLabel(label: 'Staff & access'),
             for (final role in StaffRole.values) ...[
               _RoleSection(
                 role: role,
@@ -303,34 +314,30 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
     // rather than a search. inRole is already ordered active-first, then newest-first.
     final primary = active ?? (inRole.isEmpty ? null : inRole.first);
 
-    return FlatSurface(
+    // The design's staff card, in the order staff-directory.png draws it: the post's own
+    // `label-caps` eyebrow, then the avatar / name / duty-chip header, then an inner block of
+    // the details, then the action row along the foot.
+    //
+    // The mockup's chip says "On Duty" / "Off Duty". This one says Active / Inactive, because
+    // that is what `public.users.status` means: it is whether the account can sign in at all,
+    // not whether somebody is on shift. There is no shift or attendance record for staff in
+    // the schema, and re-labelling an access flag as a duty roster would be a lie the owner
+    // would act on.
+    return GlassCard(
       padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(role.label.toUpperCase(), style: t.textTheme.labelSmall),
-                    const SizedBox(height: Space.xxs),
-                    Text(role.blurb, style: t.textTheme.bodySmall),
-                  ],
-                ),
-              ),
-              if (primary != null) ...[
-                const SizedBox(width: Space.xs),
-                StatusChip(
-                  label: primary.status.label,
-                  tone: primary.isActive ? NivoraColors.success : NivoraColors.textMuted,
-                ),
-              ],
-            ],
+          // GOLD, which is 4:536's own treatment of a post: on the mockup's staff rows the
+          // role ("Head Warden", "Assistant Manager") is the one thing set in the accent, over
+          // the property in the secondary ink. Here the card's eyebrow IS the post, so the
+          // accent lands on it rather than on a repeat of it beside the name. Measured 8.26:1
+          // on the card. The property is deliberately not repeated — see [_StaffDetails].
+          Text(
+            role.label.toUpperCase(),
+            style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary),
           ),
-          const SizedBox(height: Space.md),
+          const SizedBox(height: Space.sm),
           if (primary == null)
             EmptyNote(
               icon: Icons.person_add_alt_rounded,
@@ -341,6 +348,8 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
             )
           else
             _StaffDetails(member: primary),
+          const SizedBox(height: Space.sm),
+          Text(role.blurb, style: t.textTheme.bodySmall),
           const SizedBox(height: Space.md),
           _Actions(
             role: role,
@@ -367,7 +376,7 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
   }
 }
 
-/// Name, login and contact for whoever holds a post.
+/// Name, login and contact for whoever holds a post — the mockup's card header and inner block.
 class _StaffDetails extends StatelessWidget {
   const _StaffDetails({required this.member});
 
@@ -379,31 +388,79 @@ class _StaffDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final muted = context.tones.muted;
+    final active = member.isActive;
+    final tone = active ? NivoraColors.success : NivoraColors.textMuted;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(member.fullName, style: t.textTheme.titleMedium),
-        const SizedBox(height: Space.xs),
-        if (member.email != null)
-          _DetailLine(icon: Icons.mail_outline_rounded, text: member.email!),
-        if (member.phone != null) ...[
-          const SizedBox(height: Space.xxs),
-          _DetailLine(icon: Icons.phone_outlined, text: member.phone!),
-        ],
-        const SizedBox(height: Space.xs),
-        Text(
-          'Added ${_added.format(member.createdAt.toLocal())}',
-          style: t.textTheme.labelSmall?.copyWith(color: muted),
+        // `[avatar] Name / role  …  ● On Duty` — the design's card header.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InitialsAvatar(name: member.fullName, muted: !active),
+            const SizedBox(width: Space.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    member.fullName,
+                    style: t.textTheme.titleMedium,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    'Added ${_added.format(member.createdAt.toLocal())}',
+                    style: t.textTheme.bodySmall?.copyWith(color: muted),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: Space.xs),
+            StatusChip(label: member.status.label, tone: tone, dot: true),
+          ],
         ),
+        // The mockup's `ASSIGNED PROPERTY` block. Filled with the login and the phone rather
+        // than the property, because this screen already names the PG in its header and
+        // repeating it on both cards would be furniture. The shape is the design's: a step up
+        // the container ramp, a square icon badge, a `label-caps` eyebrow over the value.
+        if (member.email != null || member.phone != null) ...[
+          const SizedBox(height: Space.sm),
+          FlatSurface(
+            weight: GlassWeight.regular,
+            borderRadius: Radii.rControl,
+            padding: const EdgeInsets.all(Space.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (member.email != null)
+                  _DetailLine(
+                    icon: Icons.mail_outline_rounded,
+                    label: 'Login id',
+                    text: member.email!,
+                  ),
+                if (member.email != null && member.phone != null)
+                  const SizedBox(height: Space.sm),
+                if (member.phone != null)
+                  _DetailLine(
+                    icon: Icons.phone_outlined,
+                    label: 'Phone',
+                    text: member.phone!,
+                  ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
 }
 
 class _DetailLine extends StatelessWidget {
-  const _DetailLine({required this.icon, required this.text});
+  const _DetailLine({required this.icon, required this.label, required this.text});
 
   final IconData icon;
+  final String label;
   final String text;
 
   @override
@@ -411,14 +468,22 @@ class _DetailLine extends StatelessWidget {
     final t = Theme.of(context);
     return Row(
       children: [
-        Icon(icon, size: IconSize.sm, color: context.tones.muted),
-        const SizedBox(width: Space.xs),
+        // Canonical, resolved at the paint site: the rule in tokens.dart is that a tone chosen
+        // away from the widget travels as its meaning, not as a hex.
+        ToneBadge(icon: icon, tone: NivoraColors.textMuted),
+        const SizedBox(width: Space.sm),
         Expanded(
-          child: Text(
-            text,
-            style: t.textTheme.bodySmall,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label.toUpperCase(), style: t.textTheme.labelSmall),
+              Text(
+                text,
+                style: t.textTheme.bodyMedium,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ],

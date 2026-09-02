@@ -34,9 +34,9 @@
  * transaction. If the RPC fails, the uploaded objects are removed and the auth user is deleted
  * again. Unlike the web version, a rollback that ITSELF fails is reported rather than
  * swallowed: HTTP 500 naming the orphaned auth user id, because a student login with no
- * students row is invisible, unusable, and permanently holds its phone number — the phone
- * number IS the login id, so that resident can never be registered again until someone deletes
- * the stray account by hand.
+ * students row is invisible, unusable, and permanently holds its login address — the resident's
+ * email if they gave one, otherwise the address derived from their phone number — so that
+ * resident can never be registered again until someone deletes the stray account by hand.
  *
  * ═══ THE TEMPORARY PASSWORD ═══
  * Returned ONCE, with Cache-Control: no-store. Never stored, never logged, never audited.
@@ -52,8 +52,9 @@ import { fail, HttpError, ok, preflight, readJsonBody, toResponse } from "../_sh
 import { enforceRateLimit } from "../_shared/ratelimit.ts";
 import { removeStudentDocs, uploadStudentDoc } from "../_shared/storage.ts";
 import { callerClient } from "../_shared/supabase.ts";
+import { requireVerifiedEmail } from "../_shared/verification.ts";
 import { assertWritable, requireOwnHostel } from "../_shared/tenant.ts";
-import { studentLoginEmail, Validator } from "../_shared/validate.ts";
+import { isStudentLoginEmail, studentLoginEmail, Validator } from "../_shared/validate.ts";
 
 /**
  * Two base64 files at 3 MB each are ~8.4 MB of text, plus the fields. 12 MB is the ceiling
@@ -72,6 +73,10 @@ function parseBody(body: Record<string, unknown>) {
   const fullName = v.string("fullName", { min: 2, max: 120, message: "Enter the student's full name" });
   const phone = v.phone10("phone");
   const email = v.optionalEmail("email", 160);
+  // The phone-mapping namespace is not a real mail domain and nobody may claim an address in
+  // it — see isStudentLoginEmail(). Typing one here would mint the login id belonging to some
+  // other resident's phone number and lock them out of registration for good.
+  if (email && isStudentLoginEmail(email)) v.reject("email", "Enter a real email address");
   const dateOfJoining = v.isoDate("dateOfJoining", "Pick a valid date");
 
   const guardianName = v.string("guardianName", { min: 2, max: 120, message: "Enter the guardian's name" });
@@ -110,6 +115,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   try {
     const caller = await requireCaller(req, "warden");
+    // See sa-create-owner. A warden registering a resident hands over a working password at the
+    // desk; the account doing the handing over has to have proved it is reachable first.
+    requireVerifiedEmail(caller);
     const input = parseBody(await readJsonBody(req, MAX_BODY_BYTES));
 
     // The tenant comes from the caller's own profile row, never from the body.
@@ -118,14 +126,32 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     await enforceRateLimit("warden:register:" + caller.id);
 
-    // The login id is the phone number, mapped to the same synthetic address the web app
-    // resolves at sign-in. If that address is taken, createStudentAuthUser fails here with
-    // "already has an account" — before anything else has been created.
+    /*
+     * THE LOGIN ID: the resident's own email when the warden collected one, otherwise the
+     * phone number mapped to the synthetic address.
+     *
+     * Email is OPTIONAL and stays optional. A hostel resident may genuinely not have one —
+     * that is the entire reason the phone mapping exists — and a required field here would be
+     * answered with an invented address, which is worse than no address: public.users.email
+     * carries a UNIQUE index on lower(email), and GoTrue will not release a taken address, so
+     * a typo'd or borrowed address is a permanent squatter on somebody else's login.
+     *
+     * When an email IS given it becomes the login, not a second one. Both clients resolve the
+     * sign-in box with the same pure function and neither reads a table to do it.
+     *
+     * Either way, if the address is taken createStudentAuthUser fails HERE — before an object
+     * is uploaded or a row is written.
+     */
+    const loginEmail = input.email ?? studentLoginEmail(input.phone);
     const account = await createStudentAuthUser({
       fullName: input.fullName,
       phone: input.phone,
       hostelId: hostel.id,
-      loginEmail: studentLoginEmail(input.phone),
+      loginEmail,
+      loginId: input.email ?? input.phone,
+      duplicateMessage: input.email
+        ? "A student with this email address already has an account."
+        : "A student with this phone number already has an account.",
     });
 
     const asCaller = callerClient(caller.jwt);

@@ -268,6 +268,19 @@ AppFailure staffFailureFrom(FunctionException error) {
         technical: error.toString(),
       ),
     403 => _forbidden(message, error),
+    // A BODYLESS 404 IS THE ENDPOINT, NOT THE PG. When the function ran and decided the hostel
+    // is gone it says so in its `{ ok: false, error }` envelope, which is [message]. When the
+    // function is not deployed on this project the gateway answers 404 with nothing in it, and
+    // "that PG could not be found" sends an owner looking for a PG that is sitting right there
+    // on the previous screen. Same precedent as the 404 branch in
+    // features/auth/email_verification_service.dart, which was added after this exact confusion
+    // cost a live debugging session.
+    404 when message == null => NotFoundFailure(
+        'Staff accounts cannot be managed on this server yet. Nothing was changed. Ask Nivora '
+            'to enable it.',
+        technical: 'the staff Edge Function answered 404 with no body — it is not deployed on '
+            'this project, so nothing decided that a PG was missing. $error',
+      ),
     404 => NotFoundFailure(
         message ?? 'That PG could not be found.',
         technical: error.toString(),

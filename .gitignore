@@ -76,3 +76,12 @@ reciept animation/
 skills/
 # Stray perf probes from tooling runs.
 build/
+
+# Scratch copy of the Razorpay webhook secret, for pasting into the dashboard once.
+# Delete it after you have pasted it — the value also lives in .env.local.
+RAZORPAY-WEBHOOK-SECRET.txt
+
+# One-off diagnostic scripts written against the live project during debugging. They read every
+# credential from the environment (never hardcoded), but they are session artefacts rather than
+# part of the app, and a repo that accumulates them stops being readable.
+.probe-*.mjs

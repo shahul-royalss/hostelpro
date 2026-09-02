@@ -6,14 +6,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/illustrations.dart';
 import 'complaint_detail_sheet.dart';
 import 'complaints_screen.dart';
+import 'menu_screen.dart';
 import 'notices_screen.dart';
-import 'pay_rent_sheet.dart';
+import '../auth/verify_email_screen.dart';
 import 'student_providers.dart';
 import 'widgets/common.dart';
 import 'widgets/complaint.dart';
 import 'widgets/format.dart';
+import 'widgets/menu.dart';
 import 'widgets/notice.dart';
 import 'widgets/rent.dart';
 
@@ -26,6 +29,7 @@ import 'widgets/rent.dart';
 ///   public.st_hostel_contacts() — the hostel's name.
 ///   public.complaints           — the resident's own, still open.
 ///   public.announcements        — the two most recent notices they are allowed to see.
+///   public.menus                — today's four meals, out of the week the manager writes.
 ///
 /// WHAT THIS SCREEN DELIBERATELY DOES NOT READ: `rpc_hostel_stats`. It is SECURITY INVOKER, so
 /// a student CAN call it and it does answer — with occupancy, collections and subscription
@@ -55,14 +59,18 @@ class _Home extends ConsumerWidget {
     final contacts = ref.watch(hostelContactsProvider);
 
     return RefreshIndicator(
-      onRefresh: () async {
+      onRefresh: () {
         refreshStudentData(ref);
-        await awaitStudentRefresh(ref);
+        return awaitStudentRefresh(context, ref);
       },
       child: ListView(
         padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.xxxl),
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
+          // Draws nothing for the many residents whose login IS their phone number — there is
+          // no address on those accounts to prove. It appears only for a resident whose warden
+          // collected a real email, which is then that resident's login id.
+          const VerifyEmailBanner(),
           _Greeting(name: me.fullName, hostelName: contacts.value?.hostelName),
           const SizedBox(height: Space.md),
 
@@ -86,13 +94,7 @@ class _Home extends ConsumerWidget {
             builder: (row) => Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                RentCard(
-                  periodMonth: month,
-                  row: row,
-                  onPay: row == null
-                      ? null
-                      : () => showPayRentSheet(context, periodMonth: month, rent: row),
-                ),
+                RentCard(periodMonth: month, row: row),
                 const SizedBox(height: Space.sm),
                 RoomBedCard(
                   roomNumber: row?.roomNumber,
@@ -109,6 +111,17 @@ class _Home extends ConsumerWidget {
 
           const SizedBox(height: Space.md),
           _QuickActions(me: me),
+
+          // MONEY FIRST, FOOD SECOND. The menu sits BELOW the rent card and the two shortcuts
+          // and above everything else: rent is why this app gets opened and must never be
+          // pushed off the first screen, but "what is for dinner" is asked far more often than
+          // "has my complaint moved", and it was worth the place ahead of those.
+          //
+          // TODAY ONLY, WITH THE WEEK ONE TAP AWAY. Seven days times four meals is twenty-eight
+          // lines, which on a phone would bury the complaints and the noticeboard under a
+          // fortnight of scrolling. See [StudentMenuScreen] for the full week.
+          const SizedBox(height: Space.xl),
+          _TodaysMenu(hostelId: me.hostelId),
 
           const SizedBox(height: Space.xl),
           _OpenComplaints(me: me),
@@ -139,15 +152,19 @@ class _Greeting extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    // The mockups' masthead is a quiet line over a loud one — "Welcome back," then the name at
+    // headline-lg-mobile. Ours is the same shape with real data in both halves: the small line
+    // names the hostel this account belongs to instead of a fixed pleasantry, and the big line
+    // is the greeting the clock decides.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (hostelName != null) ...[
+          Text(hostelName!, style: t.textTheme.bodyMedium),
+          const SizedBox(height: Space.xxs),
+        ],
         Text('${greetingFor(DateTime.now())}, ${firstName(name)}',
             style: t.textTheme.displaySmall),
-        if (hostelName != null) ...[
-          const SizedBox(height: Space.xxs),
-          Text(hostelName!, style: t.textTheme.bodyMedium),
-        ],
       ],
     );
   }
@@ -157,12 +174,26 @@ class _QuickActions extends StatelessWidget {
   const _QuickActions({required this.me});
   final Student me;
 
+  /// BOTH OF THESE ARE OUTLINED, and the reason used to be the cream Pay button two cards
+  /// above them. That button is gone — rent is paid at the warden's desk, and the rent card now
+  /// says so in words (see PayAtDeskNote) — but the ranking it created is still right and these
+  /// stay outlined.
+  ///
+  /// The cream fill is this design's one loud object — `bg-[#f5f3ee]` on `text-[#0b0d0f]`, the
+  /// only maximally-bright surface in a near-black palette. "Complaint" used to be a cream fill
+  /// a short scroll under the rent card, which was two primary actions on one screen: the eye
+  /// gets no answer to "what am I here to do". These two are shortcuts, not the point of the
+  /// screen.
+  ///
+  /// The design's secondary action is the hairline outlined box (4:1587) with its label in
+  /// ordinary cream rather than a coloured one — the outline is what says "button", so the text
+  /// stays quiet. These two are shortcuts, not the point of the screen, and now they look it.
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
-          child: FilledButton.icon(
+          child: OutlinedButton.icon(
             onPressed: () => raiseComplaint(context, me),
             icon: const Icon(Icons.add_comment_rounded, size: IconSize.md),
             label: const Text('Complaint'),
@@ -189,6 +220,63 @@ void _open(BuildContext context, String title, Widget child) {
       builder: (_) => StudentPushPage(title: title, child: child),
     ),
   );
+}
+
+/// What is being served today, out of the one weekly read.
+///
+/// READS public.menus through `weeklyMenuProvider` — the SAME provider instance, with the same
+/// family key, that [StudentMenuScreen] and the manager's own Menu tab watch. Today's four
+/// meals are picked out of the week that is already in hand; there is no "today" query, because
+/// a second query for four of twenty-eight rows this device already holds would be a round trip
+/// bought with a resident's mobile data.
+///
+/// THREE THINGS "EMPTY" CAN MEAN HERE, AND THEY ARE NOT THE SAME SENTENCE. Nobody has planned
+/// anything at all; the week is written but today is not; today is written but one of its four
+/// meals is blank. The first two are said in words below and the third is [MealLine]'s job. A
+/// single "no menu" for all three would tell a resident whose hostel has planned every other
+/// day that their hostel does not do menus.
+class _TodaysMenu extends ConsumerWidget {
+  const _TodaysMenu({required this.hostelId});
+  final String hostelId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final provider = weeklyMenuProvider(hostelId);
+    final menu = ref.watch(provider);
+    final today = MenuDay.of(DateTime.now());
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeading(
+          title: "Today's food",
+          caption: today.label,
+          trailing: SeeAllButton(
+            label: 'Whole week',
+            onPressed: () => _open(context, 'Meal menu', const StudentMenuScreen()),
+          ),
+        ),
+        AsyncSection<WeeklyMenu>(
+          value: menu,
+          onRetry: () => ref.invalidate(provider),
+          builder: (week) {
+            if (week.plannedOn(today) == 0) {
+              return EmptyNote(
+                icon: Icons.restaurant_menu_rounded,
+                title: week.isEmpty ? 'No menu put up yet' : 'Nothing set for today yet',
+                // Both sentences are about who fills it in, because that is the only thing a
+                // resident can act on: the menu is written by the manager and read-only here.
+                message: week.isEmpty
+                    ? 'Your hostel manager writes the week here.'
+                    : 'The manager has planned other days — tap Whole week to look ahead.',
+              );
+            }
+            return DayMenuCard(day: today, week: week, isToday: true);
+          },
+        ),
+      ],
+    );
+  }
 }
 
 class _OpenComplaints extends ConsumerWidget {
@@ -228,9 +316,8 @@ class _OpenComplaints extends ConsumerWidget {
         SectionHeading(
           title: 'Your complaints',
           caption: _openCaption(complaints),
-          trailing: TextButton(
+          trailing: SeeAllButton(
             onPressed: () => _open(context, 'Complaints', const StudentComplaintsScreen()),
-            child: const Text('See all'),
           ),
         ),
         AsyncSection<PagedResult<Complaint>>(
@@ -238,10 +325,15 @@ class _OpenComplaints extends ConsumerWidget {
           onRetry: () => ref.invalidate(complaintsProvider(query)),
           builder: (page) {
             if (page.isEmpty) {
+              // The tone is passed EXPLICITLY now that [EmptyNote] no longer defaults to green.
+              // This is one of the few empty states in the app where empty is genuinely good
+              // news — nothing of yours is unresolved — so it earns the positive glyph. An
+              // empty list that is merely empty gets the design's neutral outline instead.
               return const EmptyNote(
                 icon: Icons.check_circle_outline_rounded,
                 title: 'Nothing outstanding',
                 message: 'Anything you raise will show its progress here.',
+                tone: NivoraColors.success,
               );
             }
             return Column(
@@ -278,9 +370,8 @@ class _LatestNotices extends ConsumerWidget {
         SectionHeading(
           title: 'Notices',
           caption: 'From the hostel owner.',
-          trailing: TextButton(
+          trailing: SeeAllButton(
             onPressed: () => _open(context, 'Notices', const StudentNoticesScreen()),
-            child: const Text('See all'),
           ),
         ),
         AsyncSection<PagedResult<Notice>>(
@@ -289,10 +380,10 @@ class _LatestNotices extends ConsumerWidget {
           builder: (page) {
             if (page.isEmpty) {
               return const EmptyNote(
+                illustration: EmptyArt.notices,
                 icon: Icons.campaign_outlined,
                 title: 'No notices yet',
                 message: 'Announcements from the hostel owner appear here.',
-                tone: NivoraColors.textMuted,
               );
             }
             return Column(

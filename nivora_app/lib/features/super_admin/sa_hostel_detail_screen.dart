@@ -7,6 +7,7 @@ import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../../shared/glass/glass.dart';
+import '../common/refresh.dart';
 import 'data/sa_models.dart';
 import 'data/sa_providers.dart';
 import 'widgets/sa_ui.dart';
@@ -43,11 +44,11 @@ class SaHostelDetailScreen extends ConsumerWidget {
     return SaPage(
       eyebrow: 'HOSTEL',
       title: summary.value?.hostelName ?? 'Hostel',
-      onRefresh: () async {
+      onRefresh: () {
         ref.invalidate(saHostelProvider(hostelId));
         ref.invalidate(saSubscriptionHistoryProvider(hostelId));
         ref.invalidate(hostelProvider(hostelId));
-        await ref.read(saHostelProvider(hostelId).future);
+        return settleRefresh(context, () => ref.read(saHostelProvider(hostelId).future));
       },
       child: saAsync<SaHostelRow?>(
         summary,
@@ -81,6 +82,11 @@ class SaHostelDetailScreen extends ConsumerWidget {
                   },
                 ),
               SaEmptyVerdict.refused => const SaNotPermitted(),
+
+            // NOT SaNotPermitted, and not SaUnverified's "check again" either. The read
+            // that would have explained this emptiness died with the access token, so the
+            // only honest thing on screen is the way to get a live one.
+            SaEmptyVerdict.credentialDead => const SaSessionEnded(),
               SaEmptyVerdict.confirmed => const SaEmpty(
                   icon: Icons.apartment_rounded,
                   title: 'Hostel not found',
@@ -121,7 +127,9 @@ class _Detail extends ConsumerWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text(hostel.hostelName, style: t.textTheme.titleLarge),
+                    // 16/700 — the design's card title (4:1543). Nothing in the Figma file is
+                    // set at 20, and a hostel's name is a card title, not a hero figure.
+                    child: Text(hostel.hostelName, style: t.textTheme.titleMedium),
                   ),
                   const SizedBox(width: Space.xs),
                   SaSubscriptionPill(state: hostel.subState, daysLeft: hostel.daysLeft),

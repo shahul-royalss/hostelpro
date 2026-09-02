@@ -70,7 +70,13 @@ const admin = admins[0];
 console.log(`Rotating super admin ${admin.email} → ${targetEmail} (auth user ${admin.id})`);
 
 // email_confirm: the address is being SET by the platform operator, not claimed by a
-// stranger — a confirmation round-trip would just wedge login until SMTP exists.
+// stranger, and the project has "Confirm email" ON — without this the rotated account could
+// not sign in with the new password at all.
+//
+// It does NOT mark the new address verified, and nothing here has to remember that:
+// app.users_update_guard nulls public.users.email_verified_at on any email change, so the
+// super admin is asked for a code on the new address the next time they open the app. That is
+// the point of rotating onto an address whose owner has not yet answered anything.
 const { error: uErr } = await sb.auth.admin.updateUserById(admin.id, {
   email: targetEmail,
   password: targetPassword,

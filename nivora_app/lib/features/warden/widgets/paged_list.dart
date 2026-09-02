@@ -51,13 +51,25 @@ class PagedList<T> extends StatelessWidget {
       child: AsyncSection<PagedResult<T>>(
         value: value,
         onRetry: onRefresh,
-        // The loading and failure states are scrollable too, or pull-to-refresh is the one
+        // The loading and empty states are scrollable too, or pull-to-refresh is the one
         // gesture that cannot rescue a screen that failed to load.
-        loading: ListView(children: const [_Spinner()]),
+        //
+        // SAID OUT LOUD RATHER THAN INHERITED. A vertical ListView with no controller of its
+        // own is `primary`, and ScrollView gives a primary list AlwaysScrollableScrollPhysics
+        // for free — which is the only reason the pull worked on these two short states. That
+        // is a silent dependency on a default: the day one of these lists is given a
+        // `controller:` (as both super-admin lists have been) `primary` turns false, the
+        // physics fall back to null, and content that fits refuses to over-scroll — so the
+        // RefreshIndicator stops firing and nothing anywhere says why. Naming it costs a line.
+        loading: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [_Spinner()],
+        ),
         builder: (page) {
           if (page.isEmpty) {
             return ListView(
               padding: padding,
+              physics: const AlwaysScrollableScrollPhysics(),
               children: [?header, empty],
             );
           }

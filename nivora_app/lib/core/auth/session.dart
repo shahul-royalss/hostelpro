@@ -38,6 +38,31 @@ enum UserRole {
   }
 }
 
+/// The domain student logins are mapped onto. Must match the web app's STUDENT_LOGIN_DOMAIN,
+/// `STUDENT_LOGIN_DOMAIN` in supabase/functions/_shared/validate.ts, and the literal inside
+/// `app.email_is_reachable()` in Postgres.
+///
+/// It is not a real mail domain and no address in it is ever accepted as a resident's own
+/// email — see the `isStudentLoginEmail` guard in the Edge Function. Only the phone mapping in
+/// [resolveLoginEmail] writes here.
+///
+/// It lives in this file rather than beside [resolveLoginEmail] because [NivoraSession] is what
+/// has to answer "does this account have an address worth verifying", and core/auth/session
+/// must not import the controller that imports it. auth_controller.dart re-exports the name, so
+/// every existing `import auth_controller.dart show studentLoginDomain` still resolves.
+const studentLoginDomain = 'student.hostelpro.local';
+
+/// Can mail actually be delivered to this address?
+///
+/// Mirrors `app.email_is_reachable()` in db/schema.sql and `isReachableAddress()` in
+/// supabase/functions/_shared/verification.ts. False for the synthetic phone-mapping namespace,
+/// which exists precisely because that resident gave no address at all: asking them to prove it
+/// would be asking for something that cannot be produced.
+bool isReachableLoginAddress(String? email) {
+  final e = (email ?? '').trim().toLowerCase();
+  return e.isNotEmpty && !e.endsWith('@$studentLoginDomain');
+}
+
 /// A signed-in user, as resolved from `public.users`.
 ///
 /// Deliberately NOT read from the JWT's app_metadata: those claims lag until the token
@@ -53,6 +78,7 @@ class NivoraSession {
     this.hostelId,
     this.email,
     this.phone,
+    this.emailVerifiedAt,
   });
 
   final String userId;
@@ -71,10 +97,33 @@ class NivoraSession {
   final String? email;
   final String? phone;
 
+  /// `users.email_verified_at` — when the holder opened a confirmation link sent to [email], or
+  /// null.
+  ///
+  /// NOT `auth.users.email_confirmed_at`. That one is stamped by every account-creation path so
+  /// the temporary password works at all (the project has "Confirm email" ON, and GoTrue
+  /// refuses a password grant to an unconfirmed user), which means it records that somebody
+  /// TYPED an address and never that its owner answered. This column is the proof, it starts
+  /// null for every account that has ever existed, and only the email-verification Edge
+  /// Function can write it.
+  final DateTime? emailVerifiedAt;
+
   bool get isActive => status == 'active';
 
   /// True when the account still owes an onboarding step, so routing must divert.
   bool get needsPasswordChange => mustChangePassword;
+
+  /// Does this account have an address that can receive mail at all?
+  bool get emailIsReachable => isReachableLoginAddress(email);
+
+  /// The account owes a proof AND can produce one.
+  ///
+  /// A resident who signs in with a phone number is not held to this, and the exemption is
+  /// carved by ADDRESS rather than by role: a student whose warden collected a real email is
+  /// asked exactly like an owner is. Deliberately NOT a routing gate — see
+  /// [resolveRedirect] in core/router/router.dart for why this shows a banner instead of
+  /// trapping the user on a screen.
+  bool get needsEmailVerification => emailIsReachable && emailVerifiedAt == null;
 
   static NivoraSession fromRow(Map<String, dynamic> row) {
     final role = UserRole.tryParse(row['role'] as String?);
@@ -90,6 +139,11 @@ class NivoraSession {
       hostelId: row['hostel_id'] as String?,
       email: row['email'] as String?,
       phone: row['phone'] as String?,
+      // PostgREST sends timestamptz as an ISO-8601 string. Parsed leniently on purpose: a value
+      // this build cannot read must not throw here, because [fromRow] failing signs the user
+      // out. An unparseable stamp degrades to "not verified yet", which asks for a code the
+      // person can actually supply, rather than to a locked account.
+      emailVerifiedAt: DateTime.tryParse((row['email_verified_at'] as String?) ?? ''),
     );
   }
 }

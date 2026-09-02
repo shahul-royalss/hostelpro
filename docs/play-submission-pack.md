@@ -765,7 +765,23 @@ for u in /legal/privacy /legal/account-deletion /legal/terms; do
 done
 ```
 
-### 7.1 The new blocker: the legal pages predate payments
+### 7.1 RESOLVED (2026-09-02) — the legal pages predated payments
+
+> **Status: fixed and verified rendering locally.** All four contradictions in the table below have
+> been corrected, and the pages additionally gained the consent record, the Google (email)
+> sub-processor, the Singapore hosting region and the current retention periods. See
+> [`legal-consent.md`](./legal-consent.md) for what was built and, in its §6, the list of operator
+> details that still must be confirmed before the URL goes into Console.
+>
+> **One dependency remains before pasting the URL** — not on this table, but on the retention job:
+> the policy now publishes 1 month after departure / 2 months for complaints and notices, and
+> `app.apply_retention()` does not enforce those yet. See [`legal-consent.md`](./legal-consent.md)
+> §7.1.
+>
+> The original finding is kept below because it is the reasoning, and because it is the check to
+> re-run whenever a feature changes what the app does with data.
+
+#### The original finding
 
 **A policy that does not match the Data safety form is itself a violation**, and Google fetches the
 policy URL. Three of the four live legal pages currently state the opposite of what §2 declares,
@@ -778,10 +794,19 @@ because they were written before `payment_intents` shipped:
 | `/legal/account-deletion` | *"There is no advertising network, no analytics service, no payment processor and no email or SMS provider in the picture."* | Same. Its fee-retention table (8 years, name removed) is **already correct** and covers `payment_intents` by extension — but Razorpay's own retained record is not mentioned (§2.10) |
 | `/legal/terms` §9 | Titled *"Payments are recorded, not processed"*; *"NIVORA is not a payment service."* | Rent can now be collected in-app |
 
-**Those four pages are outside this document's scope** — they belong to whoever owns `app/legal/`.
-**Do not paste the privacy-policy URL into Console until they are fixed and deployed.** A reviewer
-comparing the policy to the Data safety form finds the contradiction in under a minute, and "our
-docs were stale" is not a defence that Play accepts for a legal declaration.
+**All four are now corrected** (2026-09-02) — see the status note at the head of this section. The
+warning that produced them stands as a standing rule: **do not paste the privacy-policy URL into
+Console while any claim on it contradicts the Data safety form.** A reviewer comparing the two finds
+the contradiction in under a minute, and "our docs were stale" is not a defence that Play accepts
+for a legal declaration.
+
+Two further claims were found false during the fix and corrected at the same time, neither of which
+was in the table above:
+
+| Page | What it said | Why it was false |
+|---|---|---|
+| `/legal/privacy` | *"No email or SMS is sent. There is no messaging provider connected"* | The project sends email-verification and password-reset mail through Gmail SMTP. Google is now named as a sub-processor |
+| `/legal/privacy` §9 | The hosting region *"is a configuration setting held by the operator… this page does not guess at it"* | The region is known and recorded in [`server-health.md`](./server-health.md): `ap-southeast-1`, Singapore. The page now states it |
 
 ### 7.2 What the privacy policy has to actually say
 

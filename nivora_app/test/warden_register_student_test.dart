@@ -119,8 +119,25 @@ void main() {
       });
       expect(result.studentId, 's1');
       expect(result.roomId, 'r1');
-      // The login id is the PHONE NUMBER, not the synthetic address the auth user carries.
+      // With no email collected the login id is the PHONE NUMBER, not the synthetic address
+      // the auth user actually carries.
       expect(result.credentials.loginId, '9876500042');
+    });
+
+    test('a registration with an email carries the email as the login id', () {
+      // createStudentAuthUser sends `loginId: input.email ?? input.phone`. The client reads it
+      // rather than deriving it — the server is the only party that knows which of the two
+      // boxes the login was minted from.
+      final result = RegisteredStudent.fromJson({
+        'studentId': 's1',
+        'roomId': 'r1',
+        'credentials': {
+          'name': 'Aarav Sharma',
+          'loginId': 'aarav@example.com',
+          'password': 'Sage-7413-Kite',
+        },
+      });
+      expect(result.credentials.loginId, 'aarav@example.com');
     });
 
     test('a null roomId is "could not look it up", not a crash', () {
@@ -164,6 +181,37 @@ void main() {
       ]) {
         expect(find.text(label), findsOneWidget, reason: label);
       }
+    });
+
+    testWidgets('the email box is on the form and says what it does', (tester) async {
+      // The owner asked for students to be able to sign in with an email address. The box has
+      // to be visible at the desk — it used to sit under "Optional" below the photo, which is
+      // where a warden stops reading.
+      await _open(tester, registrations: _FakeRegistrations());
+
+      expect(find.text('Email'), findsOneWidget);
+      // Blank: the phone number is the login and the form says so, under the phone.
+      expect(find.text('This is the login id they sign in with'), findsOneWidget);
+      expect(
+        find.text('Optional — without one they sign in with their phone number'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('typing an email moves the "this is the login" line onto it', (tester) async {
+      // The two boxes trade the sentence between them. If it did not move, a warden would read
+      // "this is the login id" under the phone number and hand over the half that does not
+      // work — an account created thirty seconds ago that the resident cannot open.
+      await _open(tester, registrations: _FakeRegistrations());
+      await tester.enterText(_field('Email'), 'aarav@example.com');
+      await tester.pump();
+
+      expect(find.text('For contact and the fee ledger'), findsOneWidget);
+      expect(find.text('This is the login id they sign in with'), findsOneWidget);
+      expect(
+        find.text('Optional — without one they sign in with their phone number'),
+        findsNothing,
+      );
     });
 
     testWidgets('the notice no longer sends the warden to the web console', (tester) async {
@@ -230,6 +278,52 @@ void main() {
       expect(sent.bedId, _bedId);
       expect(sent.idProofType, IdProofType.aadhaar);
       expect(sent.monthlyFee, 7500);
+      // Nothing was typed in the email box, so nothing is claimed. The server then mints the
+      // phone-mapped login, exactly as before this feature existed.
+      expect(sent.email, isNull);
+    });
+
+    testWidgets('an email that was typed is what travels', (tester) async {
+      final registrations = _FakeRegistrations();
+      await _open(tester, registrations: registrations);
+      await _fill(tester, email: 'Aarav@Example.com');
+
+      await tester.tap(_registerButton);
+      await tester.pump();
+      await tester.pump();
+
+      expect(registrations.calls, hasLength(1));
+      // Trimmed, not otherwise touched. The Edge Function lowercases it — one place, so the
+      // address stored and the address GoTrue registers cannot disagree.
+      expect(registrations.calls.single.email, 'Aarav@Example.com');
+    });
+
+    testWidgets('an address in the phone-mapping domain never leaves the form', (tester) async {
+      // "@student.hostelpro.local" is not a real mail domain. An address inside it would mint
+      // the login id belonging to whoever actually holds 9000000001 — and, because GoTrue
+      // never releases a registered address, would block that resident from being registered
+      // at all, with nothing on any screen explaining why.
+      final registrations = _FakeRegistrations();
+      await _open(tester, registrations: registrations);
+      await _fill(tester, email: '9000000001@student.hostelpro.local');
+
+      await tester.tap(_registerButton);
+      await tester.pump();
+
+      expect(registrations.calls, isEmpty);
+      expect(find.text('Enter a real email address'), findsOneWidget);
+    });
+
+    testWidgets('a malformed email is caught before the ID scan is uploaded', (tester) async {
+      final registrations = _FakeRegistrations();
+      await _open(tester, registrations: registrations);
+      await _fill(tester, email: 'aarav@example');
+
+      await tester.tap(_registerButton);
+      await tester.pump();
+
+      expect(registrations.calls, isEmpty);
+      expect(find.text('Enter a valid email'), findsOneWidget);
     });
   });
 
@@ -358,6 +452,26 @@ void main() {
       // Scoped to the dialog: the sheet behind it still holds the same number in its phone box.
       expect(_inDialog('9876500042'), findsOneWidget);
       expect(_inDialog('Sage-7413-Kite'), findsOneWidget);
+    });
+
+    testWidgets('the dialog names the half that actually signs them in', (tester) async {
+      // The dialog is the ONLY place anyone is told which of the two boxes became the login,
+      // and it is shown once. A hard-coded "Phone (login)" over an email address would send
+      // the resident to the sign-in screen with the string that does not work.
+      await _pumpDialog(tester, loginId: '9876500042');
+      // _CredentialRow upper-cases the label it draws.
+      expect(find.text('PHONE (LOGIN)'), findsOneWidget);
+      expect(find.text('EMAIL (LOGIN)'), findsNothing);
+      expect(find.textContaining('sign in with their phone number'), findsOneWidget);
+    });
+
+    testWidgets('an email login is labelled as an email, not as a phone number',
+        (tester) async {
+      await _pumpDialog(tester, loginId: 'aarav@example.com');
+      expect(find.text('EMAIL (LOGIN)'), findsOneWidget);
+      expect(find.text('PHONE (LOGIN)'), findsNothing);
+      expect(find.text('aarav@example.com'), findsOneWidget);
+      expect(find.textContaining('sign in with this email address'), findsOneWidget);
     });
 
     testWidgets('the dialog cannot be dismissed until the warden confirms', (tester) async {
@@ -569,11 +683,18 @@ Future<void> _open(
 ///
 /// [attachIdProof] false skips the ID proof entirely; true still taps the camera button, which
 /// is how the "picker returned nothing" case is exercised.
-Future<void> _fill(WidgetTester tester, {bool attachIdProof = true}) async {
+Future<void> _fill(
+  WidgetTester tester, {
+  bool attachIdProof = true,
+  /// Null leaves the box empty, which is the common case — the resident has no email and the
+  /// phone mapping is what mints their login.
+  String? email,
+}) async {
   await tester.enterText(_field('Full name'), 'Aarav Sharma');
   // Typed the way people type it. normalisePhone() is what makes this the same string the web
   // app writes, and the assertion on `sent.phone` is what proves it ran.
   await tester.enterText(_field('Phone number'), '9876500042');
+  if (email != null) await tester.enterText(_field('Email'), email);
   await tester.enterText(_field('Monthly rent'), '7500');
   await tester.enterText(_field('Guardian name'), 'Ramesh Sharma');
   await tester.enterText(_field('Guardian phone'), '9876500043');
@@ -616,7 +737,7 @@ Finder _field(String label) => find.ancestor(
       matching: find.byType(TextFormField),
     );
 
-Future<void> _pumpDialog(WidgetTester tester) async {
+Future<void> _pumpDialog(WidgetTester tester, {String loginId = '9876500042'}) async {
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
@@ -625,9 +746,9 @@ Future<void> _pumpDialog(WidgetTester tester) async {
             child: ElevatedButton(
               onPressed: () => StudentCredentialsDialog.show(
                 context,
-                credentials: const StudentCredentials(
+                credentials: StudentCredentials(
                   name: 'Aarav Sharma',
-                  loginId: '9876500042',
+                  loginId: loginId,
                   password: 'Sage-7413-Kite',
                 ),
                 bedLabel: 'Room 101 · Bed 2',

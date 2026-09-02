@@ -17,7 +17,10 @@ import type { UserRole } from "./caller.ts";
 
 export interface CreatedAccount {
   userId: string;
-  /** What the person types on the login screen: email for staff, phone for students. */
+  /**
+   * What the person types on the login screen. Staff: their email. Students: their email if
+   * the warden collected one, otherwise their phone number. Read it, never re-derive it.
+   */
   loginId: string;
   /** Temporary password — show once, never persist. */
   password: string;
@@ -78,11 +81,18 @@ export function rollbackAwareError(originalMessage: string, userId: string, roll
 
 interface CreateAuthUserArgs {
   role: UserRole;
-  /** For students: studentLoginEmail(phone). */
+  /** For students: their real email, or studentLoginEmail(phone) when they gave none. */
   email: string;
   fullName: string;
   phone?: string | null;
   hostelId?: string | null;
+  /**
+   * What to say when GoTrue reports the address is taken. The default is written for staff.
+   * A student's is written by the caller, because the sentence has to name the thing the
+   * warden actually typed — the phone number or the email address — and only the caller knows
+   * which of the two produced this login.
+   */
+  duplicateMessage?: string;
 }
 
 async function createAuthUser(args: CreateAuthUserArgs): Promise<{ userId: string; password: string }> {
@@ -90,6 +100,17 @@ async function createAuthUser(args: CreateAuthUserArgs): Promise<{ userId: strin
   const { data, error } = await serviceClient().auth.admin.createUser({
     email: args.email.toLowerCase(),
     password,
+    // `email_confirm: true` DOES NOT MEAN THE ADDRESS WAS PROVED, and it is deliberately still
+    // here. The project has "Confirm email" ON (/auth/v1/settings reports
+    // mailer_autoconfirm=false), so GoTrue refuses a password grant to a user whose
+    // email_confirmed_at is null: creating accounts unconfirmed would not nag the new user, it
+    // would make the temporary password unusable at the desk the warden is standing at, and it
+    // would permanently lock out any resident whose only login id is the unreachable
+    // <digits>@student.hostelpro.local address. So this flag now means exactly one thing —
+    // "the temporary password works" — and the PROOF lives in public.users.email_verified_at,
+    // which starts null here and is only ever written by the email-verification Edge Function
+    // after GoTrue accepts a code the account holder read in their own inbox.
+    // See supabase/functions/_shared/verification.ts.
     email_confirm: true,
     phone_confirm: false,
     user_metadata: { full_name: args.fullName, phone: args.phone ?? null },
@@ -98,12 +119,7 @@ async function createAuthUser(args: CreateAuthUserArgs): Promise<{ userId: strin
   if (error || !data?.user) {
     const message = error?.message ?? "";
     if (/already been registered|already registered/i.test(message) || error?.status === 422) {
-      throw new HttpError(
-        409,
-        args.role === "student"
-          ? "A student with this phone number already has an account."
-          : "An account with this email already exists.",
-      );
+      throw new HttpError(409, args.duplicateMessage ?? "An account with this email already exists.");
     }
     console.error("[nivora] createUser failed:", message);
     throw new HttpError(400, "Could not create the account.");
@@ -161,6 +177,18 @@ export async function createStaffAccount(args: {
  * Create the auth user for a student. The public.users and public.students rows are created by
  * wd_register_student, called as the warden so the database re-checks the role and the
  * subscription gate itself.
+ *
+ * ── A STUDENT HAS EXACTLY ONE LOGIN ID ───────────────────────────────────────────────────
+ * [loginEmail] is the resident's REAL email when the warden collected one and
+ * studentLoginEmail(phone) when they did not. Both clients resolve what is typed on the
+ * sign-in screen with the same pure function, so the id the resident is handed here is the
+ * id that works: an email signs in as itself, a bare phone number is mapped to the synthetic
+ * address. There is deliberately no third case where a student can use either — that would
+ * need a phone→email lookup at sign-in, and a lookup on an unauthenticated endpoint is an
+ * account-enumeration oracle over a population of young residents.
+ *
+ * [loginId] is therefore the email or the phone number, whichever [loginEmail] was built
+ * from, and it is what StudentCredentialsDialog puts in front of the warden.
  */
 export async function createStudentAuthUser(args: {
   fullName: string;
@@ -168,6 +196,9 @@ export async function createStudentAuthUser(args: {
   phone: string;
   hostelId: string;
   loginEmail: string;
+  /** What the resident types to sign in: the email, or the phone number. */
+  loginId: string;
+  duplicateMessage: string;
 }): Promise<CreatedAccount> {
   const { userId, password } = await createAuthUser({
     role: "student",
@@ -175,8 +206,9 @@ export async function createStudentAuthUser(args: {
     fullName: args.fullName,
     phone: args.phone,
     hostelId: args.hostelId,
+    duplicateMessage: args.duplicateMessage,
   });
-  return { userId, loginId: args.phone, password };
+  return { userId, loginId: args.loginId, password };
 }
 
 /**

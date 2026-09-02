@@ -46,9 +46,9 @@ class _Profile extends ConsumerWidget {
     final contacts = ref.watch(hostelContactsProvider);
 
     return RefreshIndicator(
-      onRefresh: () async {
+      onRefresh: () {
         refreshStudentData(ref);
-        await awaitStudentRefresh(ref);
+        return awaitStudentRefresh(context, ref);
       },
       child: ListView(
         padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.xxxl),
@@ -113,7 +113,6 @@ class _Profile extends ConsumerWidget {
                     icon: Icons.apartment_outlined,
                     title: 'Hostel details unavailable',
                     message: 'Pull down to try again.',
-                    tone: NivoraColors.textMuted,
                   )
                 : _HostelCard(contacts: card),
           ),
@@ -143,21 +142,10 @@ class _Identity extends StatelessWidget {
       children: [
         // Initials, not a photo. `students.photo_url` is a storage key that has to be signed
         // before it can be fetched, and this app has no signing path — a broken image is worse
-        // than none.
-        Container(
-          width: 52,
-          height: 52,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            // The tint comes from the one place the alphas were measured. 0.12 was invented
-            // here, beside a chipFill that is 0.08 on light and 0.10 on dark — and it is the
-            // dark number that matters, because a tint lightens a dark fill toward the text
-            // sitting on it, which is why the measured value is the smaller one.
-            color: context.tones.chipFill(t.colorScheme.primary),
-          ),
-          child: Text(_initials(me.fullName), style: t.textTheme.titleLarge),
-        ),
+        // than none. The disc, its measured tint and the way a name becomes one or two letters
+        // all live in [InitialsAvatar] now, so the face beside this name and the cluster on the
+        // home room card cannot drift apart.
+        InitialsAvatar(name: me.fullName, size: Space.huge + Space.xxs),
         const SizedBox(width: Space.sm),
         Expanded(
           child: Column(
@@ -175,13 +163,6 @@ class _Identity extends StatelessWidget {
       ],
     );
   }
-
-  String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts.first.characters.first.toUpperCase();
-    return (parts.first.characters.first + parts.last.characters.first).toUpperCase();
-  }
 }
 
 class _Roommates extends StatelessWidget {
@@ -196,14 +177,13 @@ class _Roommates extends StatelessWidget {
         icon: Icons.person_outline_rounded,
         title: 'No roommates listed',
         message: 'Either you have the room to yourself, or you have not been placed in one yet.',
-        tone: NivoraColors.textMuted,
       );
     }
     return OutlineCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('SHARING WITH YOU', style: t.textTheme.labelSmall),
+          const CapsLabel('Sharing with you'),
           const SizedBox(height: Space.xs),
           for (var i = 0; i < mates.length; i++) ...[
             if (i > 0) Divider(color: t.colorScheme.outlineVariant),
@@ -226,6 +206,11 @@ class _RoommateRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: Space.xs),
       child: Row(
         children: [
+          // The same disc the home room card clusters, at directory size. Three fields is the
+          // entire permitted set for one resident looking at another (§4.8) — a face here would
+          // be a fourth, and there is no signing path to fetch one anyway.
+          InitialsAvatar(name: mate.fullName),
+          const SizedBox(width: Space.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -297,7 +282,7 @@ class _HostelCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('HOSTEL RULES', style: t.textTheme.labelSmall),
+                const CapsLabel('Hostel rules'),
                 const SizedBox(height: Space.xs),
                 SelectionArea(child: Text(rules, style: t.textTheme.bodyMedium)),
               ],

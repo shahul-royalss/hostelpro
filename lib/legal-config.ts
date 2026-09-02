@@ -41,8 +41,35 @@ export const LEGAL = {
   jurisdiction: "the courts at Chittoor, Andhra Pradesh",
 
   /** Shown as "last updated" on the published documents. Bump when you change them. */
-  lastUpdated: "21 August 2026",
+  lastUpdated: "2 September 2026",
 } as const;
+
+/**
+ * THE VERSION OF THE TERMS + PRIVACY PAIR THAT IS CURRENTLY PUBLISHED.
+ *
+ * One string covers both documents: they are presented together and agreed to together, so
+ * there is no state in which somebody is half-agreed.
+ *
+ * ═══ THIS STRING LIVES IN THREE PLACES AND THEY MUST MOVE TOGETHER ═══
+ *
+ *   1. here                                                  — the published web pages
+ *   2. nivora_app/lib/features/legal/legal_documents.dart     — `kLegalVersion`, what the
+ *      Android app shows and what it records an acceptance against
+ *   3. `public.legal_versions.version`                        — a migration; an acceptance may
+ *      only name a version that exists there
+ *
+ * Change the wording of either document → bump all three → every user is asked to agree again,
+ * because the app's consent gate compares the version it ships against the versions that user
+ * has accepted. Leaving this behind means people are quietly moved onto text they never saw,
+ * which is the one failure mode a consent record exists to make impossible.
+ *
+ * (1) and (2) are cross-checked by nivora_app/test/legal_consent_test.dart, so they cannot
+ * drift silently. (3) is a deployment order, not a check: the migration publishing a version
+ * row must land BEFORE an app build carrying that string, because `accept_legal_terms()`
+ * refuses a version it has never heard of and at the gate the only thing a user may do is
+ * agree.
+ */
+export const LEGAL_VERSION = "2026-09-02";
 
 /** Android application id, so the deletion page can name the app Play users installed. */
 export const ANDROID_PACKAGE = "app.nivora.twa";

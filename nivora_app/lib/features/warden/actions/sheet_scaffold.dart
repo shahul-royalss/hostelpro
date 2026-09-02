@@ -20,12 +20,18 @@ class SheetBody extends StatelessWidget {
     required this.title,
     required this.child,
     this.subtitle,
+    this.leading,
     this.trailing,
     this.scrollable = true,
   });
 
   final String title;
   final String? subtitle;
+
+  /// The design's `sheet-header` opens with an avatar (4:798). Passed through to
+  /// [SheetHeader]; sheets that are about a room or a queue leave it null.
+  final Widget? leading;
+
   final Widget? trailing;
   final Widget child;
 
@@ -43,7 +49,12 @@ class SheetBody extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SheetHeader(title: title, subtitle: subtitle, trailing: trailing),
+          SheetHeader(
+            title: title,
+            subtitle: subtitle,
+            leading: leading,
+            trailing: trailing,
+          ),
           const SizedBox(height: Space.md),
           Flexible(
             child: scrollable

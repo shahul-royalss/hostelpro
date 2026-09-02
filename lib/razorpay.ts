@@ -120,6 +120,94 @@ export function verifyWebhookSignature(rawBody: string, signatureHeader: string 
   return timingSafeEqual(received, expected);
 }
 
+/* ───────────────────────── checkout signature ───────────────────────── */
+
+/**
+ * Verify the signature Checkout hands the BROWSER when a payment succeeds.
+ *
+ * This is a DIFFERENT HMAC from verifyWebhookSignature() above, and the two must
+ * never be swapped for one another:
+ *
+ *                 keyed with              hashes
+ *   webhook       RAZORPAY_WEBHOOK_SECRET the raw request body, byte for byte
+ *   checkout      RAZORPAY_KEY_SECRET     `${order_id}|${payment_id}`, nothing else
+ *
+ * Feeding a checkout triple to the webhook verifier (or a raw body to this one)
+ * fails every time, which at least is loud. The dangerous version of that mistake
+ * is noticing the failure and "fixing" it by loosening a check.
+ *
+ * WHAT THIS PROVES, AND WHAT IT DOES NOT. A valid signature proves the browser's
+ * success callback really came from Razorpay for an order this merchant opened —
+ * it is not a `fetch()` someone wrote in a console. It does NOT prove the money
+ * settled, and it is NOT what credits a fee: a client can simply close the tab
+ * before this ever runs, and the callback is forgeable in exactly the way that
+ * matters least (an attacker who wants free rent does not need to forge it, they
+ * need the webhook, which they cannot forge). Settlement stays where it belongs,
+ * in app/api/webhooks/razorpay/route.ts. See docs/payments.md §3.
+ *
+ * The compare is crypto.timingSafeEqual over the digest bytes, for the same
+ * reason the webhook's is — a `===` on hex leaks the matching prefix length.
+ *
+ * Returns false for a missing, malformed or wrong signature. Throws only when the
+ * key secret is absent, because that is a deployment fault and answering "not
+ * verified" would be indistinguishable from a forgery in the audit trail.
+ */
+export function verifyCheckoutSignature(input: {
+  orderId: string;
+  paymentId: string;
+  signature: string;
+}): boolean {
+  const secret = env("RAZORPAY_KEY_SECRET");
+  if (!secret) {
+    throw new RazorpayNotConfiguredError(
+      "RAZORPAY_KEY_SECRET is not set — refusing to report a checkout callback as verified.",
+    );
+  }
+
+  const { orderId, paymentId, signature } = input;
+  if (typeof orderId !== "string" || typeof paymentId !== "string" || typeof signature !== "string") {
+    return false;
+  }
+
+  const candidate = signature.trim();
+  // Lowercase hex of a SHA-256 HMAC: exactly 64 hex characters. Rejecting anything
+  // else keeps Buffer.from() from silently truncating garbage into a short buffer.
+  if (!/^[0-9a-fA-F]{64}$/.test(candidate)) return false;
+
+  // The payload is the two ids joined by a literal pipe, in this order. Razorpay
+  // signs `order_id|payment_id` — reversing them verifies nothing and matches
+  // nothing, so the ids are named rather than positional at the call site.
+  const expected = createHmac("sha256", secret).update(`${orderId}|${paymentId}`, "utf8").digest();
+  const received = Buffer.from(candidate, "hex");
+  if (received.length !== expected.length) return false;
+  return timingSafeEqual(received, expected);
+}
+
+/* ───────────────────────── id shapes ───────────────────────── */
+
+/**
+ * Razorpay ids: a fixed prefix plus base62. These strings become predicates on
+ * indexed columns and get echoed into audit metadata, so they are shape-checked
+ * everywhere they enter — including on the webhook, where the HMAC has already
+ * proved origin. A signed body is authentic, not necessarily well-formed.
+ *
+ * Defined here, once, because all three entry points (order creation, the
+ * checkout verifier, the webhook) need the same answer and three private copies
+ * are three chances to drift.
+ */
+export const ORDER_ID_RE = /^order_[A-Za-z0-9]{6,30}$/;
+export const PAYMENT_ID_RE = /^pay_[A-Za-z0-9]{6,30}$/;
+
+/**
+ * A refund id, `rfnd_` + base62. This one carries more weight than the other two:
+ * it is the IDEMPOTENCY KEY for a ledger REVERSAL. The unique index
+ * payment_refunds_refund_key is built on it, so a malformed value reaching the
+ * database would either fail the write or claim a row that is not the refund being
+ * described. Kept here beside the other two so the Next.js and Deno copies cannot
+ * disagree about what a refund id looks like.
+ */
+export const REFUND_ID_RE = /^rfnd_[A-Za-z0-9]{6,30}$/;
+
 /* ───────────────────────── money ───────────────────────── */
 
 /**

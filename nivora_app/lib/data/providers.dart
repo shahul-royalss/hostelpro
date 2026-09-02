@@ -6,14 +6,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/auth/auth_controller.dart';
 import '../core/auth/session.dart';
 import '../core/perf/session_keep_alive.dart';
+import 'capture.dart';
 import 'models/models.dart';
+import 'repositories/checkout_repository.dart';
 import 'repositories/complaint_repository.dart';
 import 'repositories/dashboard_repository.dart';
 import 'repositories/fee_repository.dart';
 import 'repositories/finance_repository.dart';
 import 'repositories/hostel_repository.dart';
+import 'repositories/menu_repository.dart';
 import 'repositories/notice_repository.dart';
-import 'repositories/payment_repository.dart';
 import 'repositories/room_repository.dart';
 import 'repositories/student_repository.dart';
 import 'repositories/task_repository.dart';
@@ -70,12 +72,40 @@ final feeRepositoryProvider = Provider<FeeRepository>(
   (ref) => FeeRepository(ref.watch(supabaseClientProvider)),
 );
 
+/// Opens a Razorpay order for the signed-in resident's own rent. Takes no arguments
+/// anywhere in its chain — see CheckoutRepository on why that is the security property.
+final checkoutRepositoryProvider = Provider<CheckoutRepository>(
+  (ref) => CheckoutRepository(ref.watch(supabaseClientProvider)),
+);
+
 final complaintRepositoryProvider = Provider<ComplaintRepository>(
   (ref) => ComplaintRepository(ref.watch(supabaseClientProvider)),
 );
 
+/// The camera / photo picker every attachment in the app comes from.
+///
+/// A PROVIDER SO IT CAN BE REPLACED, exactly as `receiptExporterProvider` is. `image_picker`
+/// talks over a MethodChannel and a widget test has no platform on the other end of one — the
+/// real plugin in a test makes the sheet hang rather than fail, which is the worst of both.
+/// Overriding this is what lets the registration flow AND the raise-a-complaint flow run end to
+/// end in `flutter test`.
+///
+/// IT LIVES HERE, not in the warden's provider file, because two features now capture images
+/// and a test that overrode only one of them would silently drive the real picker in the other.
+/// warden_providers.dart re-exports it so nothing that already read it from there had to move.
+///
+/// Not autoDispose and no teardown: `ImagePicker` registers no listeners and owns nothing that
+/// outlives a call, unlike a plugin that registers event handlers of its own.
+final documentCaptureProvider = Provider<DocumentCapture>(
+  (ref) => PluginDocumentCapture(),
+);
+
 final noticeRepositoryProvider = Provider<NoticeRepository>(
   (ref) => NoticeRepository(ref.watch(supabaseClientProvider)),
+);
+
+final menuRepositoryProvider = Provider<MenuRepository>(
+  (ref) => MenuRepository(ref.watch(supabaseClientProvider)),
 );
 
 final taskRepositoryProvider = Provider<TaskRepository>(
@@ -90,32 +120,17 @@ final dashboardRepositoryProvider = Provider<DashboardRepository>(
   (ref) => DashboardRepository(ref.watch(supabaseClientProvider)),
 );
 
-/// Rent paid inside the app. public.payment_intents + the razorpay-order Edge Function.
+/// Taking money at the desk. public.wd_record_payment + public.wd_correct_payment.
 ///
-/// TYPED BY THE INTERFACE, not by the class, unlike every other repository here. The payment
-/// state machine is the one piece of this app whose interesting states are all about money that
-/// has moved but has not landed, and those are worth holding down in `flutter test` — which
-/// needs a fake in this slot. See RentPayments.
-final paymentRepositoryProvider = Provider<RentPayments>(
-  (ref) => PaymentRepository(ref.watch(supabaseClientProvider)),
-);
-
-/// The native Razorpay checkout.
-///
-/// A PROVIDER SO IT CAN BE REPLACED. `razorpay_flutter` talks over a MethodChannel, and a
-/// widget test has no platform on the other end of one — constructing the real plugin in a test
-/// makes the payment flow untestable and the failure looks like a hang rather than a mistake.
-/// Overriding this with a fake lets the whole state machine (order, checkout, confirmation,
-/// failure, cancellation) run in `flutter test`, which is where it is actually verified.
-///
-/// autoDispose with an explicit teardown: the plugin's event handlers are registered on an
-/// emitter the instance owns, so an instance that is dropped without [RazorpayCheckout.dispose]
-/// keeps delivering results to widgets that no longer exist.
-final razorpayCheckoutProvider = Provider.autoDispose<RazorpayCheckout>((ref) {
-  final checkout = PluginRazorpayCheckout();
-  ref.onDispose(checkout.dispose);
-  return checkout;
-});
+/// TYPED BY THE INTERFACE, not by the class, unlike every other repository here — and pointed
+/// at the same [FeeRepository] instance the reads use, so there is one object and one client.
+/// CASH AT THE DESK IS NOW ONE OF TWO WAYS MONEY REACHES THE LEDGER. The other is
+/// `razorpay-webhook`, which credits the resident server-to-server after an in-app checkout and
+/// never passes through this app at all. These two writes remain the only ones a PERSON makes,
+/// and their interesting states are all refusals from Postgres (a resident who has checked out,
+/// a month with nothing to correct, a figure above the schema's ceiling). Holding those down in
+/// `flutter test` needs a fake in this slot. See RentDesk.
+final feeDeskProvider = Provider<RentDesk>((ref) => ref.watch(feeRepositoryProvider));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SESSION-DERIVED KEYS
@@ -425,6 +440,72 @@ class FeeLedgerNotifier extends PagedNotifier<FeeLedgerRow> {
       );
 }
 
+/// Refunds against ONE RESIDENT, indexed by the month they belong to.
+/// Reads public.payment_refunds.
+///
+/// ═══ WHY A SECOND READ AT ALL ═══
+/// A refund is a child row of `payment_intents`, not a column on `fee_payments`, because a
+/// month can be refunded more than once and a running-total column cannot be made idempotent
+/// against a webhook Razorpay may deliver twice. So the fee rows and the refunds arrive
+/// separately and a [RefundIndex] puts them back together — see models/refund.dart.
+///
+/// ═══ IT MAY FAIL, AND NOTHING BREAKS WHEN IT DOES ═══
+/// Every screen reads this as `.value ?? RefundIndex.empty`. A refund panel is a QUALIFIER on a
+/// figure that is already on screen from its own read; it must never be able to blank, block or
+/// error the rent itself. The cost of that choice is stated plainly: if this read fails, a
+/// refunded month reads exactly as it did before this feature existed. That is the same
+/// position, not a worse one — and it is strictly better than a fees screen that will not draw
+/// because a secondary query timed out.
+///
+/// Held for the session on the resident's own shell, where it backs the Fees tab, exactly as
+/// [studentFeeHistoryProvider] is.
+final studentRefundsProvider =
+    FutureProvider.autoDispose.family<RefundIndex, String>((ref, studentId) async {
+  if (ref.watch(sessionProvider.select((s) => s?.role)) == UserRole.student) {
+    holdForSession(ref);
+  }
+  return RefundIndex.of(await ref.watch(feeRepositoryProvider).refundsForStudent(studentId));
+});
+
+/// Refunds against ONE HOSTEL, indexed by (resident, month). Reads public.payment_refunds.
+///
+/// [StatsQuery.periodMonth] narrows it: the warden's collections list is a month at a time and
+/// passes one, the owner's "who paid" walks backwards through months as it pages and passes
+/// null. Same failure contract as [studentRefundsProvider] — a screen reads it as
+/// `.value ?? RefundIndex.empty` and the ledger draws regardless.
+final hostelRefundsProvider =
+    FutureProvider.autoDispose.family<RefundIndex, StatsQuery>((ref, query) async {
+  holdForSession(ref);
+  return RefundIndex.of(
+    await ref.watch(feeRepositoryProvider).refundsForHostel(
+          hostelId: query.hostelId,
+          periodMonth: query.periodMonth,
+        ),
+  );
+});
+
+/// Who paid, most recently recorded first. Reads public.rpc_recent_payments.
+///
+/// THE OWNER'S "WHO PAID" LIST, and the warden's own record of what they have taken. Keyed by
+/// hostel because that is the whole scope of the question; the RPC refuses a caller who may not
+/// see a hostel's money, so an empty page here means nobody has paid yet and nothing else.
+///
+/// Held for the session like the other tab-backing lists: the owner's Payments tab watches this
+/// directly and must redraw from the held value rather than blanking on every visit.
+final recentPaymentsProvider = AsyncNotifierProvider.autoDispose
+    .family<RecentPaymentsNotifier, PagedResult<RecentPayment>, String>(
+  RecentPaymentsNotifier.new,
+);
+
+class RecentPaymentsNotifier extends PagedNotifier<RecentPayment> {
+  RecentPaymentsNotifier(this.hostelId);
+  final String hostelId;
+
+  @override
+  Future<PagedResult<RecentPayment>> fetchPage(int page) =>
+      ref.read(feeRepositoryProvider).recentPayments(hostelId: hostelId, page: page);
+}
+
 /// The noticeboard, paginated. Reads public.announcements.
 final noticesProvider =
     AsyncNotifierProvider.autoDispose.family<NoticesNotifier, PagedResult<Notice>, String>(
@@ -569,6 +650,28 @@ final myStudentProvider = FutureProvider.autoDispose<Student?>((ref) {
   return ref.watch(studentRepositoryProvider).me();
 });
 
+/// The mess menu for the week. public.menus.
+///
+/// ONE PROVIDER FOR BOTH ROLES, and it is the same 28 rows either way — the manager's Menu tab
+/// watches it to edit the week, the resident's home screen and week view watch it to read it.
+/// Two providers over one table would have been two caches, two lifetimes and two chances for
+/// the screen the kitchen types into to disagree with the screen the residents read. They are
+/// never the same session (a manager login and a resident login are different people), so this
+/// is about there being one definition, not about sharing a cache between them.
+///
+/// ONE REQUEST, NEVER SEVEN. The whole week arrives in a single select — see
+/// [MenuRepository.weeklyMenu] for why 28 rows are not paginated — and nothing polls it. The
+/// menu changes when a manager changes it; a resident sees the new week on their next refresh
+/// or their next sign-in, which is what a mess menu has always been.
+///
+/// Session-held: it backs the manager's Menu tab and the resident's home screen, both of which
+/// must redraw from the held value on a revisit rather than blanking back to a skeleton.
+final weeklyMenuProvider =
+    FutureProvider.autoDispose.family<WeeklyMenu, String>((ref, hostelId) {
+  holdForSession(ref);
+  return ref.watch(menuRepositoryProvider).weeklyMenu(hostelId);
+});
+
 /// Roommates, names and phones only. public.st_my_roommates.
 final roommatesProvider = FutureProvider.autoDispose<List<Roommate>>((ref) {
   holdForSession(ref);
@@ -583,16 +686,42 @@ final hostelContactsProvider = FutureProvider.autoDispose<HostelContacts?>((ref)
 
 /// One resident's payment history. public.fee_payments.
 ///
+/// PAGINATED, AND THAT IS NOT A DETAIL — IT IS THE POINT. This list is the resident's own
+/// financial record, it grows by one row a month and NOTHING EVER REMOVES A ROW: the retention
+/// job (app.apply_retention, daily at 03:15) touches audit_log, security_alerts, rate_limits
+/// and read notifications, and does not name fee_payments at all. A resident of two years has
+/// twenty-four months, which is more than one page, so a provider that could only ever hold
+/// page 0 made the client the one place where a permanent record got shortened. It used to be a
+/// plain FutureProvider and the Fees screen apologised for it in a sentence
+/// ("ask your warden for anything older"); now the screen can ask for the rest.
+///
+/// The type this exposes is unchanged — `AsyncValue<PagedResult<FeePayment>>` — so the staff
+/// sheets that watch one resident's last few months (warden/students/student_sheet.dart,
+/// owner_students_screen.dart) read exactly as they did. What they gain is a `.notifier` they
+/// may call `loadMore()` on if they ever want the rest.
+///
 /// Held ONLY for a resident's own shell, where it backs the Fees tab and RLS means the one id
 /// they can read is their own. For staff this is a per-resident detail behind a sheet, and
 /// stays plain autoDispose so browsing residents does not pin every history until sign-out.
-final studentFeeHistoryProvider =
-    FutureProvider.autoDispose.family<PagedResult<FeePayment>, String>((ref, studentId) {
-  if (ref.watch(sessionProvider.select((s) => s?.role)) == UserRole.student) {
-    holdForSession(ref);
-  }
-  return ref.watch(feeRepositoryProvider).forStudent(studentId: studentId);
-});
+final studentFeeHistoryProvider = AsyncNotifierProvider.autoDispose
+    .family<StudentFeeHistoryNotifier, PagedResult<FeePayment>, String>(
+  StudentFeeHistoryNotifier.new,
+);
+
+class StudentFeeHistoryNotifier extends PagedNotifier<FeePayment> {
+  StudentFeeHistoryNotifier(this.studentId);
+  final String studentId;
+
+  /// The resident's own tab holds; a staff sheet does not. Same rule as before, moved from the
+  /// old provider body into the hook [PagedNotifier.build] already consults.
+  @override
+  bool get holdWhileSignedIn =>
+      ref.watch(sessionProvider.select((s) => s?.role)) == UserRole.student;
+
+  @override
+  Future<PagedResult<FeePayment>> fetchPage(int page) =>
+      ref.read(feeRepositoryProvider).forStudent(studentId: studentId, page: page);
+}
 
 /// One complaint. public.complaints.
 final complaintProvider =
@@ -604,6 +733,23 @@ final complaintProvider =
 final complaintTimelineProvider =
     FutureProvider.autoDispose.family<List<ComplaintEvent>, String>((ref, complaintId) {
   return ref.watch(complaintRepositoryProvider).timeline(complaintId);
+});
+
+/// A short-lived URL for one complaint's photo, or null when it has none.
+///
+/// AUTO-DISPOSE WITH NO HOLD, and that is not the usual lifetime argument — it is the URL's.
+/// A signed URL is a bearer capability with a 30-minute life (SIGNED_URL_TTL in
+/// supabase/functions/_shared/storage.ts). Holding one for the session would keep handing a
+/// stale link to a sheet reopened forty minutes later, which renders a broken image and looks
+/// like a missing photo. Scoped to the sheet that is looking, re-minted on the next look.
+///
+/// ONE PROVIDER FOR THREE ROLES. The resident's sheet, the warden's sheet and the owner's sheet
+/// all watch this, because who may see the photo is decided on the server by the same
+/// `complaints_select` policy that decided who may see the complaint. A per-role provider would
+/// be three copies of a rule that lives in one place.
+final complaintPhotoProvider =
+    FutureProvider.autoDispose.family<Uri?, String>((ref, complaintId) {
+  return ref.watch(complaintRepositoryProvider).photoUrl(complaintId);
 });
 
 /// Revenue against expense, day by day. public.rpc_daily_finance.

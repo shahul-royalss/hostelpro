@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { LEGAL, isConfigured } from "@/lib/legal-config";
+import { LEGAL, LEGAL_VERSION, isConfigured } from "@/lib/legal-config";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { Callout, DataTable, DocBody, DocHeader, Section, TableOfContents } from "../layout";
@@ -31,7 +31,11 @@ const CONTACT = {
 
 const PLACEHOLDERS_UNSET = !isConfigured;
 
-const UPDATED = "2026-08-21";
+// The publication date of the Terms + Privacy pair, and the string an in-app acceptance is
+// recorded against. It lives in lib/legal-config.ts so that this page, its three siblings, the
+// Android app and public.legal_versions cannot drift apart — see the note on LEGAL_VERSION
+// there, which explains why bumping it re-asks every user for their agreement.
+const UPDATED = LEGAL_VERSION;
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
 
@@ -343,10 +347,20 @@ export default async function AccountDeletionPage() {
             and it will be taken up with them directly.
           </p>
           <p>
-            Your data is held by exactly two service providers on {APP_NAME}&rsquo;s behalf —
-            Supabase (database, sign-in and private file storage) and Vercel (application hosting).
-            There is no advertising network, no analytics service, no payment processor and no email
-            or SMS provider in the picture.
+            Your data is held on {APP_NAME}&rsquo;s behalf by Supabase (database, sign-in and
+            private file storage, in Singapore) and Vercel (application hosting). Two others touch
+            a narrow slice of it: <strong>Razorpay</strong>, if you ever paid rent inside the app,
+            and <strong>Google</strong>, which delivers account emails such as a confirmation link
+            or a password reset. There is no advertising network and no analytics service in the
+            picture at all. The{" "}
+            <Link href="/legal/privacy">Privacy Policy</Link> lists exactly what each one holds.
+          </p>
+          <p>
+            <strong>One thing deletion here cannot reach.</strong> Where a rent payment went
+            through Razorpay, Razorpay keeps its own record of that transaction under its own
+            policy and its own legal duties, in the same way a bank keeps a statement. Erasing your
+            account in {APP_NAME} does not erase that, and neither {APP_NAME} nor your hostel can
+            make it do so.
           </p>
         </Section>
       </DocBody>

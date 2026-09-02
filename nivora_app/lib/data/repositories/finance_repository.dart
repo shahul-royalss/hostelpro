@@ -86,7 +86,7 @@ final class FinanceRepository extends Repository {
     String? note,
     String? receiptUrl,
   }) =>
-      guard(() async {
+      guardWrite(() async {
         final row = await db
             .from('expenses')
             .insert({
@@ -103,7 +103,8 @@ final class FinanceRepository extends Repository {
             .select(Expense.columns)
             .single();
         return Expense.fromJson(row);
-      });
+      }, unresolved: 'Check the expense list before booking it again — a second entry would '
+          'double the amount.');
 
   /// Book a revenue entry. Manager only.
   Future<Revenue> addRevenue({
@@ -113,7 +114,7 @@ final class FinanceRepository extends Repository {
     DateTime? date,
     String? note,
   }) =>
-      guard(() async {
+      guardWrite(() async {
         final row = await db
             .from('revenues')
             .insert({
@@ -127,7 +128,8 @@ final class FinanceRepository extends Repository {
             .select(Revenue.columns)
             .single();
         return Revenue.fromJson(row);
-      });
+      }, unresolved: 'Check the revenue list before booking it again — a second entry would '
+          'double the amount.');
 
   /// Revenue against expense, one row per day across the range, zero-filled by the RPC.
   ///

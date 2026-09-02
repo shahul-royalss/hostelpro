@@ -31,41 +31,66 @@ class ComplaintTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final tone = complaintTone(complaint.status);
+    // The design's activity row: a round tinted glyph, then the text, then the timestamp.
+    //
+    // THE GLYPH SAYS THE CATEGORY AND THE TINT SAYS THE STATUS, which is exactly what the
+    // mockups' own rows do (`bg-error/10 text-error` behind a wrench). The two are different
+    // facts and neither replaces the other — the status is still spelled out in a WORD by the
+    // pill on the footer line, because a row that distinguished open from resolved by hue alone
+    // would be unreadable to the ~8% of men with a red-green deficiency, several per floor in a
+    // full boys' PG.
     return OutlineCard(
       onTap: onTap,
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(complaintIcon(complaint.category), size: IconSize.md, color: t.colorScheme.primary),
-              const SizedBox(width: Space.xs),
-              Expanded(
-                child: Text(
-                  complaint.title,
-                  style: t.textTheme.titleMedium,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+          ToneBadge(icon: complaintIcon(complaint.category), tone: tone),
+          const SizedBox(width: Space.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  // Centres a one-line title against the badge beside it.
+                  padding: const EdgeInsets.only(top: Space.xxs),
+                  child: Text(
+                    complaint.title,
+                    style: t.textTheme.titleMedium,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-              const SizedBox(width: Space.xs),
-              StatusPill(label: complaint.status.label, tone: tone),
-            ],
-          ),
-          if (complaint.description != null && complaint.description!.trim().isNotEmpty) ...[
-            const SizedBox(height: Space.xxs),
-            Text(
-              complaint.description!.trim(),
-              style: t.textTheme.bodySmall,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+                if (complaint.description != null &&
+                    complaint.description!.trim().isNotEmpty) ...[
+                  const SizedBox(height: Space.xxs),
+                  Text(
+                    complaint.description!.trim(),
+                    style: t.textTheme.bodySmall,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                const SizedBox(height: Space.xs),
+                // The status WORD sits on the footer beside the category and the age, rather
+                // than opposite the title. A title of unknown length and a pill of unknown
+                // length sharing one row is a layout with a breaking point — measured, this one
+                // was 320dp at 1.6x — and a Wrap has none. Nothing is lost: the badge at the
+                // head of the row already carries the status COLOUR, and this is the word it
+                // stands for, which is the half that has to survive a red-green deficiency.
+                Wrap(
+                  spacing: Space.xs,
+                  runSpacing: Space.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      '${complaint.category.label} · raised ${relativeTime(complaint.createdAt)}',
+                      style: t.textTheme.labelSmall,
+                    ),
+                    StatusPill(label: complaint.status.label, tone: tone),
+                  ],
+                ),
+              ],
             ),
-          ],
-          const SizedBox(height: Space.xs),
-          Text(
-            '${complaint.category.label} · raised ${relativeTime(complaint.createdAt)}',
-            style: t.textTheme.labelSmall,
           ),
         ],
       ),
@@ -86,11 +111,14 @@ class ComplaintTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (events.isEmpty) {
+      // Compact: this sits directly under the sheet's own "PROGRESS" label, and the design's
+      // raised state card there would be a card announcing a heading that has already been
+      // read. The full card is for a state that IS the screen.
       return const EmptyNote(
         icon: Icons.timeline_rounded,
         title: 'No updates yet',
         message: 'You will see every status change here as your warden works on it.',
-        tone: NivoraColors.textMuted,
+        compact: true,
       );
     }
     return Column(
@@ -105,6 +133,14 @@ class ComplaintTimeline extends StatelessWidget {
 
 class _Step extends StatelessWidget {
   const _Step({required this.event, required this.isLast});
+
+  /// The rail's geometry, composed from the spacing scale rather than typed in as pixels.
+  /// There is no token named "timeline dot" and there should not be — this is one widget's
+  /// construction, and what the rule protects is that the numbers come from the ramp.
+  static const _rail = Space.lg; // 20 — the column the dot and the thread share
+  static const _dot = Space.sm; // 12 — the marker for one step
+  static const _halo = Space.xxs; // 4  — the tinted ring, painted inside the dot
+  static const _thread = Strokes.hairline * 2; // the line down to the next step
 
   final ComplaintEvent event;
   final bool isLast;
@@ -124,25 +160,25 @@ class _Step extends StatelessWidget {
         children: [
           // The rail: a dot for this step and a line down to the next one.
           SizedBox(
-            width: 20,
+            width: _rail,
             child: Column(
               children: [
                 Container(
                   margin: const EdgeInsets.only(top: Space.xxs),
-                  width: 10,
-                  height: 10,
+                  width: _dot,
+                  height: _dot,
                   decoration: BoxDecoration(
                     color: accent,
                     shape: BoxShape.circle,
                     // The halo alpha comes from the measured chip recipe rather than the 0.35
                     // that was invented here: same tone, same decorative weight, one place.
-                    border: Border.all(color: tones.chipBorder(accent), width: 3),
+                    border: Border.all(color: tones.chipBorder(accent), width: _halo),
                   ),
                 ),
                 if (!isLast)
                   Expanded(
                     child: Container(
-                      width: 2,
+                      width: _thread,
                       margin: const EdgeInsets.symmetric(vertical: Space.xxs),
                       color: Theme.of(context).colorScheme.outlineVariant,
                     ),

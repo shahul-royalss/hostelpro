@@ -1,6 +1,16 @@
 /**
  * POST /functions/v1/razorpay-webhook — the only thing in the mobile stack that can mark rent
- * as paid.
+ * as paid, and the only thing that can mark it unpaid again.
+ *
+ * ═══ WHAT IT HANDLES ═══
+ *   payment.captured   claim the order, credit public.fee_payments.
+ *   payment.failed     record the failure. Never touches fee_payments.
+ *   refund.created     record an INTENTION. Never touches fee_payments.
+ *   refund.processed   the money has actually left — REDUCE fee_payments.amount_paid.
+ *   refund.failed      record that the instruction died. Never touches fee_payments.
+ *   payment.refunded   a summary of the above; noted in the audit trail, moves nothing.
+ *   payment.dispute.*  chargebacks; routed to the reconciliation queue, moves nothing.
+ * Everything else is answered 200 {"outcome":"ignored"}.
  *
  * ═══ THE SIGNATURE IS THE ENTIRE PERIMETER ═══
  * Razorpay is not signed in and never will be, so this endpoint has to be reachable with no
@@ -40,7 +50,13 @@
  * twice. See docs/razorpay-in-app.md §"Which webhook".
  */
 import { serviceClient } from "../_shared/supabase.ts";
-import { PAYMENT_ID_RE, ORDER_ID_RE, verifyWebhookSignature, webhookSecret } from "../_shared/razorpay.ts";
+import {
+  ORDER_ID_RE,
+  PAYMENT_ID_RE,
+  REFUND_ID_RE,
+  verifyWebhookSignature,
+  webhookSecret,
+} from "../_shared/razorpay.ts";
 
 /** A Razorpay event is a few hundred bytes. Anything larger is not one. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -92,6 +108,61 @@ interface CaptureResult {
   already_credited: boolean;
 }
 
+interface RefundEntity {
+  id?: unknown;
+  payment_id?: unknown;
+  amount?: unknown;
+  currency?: unknown;
+  status?: unknown;
+  speed_processed?: unknown;
+  error_description?: unknown;
+}
+
+interface RefundRecordResult {
+  outcome: "recorded" | "advanced" | "duplicate" | "conflict";
+  refund_row_id: string;
+  intent_id: string;
+  hostel_id: string;
+  student_id: string;
+  period_month: string;
+  amount_paise: number;
+  status: "pending" | "processed" | "failed";
+  already_reversed: boolean;
+}
+
+/**
+ * ═══ WHICH REFUND EVENT IS ALLOWED TO MOVE MONEY ═══
+ *
+ * Razorpay emits all three of these for one refund, and NOT reliably in this order on the wire.
+ * They mean different things and the difference is the whole feature:
+ *
+ *   refund.created    An INTENTION. The refund exists as an instruction; nothing has left the
+ *                     merchant account. It can still fail — an instant refund to a closed card
+ *                     falls back, or fails outright. Reversing a resident's ledger here would
+ *                     mark rent unpaid for money that may never reach them, which is a worse
+ *                     lie than the bug this replaces. Recorded as 'pending'. Ledger untouched.
+ *   refund.processed  THE MONEY HAS LEFT. This, and only this, reduces fee_payments.
+ *   refund.failed     The instruction died. The ledger was never moved, so there is nothing to
+ *                     undo — and if this arrives for a refund already processed, that is a
+ *                     contradiction for a human, never an instruction to re-credit rent.
+ *
+ * The state is taken from the EVENT NAME, not from entity.status: the event name is what
+ * Razorpay is asserting on this particular delivery.
+ */
+const REFUND_STATE: Record<string, "pending" | "processed" | "failed"> = {
+  "refund.created": "pending",
+  "refund.processed": "processed",
+  "refund.failed": "failed",
+};
+
+/**
+ * Raises from rz_record_refund / rz_reverse_fee that are VERDICTS, not outages. Retrying cannot
+ * change any of them, so they take a 200 and become a human's problem rather than letting
+ * Razorpay hammer the endpoint until it disables the webhook. Same policy as the capture path.
+ */
+const PERMANENT_REFUND_ERROR =
+  /Unknown Razorpay payment|never captured|Refunds exceed|does not match the recorded refund|Unknown refund|Refund amount must be|No fee record for|exceeds the/i;
+
 /**
  * Best-effort audit. public.audit_event() swallows its own failures by design, and a failure to
  * write a log line must never be the reason a payment is not credited.
@@ -111,6 +182,164 @@ async function auditSystem(
   } catch (e) {
     console.error("[payments] audit failed:", e instanceof Error ? e.message : String(e));
   }
+}
+
+/**
+ * The refund path, in the same two-step shape as the capture path.
+ *
+ * STEP 1 rz_record_refund writes the refund down. STEP 2 rz_reverse_fee takes it off the fee
+ * ledger. Two transactions, deliberately, for the reason the capture/credit split exists: the
+ * ledger move can legitimately be refused (§4.4, hostel not writable, or a month whose total a
+ * warden has since corrected), and if that refusal rolled back the record that Razorpay gave the
+ * money away, the app would forget a real refund. Split, the refund stays recorded and only the
+ * reversal is outstanding — the reconciliation queue (payment_refunds_unreversed_idx), which is
+ * a state a person can fix, rather than a fact that is gone.
+ *
+ * IDEMPOTENCY is the database's, not this function's: a unique index on razorpay_refund_id, and
+ * a reversal that claims under `reversed_at is null`. A replayed refund.processed therefore
+ * comes back 'duplicate' / 'already_reversed' and moves fee_payments zero further rupees.
+ */
+async function handleRefund(
+  db: ReturnType<typeof serviceClient>,
+  state: "pending" | "processed" | "failed",
+  refund: RefundEntity,
+): Promise<Response> {
+  const refundId = str(refund.id);
+  const paymentId = str(refund.payment_id);
+
+  if (!refundId || !REFUND_ID_RE.test(refundId)) return done("ignored_no_refund");
+  if (!paymentId || !PAYMENT_ID_RE.test(paymentId)) return done("ignored_no_payment");
+
+  // The amount is the whole point: a resident who overpaid ₹500 gets ₹500 back, not ₹9,500.
+  // Integer paise or nothing — money is never a float on this path.
+  const amountPaise = typeof refund.amount === "number" ? refund.amount : Number.NaN;
+  if (!Number.isInteger(amountPaise) || amountPaise <= 0) return done("ignored_bad_amount");
+  if (str(refund.currency) !== "INR") return done("ignored_currency");
+
+  // ── Step 1. Record it.
+  const { data: recordData, error: recordError } = await db.rpc("rz_record_refund", {
+    p_payment_id: paymentId,
+    p_refund_id: refundId,
+    p_amount_paise: amountPaise,
+    p_status: state,
+    p_reason: str(refund.error_description),
+    p_speed: str(refund.speed_processed),
+  });
+
+  if (recordError) {
+    const message = recordError.message ?? "";
+    const permanent = PERMANENT_REFUND_ERROR.test(message);
+    await auditSystem("payment.reconcile.required", {
+      targetType: "payment",
+      targetId: paymentId,
+      meta: {
+        refundId, amountPaise, stage: "refund_record", permanent, source: "edge",
+        reason: message.slice(0, 180),
+      },
+    });
+    if (!permanent) {
+      console.error("[payments] refund could not be recorded:", message);
+      return retryable("refund_error");
+    }
+    return done("refund_rejected");
+  }
+
+  const record = recordData as RefundRecordResult;
+
+  // AUDIT. Money leaving is exactly the event a PG owner will one day need explained, and the
+  // trail has to distinguish "a refund was instructed" from "the money went".
+  if (record.outcome === "recorded" || record.outcome === "advanced") {
+    await auditSystem(
+      record.status === "processed"
+        ? "payment.refund.processed"
+        : record.status === "failed"
+        ? "payment.refund.failed"
+        : "payment.refund.pending",
+      {
+        targetType: "student",
+        targetId: record.student_id,
+        hostelId: record.hostel_id,
+        meta: {
+          refundId, paymentId, period: record.period_month,
+          amountPaise: record.amount_paise, source: "edge",
+        },
+      },
+    );
+  }
+
+  // refund.failed for a refund we have already processed and reversed. The money left; a later
+  // "it failed" does not put it back, and this endpoint will not silently re-credit rent on the
+  // strength of a contradiction. A person decides.
+  if (record.outcome === "conflict") {
+    await auditSystem("payment.reconcile.required", {
+      targetType: "student",
+      targetId: record.student_id,
+      hostelId: record.hostel_id,
+      meta: { refundId, paymentId, stage: "refund_conflict", event: state, source: "edge" },
+    });
+    return done("refund_conflict");
+  }
+
+  // Only processed money moves a ledger.
+  if (record.status !== "processed") return done(`refund_${record.status}`);
+
+  // ── Step 2. Reverse it. Attempted on a DUPLICATE delivery too: if an earlier delivery
+  // recorded the refund but the reversal failed, this is what repairs it.
+  const { data: reverseData, error: reverseError } = await db.rpc("rz_reverse_fee", {
+    p_refund_row_id: record.refund_row_id,
+  });
+
+  if (reverseError) {
+    // The refund is recorded and will not be recorded twice. Only the ledger movement is
+    // missing, and the row now sits in the reconciliation queue.
+    const message = reverseError.message ?? "";
+    const permanent = PERMANENT_REFUND_ERROR.test(message);
+    console.error("[payments] refunded but not reversed:", message);
+    await auditSystem("payment.reconcile.required", {
+      targetType: "student",
+      targetId: record.student_id,
+      hostelId: record.hostel_id,
+      meta: {
+        refundId, paymentId, stage: "refund_reverse", permanent, source: "edge",
+        reason: message.slice(0, 180),
+      },
+    });
+    // Retryable only when retrying could help. "Refund exceeds what is recorded for that month"
+    // cannot be fixed by Razorpay sending it again — it needs the warden desk.
+    if (!permanent) return retryable("reverse_error");
+    return done("reverse_rejected");
+  }
+
+  const reverse = reverseData as {
+    outcome: string;
+    amount?: number;
+    fee_status?: string;
+    period_month?: string;
+  };
+
+  if (reverse.outcome === "reversed") {
+    await auditSystem("payment.refund.reversed", {
+      targetType: "student",
+      targetId: record.student_id,
+      hostelId: record.hostel_id,
+      meta: {
+        refundId, paymentId, period: record.period_month,
+        amount: reverse.amount, feeStatus: reverse.fee_status, source: "edge",
+      },
+    });
+  } else if (reverse.outcome === "not_credited") {
+    // Razorpay took the money and gave it back, but our ledger never went up in the first place
+    // — the capture is itself unreconciled. There is nothing to take down, and inventing a debit
+    // would be worse than saying so.
+    await auditSystem("payment.reconcile.required", {
+      targetType: "student",
+      targetId: record.student_id,
+      hostelId: record.hostel_id,
+      meta: { refundId, paymentId, stage: "refund_uncredited", source: "edge" },
+    });
+  }
+
+  return done(`refund_${reverse.outcome}`);
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -157,7 +386,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // ── 3. Only now is any of this treated as data ─────────────────────────────
-  let event: { event?: unknown; payload?: { payment?: { entity?: PaymentEntity } } };
+  let event: {
+    event?: unknown;
+    payload?: { payment?: { entity?: PaymentEntity }; refund?: { entity?: RefundEntity } };
+  };
   try {
     event = JSON.parse(raw);
   } catch {
@@ -165,6 +397,43 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   const kind = str(event.event);
+  const db = serviceClient();
+
+  /* ── refund.created | refund.processed | refund.failed ────────────────────
+   * A refunded payment must stop counting as paid. See REFUND_STATE above for why only
+   * refund.processed is allowed to move the ledger. */
+  const refundState = kind ? REFUND_STATE[kind] : undefined;
+  if (refundState) return await handleRefund(db, refundState, event.payload?.refund?.entity ?? {});
+
+  /* ── payment.refunded ─────────────────────────────────────────────────────
+   * A payment-level SUMMARY ("this payment is now fully refunded"), not a refund. It carries
+   * the payment entity and no refund id, so it cannot be made idempotent on its own — and the
+   * money it describes always also arrives as refund.processed, which is handled above and IS
+   * idempotent. Acting on both would reverse the same rupees twice. Noted, never actioned. */
+  if (kind === "payment.refunded") {
+    await auditSystem("payment.reconcile.required", {
+      targetType: "payment",
+      targetId: str(event.payload?.payment?.entity?.id) ?? undefined,
+      meta: { stage: "refund_summary", source: "edge", note: "payment.refunded seen; ledger moves on refund.processed" },
+    });
+    return done("refund_summary_noted");
+  }
+
+  /* ── payment.dispute.* ────────────────────────────────────────────────────
+   * A chargeback is money HELD, and on a lost dispute money genuinely leaves — but the dispute
+   * entity has a different shape (disp_… id, its own fee, no refund id), and a dispute.created
+   * is an intention in exactly the way refund.created is. Guessing a payload shape on the money
+   * path is worse than routing it loudly to a person, so this is recorded in the owner's
+   * reconciliation queue and deliberately moves nothing. */
+  if (kind && kind.startsWith("payment.dispute.")) {
+    await auditSystem("payment.reconcile.required", {
+      targetType: "payment",
+      targetId: str(event.payload?.payment?.entity?.id) ?? undefined,
+      meta: { stage: "dispute", event: kind, source: "edge" },
+    });
+    return done("dispute_noted");
+  }
+
   const entity = event.payload?.payment?.entity ?? {};
   const paymentId = str(entity.id);
   const orderId = str(entity.order_id);
@@ -175,8 +444,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (kind !== "payment.captured" && kind !== "payment.failed") return done("ignored");
   if (!orderId || !ORDER_ID_RE.test(orderId)) return done("ignored_no_order");
   if (!paymentId || !PAYMENT_ID_RE.test(paymentId)) return done("ignored_no_payment");
-
-  const db = serviceClient();
 
   /* ── payment.failed ──────────────────────────────────────────────────────
    * Never touches fee_payments. rz_mark_failed refuses to overwrite a row that already carries

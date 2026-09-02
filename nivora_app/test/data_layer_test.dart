@@ -204,18 +204,43 @@ void main() {
 
     test('a missing row, an expired session and a 5xx are each their own type', () {
       expect(map('PGRST116', 'no rows'), isA<NotFoundFailure>());
-      expect(map('PGRST301', 'JWT expired'), isA<SignedOutFailure>());
+
+      // TIGHTENED 2026-09-01, not loosened. This used to assert SignedOutFailure, which was
+      // true and was the LEAST specific true thing available: an access token that ran out is
+      // the single most common 401 this app produces — one hour of life, renewed by a
+      // background refresh that fails whenever this instance flips Unhealthy — and "your
+      // session has ended" reads as a revocation to the person holding a perfectly good
+      // account. PostgREST says which in as many words, so the app now does too.
+      final expired = map('PGRST301', 'JWT expired');
+      expect(expired, isA<SessionExpiredFailure>());
+      expect(expired.needsSignIn, isTrue);
+      expect(expired.isRefusal, isFalse, reason: 'nobody has refused this person anything');
+
+      // A 401 that is NOT about expiry still gets the older, more careful sentence.
+      expect(map('PGRST301', 'no suitable key or wrong key type'), isA<SignedOutFailure>());
+
       expect(map('503', 'upstream'), isA<ServerFailure>());
       expect(map('503', 'upstream').isRetryable, isTrue);
     });
 
     test('no signal is offline, and offline is retryable', () {
-      expect(AppFailure.from(TimeoutException('slow')), isA<OfflineFailure>());
       expect(
         AppFailure.from(Exception('SocketException: Failed host lookup: supabase.co')),
         isA<OfflineFailure>(),
       );
       expect(AppFailure.from(Exception('SocketException')).isRetryable, isTrue);
+    });
+
+    test('a silent server is not offline, whatever the two have in common', () {
+      // This assertion read isA<OfflineFailure>() until the read deadline went in, and every
+      // screen words that type as "check your Wi-Fi". Running out of time means DNS resolved,
+      // the socket was accepted and the request went out — the connection is the one part that
+      // demonstrably worked, and blaming it sends people to reboot a router while the server is
+      // the thing that is down. See AppFailure.timedOut.
+      final f = AppFailure.from(TimeoutException('slow'));
+      expect(f, isA<ServerFailure>());
+      expect(f.message.toLowerCase(), contains('stopped responding'));
+      expect(f.message.toLowerCase(), isNot(contains('check your connection')));
     });
 
     test('an unrecognised error degrades to a generic message but keeps the detail', () {

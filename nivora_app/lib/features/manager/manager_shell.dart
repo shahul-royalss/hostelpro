@@ -99,8 +99,10 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final index = ref.watch(managerTabProvider);
+    // CLAMPED, like the owner's, the student's and the super admin's sections already are. See
+    // warden_shell.dart for what an out-of-range IndexedStack index costs: not an exception a
+    // user can report, but a body that draws nothing under a tab bar that still works.
+    final index = ref.watch(managerTabProvider).clamp(0, _screens.length - 1);
     final hostelId = ref.watch(currentHostelIdProvider);
     _visited.add(index);
 
@@ -121,14 +123,15 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
             _visited.contains(i) ? _screens[i] : const SizedBox.shrink(),
         ],
       ),
+      // THE BAR IS THE THEME'S, NOT THIS FILE'S. NavigationBarThemeData in theme.dart already
+      // sets the raised fill, the 64dp height, the always-on labels and — the one that matters
+      // — the gold indicator at the design's own 10% chip alpha, measured once in
+      // NivoraSemantics. The three overrides that used to be here restated two of those and
+      // got the third wrong: a hand-typed `withValues(alpha: 0.12)` is exactly the kind of
+      // plausible-looking number tokens.dart exists to stop.
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (i) => ref.read(managerTabProvider.notifier).go(i),
-        // 64dp keeps every destination above the 48dp minimum with room for the label.
-        height: 64,
-        backgroundColor: t.colorScheme.surface,
-        indicatorColor: t.colorScheme.primary.withValues(alpha: 0.12),
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: [
           const NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Home'),
           const NavigationDestination(

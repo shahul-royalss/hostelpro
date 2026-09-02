@@ -14,7 +14,7 @@
 /// chooser, which is how a receipt gets saved rather than sent.
 ///
 /// ═══ WHY THERE IS AN INTERFACE IN FRONT OF IT ═══
-/// The same reason [RazorpayCheckout] has one. `share_plus` and `path_provider` are
+/// The same reason [DocumentCapture] has one. `share_plus` and `path_provider` are
 /// MethodChannel plugins and a widget test has no platform to answer them, so the export goes
 /// through [receiptExporterProvider] and a test can substitute a fake and still drive the whole
 /// receipt screen — including the failure branches, which are the ones worth pinning down.

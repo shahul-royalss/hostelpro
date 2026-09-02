@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../common/refresh.dart';
 import '../data/manager_providers.dart';
 import '../widgets/manager_ui.dart';
 import '../widgets/paged_list.dart';
@@ -38,11 +39,14 @@ class ManagerExpensesScreen extends ConsumerWidget {
     if (hostelId == null) {
       return const ManagerScreen(
         title: 'Money',
-        child: EmptyNote(
-          icon: Icons.account_balance_wallet_outlined,
-          title: 'No hostel on this account',
-          detail: 'A manager runs exactly one hostel. Ask the owner to check the assignment — '
-              'until then there is nothing to show.',
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(Space.md),
+          child: EmptyNote(
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'No hostel on this account',
+            detail: 'A manager runs exactly one hostel. Ask the owner to check the assignment — '
+                'until then there is nothing to show.',
+          ),
         ),
       );
     }
@@ -55,7 +59,9 @@ class ManagerExpensesScreen extends ConsumerWidget {
       actions: [
         IconButton(
           tooltip: direction == MoneyDirection.out ? 'Record an expense' : 'Record money in',
-          icon: const Icon(Icons.add_rounded),
+          // 16 inside a 32dp button, which is the size the design draws a header glyph at
+          // (4:454) — not 24 inside 40.
+          icon: const Icon(Icons.add_rounded, size: IconSize.md),
           onPressed: () => direction == MoneyDirection.out
               ? showRecordExpenseSheet(context, hostelId: hostelId)
               : showRecordRevenueSheet(context, hostelId: hostelId),
@@ -68,23 +74,34 @@ class ManagerExpensesScreen extends ConsumerWidget {
   }
 }
 
-/// Out / In. A segmented control rather than two tabs: the role_shell tab list is the readable
-/// index of this role's navigation, and a fifth destination that only ever shows a variant of
-/// the fourth would make that index lie.
+/// Out / In. Two chips rather than two tabs: the role_shell tab list is the readable index of
+/// this role's navigation, and a fifth destination that only ever shows a variant of the fourth
+/// would make that index lie.
+///
+/// IT WAS A [SegmentedButton] AND IS NOT ANY MORE, for two reasons. Material's stock one is a
+/// stadium with a tick in it, and there is not one capsule and not one tick in the nineteen
+/// Figma frames — the design's way of saying "this is the selected one of these" is 4:1265, a
+/// gold-filled chip at the control radius. And a segmented button divides its width equally
+/// between fixed labels: at 1.6x text scale on a 320dp phone "Money out" and "Money in" do not
+/// fit side by side, and it overflows rather than wrapping. A [Wrap] of [ToggleChip]s is the
+/// design's own vocabulary AND drops to two lines when the type gets big.
 class _Direction extends ConsumerWidget {
   const _Direction();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final direction = ref.watch(moneyDirectionProvider);
-    return SegmentedButton<MoneyDirection>(
-      showSelectedIcon: false,
-      segments: [
+    return Wrap(
+      spacing: Space.xs,
+      runSpacing: Space.xs,
+      children: [
         for (final d in MoneyDirection.values)
-          ButtonSegment<MoneyDirection>(value: d, label: Text(d.label)),
+          ToggleChip(
+            label: d.label,
+            selected: direction == d,
+            onSelected: (_) => ref.read(moneyDirectionProvider.notifier).set(d),
+          ),
       ],
-      selected: {direction},
-      onSelectionChanged: (s) => ref.read(moneyDirectionProvider.notifier).set(s.first),
     );
   }
 }
@@ -101,7 +118,13 @@ class _ExpenseList extends ConsumerWidget {
 
     return PagedList<Expense>(
       value: page,
-      onRefresh: () async => ref.invalidate(managerExpensesProvider(query)),
+      // Bounded and spoken. AsyncSection keeps the book on screen through a failed reload,
+      // so the gesture is the only thing that can report the failure — see
+      // features/common/refresh.dart.
+      onRefresh: () {
+        ref.invalidate(managerExpensesProvider(query));
+        return settleRefresh(context, () => ref.read(managerExpensesProvider(query).future));
+      },
       onLoadMore: () => ref.read(managerExpensesProvider(query).notifier).loadMore(),
       header: const _ExpenseFilters(),
       empty: EmptyNote(
@@ -135,16 +158,16 @@ class _ExpenseFilters extends ConsumerWidget {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              ChoiceChip(
-                label: const Text('All'),
+              ToggleChip(
+                label: 'All',
                 selected: selected == null,
                 onSelected: (_) => notifier.set(null),
               ),
               // public.expense_category, every value, in its declared order.
               for (final c in ExpenseCategory.values) ...[
                 const SizedBox(width: Space.xs),
-                ChoiceChip(
-                  label: Text(c.label),
+                ToggleChip(
+                  label: c.label,
                   selected: selected == c,
                   onSelected: (_) => notifier.set(selected == c ? null : c),
                 ),
@@ -171,28 +194,29 @@ class _ExpenseRow extends StatelessWidget {
           '${shortDate(expense.date)}',
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: context.tones.warning.withValues(alpha: 0.12),
-              borderRadius: Radii.rControl,
-            ),
-            child: Icon(_iconFor(expense.category),
-                size: IconSize.md, color: context.tones.warning),
-          ),
+          // A small squared badge tinted with the row's own meaning, drawn by the one widget
+          // that owns that recipe. The 12% alpha this used to inline was a fifth number for a
+          // thing NivoraSemantics already measures.
+          ToneBadge(icon: _iconFor(expense.category), tone: NivoraColors.warning),
           const SizedBox(width: Space.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(expense.category.label, style: t.textTheme.titleSmall),
+                // body 13/400 over a 10px meta line — the design's row anatomy (4:1200/4:1201).
+                // The weight in this row belongs to the AMOUNT, which is what a receipt is
+                // being checked against.
+                Text(
+                  expense.category.label,
+                  style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurface),
+                ),
+                const SizedBox(height: Space.xxs / 2),
                 Text(
                   note == null || note.isEmpty
                       ? shortDate(expense.date)
                       : '${shortDate(expense.date)} · $note',
-                  style: t.textTheme.bodySmall,
+                  style: t.textTheme.labelSmall
+                      ?.copyWith(color: context.tones.muted, letterSpacing: 0.2),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -201,7 +225,19 @@ class _ExpenseRow extends StatelessWidget {
           ),
           const SizedBox(width: Space.xs),
           // Exact to the paise: this row is what a receipt gets checked against.
-          Text('-${moneyExact(expense.amount)}', style: t.textTheme.titleSmall),
+          //
+          // SCALED DOWN, NEVER ELLIPSISED. At 1.6x text scale on a 320dp phone a lakh-sized
+          // figure is wider than the space left beside its description, and the two ordinary
+          // answers are both wrong here: `-₹2,45…` is a DIFFERENT NUMBER, and dropping the
+          // paise is the rounding this row exists to avoid. BoxFit.scaleDown stops the figure
+          // growing past the width available and changes nothing at ordinary text sizes.
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text('-${moneyExact(expense.amount)}', style: t.textTheme.titleSmall),
+            ),
+          ),
         ],
       ),
     );
@@ -229,7 +265,11 @@ class _RevenueList extends ConsumerWidget {
 
     return PagedList<Revenue>(
       value: page,
-      onRefresh: () async => ref.invalidate(managerRevenuesProvider(hostelId)),
+      onRefresh: () {
+        ref.invalidate(managerRevenuesProvider(hostelId));
+        return settleRefresh(
+            context, () => ref.read(managerRevenuesProvider(hostelId).future));
+      },
       onLoadMore: () => ref.read(managerRevenuesProvider(hostelId).notifier).loadMore(),
       header: const Padding(
         padding: EdgeInsets.only(bottom: Space.sm),
@@ -259,28 +299,23 @@ class _RevenueRow extends StatelessWidget {
           '${shortDate(revenue.date)}',
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: context.tones.success.withValues(alpha: 0.12),
-              borderRadius: Radii.rControl,
-            ),
-            child: Icon(Icons.arrow_downward_rounded,
-                size: IconSize.md, color: context.tones.success),
-          ),
+          ToneBadge(icon: Icons.arrow_downward_rounded, tone: NivoraColors.success),
           const SizedBox(width: Space.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(revenue.source.label, style: t.textTheme.titleSmall),
+                Text(
+                  revenue.source.label,
+                  style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurface),
+                ),
+                const SizedBox(height: Space.xxs / 2),
                 Text(
                   note == null || note.isEmpty
                       ? shortDate(revenue.date)
                       : '${shortDate(revenue.date)} · $note',
-                  style: t.textTheme.bodySmall,
+                  style: t.textTheme.labelSmall
+                      ?.copyWith(color: context.tones.muted, letterSpacing: 0.2),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -288,7 +323,21 @@ class _RevenueRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: Space.xs),
-          Text('+${moneyExact(revenue.amount)}', style: t.textTheme.titleSmall),
+          // Green, because the design reserves `tertiary` for the positive direction and this
+          // is the one column on the screen that is money arriving. The expense row's figure
+          // stays in `on-surface` — the design leaves its MONEY OUT totals uncoloured too, and
+          // spending is not an error. Scaled rather than truncated, for the reason on the
+          // expense row's own figure.
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                '+${moneyExact(revenue.amount)}',
+                style: t.textTheme.titleSmall?.copyWith(color: context.tones.success),
+              ),
+            ),
+          ),
         ],
       ),
     );

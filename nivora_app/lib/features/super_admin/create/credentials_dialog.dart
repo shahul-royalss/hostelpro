@@ -107,7 +107,7 @@ class _CredentialsDialogState extends State<CredentialsDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Owner account created', style: t.textTheme.titleLarge),
+                          Text('Owner account created', style: t.textTheme.titleMedium),
                           if (widget.hostelName != null)
                             Text(widget.hostelName!,
                                 style: t.textTheme.bodySmall,
@@ -136,13 +136,18 @@ class _CredentialsDialogState extends State<CredentialsDialog> {
                 ),
 
                 const SizedBox(height: Space.md),
+                // The design's badge recipe — a 10% fill of the tone under a full-strength
+                // hairline of it, both measured once in NivoraSemantics. The 0.08/0.32 pair
+                // this replaced was a light-theme alpha painted twice.
                 Container(
                   padding: const EdgeInsets.all(Space.sm),
                   decoration: BoxDecoration(
-                    color: context.tones.warning.withValues(alpha: 0.08),
+                    color: context.tones.chipFill(context.tones.warning),
                     borderRadius: Radii.rControl,
-                    border:
-                        Border.all(color: context.tones.warning.withValues(alpha: 0.32)),
+                    border: Border.all(
+                      color: context.tones.chipBorder(context.tones.warning),
+                      width: Strokes.hairline,
+                    ),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,32 +1,33 @@
-/// What a receipt is allowed to say, and the two rows it is allowed to say it from.
+/// What a receipt is allowed to say, and the one row it is allowed to say it from.
 ///
 /// ═══ THE RULE THIS FILE ENFORCES WITH A TYPE ═══
-/// A receipt is a claim that money changed hands. This app is not in a position to make that
-/// claim on its own: the Razorpay checkout returns success on the device seconds before the
-/// webhook that credits the rent ledger reaches the server, and a screen that prints a receipt
-/// off the back of that callback is printing a receipt for money the hostel may never receive.
+/// A receipt is a claim that money changed hands. There is no public constructor: a [Receipt]
+/// can only be built by the factory below, and it RETURNS NULL when the row it was handed is
+/// not evidence.
 ///
-/// So there is no public constructor. A [Receipt] can only be built by one of the two factories
-/// below, and BOTH RETURN NULL when the row they were handed is not evidence:
-///
-///   [Receipt.forSettledIntent]  null unless `payment_intents.credited_at` is set — the money
-///                               was captured by Razorpay AND the rent ledger was credited,
-///                               both written by the server, neither writable from this app.
 ///   [Receipt.forFeePayment]     null unless `fee_payments.amount_paid > 0` — a row exists for
 ///                               the month but nothing has been received against it. That is a
-///                               real state (a month opened with no payment) and it is not a
-///                               receipt.
+///                               real state (a month opened and then corrected back to zero)
+///                               and it is not a receipt.
 ///
 /// A caller that cannot get a [Receipt] cannot open the receipt screen. "Do not render a
 /// receipt the server has not confirmed" is therefore not a rule someone has to remember; it is
 /// the only way the code compiles.
 ///
+/// ═══ ONE CHANNEL, BECAUSE THERE IS ONE WAY TO PAY ═══
+/// This file used to hold a second factory, `forSettledIntent`, for rent paid inside the app
+/// through Razorpay — guarded on `payment_intents.credited_at` so a checkout callback could
+/// never print a receipt on its own. Online payment is out of v1 (rent is handed over at the
+/// warden's desk and recorded there), so that factory, the model behind it and the whole
+/// client-side checkout are gone. The Edge Functions stay deployed for a later version; when
+/// they are configured, the online factory comes back with its `credited_at` guard intact and
+/// [ReceiptChannel] grows its second value again.
+///
 /// ═══ AND NO ARITHMETIC ═══
 /// Every figure below is a column, or a getter on the model that owns that column
-/// ([PaymentIntent.amountRupees] is a unit conversion; [FeePayment.balance] is the model's own
-/// clamp). Nothing here adds two amounts together. A receipt that computed its own total could
-/// disagree with the ledger the warden is reading, and the resident holding the receipt would
-/// be the one who found out.
+/// ([FeePayment.balance] is the model's own clamp). Nothing here adds two amounts together. A
+/// receipt that computed its own total could disagree with the ledger the warden is reading,
+/// and the resident holding the receipt would be the one who found out.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -34,11 +35,13 @@ import 'package:intl/intl.dart';
 
 import '../../data/models/models.dart';
 
-/// How the money reached the hostel. Two genuinely different documents.
+/// How the money reached the hostel.
+///
+/// ONE VALUE TODAY. Rent is handed over at the desk; there is no other path money can take
+/// into this app. The stamp still exists as a field rather than a hard-coded string because a
+/// receipt that does not say where it came from is worth less on a disputed month, and because
+/// the online value returns with online payment.
 enum ReceiptChannel {
-  /// Paid through the app, settled by a verified Razorpay webhook.
-  online('PAID ONLINE'),
-
   /// Cash, UPI or a bank transfer handed over at the office and recorded by staff.
   desk('PAID AT THE OFFICE');
 
@@ -83,8 +86,8 @@ class Receipt {
   /// disagree. Printed as text, in full, and selectable on screen.
   final String reference;
 
-  /// What that string IS — 'RAZORPAY PAYMENT', 'RAZORPAY ORDER', 'RECEIPT NO'. A bare id with
-  /// no name on it is not much use to whoever is asked to look it up.
+  /// What that string IS — 'RECEIPT NO'. A bare id with no name on it is not much use to
+  /// whoever is asked to look it up.
   final String referenceLabel;
 
   /// The headline figure, in rupees.
@@ -114,57 +117,18 @@ class Receipt {
   final String? payerName;
   final String? hostelName;
 
-  /// A receipt for rent paid inside the app.
-  ///
-  /// NULL UNLESS THE SERVER HAS CREDITED IT. `credited_at` is written by `rz_credit_fee()` in
-  /// its own transaction, after `rz_record_capture()` has verified the webhook's HMAC. Until
-  /// that column is set there is no receipt to print — at most there is "Razorpay has your
-  /// money and your ledger has not caught up", which the pay sheet says in words.
-  ///
-  /// [PaymentIntent.amountPaise] is what THIS payment was for, so the headline is this
-  /// payment's amount and nothing has to be summed.
-  static Receipt? forSettledIntent(
-    PaymentIntent intent, {
-    String? payerName,
-    String? hostelName,
-  }) {
-    // Reading the column rather than the getter promotes the type AND is the definition of
-    // `isSettled`, so the two cannot drift apart.
-    final credited = intent.creditedAt;
-    if (credited == null) return null;
-
-    final payer = _clean(payerName);
-    final method = _clean(intent.method);
-    final paid = _money(intent.amountRupees);
-
-    return Receipt._(
-      reference: intent.razorpayPaymentId ?? intent.razorpayOrderId,
-      referenceLabel: intent.razorpayPaymentId == null ? 'RAZORPAY ORDER' : 'RAZORPAY PAYMENT',
-      amount: intent.amountRupees,
-      amountCaption: 'paid for ${receiptMonth(intent.periodMonth)}',
-      periodMonth: intent.periodMonth,
-      paidAt: credited,
-      channel: ReceiptChannel.online,
-      payerName: payer,
-      hostelName: _clean(hostelName),
-      facts: [
-        if (payer != null) ReceiptLine('Resident', payer),
-        ReceiptLine('Rent for', receiptMonth(intent.periodMonth)),
-        // Razorpay's own word for the instrument ('upi', 'card', 'netbanking'). Printed as it
-        // came, title-cased, rather than mapped to a vocabulary the payment did not use.
-        if (method != null) ReceiptLine('Method', _titleCase(method)),
-      ],
-      amounts: [ReceiptLine('Rent payment', paid)],
-      totalLabel: 'PAID',
-      totalValue: paid,
-    );
-  }
-
   /// A receipt for money taken at the hostel office, from the `fee_payments` row that
-  /// `wd_record_payment()` returned.
+  /// `wd_record_payment()` — or `wd_correct_payment()` — returned.
   ///
   /// NULL WHEN NOTHING HAS BEEN RECEIVED. A `fee_payments` row can exist with `amount_paid`
   /// zero; it is a month, not a payment.
+  ///
+  /// A REFUNDED MONTH STILL HAS A RECEIPT, and it must. The document is evidence of what
+  /// happened to this month's money, and money going back is part of what happened — a receipt
+  /// withheld the moment a refund landed would take away the one piece of paper the resident
+  /// needs in order to ask about it. So a refund is printed as its own money line rather than
+  /// allowed to suppress the document. [refunds] is this month's rows from
+  /// `public.payment_refunds`, passed in by the screen that already holds them.
   ///
   /// ═══ WHY THE HEADLINE IS THE MONTH'S TOTAL, NOT "THE AMOUNT JUST HANDED OVER" ═══
   /// `wd_record_payment` UPSERTS AND ADDS: a second payment in the same month tops up
@@ -178,6 +142,7 @@ class Receipt {
     FeePayment payment, {
     String? payerName,
     String? hostelName,
+    List<RefundInfo> refunds = const [],
   }) {
     if (!(payment.amountPaid > 0)) return null;
 
@@ -205,6 +170,22 @@ class Receipt {
       amounts: [
         ReceiptLine('Rent for the month', _money(payment.amountDue)),
         ReceiptLine('Received so far', received),
+        // ═══ A RECEIPT THAT DOES NOT MENTION THE REFUND IS A FALSE DOCUMENT ═══
+        // This paper is the thing a resident keeps, shows their parents, and produces when a
+        // ledger and a bank statement disagree. Printing "received ₹8,500" for a month that
+        // gave ₹2,000 back is the same failure as the fee screen flipping to unpaid in silence,
+        // only harder to correct afterwards because the resident is holding it.
+        //
+        // ONLY SETTLED REFUNDS GO ON THE PAPER. A pending refund is an instruction, not an
+        // event; a printed document that outlives the instruction would be evidence of money
+        // returned that never was. The live screens say a refund is on its way — paper does
+        // not, because paper cannot be corrected once it has been shared.
+        //
+        // A COLUMN, NOT A DEDUCTION, and one line per refund. Each is printed beside "Received
+        // so far" with neither figure adjusted by the other — same rule as everywhere else in
+        // this file.
+        for (final r in refunds.where((r) => r.isSettled))
+          ReceiptLine('Refunded', _money(r.amount)),
         // Printed even when it is zero: "still to pay ₹0" is the sentence the resident came
         // for, and leaving it off a fully paid month makes the two receipts read differently
         // for no reason.
@@ -272,7 +253,3 @@ String? _clean(String? value) {
   final trimmed = (value ?? '').trim();
   return trimmed.isEmpty ? null : trimmed;
 }
-
-/// 'netbanking' -> 'Netbanking'. Razorpay reports lowercase; a receipt is not shouted.
-String _titleCase(String value) =>
-    value.length < 2 ? value.toUpperCase() : value[0].toUpperCase() + value.substring(1);

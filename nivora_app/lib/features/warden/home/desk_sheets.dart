@@ -62,6 +62,7 @@ class _LeavesSheet extends ConsumerWidget {
               icon: Icons.event_available_outlined,
               title: 'Nothing to decide',
               detail: 'Every leave request has been answered.',
+              tone: NivoraColors.success,
             );
           }
           return Column(
@@ -116,8 +117,16 @@ class _LeaveRowState extends ConsumerState<_LeaveRow> {
     // readable. Saying so is better than printing a raw uuid at somebody.
     final name = leave.studentName ?? 'Resident';
 
+    // warden-dashboard.png's "Pending Leaves" row: the avatar, the name, the dates as a glyphed
+    // line under it, and the decision as a coral cross beside a mint tick.
+    //
+    // The two buttons keep their WORDS. The mockup's are bare icons, and a tap that notifies a
+    // resident and cannot be taken back is not a tap to leave unlabelled — a warden deciding
+    // four requests one-handed in a corridor should not have to remember which glyph is which.
+    // The icons are the mockup's; the labels are what makes them safe.
     return TapRow(
       onTap: () => showStudentSheet(context, studentId: leave.studentId),
+      padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -131,19 +140,25 @@ class _LeaveRowState extends ConsumerState<_LeaveRow> {
                   children: [
                     Text(name, style: t.textTheme.titleMedium,
                         maxLines: 1, overflow: TextOverflow.ellipsis),
-                    Text(
-                      '${shortDate(leave.fromDate)} → ${shortDate(leave.toDate)} '
-                      '· ${leave.nights} night${leave.nights == 1 ? '' : 's'}',
-                      style: t.textTheme.bodySmall,
-                    ),
+                    const SizedBox(height: Space.xxs / 2),
+                    MetaLine([
+                      (
+                        Icons.event_outlined,
+                        '${shortDate(leave.fromDate)} → ${shortDate(leave.toDate)}',
+                      ),
+                      (
+                        Icons.nightlight_outlined,
+                        '${leave.nights} night${leave.nights == 1 ? '' : 's'}',
+                      ),
+                    ]),
                   ],
                 ),
               ),
-              Text(age(leave.createdAt), style: t.textTheme.bodySmall),
+              CapsLabel(age(leave.createdAt)),
             ],
           ),
           if (leave.reason != null) ...[
-            const SizedBox(height: Space.xs),
+            const SizedBox(height: Space.sm),
             Text(leave.reason!, style: t.textTheme.bodyMedium),
           ],
           const SizedBox(height: Space.sm),
@@ -153,21 +168,29 @@ class _LeaveRowState extends ConsumerState<_LeaveRow> {
             Row(
               children: [
                 Expanded(
-                  // Approve is the primary action and the theme already says what that looks
-                  // like. Repainting it #188D43 put white on green at 4.26:1.
-                  child: FilledButton(
-                    onPressed: () => _decide(LeaveStatus.approved),
-                    child: const Text('Approve'),
+                  child: OutlinedButton.icon(
+                    // Here the colour DOES carry meaning — this is the destructive half of a
+                    // pair — so it stays, resolved for the theme (5.83:1 light, 6.98:1 dark).
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: context.tones.error,
+                      side: BorderSide(
+                        color: context.tones.chipBorder(context.tones.error),
+                        width: Strokes.hairline,
+                      ),
+                    ),
+                    icon: const Icon(Icons.close_rounded, size: IconSize.md),
+                    label: const Text('Reject'),
+                    onPressed: () => _decide(LeaveStatus.rejected),
                   ),
                 ),
                 const SizedBox(width: Space.xs),
                 Expanded(
-                  child: OutlinedButton(
-                    // Here the colour DOES carry meaning — this is the destructive half of a
-                    // pair — so it stays, resolved for the theme (5.83:1 light, 6.98:1 dark).
-                    style: OutlinedButton.styleFrom(foregroundColor: context.tones.error),
-                    onPressed: () => _decide(LeaveStatus.rejected),
-                    child: const Text('Reject'),
+                  // Approve is the primary action and the theme already says what that looks
+                  // like. Repainting it #188D43 put white on green at 4.26:1.
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.check_rounded, size: IconSize.md),
+                    label: const Text('Approve'),
+                    onPressed: () => _decide(LeaveStatus.approved),
                   ),
                 ),
               ],
@@ -216,6 +239,7 @@ class _VisitorsSheet extends ConsumerWidget {
               icon: Icons.door_front_door_outlined,
               title: 'Nobody signed in',
               detail: 'Every visitor logged today has signed out again.',
+              tone: NivoraColors.success,
             );
           }
           return Column(
@@ -276,16 +300,18 @@ class _VisitorRowState extends ConsumerState<_VisitorRow> {
               children: [
                 Text(visitor.visitorName, style: t.textTheme.titleMedium,
                     maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text(
-                  [
-                    if (visitor.relation != null) visitor.relation!,
-                    if (visitor.studentName != null) 'for ${visitor.studentName}',
+                const SizedBox(height: Space.xxs / 2),
+                MetaLine([
+                  (Icons.badge_outlined, visitor.relation),
+                  (
+                    Icons.person_outline_rounded,
+                    visitor.studentName == null ? null : 'for ${visitor.studentName}',
+                  ),
+                  (
+                    Icons.schedule_rounded,
                     'in since ${timeOfDay(visitor.checkInAt)} · $duration',
-                  ].join(' · '),
-                  style: t.textTheme.bodySmall,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                  ),
+                ]),
               ],
             ),
           ),

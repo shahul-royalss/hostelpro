@@ -1,10 +1,11 @@
 library;
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../common/refresh.dart';
 
 /// Composition, not data access.
 ///
@@ -46,6 +47,16 @@ import '../../data/providers.dart';
 /// `students` row, which `myStudentProvider` already keeps for the session — and it is thrown
 /// away by [refreshStudentData] and rebuilt on sign-out, because it watches `myStudentProvider`
 /// which watches the session.
+///
+/// ── DO NOT MAKE THIS autoDispose ─────────────────────────────────────────────────────────
+/// The body below touches `ref` TWICE after an await gap, and it is the only provider left in
+/// the app that does. That is safe here for one reason and one reason only: a plain
+/// FutureProvider is never torn down mid-flight. Make it autoDispose and the warm reads in
+/// [awaitStudentRefresh] and `studentTabWarmers` — both `ref.read(….future)` with nothing
+/// listening — would resume into a disposed element and throw UnmountedRefException out of
+/// `.future`, which is exactly the bug that made the warden's "choose a bed" do nothing (see
+/// freeBedOptionsProvider and the note atop warden/actions/assign_bed_sheet.dart). If this ever
+/// does need autoDispose, hoist both `ref.watch` calls above the first await first.
 final myRentThisMonthProvider = FutureProvider<FeeLedgerRow?>((ref) async {
   final me = await ref.watch(myStudentProvider.future);
   if (me == null) return null;
@@ -71,15 +82,6 @@ final myRentThisMonthProvider = FutureProvider<FeeLedgerRow?>((ref) async {
   return null;
 });
 
-/// The resident's own hostel id, once their record has loaded.
-///
-/// Taken from `students.hostel_id` rather than from the session. `public.users.hostel_id` is set
-/// for residents in this database, but the students row is the column every policy this screen
-/// depends on is actually written against, so it is the one to key queries by.
-final myHostelIdProvider = Provider.autoDispose<String?>((ref) {
-  return ref.watch(myStudentProvider).value?.hostelId;
-});
-
 /// Everything the student tabs read, thrown away and fetched again.
 ///
 /// Used by pull-to-refresh. Invalidating a family provider with no argument clears every
@@ -90,9 +92,16 @@ void refreshStudentData(WidgetRef ref) {
   ref.invalidate(myRentThisMonthProvider);
   ref.invalidate(feeLedgerProvider);
   ref.invalidate(studentFeeHistoryProvider);
+  // Money that went back. A resident who pulls to refresh on the fees screen is very often
+  // asking exactly this — "has my refund come through yet" — and the rent figure alone cannot
+  // answer it: a PENDING refund moves nothing on the ledger at all.
+  ref.invalidate(studentRefundsProvider);
   ref.invalidate(complaintsProvider);
   ref.invalidate(complaintTimelineProvider);
   ref.invalidate(noticesProvider);
+  // The week's food. A resident who pulls to refresh because "the menu looks like last week's"
+  // is asking exactly this question, and nothing else in the app re-reads public.menus.
+  ref.invalidate(weeklyMenuProvider);
   ref.invalidate(roommatesProvider);
   ref.invalidate(hostelContactsProvider);
   ref.invalidate(unreadCountProvider);
@@ -101,13 +110,16 @@ void refreshStudentData(WidgetRef ref) {
 /// Waits for the reads a pull-to-refresh actually shows, so the spinner disappears when the
 /// screen is ready rather than the instant the gesture ends.
 ///
-/// Failures are swallowed here on purpose: each section renders its own error state, and an
-/// exception escaping a RefreshIndicator callback leaves the spinner turning forever.
-Future<void> awaitStudentRefresh(WidgetRef ref) async {
-  try {
+/// BOUNDED, AND IT SAYS WHAT HAPPENED. It used to await `.future` with no deadline and write
+/// the failure to `debugPrint` — which nobody holding a phone can read. Both halves were wrong
+/// for the same reason: riverpod 3 retries a failed provider ten times behind an unfinished
+/// `.future`, so an unbounded wait can hold the spinner for over two minutes, and every section
+/// on these three screens is an [AsyncSection], which keeps the rows it already has through a
+/// failed reload. The gesture is the ONLY thing that can report the failure, so the gesture
+/// reports it. See features/common/refresh.dart.
+Future<void> awaitStudentRefresh(BuildContext context, WidgetRef ref) {
+  return settleRefresh(context, () async {
     await ref.read(myStudentProvider.future);
     await ref.read(myRentThisMonthProvider.future);
-  } catch (error) {
-    debugPrint('student refresh: $error');
-  }
+  });
 }

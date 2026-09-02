@@ -9,6 +9,7 @@ import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../../shared/glass/glass.dart';
+import '../common/refresh.dart';
 import 'data/sa_providers.dart';
 import 'sa_hostel_detail_screen.dart';
 import 'widgets/sa_ui.dart';
@@ -60,11 +61,31 @@ class _SaSubscriptionsScreenState extends ConsumerState<SaSubscriptionsScreen> {
     super.dispose();
   }
 
+  /// Non-null when the last attempt at the next page failed. See [SaLoadMoreFooter] — this
+  /// was `unawaited(...)`, and `loadMore` returns its failure rather than throwing, so a page
+  /// that did not load left a spinner turning under the rows with nothing to read or tap.
+  AppFailure? _loadMoreError;
+  bool _loadingMore = false;
+
   void _onScroll() {
     if (!_scroll.hasClients) return;
     if (_scroll.position.pixels < _scroll.position.maxScrollExtent - 400) return;
+    _loadMore();
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || _loadMoreError != null) return;
+    _loadingMore = true;
     final query = SaHostelQuery(subState: ref.read(saSubscriptionFilterProvider));
-    unawaited(ref.read(saHostelListProvider(query).notifier).loadMore());
+    final failure = await ref.read(saHostelListProvider(query).notifier).loadMore();
+    _loadingMore = false;
+    if (!mounted || failure == null) return;
+    setState(() => _loadMoreError = failure);
+  }
+
+  void _retryLoadMore() {
+    setState(() => _loadMoreError = null);
+    _loadMore();
   }
 
   @override
@@ -110,6 +131,8 @@ class _SaSubscriptionsScreenState extends ConsumerState<SaSubscriptionsScreen> {
                 query: query,
                 filter: filter,
                 scroll: _scroll,
+                loadMoreError: _loadMoreError,
+                onRetryLoadMore: _retryLoadMore,
                 verdict: verdict,
                 onRecheck: () {
                   ref.invalidate(saStatsProvider);
@@ -177,6 +200,8 @@ class _SubscriptionList extends ConsumerWidget {
     required this.scroll,
     required this.verdict,
     required this.onRecheck,
+    required this.loadMoreError,
+    required this.onRetryLoadMore,
   });
 
   final PagedResult<SaHostelRow> page;
@@ -191,6 +216,10 @@ class _SubscriptionList extends ConsumerWidget {
 
   /// Re-runs both reads. The only exit from [SaEmptyVerdict.unverified].
   final VoidCallback onRecheck;
+
+  /// The next page's failure, and the way to ask for it again.
+  final AppFailure? loadMoreError;
+  final VoidCallback onRetryLoadMore;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -222,6 +251,11 @@ class _SubscriptionList extends ConsumerWidget {
 
             SaEmptyVerdict.refused => const SaNotPermitted(),
 
+            // NOT SaNotPermitted, and not SaUnverified's "check again" either. The read
+            // that would have explained this emptiness died with the access token, so the
+            // only honest thing on screen is the way to get a live one.
+            SaEmptyVerdict.credentialDead => const SaSessionEnded(),
+
             SaEmptyVerdict.confirmed => SaEmpty(
                 icon: filter == SubscriptionState.expired
                     ? Icons.check_circle_outline_rounded
@@ -246,9 +280,9 @@ class _SubscriptionList extends ConsumerWidget {
     }
 
     return RefreshIndicator(
-      onRefresh: () async {
+      onRefresh: () {
         ref.invalidate(saHostelListProvider(query));
-        await ref.read(saHostelListProvider(query).future);
+        return settleRefresh(context, () => ref.read(saHostelListProvider(query).future));
       },
       child: ListView.separated(
         controller: scroll,
@@ -264,18 +298,12 @@ class _SubscriptionList extends ConsumerWidget {
         itemBuilder: (context, index) {
           if (index == 0) return const _ReadOnlyExplainer();
           if (index == page.items.length + 1) {
-            return Padding(
-              padding: const EdgeInsets.only(top: Space.md),
-              child: Center(
-                child: page.hasMore
-                    ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text('${plural(page.items.length, 'hostel')} shown',
-                        style: Theme.of(context).textTheme.bodySmall),
-              ),
+            return SaLoadMoreFooter(
+              hasMore: page.hasMore,
+              shown: page.items.length,
+              noun: 'hostel',
+              error: loadMoreError,
+              onRetry: onRetryLoadMore,
             );
           }
           final hostel = page.items[index - 1];

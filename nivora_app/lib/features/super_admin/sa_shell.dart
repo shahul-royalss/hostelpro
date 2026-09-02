@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/perf/tab_warmer.dart';
+import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import 'data/sa_providers.dart';
 import 'sa_hostels_screen.dart';
@@ -108,7 +109,9 @@ class _SaShellState extends ConsumerState<SaShell> {
         // 64dp keeps every destination above the 48dp minimum with room for the label.
         height: 64,
         backgroundColor: t.colorScheme.surface,
-        indicatorColor: t.colorScheme.primary.withValues(alpha: 0.12),
+        // The design's own tint recipe rather than an alpha picked by eye — the same 10% that
+        // sits behind every status badge in the file.
+        indicatorColor: context.tones.chipFill(t.colorScheme.primary),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: [
           const NavigationDestination(

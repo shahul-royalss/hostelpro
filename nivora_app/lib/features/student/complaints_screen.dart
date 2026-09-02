@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../common/refresh.dart';
+import '../../shared/illustrations.dart';
 import 'complaint_detail_sheet.dart';
 import 'raise_complaint_sheet.dart';
 import 'widgets/common.dart';
@@ -43,16 +45,17 @@ class _Complaints extends ConsumerWidget {
     return StudentPagedList<Complaint>(
       value: ref.watch(provider),
       header: _RaiseButton(me: me),
-      onRefresh: () async {
+      // BOUNDED. The bare `await ref.read(provider.future)` had no deadline, and riverpod 3
+      // retries a failed provider ten times behind a future it does not complete — so a
+      // resident on a hostel Wi-Fi that had stopped answering held this spinner for over two
+      // minutes. See features/common/refresh.dart.
+      onRefresh: () {
         ref.invalidate(provider);
-        try {
-          await ref.read(provider.future);
-        } catch (_) {
-          // Drawn by the section itself; escaping here would hang the refresh spinner.
-        }
+        return settleRefresh(context, () => ref.read(provider.future));
       },
       onLoadMore: () => ref.read(provider.notifier).loadMore(),
       empty: const EmptyNote(
+        illustration: EmptyArt.complaints,
         icon: Icons.check_circle_outline_rounded,
         title: 'You have not raised anything',
         message: 'If something in the hostel is not working — food, cleaning, Wi-Fi, a repair — '

@@ -115,6 +115,18 @@ class _Ledger extends FeeLedgerNotifier {
       _late(log, 'ledger', _one([partialRow]));
 }
 
+/// The Fees tab's payment history. Keeps the REAL hold rule — this file overrides
+/// `sessionProvider` with a student session, so [PagedNotifier.build] calls holdForSession
+/// exactly as it would in the app, which is the whole subject of these tests.
+class _History extends StudentFeeHistoryNotifier {
+  _History(super.studentId, this.log);
+  final List<String> log;
+
+  @override
+  Future<PagedResult<FeePayment>> fetchPage(int page) =>
+      _late(log, 'history', _one<FeePayment>(const []));
+}
+
 class _Complaints extends ComplaintsNotifier {
   _Complaints(super.query, this.log);
   final List<String> log;
@@ -156,10 +168,7 @@ Future<void> _pumpShell(WidgetTester tester, List<String> log) async {
     feeLedgerProvider.overrideWith2((query) => _Ledger(query, log)),
     complaintsProvider.overrideWith2((query) => _Complaints(query, log)),
     noticesProvider.overrideWith2((hostelId) => _Notices(hostelId, log)),
-    studentFeeHistoryProvider.overrideWith((ref, id) {
-      holdForSession(ref);
-      return _late(log, 'history', _one<FeePayment>(const []));
-    }),
+    studentFeeHistoryProvider.overrideWith2((id) => _History(id, log)),
     roommatesProvider.overrideWith((ref) {
       holdForSession(ref);
       return _late(log, 'roommates', _roommates);

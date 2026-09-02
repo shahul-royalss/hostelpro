@@ -368,6 +368,136 @@ void main() {
     expect(SaTabs.security, 3);
     expect(SaTabs.count, 4);
   });
+
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // THE FIGMA DASHBOARD, node 4:125 — and the parts of it that may not be reproduced
+  //
+  // The mockup is drawn full of invented numbers: `₹14.8L`, `412 Active PGs`, `↑ 12%`,
+  // `+14% MoM`, `Active (380)`. The figures are replaced by real ones and the TRENDS are not
+  // reproduced at all, because no trend exists in this schema. These tests hold that line: a
+  // future agent restoring the mockup's third KPI line, or filling the growth section's accent
+  // slot unconditionally, breaks them.
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+
+  group('the platform dashboard', () {
+    testWidgets('draws four KPI tiles from the stats row and no trend beside them',
+        (tester) async {
+      await _pumpOverview(tester);
+
+      expect(find.byType(SaKpiTile), findsNWidgets(4), reason: '4:141 + 4:150, two rows of two');
+
+      // Every figure is the stub's, formatted the Indian way. If one were hardcoded, changing
+      // the stub would not change the screen.
+      expect(find.text('12'), findsWidgets, reason: 'hostels');
+      expect(find.text('9'), findsWidgets, reason: 'owners');
+      expect(find.text('418'), findsWidgets, reason: 'residents');
+      expect(find.text('₹1,84,000'), findsOneWidget, reason: 'subscription revenue');
+
+      // 4:145 and its three siblings carry `↑ 12%` / `— 0%`. rpc_sa_dashboard returns seven
+      // scalars for right now and no history of itself, so any delta here would be invented.
+      expect(
+        find.descendant(of: find.byType(SaKpiTile), matching: find.textContaining('%')),
+        findsNothing,
+        reason: 'the mockup\'s trend line has no source in the schema and is not drawn',
+      );
+    });
+
+    testWidgets('the health bar counts the hostels the server classified, not the platform',
+        (tester) async {
+      // 20 hostels, 12 of them with a subscription state. `app.subscription_state()` classifies
+      // only hostels that HAVE a subscription, so eight here were never sold one and belong in
+      // none of the three bands. Dividing by 20 would draw a bar that never reaches its own end.
+      await _pumpOverview(
+        tester,
+        stats: const SaStats(
+          totalHostels: 20,
+          totalOwners: 9,
+          totalStudents: 418,
+          activeSubs: 9,
+          expiringSubs: 2,
+          expiredSubs: 1,
+          monthlySubscriptionRevenue: 184000,
+        ),
+      );
+
+      expect(find.byType(SaSegmentBar), findsOneWidget);
+      expect(find.text('Active (9)'), findsOneWidget);
+      expect(find.text('Expiring (2)'), findsOneWidget);
+      expect(find.text('Expired (1)'), findsOneWidget);
+    });
+
+    testWidgets('the growth accent is arithmetic on the returned series, named to the month',
+        (tester) async {
+      await _pumpOverview(
+        tester,
+        series: const [
+          OnboardingPoint(month: '2026-07', hostels: 4),
+          OnboardingPoint(month: '2026-08', hostels: 5),
+        ],
+      );
+
+      // 4:180 reads `+14% MoM`. Ours is the real change between the last two points the server
+      // returned, and it names the month it is measuring against rather than leaving the reader
+      // to guess which two.
+      expect(find.text('+25% vs Jul'), findsOneWidget);
+    });
+
+    testWidgets('and is omitted entirely when the previous month was zero', (tester) async {
+      await _pumpOverview(
+        tester,
+        series: const [
+          OnboardingPoint(month: '2026-07', hostels: 0),
+          OnboardingPoint(month: '2026-08', hostels: 5),
+        ],
+      );
+
+      // From nothing to five hostels is not "+100% growth" and is not "+infinity" either. The
+      // accent slot is simply not drawn, which is what an accent slot is for.
+      expect(find.textContaining('%'), findsNothing);
+      expect(find.textContaining('vs Jul'), findsNothing);
+    });
+  });
+}
+
+/// The Overview alone, on a viewport tall enough that nothing it draws is off-screen.
+///
+/// Every provider it reads is overridden, so no test here depends on a network this machine
+/// cannot reach (see the file header). The onboarding series defaults to two real months
+/// because the growth section needs at least two points to have anything to compare.
+Future<void> _pumpOverview(
+  WidgetTester tester, {
+  SaStats stats = _stats,
+  List<OnboardingPoint> series = const [
+    OnboardingPoint(month: '2026-07', hostels: 4),
+    OnboardingPoint(month: '2026-08', hostels: 5),
+  ],
+  int openAlerts = 0,
+}) async {
+  tester.view.physicalSize = const Size(1000, 2400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+
+  final overrides = <Object>[
+    sessionProvider.overrideWithValue(_session),
+    saStatsProvider.overrideWith((ref) => stats),
+    saOnboardingProvider.overrideWith((ref) => series),
+    saOpenAlertCountProvider.overrideWith((ref) => openAlerts),
+  ];
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: overrides.cast(),
+      child: MaterialApp(
+        theme: NivoraTheme.light(),
+        debugShowCheckedModeBanner: false,
+        home: const Scaffold(body: SaOverviewScreen()),
+      ),
+    ),
+  );
+  // Not pumpAndSettle: a skeleton never stops animating, so settling would hang.
+  for (var i = 0; i < 8; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 

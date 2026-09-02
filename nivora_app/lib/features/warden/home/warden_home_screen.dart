@@ -4,9 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/auth/session.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/glass/glass.dart';
+import '../../common/refresh.dart';
+import '../../common/staff_notices.dart';
+import '../notices/warden_notices_screen.dart';
+import '../../settings/security_screen.dart';
+import '../../auth/verify_email_screen.dart';
 import '../actions/assign_bed_sheet.dart';
 import '../actions/register_student_sheet.dart';
 import '../data/warden_models.dart';
@@ -37,7 +44,7 @@ class WardenHomeScreen extends ConsumerWidget {
     if (hostelId == null) {
       return WardenScreen(
         title: 'Today',
-        actions: const [_SignOutButton()],
+        actions: const [_SecurityButton(), _SignOutButton()],
         child: const EmptyState(
           icon: Icons.home_work_outlined,
           title: 'No hostel on this account',
@@ -58,53 +65,87 @@ class WardenHomeScreen extends ConsumerWidget {
 
     final firstName = (session?.fullName ?? '').split(' ').first;
 
+    // Read outside the AsyncSection so the banner can be hoisted out of the scroll view and
+    // run full width, which is the shape `screen-subscription-expired` (4:1520) gives it: a
+    // strip the page hangs from, not another card in the stack.
+    final loaded = stats.value;
+
     return WardenScreen(
+      // No eyebrow. 4:651 is one line of type — a gold dot and the page name — and the caps
+      // labels this design does draw are section headings down in the body.
       title: firstName.isEmpty ? 'Today' : 'Hello, $firstName',
       subtitle: hostel?.name,
-      actions: const [_SignOutButton()],
-      child: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(hostelStatsProvider);
-          ref.invalidate(visitorsOnSiteProvider(hostelId));
-          ref.invalidate(pendingLeavesProvider(hostelId));
-          ref.invalidate(roomOccupancyProvider(hostelId));
-        },
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.xxxl),
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            AsyncSection<HostelStats?>(
-              value: stats,
-              onRetry: () => ref.invalidate(hostelStatsProvider),
-              loading: const _AttentionSkeleton(),
-              builder: (data) {
-                if (data == null) {
-                  return const EmptyState(
-                    icon: Icons.query_stats_rounded,
-                    title: 'No figures came back',
-                    detail: 'The hostel may not be readable from this account.',
-                  );
-                }
-                return Column(
-                  children: [
-                    if (data.subscriptionState != SubscriptionState.active)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: Space.sm),
-                        child: _SubscriptionBanner(stats: data),
-                      ),
-                    _Attention(hostelId: hostelId, stats: data, visitors: visitors),
-                  ],
+      actions: const [_SecurityButton(), _SignOutButton()],
+      child: Column(
+        children: [
+          // Before the subscription strip. A lapsed subscription is the hostel's problem and
+          // the owner's to fix; an unproved address is this warden's own and is the one of the
+          // two they can act on from here.
+          const VerifyEmailBanner(),
+          if (loaded != null && loaded.subscriptionState != SubscriptionState.active)
+            _SubscriptionBanner(stats: loaded),
+          Expanded(child: _Body(hostelId: hostelId, stats: stats, visitors: visitors)),
+        ],
+      ),
+    );
+  }
+}
+
+/// The scrolling half of the dashboard.
+class _Body extends ConsumerWidget {
+  const _Body({required this.hostelId, required this.stats, required this.visitors});
+
+  final String hostelId;
+  final AsyncValue<HostelStats?> stats;
+  final AsyncValue<List<VisitorLog>> visitors;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return RefreshIndicator(
+      // The four reads are thrown away together; the WAIT is on the one this screen is named
+      // for. Bounded and spoken, because AsyncSection keeps the figures already drawn through
+      // a failed reload — so without this a pull that did not work looked exactly like a pull
+      // that did. See features/common/refresh.dart.
+      onRefresh: () {
+        final stats = hostelStatsProvider(StatsQuery(
+          hostelId: hostelId,
+          periodMonth: ref.read(currentPeriodMonthProvider),
+        ));
+        ref.invalidate(hostelStatsProvider);
+        ref.invalidate(visitorsOnSiteProvider(hostelId));
+        ref.invalidate(pendingLeavesProvider(hostelId));
+        ref.invalidate(roomOccupancyProvider(hostelId));
+        return settleRefresh(context, () => ref.read(stats.future));
+      },
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.xxxl),
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          AsyncSection<HostelStats?>(
+            value: stats,
+            onRetry: () => ref.invalidate(hostelStatsProvider),
+            loading: const _AttentionSkeleton(),
+            builder: (data) {
+              if (data == null) {
+                return const EmptyState(
+                  icon: Icons.query_stats_rounded,
+                  title: 'No figures came back',
+                  detail: 'The hostel may not be readable from this account.',
                 );
-              },
-            ),
+              }
+              return _Attention(hostelId: hostelId, stats: data, visitors: visitors);
+            },
+          ),
 
-            const SectionLabel(label: 'Do it now'),
-            _QuickActions(hostelId: hostelId),
+          const SectionLabel(label: 'Quick actions'),
+          _QuickActions(hostelId: hostelId),
 
-            const SectionLabel(label: 'The building'),
-            _Occupancy(hostelId: hostelId),
-          ],
-        ),
+          const SectionLabel(label: 'Notices'),
+          _Notices(hostelId: hostelId),
+
+          const SectionLabel(label: 'The building'),
+          _Occupancy(hostelId: hostelId),
+        ],
       ),
     );
   }
@@ -127,8 +168,7 @@ class _Attention extends ConsumerWidget {
         Row(
           children: [
             Expanded(
-              child: _AttentionCard(
-                icon: Icons.currency_rupee_rounded,
+              child: StatTile(
                 label: 'Rent owed',
                 value: '${stats.studentsUnpaid}',
                 caption: stats.studentsUnpaid == 0
@@ -144,8 +184,7 @@ class _Attention extends ConsumerWidget {
             ),
             const SizedBox(width: Space.xs),
             Expanded(
-              child: _AttentionCard(
-                icon: Icons.report_problem_rounded,
+              child: StatTile(
                 label: 'Complaints',
                 value: '${stats.openComplaints}',
                 caption: stats.openComplaints == 0 ? 'All resolved' : 'not resolved yet',
@@ -162,8 +201,7 @@ class _Attention extends ConsumerWidget {
         Row(
           children: [
             Expanded(
-              child: _AttentionCard(
-                icon: Icons.event_available_rounded,
+              child: StatTile(
                 label: 'Leave requests',
                 value: '${stats.pendingLeaves}',
                 caption: stats.pendingLeaves == 0 ? 'Nothing to decide' : 'awaiting a decision',
@@ -173,8 +211,7 @@ class _Attention extends ConsumerWidget {
             ),
             const SizedBox(width: Space.xs),
             Expanded(
-              child: _AttentionCard(
-                icon: Icons.door_front_door_rounded,
+              child: StatTile(
                 label: 'Visitors on site',
                 // Two DIFFERENT figures, never conflated. `visitors_today` counts check-ins
                 // against the IST calendar day whether or not the guest has left; the headline
@@ -189,74 +226,6 @@ class _Attention extends ConsumerWidget {
           ],
         ),
       ],
-    );
-  }
-}
-
-class _AttentionCard extends StatelessWidget {
-  const _AttentionCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.caption,
-    required this.tone,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final String caption;
-  final Color tone;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    // Canonical in, legible out. This figure is the loudest thing on the card.
-    final accent = context.tones.resolve(tone);
-    return Semantics(
-      button: true,
-      label: '$label: $value. $caption',
-      child: Material(
-        color: t.colorScheme.surface,
-        borderRadius: Radii.rCard,
-        child: InkWell(
-          borderRadius: Radii.rCard,
-          onTap: onTap,
-          child: Container(
-            // A MINIMUM. At 1.4x text scale the eyebrow, the figure and a two-line caption
-            // come to roughly 145dp and the fixed 118 clipped the caption off the bottom.
-            constraints: const BoxConstraints(minHeight: 118),
-            padding: const EdgeInsets.all(Space.md),
-            decoration: BoxDecoration(
-              borderRadius: Radii.rCard,
-              border: Border.all(color: t.colorScheme.outlineVariant),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(icon, size: IconSize.sm, color: accent),
-                    const SizedBox(width: Space.xxs),
-                    Expanded(
-                      child: Text(label.toUpperCase(), style: t.textTheme.labelSmall,
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                ),
-                // Spacer needs a bounded height, which a minHeight no longer gives it.
-                const SizedBox(height: Space.sm),
-                Text(value, style: t.textTheme.headlineMedium?.copyWith(color: accent)),
-                const SizedBox(height: Space.xxs / 2),
-                Text(caption, style: t.textTheme.bodySmall,
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -326,6 +295,80 @@ class _QuickActions extends ConsumerWidget {
 }
 
 /// Beds free, at a glance, with a way into the grid.
+/// What the owner has posted to this hostel.
+///
+/// ── THIS SECTION IS WHY THE WARDEN NOW HAS A NOTICEBOARD AT ALL ──────────────────────────
+///
+/// `app.announcements_after_insert` has always written this role a `notifications` row when the
+/// owner posts to `all` or to `warden` — with `link` set to `/warden` — and until this section
+/// existed there was nothing behind that link. The notification was real and the destination
+/// was not. Measured on the live tenant: four notices, one per audience, produced six
+/// notification rows, two of them the warden's.
+///
+/// TWO ROWS, NOT THE PAGE. This screen is a to-do list; the whole noticeboard belongs on its
+/// own screen, which [WardenNoticesScreen] is.
+class _Notices extends ConsumerWidget {
+  const _Notices({required this.hostelId});
+  final String hostelId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final page = ref.watch(noticesProvider(hostelId));
+
+    return AsyncSection<PagedResult<Notice>>(
+      value: page,
+      onRetry: () => ref.invalidate(noticesProvider(hostelId)),
+      loading: const SkeletonBlock(lines: 2),
+      builder: (result) {
+        if (result.isEmpty) {
+          // No tone: an empty noticeboard is neither good news nor bad.
+          return const EmptyState(
+            icon: Icons.campaign_outlined,
+            title: 'No notices yet',
+            detail: 'Anything the owner posts to this hostel appears here.',
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            StaffNoticeList(
+              hostelId: hostelId,
+              page: result,
+              viewerRole: UserRole.warden,
+              limit: 2,
+              // Embedded in this screen's own scroll view: a nested one here would fight the
+              // page for the gesture.
+              scrollable: false,
+            ),
+            const SizedBox(height: Space.sm),
+            TapRow(
+              semanticLabel: 'All notices',
+              onTap: () => Navigator.of(context).push(WardenNoticesScreen.route(hostelId)),
+              child: Row(
+                children: [
+                  const IconBadge(icon: Icons.campaign_rounded),
+                  const SizedBox(width: Space.sm),
+                  Expanded(
+                    child: Text(
+                      'All notices',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: IconSize.md,
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _Occupancy extends ConsumerWidget {
   const _Occupancy({required this.hostelId});
   final String hostelId;
@@ -363,7 +406,11 @@ class _Occupancy extends ConsumerWidget {
                     ),
                   ),
                   if (ratio != null)
-                    Text('${(ratio * 100).round()}% full', style: t.textTheme.bodySmall),
+                    StatusPill.text(
+                      label: '${(ratio * 100).round()}% full',
+                      tone: free == 0 ? NivoraColors.error : t.colorScheme.primary,
+                      dot: true,
+                    ),
                 ],
               ),
               if (ratio != null) ...[
@@ -372,10 +419,11 @@ class _Occupancy extends ConsumerWidget {
                   borderRadius: Radii.rPill,
                   child: LinearProgressIndicator(
                     value: ratio,
-                    minHeight: Space.xs,
-                    // The TRACK is the free beds and the FILL is the taken ones, so the track
-                    // is the one tinted green. Both alphas from the measured recipe.
-                    backgroundColor: context.tones.chipFill(NivoraColors.success),
+                    // The design's meter, verbatim: `w-full bg-surface-bright h-1.5
+                    // rounded-full` with `bg-primary h-full rounded-full` inside it. The height
+                    // is the theme's 6, which is that `h-1.5`; the track used to be a green
+                    // tint, which made a full building read as an alarm.
+                    backgroundColor: t.colorScheme.surfaceBright,
                     valueColor: AlwaysStoppedAnimation(t.colorScheme.primary),
                   ),
                 ),
@@ -403,49 +451,42 @@ class _SubscriptionBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final tones = context.tones;
     final expired = stats.subscriptionState == SubscriptionState.expired;
-    final tone = expired ? tones.error : tones.warning;
+    final tone = expired ? NivoraColors.error : NivoraColors.warning;
     final days = stats.subscriptionDaysLeft;
 
-    return Container(
-      padding: const EdgeInsets.all(Space.sm),
-      decoration: BoxDecoration(
-        color: tones.chipFill(tone),
-        borderRadius: Radii.rCard,
-        border: Border.all(color: tones.chipBorder(tone), width: Strokes.hairline),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(expired ? Icons.lock_outline_rounded : Icons.schedule_rounded,
-              size: IconSize.md, color: tone),
-          const SizedBox(width: Space.xs),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  expired ? 'This hostel is read-only' : 'Subscription ending',
-                  style: t.textTheme.titleSmall?.copyWith(color: tone),
-                ),
-                Text(
-                  expired
-                      // days_left is returned unclamped, so a negative number is days EXPIRED
-                      // and is reported as such rather than rounded up to zero.
-                      ? 'The subscription lapsed${days != null && days < 0 ? ' ${-days} days ago' : ''}. '
-                          'Registrations, payments and complaint updates will be refused until '
-                          'the owner renews it.'
-                      : 'Renewal is due${days != null ? ' in $days days' : ' soon'}. '
-                          'Everything keeps working until then.',
-                  style: t.textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    // NODE 4:1520, `screen-subscription-expired`: a full-bleed band at the very top of the
+    // screen, filled with 10% of its tone and underlined at full strength, with an alert
+    // glyph, an eyebrow in the tone and the sentence in cream. It used to be the tinted info
+    // well, which is the shape this design gives an aside INSIDE a card — the wrong scope for
+    // a state that applies to the whole hostel.
+    return NoticeBanner(
+      icon: expired ? Icons.lock_outline_rounded : Icons.schedule_rounded,
+      tone: tone,
+      eyebrow: expired ? 'This hostel is read-only' : 'Subscription ending',
+      message: expired
+          // days_left is returned unclamped, so a negative number is days EXPIRED and is
+          // reported as such rather than rounded up to zero.
+          ? 'The subscription lapsed${days != null && days < 0 ? ' ${-days} days ago' : ''}. '
+              'Registrations, payments and complaint updates will be refused until '
+              'the owner renews it.'
+          : 'Renewal is due${days != null ? ' in $days days' : ' soon'}. '
+              'Everything keeps working until then.',
+    );
+  }
+}
+
+/// Two-factor enrolment. Every role's header carries one — see
+/// features/settings/security_screen.dart.
+class _SecurityButton extends StatelessWidget {
+  const _SecurityButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return HeaderAction(
+      tooltip: 'Security',
+      icon: Icons.shield_outlined,
+      onPressed: () => openSecurity(context),
     );
   }
 }
@@ -455,9 +496,9 @@ class _SignOutButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return IconButton(
+    return HeaderAction(
       tooltip: 'Sign out',
-      icon: const Icon(Icons.logout_rounded),
+      icon: Icons.logout_rounded,
       onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
     );
   }

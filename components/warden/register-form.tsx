@@ -98,6 +98,8 @@ export function RegisterStudentForm({
   const { register, formState, watch, setValue, trigger, setError, handleSubmit } = form;
   const errors = formState.errors;
   const values = watch();
+  /** An email was typed, so THAT is the login and the phone number is not. */
+  const emailGiven = (values.email ?? "").trim().length > 0;
 
   const roomsOnFloor = React.useMemo(() => rooms.filter((r) => floor === null || r.floor_number === floor), [rooms, floor]);
   const selectedRoom = rooms.find((r) => r.room_id === roomId) ?? null;
@@ -173,7 +175,15 @@ export function RegisterStudentForm({
       }
       toast.success("Student registered");
       setDoneRoomId(res.data.roomId);
-      setCredentials({ ...res.data.credentials, role: "Student", loginLabel: "Phone (login)", title: "Student registered" });
+      // The SERVER decided which of the two boxes became the login — it is the only party
+      // that knows — so the label is read off what came back, never assumed. A hard-coded
+      // "Phone (login)" over an email address hands the resident the half that does not work.
+      setCredentials({
+        ...res.data.credentials,
+        role: "Student",
+        loginLabel: res.data.credentials.loginId.includes("@") ? "Email (login)" : "Phone (login)",
+        title: "Student registered",
+      });
     });
   });
 
@@ -208,14 +218,32 @@ export function RegisterStudentForm({
 
       <form onSubmit={submit} className="pb-24" noValidate>
         {step === 0 && (
-          <StepCard title="Personal details" description="The phone number becomes the student's login.">
+          <StepCard title="Personal details" description="Their email becomes the login, or the phone number if they have none.">
             <Field label="Full name" htmlFor="fullName" required error={errors.fullName?.message}>
               <Input id="fullName" autoComplete="name" placeholder="e.g. Aarav Sharma" aria-invalid={!!errors.fullName} {...register("fullName")} />
             </Field>
-            <Field label="Phone (login)" htmlFor="phone" required error={errors.phone?.message} hint="10 digits — used to sign in">
+            {/*
+              WHICH OF THESE TWO IS THE LOGIN depends on whether the other is filled in.
+              createStudentAuthUser() mints the account with the email when there is one and
+              with the phone-mapped address when there is not, so the hints have to trade
+              places or the warden reads "used to sign in" under the half that does not work.
+              The mobile app's register sheet does exactly the same thing.
+            */}
+            <Field
+              label={emailGiven ? "Phone" : "Phone (login)"}
+              htmlFor="phone"
+              required
+              error={errors.phone?.message}
+              hint={emailGiven ? "10 digits — for contact and the fee ledger" : "10 digits — used to sign in"}
+            >
               <Input id="phone" type="tel" inputMode="numeric" autoComplete="tel" placeholder="98765 43210" aria-invalid={!!errors.phone} {...register("phone")} />
             </Field>
-            <Field label="Email (optional)" htmlFor="email" error={errors.email?.message}>
+            <Field
+              label={emailGiven ? "Email (login)" : "Email (optional)"}
+              htmlFor="email"
+              error={errors.email?.message}
+              hint={emailGiven ? "Used to sign in" : "Without one they sign in with their phone number"}
+            >
               <Input id="email" type="email" inputMode="email" autoComplete="email" placeholder="name@example.com" aria-invalid={!!errors.email} {...register("email")} />
             </Field>
             <Field label="Date of joining" htmlFor="dateOfJoining" required error={errors.dateOfJoining?.message}>
@@ -401,7 +429,7 @@ export function RegisterStudentForm({
               <ReviewRow label="Monthly fee" value={formatINR(values.monthlyFee)} />
             </ReviewSection>
             <p className="px-1 text-[12px] text-muted">
-              Submitting creates the student&apos;s login (phone number + temporary password shown once) and marks the bed occupied.
+              Submitting creates the student&apos;s login ({emailGiven ? "email address" : "phone number"} + temporary password shown once) and marks the bed occupied.
             </p>
           </div>
         )}

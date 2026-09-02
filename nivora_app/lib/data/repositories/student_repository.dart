@@ -64,6 +64,11 @@ final class StudentRepository extends Repository {
 
   /// One resident. Null when the row is not visible to this caller.
   Future<Student?> byId(String studentId) => guard(() async {
+        // A null from here is drawn as a sentence about the reader ("not visible",
+        // "belongs to another hostel", "no record for this account"). That sentence is
+        // earned only when a live credential asked — a dead session makes this an
+        // anonymous read whose null means nothing. See Repository.requireLiveSession.
+        requireLiveSession('students.byId');
         final row = await db
             .from('students')
             .select(Student.columns)
@@ -78,7 +83,17 @@ final class StudentRepository extends Repository {
   /// RLS policy admits, so this is exact whatever else is in the table. Returns null for staff,
   /// who have no resident row.
   Future<Student?> me() => guard(() async {
+        // ═══ THE STUDENT-FACING SHAPE OF THE SUPER ADMIN'S BUG ═══
+        // ResidentBuilder draws a null from here as "No resident record for this account —
+        // ask your warden to check your registration." For a resident whose session died on
+        // the bus that is an invented errand: the read went out as `anon`, RLS returned
+        // nothing, and a young person in a strange city goes looking for a member of staff
+        // over an expired token. The `userId == null` line below used to hand back exactly
+        // that null, silently.
+        requireLiveSession('students.me');
         final userId = db.auth.currentUser?.id;
+        // Unreachable now — requireLiveSession has already refused a client with no session —
+        // and kept because a null here would still be a null nobody could explain.
         if (userId == null) return null;
         final row = await db
             .from('students')
@@ -119,9 +134,10 @@ final class StudentRepository extends Repository {
   /// status, bed release, user deactivation — and a dropped connection between any two leaves a
   /// bed that nobody can be assigned to and an account that can still sign in. The RPC does all
   /// three or none.
-  Future<void> vacate(String studentId) => guard(() async {
+  Future<void> vacate(String studentId) => guardWrite(() async {
         await db.rpc('wd_vacate_student', params: {'p_student_id': studentId});
-      });
+      }, unresolved: 'Reload the roster to see whether the resident is already checked out; if '
+          'they are not, doing it again is safe.');
 
   /// Edit a resident's own details. Warden and owner only (RLS), and blocked once the
   /// subscription lapses.
@@ -137,7 +153,7 @@ final class StudentRepository extends Repository {
     String? permanentAddress,
     double? monthlyFee,
   }) =>
-      guard(() async {
+      guardWrite(() async {
         final patch = <String, dynamic>{
           'full_name': ?fullName,
           'email': ?email,
@@ -156,5 +172,6 @@ final class StudentRepository extends Repository {
             .select(Student.columns)
             .single();
         return Student.fromJson(row);
-      });
+      }, unresolved: 'Reload the resident to see which details were saved; saving the same ones '
+          'again is safe.');
 }

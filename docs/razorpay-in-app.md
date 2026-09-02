@@ -26,8 +26,9 @@ Companion documents, not duplicates of this one:
 | `supabase/functions/razorpay-order/index.ts` | Supabase Edge (Deno) | `RAZORPAY_KEY_SECRET`. **No service-role key.** |
 | `supabase/functions/razorpay-webhook/index.ts` | Supabase Edge (Deno) | `RAZORPAY_WEBHOOK_SECRET` + the service-role key |
 | `supabase/functions/_shared/razorpay.ts` | Supabase Edge (Deno) | Key handling, HMAC verification, the Orders API call |
-| `nivora_app/lib/data/models/payment.dart` | Phone | `PaymentIntent`, `RentOrder` — no secret of any kind |
-| `nivora_app/lib/data/repositories/payment_repository.dart` | Phone | The Edge Function call, the settlement watch, the native checkout wrapper |
+| `nivora_app/lib/data/models/checkout.dart` | Phone | `CheckoutOrder`, `CheckoutOutcome` — no secret of any kind |
+| `nivora_app/lib/data/repositories/checkout_repository.dart` | Phone | The Edge Function call, and the refusal-to-sentence mapping |
+| `nivora_app/lib/features/payments/pay_rent.dart` | Phone | The native checkout wrapper and the **ledger wait** that confirms it |
 | `nivora_app/lib/features/student/rent_payment_controller.dart` | Phone | The eight-state payment machine |
 | `nivora_app/lib/features/student/pay_rent_sheet.dart` | Phone | What the resident actually sees |
 | `nivora_app/test/payment_test.dart` | CI | 18 tests — no network, no device, no Razorpay account |
@@ -86,7 +87,7 @@ which is the point. **One set of money rules, two clients.**
 
 ### The two properties this whole design exists for
 
-**1. The client never names the amount.** `PaymentRepository.openRentOrder()` sends **no request
+**1. The client never names the amount.** `CheckoutRepository.open()` sends **no request
 body** — not an amount, not a student id, not a month. The Edge Function derives all three from the
 JWT and the caller's own ledger, and then `rz_open_intent()` derives the amount a *second* time
 inside the database and raises `P0001` unless the two agree exactly. Two independent derivations

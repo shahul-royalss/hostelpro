@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/glass/glass.dart';
 import 'owner_format.dart';
 import 'owner_insights.dart';
 import 'owner_pg_detail_screen.dart';
@@ -71,12 +72,18 @@ class OwnerPgListScreen extends ConsumerWidget {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding:
                     const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.huge),
-                itemCount: hostels.length,
-                separatorBuilder: (_, _) => const SizedBox(height: Space.md),
-                itemBuilder: (context, i) => _PgCard(
-                  hostel: hostels[i],
-                  isActive: hostels[i].id == activeId,
-                ),
+                // One extra leading item: the design's `REGISTERED HOSTELS` section label.
+                itemCount: hostels.length + 1,
+                // The section label carries its own trailing space; adding the card gutter on
+                // top of it would put 24dp under a 12px label.
+                separatorBuilder: (_, i) =>
+                    SizedBox(height: i == 0 ? 0 : Space.sm),
+                itemBuilder: (context, i) => i == 0
+                    ? const SectionLabel(label: 'Registered hostels')
+                    : _PgCard(
+                        hostel: hostels[i - 1],
+                        isActive: hostels[i - 1].id == activeId,
+                      ),
               ),
       ),
     );
@@ -97,92 +104,125 @@ class _PgCard extends ConsumerWidget {
       hostelStatsProvider(StatsQuery(hostelId: hostel.id, periodMonth: period)),
     );
 
-    return Material(
-      color: t.colorScheme.surface,
-      borderRadius: Radii.rCard,
-      child: InkWell(
-        borderRadius: Radii.rCard,
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => OwnerPgDetailScreen(hostelId: hostel.id),
-          ),
+    // Figma 4:536's own hostel card, top to bottom: the name with its status badge opposite,
+    // the address under it, then the labelled figures — a `Beds Occupied  42/48` row over a
+    // meter, and `Monthly Revenue` opposite its amount.
+    //
+    // THE ICON BADGE THAT USED TO LEAD THIS ROW IS GONE. Every card in the list carried the
+    // same `apartment` glyph, which is a picture of the word "hostel" on a screen headed
+    // REGISTERED HOSTELS. The mockup gives the slot to the status badge instead, which is the
+    // one thing that differs between the cards.
+    return GlassCard(
+      padding: const EdgeInsets.all(Space.sm),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => OwnerPgDetailScreen(hostelId: hostel.id),
         ),
-        child: Container(
-          padding: const EdgeInsets.all(Space.md),
-          decoration: BoxDecoration(
-            borderRadius: Radii.rCard,
-            border: Border.all(color: t.colorScheme.outlineVariant),
-          ),
-          child: Column(
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(hostel.name,
-                            style: t.textTheme.titleLarge,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis),
-                        const SizedBox(height: Space.xxs),
-                        Text(
-                          hostel.address ??
-                              '${countLabel(hostel.totalFloors, 'floor')} · '
-                                  '${countLabel(hostel.totalRooms, 'room')}',
-                          style: t.textTheme.bodySmall,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: Space.xs),
-                  Icon(Icons.chevron_right_rounded,
-                      size: IconSize.lg, color: t.colorScheme.outline),
-                ],
-              ),
-              const SizedBox(height: Space.sm),
-              Wrap(
-                spacing: Space.xs,
-                runSpacing: Space.xxs,
-                children: [
-                  if (isActive)
-                    StatusChip(label: 'On your dashboard', tone: t.colorScheme.primary),
-                  // A hostel that is not 'active' is read-only or suspended server-side
-                  // (app.hostel_writable), so the state is worth saying out loud rather than
-                  // letting staff discover it when a write is refused.
-                  if (hostel.status != HostelStatus.active)
-                    StatusChip(
-                      label: hostel.status.label,
-                      tone: hostel.status == HostelStatus.suspended
-                          ? NivoraColors.error
-                          : NivoraColors.warning,
-                    ),
-                ],
-              ),
-              const SizedBox(height: Space.sm),
-              whenAsync(
-                stats,
-                loading: () => const Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Skeleton(height: Space.xs),
-                    SizedBox(height: Space.xs),
-                    Skeleton(widthFactor: 0.7),
+                    Text(hostel.name,
+                        style: t.textTheme.titleMedium,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: Space.xxs / 2),
+                    Text(
+                      hostel.address ??
+                          '${countLabel(hostel.totalFloors, 'floor')} · '
+                              '${countLabel(hostel.totalRooms, 'room')}',
+                      style: t.textTheme.bodySmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
-                error: (error) => ErrorNote(error: error, compact: true),
-                data: (s) => s == null
-                    ? Text('No figures for this PG yet.', style: t.textTheme.bodySmall)
-                    : _PgFigures(stats: s, period: period),
+              ),
+              const SizedBox(width: Space.xs),
+              // 4:536 badges EVERY card, `ACTIVE` in green as readily as `SUSPENDED` in red.
+              // This used to draw the chip only when something was wrong, which meant a healthy
+              // PG and a PG whose status had not loaded looked identical. A hostel that is not
+              // 'active' is read-only or suspended server-side (app.hostel_writable), and that
+              // is worth saying out loud rather than letting staff find out when a write fails.
+              StatusChip(
+                label: hostel.status.label,
+                dot: hostel.status != HostelStatus.active,
+                tone: switch (hostel.status) {
+                  HostelStatus.active => NivoraColors.success,
+                  HostelStatus.suspended => NivoraColors.error,
+                  _ => NivoraColors.warning,
+                },
               ),
             ],
           ),
-        ),
+          if (isActive) ...[
+            const SizedBox(height: Space.xs),
+            StatusChip(label: 'On your dashboard', tone: t.colorScheme.primary),
+          ],
+          const SizedBox(height: Space.sm),
+          whenAsync(
+            stats,
+            loading: () => const Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Skeleton(height: Space.xs),
+                SizedBox(height: Space.xs),
+                Skeleton(widthFactor: 0.7),
+              ],
+            ),
+            error: (error) => ErrorNote(error: error, compact: true),
+            data: (s) => s == null
+                ? Text('No figures for this PG yet.', style: t.textTheme.bodySmall)
+                : _PgFigures(stats: s, period: period),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+/// The design's `label ……… value` row — a caption on the left, the figure hard right.
+class _StatLine extends StatelessWidget {
+  const _StatLine({required this.label, required this.value, this.emphasis = false});
+
+  final String label;
+  final String value;
+
+  /// The card's closing figure — `Monthly Revenue` on 4:536, set a step larger than the rows
+  /// above it.
+  final bool emphasis;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    // WRAP, NOT ROW, and the reason is a crore. `Row(Expanded(label), Text(value))` hands the
+    // value unbounded width, so a `₹4,82,50,000` never ellipsises — it just overflows, which
+    // is what this did at 1.4x on a 320dp phone. Giving the value a `Flexible` instead would
+    // truncate it, and a truncated ledger figure is worse than no figure at all.
+    //
+    // A Wrap keeps them on one line, pushed apart, while they both fit, and drops the value
+    // onto its own line when they do not — which is the same answer _MonthTotals reaches on
+    // the dashboard, and it never lies about a number.
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.end,
+      spacing: Space.sm,
+      runSpacing: Space.xxs,
+      children: [
+        Text(label, style: t.textTheme.bodySmall),
+        Text(
+          value,
+          style: emphasis ? t.textTheme.headlineSmall : t.textTheme.titleSmall,
+          maxLines: 1,
+        ),
+      ],
     );
   }
 }
@@ -199,19 +239,33 @@ class _PgFigures extends StatelessWidget {
     final tones = context.tones;
     final notice = subscriptionNotice(stats);
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ProportionMeter(value: stats.occupancyRate, semanticLabel: 'Beds occupied'),
-        const SizedBox(height: Space.xs),
-        Text(occupancyCaption(stats), style: t.textTheme.bodySmall),
-        const SizedBox(height: Space.xs),
-        Text(
-          '${money(stats.feesCollected)} collected in ${monthNameOnly(period)} · '
-          '${collectionsCaption(stats)}',
-          style: t.textTheme.bodySmall,
+        // The mockup's `Beds Occupied ……… 42/48` over its meter. A PG with no beds set up gets
+        // the sentence instead: "0/0" beside an empty bar is a drawing of a failed business,
+        // where the truth is an unfinished setup.
+        if (stats.totalBeds == 0)
+          Text(occupancyCaption(stats), style: t.textTheme.bodySmall)
+        else ...[
+          _StatLine(
+            label: 'Beds occupied',
+            value: '${stats.occupiedBeds}/${stats.totalBeds}',
+          ),
+          const SizedBox(height: Space.xs),
+          ProportionMeter(value: stats.occupancyRate, semanticLabel: 'Beds occupied'),
+        ],
+        const SizedBox(height: Space.sm),
+        // 4:536's closing row is `Monthly Revenue`. It is filled with FEE COLLECTIONS, not
+        // `revenues.amount`: the two are separate ledgers (see the Revenue model), adding them
+        // double-counts any PG that also books rent as revenue, and collections are what an
+        // owner means by a property's month. The label says which one it is.
+        _StatLine(
+          label: 'Collected in ${monthNameOnly(period)}',
+          value: money(stats.feesCollected),
+          emphasis: true,
         ),
         if (stats.openComplaints > 0) ...[
-          const SizedBox(height: Space.xxs),
+          const SizedBox(height: Space.xs),
           Text(
             '${countLabel(stats.openComplaints, 'complaint')} still open.',
             // Resolved: canonical #A96D08 as 13px body text on the dark elevated surface

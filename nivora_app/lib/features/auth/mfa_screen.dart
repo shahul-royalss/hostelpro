@@ -1,25 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/theme/tokens.dart';
 import '../../shared/glass/glass.dart';
+import 'code_field.dart';
 
 /// Second factor.
 ///
-/// Two bugs from the web build are designed out here rather than reimplemented:
-///
-/// 1. **Boxes that collapse to slivers.** The web version gave each of six slots `w-full`
-///    alongside `flex-1`, so all six asked for 100% of the row; flex-shrink crushed them and
-///    the only thing left visible was the blinking caret — the reported "small vertical lines".
-///    Here each slot is an [Expanded] with a `minWidth` floor, so under-allocation is
-///    impossible by construction.
-///
-/// 2. **A correct code reported wrong.** The web version submitted a value read back from
-///    state, which had not flushed yet, so the server got the previous keystroke and rejected
-///    it; pressing Verify a moment later worked. Here [_verify] is always called with the
-///    string the field just produced, never with a re-read.
+/// The six-digit entry — and the two web-build bugs designed out of it — now lives in
+/// [CodeField], because the app asks for a 6-digit code here AND on the email-verification
+/// screen, and those bugs are not worth paying for twice. This screen keeps what is specific
+/// to a second factor: the wording, and the fact that a rejected code clears the field.
 class MfaScreen extends ConsumerStatefulWidget {
   const MfaScreen({super.key});
   @override
@@ -50,8 +42,28 @@ class _MfaScreenState extends ConsumerState<MfaScreen> {
   String? _error;
 
   Future<void> _verify(String code) async {
+    // ONE VERIFICATION AT A TIME. [CodeField] fires `onCompleted` the moment the sixth digit
+    // lands and the button below is also live at six digits, so a user who types the last digit
+    // and taps Verify could send the same code twice. That is not free: the server allows six
+    // codes per ten minutes per account (LIMITS.mfaVerifyPerUser), a TOTP cannot be presented
+    // twice, and the second attempt would spend a slot and come back rejected — the person is
+    // then told their correct code was wrong.
+    if (_busy) return;
+
     final phase = ref.read(authControllerProvider).value;
-    if (phase is! AuthNeedsMfa) return;
+    if (phase is! AuthNeedsMfa) {
+      // THIS USED TO `return` IN SILENCE, and a button that does nothing is the same bug as a
+      // button that spins forever: the code field sits there, the tap is swallowed, and there is
+      // nothing on screen to act on. The phase can genuinely change under this screen — the
+      // first factor's session can end while the code is being typed — so say what happened.
+      setState(() {
+        _busy = false;
+        _error = 'Your sign-in ended before this code could be checked. '
+            'Sign in again to carry on.';
+      });
+      return;
+    }
+
     setState(() {
       _busy = true;
       _error = null;
@@ -96,77 +108,31 @@ class _MfaScreenState extends ConsumerState<MfaScreen> {
                     Text('Enter the 6-digit code from your authenticator app.',
                         style: t.textTheme.bodyMedium, textAlign: TextAlign.center),
                     const SizedBox(height: Space.xl),
-                    Stack(
-                      children: [
-                        Row(
-                          children: [
-                            for (var i = 0; i < _len; i++) ...[
-                              if (i > 0) const SizedBox(width: Space.xs),
-                              Expanded(
-                                child: ConstrainedBox(
-                                  constraints:
-                                      const BoxConstraints(minWidth: 36, minHeight: 56),
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: t.colorScheme.surface,
-                                      borderRadius: Radii.rControl,
-                                      border: Border.all(
-                                        color: error != null
-                                            ? NivoraColors.error
-                                            : i == code.length
-                                                ? t.colorScheme.primary
-                                                : t.colorScheme.outline,
-                                        width: i == code.length ? 1.8 : 1,
-                                      ),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        i < code.length ? code[i] : '',
-                                        style: t.textTheme.headlineMedium,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        // The real field, transparent over the boxes. Keeps paste, autofill and
-                        // the OS one-time-code suggestion working — all of which a hand-rolled
-                        // key handler throws away.
-                        Positioned.fill(
-                          child: TextField(
-                            controller: _controller,
-                            focusNode: _focus,
-                            enabled: !busy,
-                            keyboardType: TextInputType.number,
-                            maxLength: _len,
-                            showCursor: false,
-                            style: const TextStyle(
-                                color: Colors.transparent, height: 0.01),
-                            decoration: const InputDecoration(
-                              counterText: '',
-                              border: InputBorder.none,
-                              filled: false,
-                            ),
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                            onChanged: (v) {
-                              setState(() {});
-                              // `v` is what the field just produced. Never re-read state here.
-                              if (v.length == _len && !busy) _verify(v);
-                            },
-                          ),
-                        ),
-                      ],
+                    CodeField(
+                      controller: _controller,
+                      focusNode: _focus,
+                      enabled: !busy,
+                      hasError: error != null,
+                      length: _len,
+                      onChanged: (_) => setState(() {}),
+                      onCompleted: _verify,
                     ),
                     if (error != null) ...[
                       const SizedBox(height: Space.sm),
                       Semantics(
                         liveRegion: true,
+                        // The theme-resolved TEXT red, not NivoraColors.error. That one is the
+                        // canonical GRAPHIC red — it measures 4.05:1 on this card, which is
+                        // below AA for type, and tokens.dart says outright not to set small
+                        // text in it. The sign-in and create-password screens carried the same
+                        // mistake; all three now go through context.tones. Size is the design's
+                        // running text rather than its 11px metadata step, because the longest
+                        // sentence here is "Codes change every 30 seconds — try the current
+                        // one."
                         child: Text(
                           error,
-                          style: t.textTheme.bodySmall
-                              ?.copyWith(color: NivoraColors.error),
+                          style: t.textTheme.bodyMedium
+                              ?.copyWith(color: context.tones.error),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -176,11 +142,12 @@ class _MfaScreenState extends ConsumerState<MfaScreen> {
                       onPressed:
                           (busy || code.length < _len) ? null : () => _verify(code),
                       child: busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
+                          ? SizedBox(
+                              width: IconSize.md,
+                              height: IconSize.md,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
+                                  strokeWidth: 2,
+                                  color: Theme.of(context).colorScheme.onPrimary),
                             )
                           : const Text('Verify and continue'),
                     ),

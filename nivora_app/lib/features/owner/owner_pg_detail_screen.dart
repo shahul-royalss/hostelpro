@@ -5,6 +5,7 @@ import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../../shared/glass/glass.dart';
+import '../../shared/rooms/edit_room_sheet.dart';
 import 'owner_format.dart';
 import 'owner_providers.dart';
 import 'widgets/meter.dart';
@@ -46,10 +47,15 @@ class OwnerPgDetailScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('ROOMS & BEDS', style: t.textTheme.labelSmall),
+                      Text(
+                        'Rooms & beds',
+                        style: t.textTheme.titleLarge?.copyWith(color: t.colorScheme.primary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       Text(
                         hostel.value?.name ?? 'PG',
-                        style: t.textTheme.titleLarge,
+                        style: t.textTheme.bodySmall,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -168,23 +174,22 @@ class _BuildingSummary extends StatelessWidget {
     }
     final rate = capacity == 0 ? null : occupied / capacity;
 
+    // The dashboard's Occupancy card, on the screen it opens onto: the same eyebrow, the same
+    // `bed` badge, the same figure size and the same meter, so the tap does not land somewhere
+    // that looks like a different app.
     return Padding(
       padding: const EdgeInsets.only(bottom: Space.lg),
-      child: Container(
-        padding: const EdgeInsets.all(Space.md),
-        decoration: BoxDecoration(
-          borderRadius: Radii.rCard,
-          border: Border.all(color: t.colorScheme.outlineVariant),
-        ),
+      child: GlassCard(
+        padding: const EdgeInsets.all(Space.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('OCCUPANCY', style: t.textTheme.labelSmall),
-            const SizedBox(height: Space.xs),
+            const CardEyebrow(label: 'Occupancy', icon: Icons.bed_rounded),
+            const SizedBox(height: Space.md),
             Text('$occupied of $capacity beds filled', style: t.textTheme.headlineMedium),
-            const SizedBox(height: Space.sm),
+            const SizedBox(height: Space.md),
             ProportionMeter(value: rate, semanticLabel: 'Beds occupied'),
-            const SizedBox(height: Space.xs),
+            const SizedBox(height: Space.sm),
             Text(
               rate == null
                   ? 'No beds have been set up in these rooms yet.'
@@ -240,7 +245,7 @@ class _FloorBlock extends StatelessWidget {
 
 /// One room. The dots are the point: capacity is 1–12 by check constraint, so a bed-per-dot
 /// reading is exact rather than a bar to be estimated against.
-class _RoomTile extends StatelessWidget {
+class _RoomTile extends ConsumerWidget {
   const _RoomTile({required this.room});
 
   /// At 1.0x. Two tiles and their gutter fit a 320dp phone with the page padding on.
@@ -249,7 +254,7 @@ class _RoomTile extends StatelessWidget {
   final RoomOccupancy room;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
     final tones = context.tones;
     final hasSpace = !room.isFull;
@@ -258,7 +263,10 @@ class _RoomTile extends StatelessWidget {
       // room number and the "3 free" line under it both grew and the tile clipped.
       width: MediaQuery.textScalerOf(context).scale(_tileWidth),
       child: Material(
-        color: t.colorScheme.surface,
+        // A step UP the container ramp: the tiles sit on the page ground, and in the dark
+        // theme a `thin` tile on that ground is barely a shape. `surface-container` is what
+        // the design paints a block that content sits ON rather than under.
+        color: GlassWeight.regular.surfaceOf(t.colorScheme),
         borderRadius: Radii.rCard,
         child: InkWell(
           borderRadius: Radii.rCard,
@@ -273,6 +281,7 @@ class _RoomTile extends StatelessWidget {
                 color: hasSpace
                     ? tones.chipBorder(NivoraColors.success)
                     : t.colorScheme.outlineVariant,
+                width: Strokes.hairline,
               ),
             ),
             child: Column(
@@ -353,6 +362,34 @@ class _BedSheet extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Room ${room.roomNumber}', style: t.textTheme.titleLarge),
+        // EDIT LIVES HERE, not on the tile. The tile's tap already means "show me this room",
+        // and re-pointing an established gesture at a write is how people change something
+        // they only meant to look at.
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () async {
+              final changed = await showEditRoomSheet(
+                context,
+                roomId: room.roomId,
+                roomNumber: room.roomNumber,
+                capacity: room.capacity,
+                occupied: room.occupied,
+                floorNumber: room.floorNumber,
+              );
+              if (!changed || !context.mounted) return;
+              // Capacity changes add or remove bed rows server-side, so BOTH the grid and this
+              // room's beds are stale — see RoomRepository.updateRoom.
+              // The whole family, not one key: RoomOccupancy carries no hostel id, and a
+              // room edit is rare enough that refetching every open grid costs nothing.
+              ref.invalidate(roomOccupancyProvider);
+              ref.invalidate(bedsInRoomProvider(room.roomId));
+              Navigator.of(context).pop();
+            },
+            icon: const Icon(Icons.edit_outlined, size: IconSize.sm),
+            label: const Text('Edit room'),
+          ),
+        ),
         Text(
           'Floor ${room.floorNumber} · ${room.occupied} of ${room.capacity} beds taken',
           style: t.textTheme.bodySmall,

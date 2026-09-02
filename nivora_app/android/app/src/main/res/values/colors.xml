@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+      The Figma design's page ground (`background`, #0B0D0F) — the same value as
+      NivoraColors.ground in lib/core/theme/tokens.dart, which is the only other place it is
+      written down. These two have to agree: this one is the Android window before Flutter
+      paints, that one is the first thing Flutter paints, and the seam between them is
+      visible on every cold start. See drawable/launch_background.xml for what happened when
+      they did not.
+    -->
+    <color name="nivora_ground">#0B0D0F</color>
+    <!-- The Flutter light theme's ground (NivoraColors.background, #FFF8F3). The launch
+         window must match the scheme the app is about to draw or there is a flash on
+         every cold start; values-night/ uses nivora_ground for the same reason. -->
+    <color name="nivora_ground_light">#FFF8F3</color>
+
     <!-- theme_color from app/manifest.ts -->
     <color name="colorPrimary">#F6F4EF</color>
     <color name="navigationColor">#F6F4EF</color>

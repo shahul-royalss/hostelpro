@@ -217,6 +217,15 @@ List<AttentionItem> attentionItems(HostelStats s) {
         next: 'Sign out and sign in again to continue.',
         canRetry: false,
       ),
+    // NOT "Not your PG". An owner whose token expired sees the same empty answers a stranger
+    // would, and being told their own hostel is not registered to them is alarming in a way
+    // "your sign-in ran out" is not.
+    SessionExpiredFailure() => (
+        title: 'Sign-in expired',
+        next: 'Your sign-in ran out and could not be renewed. Nothing has changed about your '
+            'PGs or your account — sign in again.',
+        canRetry: false,
+      ),
     ServerFailure() => (
         title: 'Nivora is struggling',
         next: 'The server did not answer in time. Try again in a moment.',

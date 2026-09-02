@@ -21,10 +21,11 @@ import 'package:http/testing.dart';
 import 'package:mobile/data/models/models.dart';
 import 'package:mobile/data/repositories/dashboard_repository.dart';
 import 'package:mobile/data/repositories/hostel_repository.dart';
-import 'package:mobile/data/repositories/payment_repository.dart';
 import 'package:mobile/data/repositories/repository.dart';
 import 'package:mobile/data/repositories/room_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'fake_session.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A SUPABASE CLIENT THAT ANSWERS WITH WHATEVER POSTGREST WOULD HAVE SENT
@@ -46,6 +47,22 @@ SupabaseClient _answering(List<Map<String, Object?>> rows) => SupabaseClient(
         ),
       ),
     );
+
+/// The same client, HOLDING A LIVE SESSION.
+///
+/// ═══ WHY EVERY REFUSAL TEST BELOW NOW HAS TO ASK FOR THIS ═══
+/// A [SupabaseClient] with no session does not fail to make requests — it makes them under the
+/// ANON KEY (supabase AuthHttpClient, and see core/auth/session_standing.dart for the incident).
+/// So a bare stub client was, all along, the "signed out" case, and these tests were asserting
+/// that a gated RPC refuses an anonymous caller. It does. That was never the interesting claim.
+///
+/// The claim is that a gated RPC returning nothing TO A REAL, LIVE SESSION is a refusal about
+/// that caller's role — and it can only be made by a client that is holding one.
+Future<SupabaseClient> _answeringSignedIn(List<Map<String, Object?>> rows) async {
+  final client = _answering(rows);
+  await installLiveSession(client);
+  return client;
+}
 
 /// The one row rpc_hostel_stats always produces. Every column of the `returns table`, because
 /// HostelStats.fromJson refuses to guess at a missing one.
@@ -96,7 +113,11 @@ void main() {
       // `where app.is_super_admin()` answers everyone else with zero rows rather than a 403.
       // Returned as null, that is a platform with no hostels, no owners and no residents —
       // shown to the one person whose job is to notice when that is true.
-      final client = _answering(const []);
+      //
+      // SIGNED IN, deliberately: this is the arm where blaming the caller's ROLE is the honest
+      // reading, and it is honest only because the credential that asked was alive. The two
+      // arms where it is not are the next two tests.
+      final client = await _answeringSignedIn(const []);
       addTearDown(client.dispose);
 
       await expectLater(
@@ -113,7 +134,7 @@ void main() {
 
     test('a super admin still gets the figures', () async {
       // The other half of the pair. Without it, "throws every time" would pass the test above.
-      final client = _answering([_saRow()]);
+      final client = await _answeringSignedIn([_saRow()]);
       addTearDown(client.dispose);
 
       final stats = await DashboardRepository(client).superAdminStats();
@@ -160,8 +181,9 @@ void main() {
   group('a contact card that is not there is not a contact card that is blank', () {
     test('st_hostel_contacts with no rows says the account has no hostel', () async {
       // The function's only filter is the caller's own hostel. A hostel that resolves always
-      // produces a row, so zero rows is about the caller, never about the hostel.
-      final client = _answering(const []);
+      // produces a row, so zero rows is about the caller, never about the hostel — provided the
+      // caller was somebody. Signed in, for the reason on [_answeringSignedIn].
+      final client = await _answeringSignedIn(const []);
       addTearDown(client.dispose);
 
       await expectLater(
@@ -179,7 +201,7 @@ void main() {
     });
 
     test('a resident with a hostel gets the card', () async {
-      final client = _answering([
+      final client = await _answeringSignedIn([
         {
           'hostel_name': 'Sunrise PG',
           'address': '12 Residency Road',
@@ -204,7 +226,7 @@ void main() {
       // rooms.capacity is `check (capacity between 1 and 12)` and app.rooms_capacity_sync
       // creates a bed per unit of it, so a room with no beds cannot exist. An empty list was
       // drawn as "This room has no beds" — a confident sentence about someone else's room.
-      final client = _answering(const []);
+      final client = await _answeringSignedIn(const []);
       addTearDown(client.dispose);
 
       await expectLater(
@@ -219,7 +241,7 @@ void main() {
     });
 
     test('a room the caller can open still lists its beds', () async {
-      final client = _answering([_bedRow(1), _bedRow(2)]);
+      final client = await _answeringSignedIn([_bedRow(1), _bedRow(2)]);
       addTearDown(client.dispose);
 
       final beds = await RoomRepository(client).bedsInRoom('r1');
@@ -229,7 +251,7 @@ void main() {
     test('EMPTY is still available where empty is a real answer', () async {
       // The rule is not "no list may ever be empty". A hostel with every bed taken genuinely
       // has no free beds, and that must keep drawing the empty state rather than a failure.
-      final client = _answering(const []);
+      final client = await _answeringSignedIn(const []);
       addTearDown(client.dispose);
 
       expect(await RoomRepository(client).freeBeds('h1'), isEmpty);
@@ -238,162 +260,145 @@ void main() {
   });
 
   group('the helpers name what zero rows meant', () {
+    // EVERY CASE BELOW SAYS WHICH CREDENTIAL ASKED. `standing` became required on 2026-09-01,
+    // and these assertions are the reason it had to be: each one is a claim about the CALLER,
+    // and a claim about the caller may only be made when the token that asked was one this
+    // client could still vouch for. SessionStanding.live is what these tests always silently
+    // assumed; saying it out loud is what makes the group below possible.
     test('a refusal and an absence are different failures', () {
       expect(
-        () => rpcRowOrRefusal(const [], 'rpc_sa_dashboard', refusal: 'staff only'),
+        () => rpcRowOrRefusal(const [], 'rpc_sa_dashboard',
+            refusal: 'staff only', standing: SessionStanding.live),
         throwsA(isA<AccessDeniedFailure>()),
       );
       expect(
-        () => rpcRowOrMissing(const [], 'st_hostel_contacts', missing: 'no hostel'),
+        () => rpcRowOrMissing(const [], 'st_hostel_contacts',
+            missing: 'no hostel', standing: SessionStanding.live),
         throwsA(isA<NotFoundFailure>()),
       );
       expect(
-        () => rowsOrMissing(const [], missing: 'not yours', why: 'schema guarantees a row'),
+        () => rowsOrMissing(const [],
+            missing: 'not yours',
+            why: 'schema guarantees a row',
+            standing: SessionStanding.live),
         throwsA(isA<NotFoundFailure>()),
       );
     });
 
     test('a row present is handed straight back', () {
       const Map<String, dynamic> row = {'total_hostels': 1};
-      expect(rpcRowOrRefusal(const [row], 'rpc_sa_dashboard', refusal: 'x'), row);
-      expect(rpcRowOrMissing(const [row], 'st_hostel_contacts', missing: 'x'), row);
-      expect(rowsOrMissing(const [row], missing: 'x', why: 'y'), const [row]);
+      expect(
+        rpcRowOrRefusal(const [row], 'rpc_sa_dashboard',
+            refusal: 'x', standing: SessionStanding.live),
+        row,
+      );
+      expect(
+        rpcRowOrMissing(const [row], 'st_hostel_contacts',
+            missing: 'x', standing: SessionStanding.live),
+        row,
+      );
+      expect(
+        rowsOrMissing(const [row], missing: 'x', why: 'y', standing: SessionStanding.live),
+        const [row],
+      );
     });
 
     test('a shape disagreement is still a shape disagreement, not a refusal', () {
       // A scalar where an array belongs means the function changed under us. That is a bug
       // report, not a permissions conversation.
       expect(
-        () => rpcRowOrRefusal(42, 'rpc_sa_dashboard', refusal: 'x'),
+        () => rpcRowOrRefusal(42, 'rpc_sa_dashboard',
+            refusal: 'x', standing: SessionStanding.live),
         throwsA(isA<RowShapeError>()),
       );
     });
   });
 
-  group('the settlement watch has two endings and they are different signals', () {
-    test('a credited payment closes the stream normally', () async {
-      final result = await _drain(settlementUpdates(
-        poll: _polls([_intent(PaymentIntentStatus.captured, credited: true)]),
-        interval: const Duration(milliseconds: 1),
-        timeout: const Duration(seconds: 5),
-      ));
-
-      expect(result.error, isNull, reason: 'the server gave a verdict; nothing failed');
-      expect(result.events.single.isSettled, isTrue);
-    });
-
-    test('a failed payment closes the stream normally too', () async {
-      final result = await _drain(settlementUpdates(
-        poll: _polls([_intent(PaymentIntentStatus.failed)]),
-        interval: const Duration(milliseconds: 1),
-        timeout: const Duration(seconds: 5),
-      ));
-
-      expect(result.error, isNull);
-      expect(result.events.single.status, PaymentIntentStatus.failed);
-    });
-
-    test('giving up ends in an error, and it says the outcome is unknown', () async {
-      // THE ONE THIS FILE EXISTS FOR. The webhook has not arrived. The money may well have
-      // moved. Ending the same way as "the server told us it failed" is how a resident is told
-      // nothing happened when nobody knows that.
-      final result = await _drain(settlementUpdates(
-        poll: _polls([_intent(PaymentIntentStatus.created)]),
-        interval: const Duration(milliseconds: 1),
-        timeout: const Duration(milliseconds: 30),
-      ));
-
-      expect(result.events.single.status, PaymentIntentStatus.created);
-      expect(result.error, isA<AppFailure>());
-      final failure = result.error! as AppFailure;
-      expect(failure.outcomeIsUnknown, isTrue);
-      expect(failure.sideEffect, SideEffect.unknown);
-      expect(failure.message, contains('payment history'));
-    });
-
-    test('a verdict and a give-up cannot be told apart by luck', () async {
-      // Both used to close the stream identically. The listener could only guess from whatever
-      // state it happened to be in.
-      final verdict = await _drain(settlementUpdates(
-        poll: _polls([_intent(PaymentIntentStatus.failed)]),
-        interval: const Duration(milliseconds: 1),
-        timeout: const Duration(seconds: 5),
-      ));
-      final gaveUp = await _drain(settlementUpdates(
-        poll: _polls([_intent(PaymentIntentStatus.created)]),
-        interval: const Duration(milliseconds: 1),
-        timeout: const Duration(milliseconds: 30),
-      ));
-
-      expect(verdict.error, isNull);
-      expect(gaveUp.error, isNotNull);
-      expect(verdict.events.single.status, isNot(gaveUp.events.single.status));
-    });
-
-    test('never reaching the server reads differently from reaching it', () async {
-      // "We could not ask" and "we asked and it had not heard yet" want different sentences,
-      // and only one of them is worth checking your connection over.
-      final unreachable = await _drain(settlementUpdates(
-        poll: () async {
-          throw const OfflineFailure('no signal');
-        },
-        interval: const Duration(milliseconds: 1),
-        timeout: const Duration(milliseconds: 30),
-      ));
-      final noVerdictYet = await _drain(settlementUpdates(
-        poll: _polls([null]),
-        interval: const Duration(milliseconds: 1),
-        timeout: const Duration(milliseconds: 30),
-      ));
-
-      expect(unreachable.events, isEmpty);
-      expect(unreachable.error, isA<OfflineFailure>());
-      expect((unreachable.error! as AppFailure).outcomeIsUnknown, isTrue);
-      expect((unreachable.error! as AppFailure).message, contains('could not reach'));
-
-      expect(noVerdictYet.error, isA<ServerFailure>());
-      expect((noVerdictYet.error! as AppFailure).outcomeIsUnknown, isTrue);
+  // ---------------------------------------------------------------------------
+  // A DEAD TOKEN PRODUCES THE SAME EMPTINESS AS THE WRONG ROLE, AND MUST NOT PRODUCE THE SAME
+  // SENTENCE.
+  //
+  // This is the group the `standing` parameter exists for. When a session dies, supabase's
+  // AuthHttpClient fills the Authorization header with the ANON key rather than sending none
+  // (auth_http_client.dart:24-32), so `rpc_sa_dashboard()` -- which ends in
+  // `where app.is_super_admin()` -- answers zero rows exactly as it would a genuine impostor.
+  // The console then told its own super admin to sign in as the super admin. The bytes on the
+  // wire cannot tell those two apart; only the credential this client was holding can.
+  // ---------------------------------------------------------------------------
+  group('zero rows is never a verdict on the person when the token was not live', () {
+    test('no session at all: signed out, not access denied', () {
       expect(
-        (noVerdictYet.error! as AppFailure).message,
-        isNot(contains('could not reach')),
+        () => rpcRowOrRefusal(const [], 'rpc_sa_dashboard',
+            refusal: 'This console is for the Super Admin account.',
+            standing: SessionStanding.none),
+        throwsA(
+          isA<SignedOutFailure>()
+              .having((f) => f.needsSignIn, 'needsSignIn', isTrue)
+              .having((f) => f.isRefusal, 'isRefusal', isFalse)
+              .having((f) => f.technical, 'technical', contains('anon key')),
+        ),
       );
     });
 
-    test('money taken but not credited says exactly that', () async {
-      // Razorpay has it; rz_credit_fee has not run. Neither "settled" nor "failed" is true and
-      // the resident is owed the actual sentence.
-      final result = await _drain(settlementUpdates(
-        poll: _polls([_intent(PaymentIntentStatus.captured)]),
-        interval: const Duration(milliseconds: 1),
-        timeout: const Duration(milliseconds: 30),
-      ));
-
-      expect(result.events.single.isMoneyTaken, isTrue);
-      expect(result.events.single.isSettled, isFalse);
-      final failure = result.error! as AppFailure;
-      expect(failure.outcomeIsUnknown, isTrue);
-      expect(failure.message, contains('Razorpay has your payment'));
+    test('expired session: the sign-in expired, not the account', () {
+      expect(
+        () => rpcRowOrRefusal(const [], 'rpc_sa_dashboard',
+            refusal: 'This console is for the Super Admin account.',
+            standing: SessionStanding.expired),
+        throwsA(
+          isA<SessionExpiredFailure>()
+              .having((f) => f.needsSignIn, 'needsSignIn', isTrue)
+              .having((f) => f.isRefusal, 'isRefusal', isFalse)
+              .having((f) => f.isRetryable, 'isRetryable', isFalse),
+        ),
+      );
     });
 
-    test('a dropped poll is not a verdict — the watch keeps waiting', () async {
-      // The money's fate is decided on a server whether or not this phone can reach it. One bad
-      // poll must not end the wait, and must not end it as a failure either.
-      var call = 0;
-      final result = await _drain(settlementUpdates(
-        poll: () async {
-          call++;
-          if (call < 3) throw const OfflineFailure('flaky');
-          return _intent(PaymentIntentStatus.captured, credited: true);
-        },
-        interval: const Duration(milliseconds: 1),
-        timeout: const Duration(seconds: 5),
-      ));
+    test('an absence is also never blamed on a resident whose token died', () {
+      // The student-facing shape of the same bug: "ask your warden to check your registration"
+      // is a real errand for a real person, and a dead token must not send anybody on it.
+      expect(
+        () => rpcRowOrMissing(const [], 'st_hostel_contacts',
+            missing: 'Ask your warden to check your registration.',
+            standing: SessionStanding.expired),
+        throwsA(isA<SessionExpiredFailure>()),
+      );
+      expect(
+        () => rowsOrMissing(const [],
+            missing: 'That room is not one this account can open.',
+            why: 'rooms_capacity_sync guarantees a bed per unit of capacity',
+            standing: SessionStanding.none),
+        throwsA(isA<SignedOutFailure>()),
+      );
+    });
 
-      expect(result.error, isNull);
-      expect(result.events.single.isSettled, isTrue);
-      expect(call, greaterThanOrEqualTo(3));
+    test('a live token still gets the honest refusal -- the fix did not blunt it', () {
+      // The failure mode of a change like this is over-correcting into "never say no". A real
+      // impostor on a real session must still be told, or the console has stopped meaning
+      // anything.
+      expect(
+        () => rpcRowOrRefusal(const [], 'rpc_sa_dashboard',
+            refusal: 'This console is for the Super Admin account.',
+            standing: SessionStanding.live),
+        throwsA(
+          isA<AccessDeniedFailure>()
+              .having((f) => f.isRefusal, 'isRefusal', isTrue)
+              .having((f) => f.needsSignIn, 'needsSignIn', isFalse),
+        ),
+      );
     });
   });
+
+  // WHAT USED TO BE HERE. A group called "the settlement watch has two endings and they are
+  // different signals" drove `settlementUpdates()` — the loop that polled `payment_intents`
+  // after a Razorpay checkout closed, and whose two endings were "the server reached a verdict"
+  // and "we stopped waiting and genuinely do not know whether the money left your account".
+  // Online payment is out of v1 (rent is handed over at the warden's desk), that loop went with
+  // the checkout, and its tests went with it rather than being kept green against dead code.
+  //
+  // The property those tests were protecting has NOT gone anywhere: an outcome nobody knows is
+  // not a failure, and must never be offered a "try again" that could take money twice. It is
+  // held down by [SideEffect] and by `AppFailure.isRetryable`, which the group below covers.
 
   group('a timeout is not a dead socket', () {
     test('no answer leaves the outcome unknown; a refused socket does not', () {
@@ -412,45 +417,4 @@ void main() {
       expect(const ConflictFailure('x').outcomeIsUnknown, isFalse);
     });
   });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SETTLEMENT TEST PLUMBING
-// ─────────────────────────────────────────────────────────────────────────────
-
-PaymentIntent _intent(PaymentIntentStatus status, {bool credited = false}) => PaymentIntent(
-      id: 'pi_1',
-      studentId: 's1',
-      periodMonth: '2026-08',
-      amountPaise: 900000,
-      razorpayOrderId: 'order_1',
-      status: status,
-      capturedAt: status == PaymentIntentStatus.captured
-          ? DateTime.utc(2026, 8, 25, 10, 0, 1)
-          : null,
-      creditedAt: credited ? DateTime.utc(2026, 8, 25, 10, 0, 3) : null,
-      createdAt: DateTime.utc(2026, 8, 25, 10),
-    );
-
-/// Answers each poll with the next entry, repeating the last one forever after — which is what
-/// a real intent row does while everyone waits on a webhook.
-Future<PaymentIntent?> Function() _polls(List<PaymentIntent?> answers) {
-  var i = 0;
-  return () async {
-    final answer = answers[i < answers.length ? i : answers.length - 1];
-    if (i < answers.length) i++;
-    return answer;
-  };
-}
-
-/// Collects everything a settlement stream said, INCLUDING how it ended.
-Future<({List<PaymentIntent> events, Object? error})> _drain(Stream<PaymentIntent> stream) async {
-  final events = <PaymentIntent>[];
-  Object? error;
-  await for (final event in stream.handleError((Object e) {
-    error = e;
-  })) {
-    events.add(event);
-  }
-  return (events: events, error: error);
 }

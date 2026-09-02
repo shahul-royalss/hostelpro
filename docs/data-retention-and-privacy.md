@@ -3,7 +3,9 @@
 What personal data this application holds, on what basis, for how long, how a person gets a copy or
 gets it erased, and who else touches it.
 
-Companion documents: [`../THREAT-MODEL.md`](../THREAT-MODEL.md) §2 (assets),
+Companion documents: [`legal-consent.md`](./legal-consent.md) (the published documents, the in-app
+consent gate and the record of who agreed — **the periods in §5.2 below are what that policy now
+publishes to the world**), [`../THREAT-MODEL.md`](../THREAT-MODEL.md) §2 (assets),
 [`access-control.md`](./access-control.md) (who can reach what),
 [`logging-and-monitoring.md`](./logging-and-monitoring.md) §4 (log retention),
 [`incident-response.md`](./incident-response.md) §6 (breach notification).
@@ -112,6 +114,8 @@ Sensitivity: **H** = identity-theft or safety risk if exposed; **M** = privacy o
 | `app.rate_limits` | SHA-256 hashed keys only — never a clear IP or identifier (`lib/rate-limit.ts`) | Pseudonymous | L | Hours |
 | `security_alerts` | `actor_user_id`, **`ip`**, `summary`, `details` — a detection references the person it fired on | Everyone who signs in | M | Acknowledged: 365 days. **Unacknowledged: retained indefinitely** — an open alert is an open investigation |
 | `payment_intents` | `student_id`, `amount_paise`, `currency`, `razorpay_order_id`, `razorpay_payment_id`, `method` — a record that a payment happened. **No card number, UPI ID, CVV or bank account**: those are collected by Razorpay on Razorpay's own page and never reach this server | Residents who pay online | M | 8 years — it evidences a rent payment, so it follows the accounting retention in §5.2 rather than the shorter operational periods |
+| `legal_acceptances` | `user_id`, `version`, `accepted_at`, `surface`, `app_version` — who agreed to which published version of the Terms + Privacy pair, and when. **Deliberately no `ip` and no `user_agent`** | Everyone who signs in | L | **With the account.** `on delete cascade` from `users`, so erasing a person erases their consent in the same statement. **Must not be swept on a time basis** — it is the lawful basis for everything else in this table ([`legal-consent.md`](./legal-consent.md) §2.2) |
+| `legal_versions` | None — published document text and URLs | n/a | — | Permanent. Target of a foreign key from every acceptance |
 | `floors` | None — structural only (`hostel_id`, floor number) | n/a | — | Life of the tenant |
 | `rooms` | None directly, but `room_id` links a resident to a physical location via `beds`/`students` | n/a (indirect) | L | Life of the tenant |
 
@@ -179,6 +183,26 @@ is:
   ([`logging-and-monitoring.md`](./logging-and-monitoring.md) §4).
 
 ### 5.2 Retention periods
+
+> ⚠️ **UNRESOLVED CONFLICT — read before changing either side (2026-09-02).**
+>
+> The published privacy policy at `/legal/privacy` §7 now states **shorter** periods than the table
+> below, on instruction from the product owner:
+>
+> | Data | This table | What the policy now publishes |
+> |---|---|---|
+> | Vacated resident record (+ photo and ID scan) | 12 months | **1 month after departure** |
+> | Complaints + `complaint_events` | 12 months after resolution | **2 months after resolution** |
+> | `announcements` | 24 months | **2 months** |
+> | `fee_payments` and the other financial records | 8 years | **Kept indefinitely** |
+>
+> **The policy is the promise the world can read, so it is the one that binds.** Whoever owns
+> `app.apply_retention()` must either implement these periods or get the policy changed — a
+> published policy that overstates what is deleted is precisely the violation
+> [`play-submission-pack.md`](./play-submission-pack.md) §7.1 warns about. Until the job enforces
+> them, the policy is honest only because those rows sit under *"Applied by the hostel operator"*
+> with a note that automation is being extended. That framing is load-bearing; do not remove it
+> while the gap is open. Background in [`legal-consent.md`](./legal-consent.md) §7.1.
 
 Storage limitation means keeping data no longer than the purpose needs. These are defaults; a tenant's
 own statutory duties override them upward, never downward.

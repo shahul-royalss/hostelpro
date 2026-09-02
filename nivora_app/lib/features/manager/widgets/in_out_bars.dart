@@ -22,6 +22,12 @@ import 'manager_ui.dart';
 /// keeps by hand. Rent lives in public.fee_payments, which this role cannot read, and is not
 /// in either bar. The caption says so, every time, so nobody reads a quiet month here as a
 /// hostel that took no money.
+///
+/// AND IT IS NOT THE FRAME'S OWN CHART. `screen-manager-dashboard` (4:1215) draws a stacked
+/// band of expense CATEGORIES with a percentage legend under it. Nothing in db/schema.sql
+/// aggregates expenses by category — see the note on ManagerHomeScreen — so that chart cannot
+/// be drawn from data. What is taken from it is the legend: the design's 6dp dot beside a 10px
+/// label (4:1221), which is what the row along the top of this chart now is.
 class InOutBars extends StatelessWidget {
   const InOutBars({super.key, required this.window});
 
@@ -56,10 +62,20 @@ class InOutBars extends StatelessWidget {
         Row(
           children: [
             _LegendDot(color: tones.success, label: 'In'),
-            const SizedBox(width: Space.md),
+            const SizedBox(width: Space.sm),
             _LegendDot(color: tones.warning, label: 'Out'),
-            const Spacer(),
-            Text('Busiest day ${moneyShort(peak)}', style: t.textTheme.bodySmall),
+            const SizedBox(width: Space.xs),
+            // Expanded rather than a Spacer: at 1.6x text scale on a 320dp phone the two
+            // legend dots and this sentence are wider than the row, and a Spacer has no give.
+            Expanded(
+              child: Text(
+                'Busiest day ${moneyShort(peak)}',
+                style: t.textTheme.labelSmall?.copyWith(color: context.tones.muted),
+                textAlign: TextAlign.end,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: Space.sm),
@@ -110,9 +126,11 @@ class InOutBars extends StatelessWidget {
         const SizedBox(height: Space.xs),
         Row(
           children: [
-            Text(shortDate(days.first.day), style: t.textTheme.bodySmall),
+            Text(shortDate(days.first.day),
+                style: t.textTheme.labelSmall?.copyWith(color: context.tones.muted)),
             const Spacer(),
-            Text(shortDate(days.last.day), style: t.textTheme.bodySmall),
+            Text(shortDate(days.last.day),
+                style: t.textTheme.labelSmall?.copyWith(color: context.tones.muted)),
           ],
         ),
       ],
@@ -136,7 +154,9 @@ class _Bar extends StatelessWidget {
       height: height,
       decoration: BoxDecoration(
         color: fraction <= 0 ? Theme.of(context).colorScheme.outlineVariant : colour,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+        // The frame's own bar band is `rounded-[4px]` (4:1215) — the badge step, which is what
+        // tokens.dart reserves for something too small to have a corner in the usual sense.
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.tiny)),
       ),
     );
   }
@@ -153,13 +173,18 @@ class _LegendDot extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // The design's legend dot is `size-[6px]` (4:1222). 6 is not on the spacing scale and
+        // does not need to be: it is half of Space.sm, which is how the frame's own 6dp gaps
+        // are expressed everywhere else in this role.
         Container(
-          width: 8,
-          height: 8,
+          width: Space.sm / 2,
+          height: Space.sm / 2,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: Space.xxs),
-        Text(label, style: t.textTheme.bodySmall),
+        Text(label,
+            style: t.textTheme.labelSmall
+                ?.copyWith(color: t.colorScheme.onSurfaceVariant, letterSpacing: 0.2)),
       ],
     );
   }

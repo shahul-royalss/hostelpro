@@ -44,8 +44,12 @@ class _ComplaintDetailSheet extends ConsumerWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(complaintIcon(complaint.category), size: IconSize.lg, color: t.colorScheme.primary),
-                const SizedBox(width: Space.xs),
+                // The same round tinted glyph the list row uses, carrying the same two facts:
+                // the SHAPE is the category and the TINT is the status. A plain gold icon here
+                // said neither, and made the sheet and the row it was opened from look like two
+                // different objects.
+                ToneBadge(icon: complaintIcon(complaint.category), tone: tone),
+                const SizedBox(width: Space.sm),
                 Expanded(child: Text(complaint.title, style: t.textTheme.titleLarge)),
                 const SizedBox(width: Space.xs),
                 StatusPill(label: complaint.status.label, tone: tone),
@@ -71,7 +75,7 @@ class _ComplaintDetailSheet extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('WHAT THE HOSTEL DID', style: t.textTheme.labelSmall),
+                    const CapsLabel('What the hostel did'),
                     const SizedBox(height: Space.xxs),
                     Text(complaint.resolutionNote!.trim(), style: t.textTheme.bodyMedium),
                     if (complaint.resolvedAt != null) ...[
@@ -85,7 +89,7 @@ class _ComplaintDetailSheet extends ConsumerWidget {
             ],
 
             const SizedBox(height: Space.md),
-            Text('PROGRESS', style: t.textTheme.labelSmall),
+            const CapsLabel('Progress'),
             const SizedBox(height: Space.sm),
             AsyncSection<List<ComplaintEvent>>(
               value: timeline,
@@ -95,9 +99,16 @@ class _ComplaintDetailSheet extends ConsumerWidget {
             ),
 
             const SizedBox(height: Space.md),
-            OutlinedButton(
-              onPressed: () => Navigator.of(context).maybePop(),
-              child: const Text('Close'),
+            // Full-bleed. The theme's `Size.fromHeight(48)` fixes the height and leaves the
+            // minimum WIDTH at zero, so inside this `CrossAxisAlignment.start` column every
+            // button on every sheet in this feature was shrinking to hug its label. The design's
+            // sheet actions run the width of the sheet.
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(context).maybePop(),
+                child: const Text('Close'),
+              ),
             ),
           ],
         ),

@@ -6,9 +6,9 @@ import '../../../data/models/models.dart';
 import '../../../data/repositories/repository.dart';
 import 'manager_models.dart';
 
-/// The three queries the manager needs that no other role does.
+/// The queries the manager needs that no other role does.
 ///
-/// TABLES: public.menus, public.users, public.tasks (counts only).
+/// TABLES: public.users, public.tasks (counts only).
 ///
 /// Everything else this role reads or writes already has a repository: expenses and revenues
 /// go through FinanceRepository, the task list and its status changes through TaskRepository,
@@ -25,53 +25,14 @@ final class ManagerRepository extends Repository {
   const ManagerRepository(super.db);
 
   // ───────────────────────────────────────────────────────────────────────────
-  // MESS MENU
+  // THE MESS MENU IS NOT HERE ANY MORE
+  //
+  // public.menus moved to lib/data/repositories/menu_repository.dart, because the manager is
+  // no longer the only role that touches it: the manager writes the week and every resident of
+  // the hostel now reads it on their home screen. Leaving the query here and adding a second
+  // one under lib/features/student/ would give two files an opinion about one table — which is
+  // exactly what the note above forbids for public.expenses.
   // ───────────────────────────────────────────────────────────────────────────
-
-  /// The whole week in one request.
-  ///
-  /// NOT PAGINATED, and that is a considered exception rather than an oversight: the unique
-  /// index on (hostel_id, day_of_week, meal) caps this table at 28 rows per hostel forever.
-  /// Paging 28 rows would cost a second round trip to save nothing.
-  Future<WeeklyMenu> weeklyMenu(String hostelId) => guard(() async {
-        final rows = await db
-            .from('menus')
-            .select(MenuEntry.columns)
-            .eq('hostel_id', hostelId);
-        return WeeklyMenu(rows.map(MenuEntry.fromJson).toList(growable: false));
-      });
-
-  /// Write one meal.
-  ///
-  /// An UPSERT on the table's own unique key, so planning Monday's lunch for the first time
-  /// and changing it later are the same call. Doing it as "select, then insert or update"
-  /// would race a second device and end in a 23505 the user cannot act on.
-  ///
-  /// Manager only (menus_write). An owner or warden calling this gets 42501, which
-  /// [AppFailure] renders as "You do not have access to that".
-  Future<MenuEntry> saveMeal({
-    required String hostelId,
-    required MenuDay day,
-    required Meal meal,
-    required String items,
-  }) =>
-      guard(() async {
-        final row = await db
-            .from('menus')
-            .upsert(
-              {
-                'hostel_id': hostelId,
-                'day_of_week': day.wire,
-                'meal': meal.wire,
-                'items': items,
-                'updated_by': ?db.auth.currentUser?.id,
-              },
-              onConflict: 'hostel_id,day_of_week,meal',
-            )
-            .select(MenuEntry.columns)
-            .single();
-        return MenuEntry.fromJson(row);
-      });
 
   // ───────────────────────────────────────────────────────────────────────────
   // STAFF

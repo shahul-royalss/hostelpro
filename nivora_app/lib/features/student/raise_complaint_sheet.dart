@@ -117,24 +117,22 @@ class _RaiseComplaintSheetState extends ConsumerState<_RaiseComplaintSheet> {
               ),
               const SizedBox(height: Space.md),
 
-              Text('CATEGORY', style: t.textTheme.labelSmall),
+              const CapsLabel('Category'),
               const SizedBox(height: Space.xs),
               Wrap(
                 spacing: Space.xs,
                 runSpacing: Space.xs,
                 children: [
                   for (final category in ComplaintCategory.values)
-                    ChoiceChip(
+                    _CategoryChip(
+                      category: category,
                       selected: _category == category,
                       onSelected: _sending
                           ? null
-                          : (_) => setState(() {
+                          : () => setState(() {
                                 _category = category;
                                 _failure = null;
                               }),
-                      avatar: Icon(complaintIcon(category), size: IconSize.sm),
-                      label: Text(category.label),
-                      shape: const RoundedRectangleBorder(borderRadius: Radii.rControl),
                     ),
                 ],
               ),
@@ -184,22 +182,115 @@ class _RaiseComplaintSheetState extends ConsumerState<_RaiseComplaintSheet> {
               ],
 
               const SizedBox(height: Space.md),
-              FilledButton(
-                onPressed: _sending ? null : _submit,
-                child: _sending
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Send to my warden'),
+              // The sheet's primary action, full-bleed and cream: this form's whole purpose is
+              // the one button at the bottom of it. See the note on the Close button in
+              // complaint_detail_sheet.dart for why the width has to be said out loud.
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _sending ? null : _submit,
+                  child: _sending
+                      ? SizedBox(
+                          width: IconSize.md,
+                          height: IconSize.md,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            // The spinner sits ON the cream fill, so it takes that button's own
+                            // foreground rather than the theme's default accent. `onPrimary` and
+                            // not `onPrimaryContainer`: theme.dart wires the filled button to
+                            // the CREAM `primaryContainer` in the dark theme and to `primary` in
+                            // the light one, and `onPrimary` is the value that is right for both
+                            // (near-black on cream, white on gold).
+                            color: t.colorScheme.onPrimary,
+                          ),
+                        )
+                      : const Text('Send to my warden'),
+                ),
               ),
               const SizedBox(height: Space.xs),
-              TextButton(
-                onPressed: _sending ? null : () => Navigator.of(context).maybePop(),
-                child: const Text('Cancel'),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: _sending ? null : () => Navigator.of(context).maybePop(),
+                  child: const Text('Cancel'),
+                ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One category, as the design draws a chip: a 10% wash of the accent behind a full-strength
+/// hairline, with the glyph and the label in the accent — and the hairline surface with the
+/// ordinary control border when it is not chosen.
+///
+/// A hand-built box rather than Material's [ChoiceChip], which paints its selected state in
+/// `secondaryContainer`. That is #25231C in this palette — a dark olive that reads as a
+/// disabled chip rather than a chosen one — and there is no way to reach the design's recipe
+/// through `ChipThemeData` without also changing every other chip in the app from a file this
+/// agent does not own. The two alphas come from [NivoraSemantics], where the tightest contrast
+/// case in the product is measured, so a chosen category is exactly as loud as a status pill.
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip({
+    required this.category,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final ComplaintCategory category;
+  final bool selected;
+
+  /// Null while the form is submitting. The chip greys out rather than disappearing, so the
+  /// resident can still see what they picked.
+  final VoidCallback? onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final tones = context.tones;
+    final enabled = onSelected != null;
+    final accent = selected ? t.colorScheme.primary : t.colorScheme.onSurfaceVariant;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      enabled: enabled,
+      child: Material(
+        color: selected ? tones.chipFill(t.colorScheme.primary) : Colors.transparent,
+        borderRadius: Radii.rControl,
+        child: InkWell(
+          borderRadius: Radii.rControl,
+          onTap: onSelected,
+          child: Opacity(
+            opacity: enabled ? 1 : Dim.readOnly,
+            child: Container(
+              // 44 high with 12/8 padding: a chip is a tap target before it is a decoration.
+              constraints: const BoxConstraints(minHeight: Space.xxl + Space.sm),
+              padding: const EdgeInsets.symmetric(horizontal: Space.sm, vertical: Space.xs),
+              decoration: BoxDecoration(
+                borderRadius: Radii.rControl,
+                border: Border.all(
+                  color: selected
+                      ? tones.chipBorder(t.colorScheme.primary)
+                      : t.colorScheme.outline,
+                  width: Strokes.hairline,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(complaintIcon(category), size: IconSize.sm, color: accent),
+                  const SizedBox(width: Space.xs),
+                  Text(
+                    category.label,
+                    style: t.textTheme.labelLarge?.copyWith(color: accent),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

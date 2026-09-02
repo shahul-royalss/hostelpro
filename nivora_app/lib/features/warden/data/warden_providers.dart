@@ -8,6 +8,12 @@ import '../../../data/providers.dart';
 import 'warden_models.dart';
 import 'warden_repository.dart';
 
+/// The camera / photo picker the ID proof comes from MOVED to lib/data/providers.dart, where
+/// the resident's raise-a-complaint sheet can reach it too. Re-exported so every existing
+/// import of documentCaptureProvider through this file — including the registration test's
+/// override — still resolves to the one provider both flows read.
+export '../../../data/providers.dart' show documentCaptureProvider;
+
 /// Providers for the warden's screens.
 ///
 /// HAND-WRITTEN, matching lib/data/providers.dart — no codegen, nothing to regenerate. Anything
@@ -28,23 +34,9 @@ final wardenRepositoryProvider = Provider<WardenRepository>(
 /// four fields rejected at once, a phone number already taken, a bed occupied between loading
 /// the picker and pressing Register, a rollback that itself failed — are the states worth
 /// holding down in `flutter test`, which needs a fake in this slot. See StudentRegistrations,
-/// and RentPayments / SaPlatformWrites, which are this shape for the same reason.
+/// and RentDesk / SaPlatformWrites, which are this shape for the same reason.
 final wardenRegistrationsProvider = Provider<StudentRegistrations>(
   (ref) => ref.watch(wardenRepositoryProvider),
-);
-
-/// The camera / photo picker the ID proof comes from.
-///
-/// A PROVIDER SO IT CAN BE REPLACED, exactly as `razorpayCheckoutProvider` is. `image_picker`
-/// talks over a MethodChannel and a widget test has no platform on the other end of one — the
-/// real plugin in a test makes the registration sheet hang rather than fail, which is the worst
-/// of both. Overriding this is what lets the whole flow, up to and including the password
-/// dialog, run in `flutter test`.
-///
-/// Not autoDispose and no teardown: `ImagePicker` registers no listeners and owns nothing that
-/// outlives a call, unlike the Razorpay checkout.
-final documentCaptureProvider = Provider<DocumentCapture>(
-  (ref) => PluginDocumentCapture(),
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -134,10 +126,44 @@ class FreeBed {
 
 /// Every unoccupied bed in the hostel, labelled by room and ordered the way a warden walks the
 /// building: ground floor first, then by room number, then by bed.
+///
+/// STAYS autoDispose, DELIBERATELY. A free-bed list is the last thing in this app that should
+/// be pinned for the session: another warden in the same building is assigning beds out of it,
+/// and a held copy would offer one that was taken twenty minutes ago. It is cheap to refetch
+/// and expensive to be wrong about, so it lives exactly as long as a picker is open.
+///
+/// BOTH REQUESTS ARE STARTED BEFORE EITHER IS AWAITED, and that is not a micro-optimisation.
+///
+/// This used to read `await ref.watch(a.future); await ref.watch(b.future);` — the second
+/// `ref.watch` on the far side of an await gap. That is the one shape in riverpod 3 that can
+/// throw out of a provider that is otherwise perfectly healthy: with nothing listening, an
+/// autoDispose provider is torn down while its body is still suspended at the first await, and
+/// the `ref` the resumed body then reaches for belongs to a disposed element —
+/// UnmountedRefException, straight out of `provider.future`. That is what made "choose a bed"
+/// do nothing at all. Measured, not deduced: a disposed element's in-flight future still
+/// RESOLVES in riverpod 3 — it is specifically touching `ref` after the gap that throws.
+///
+/// Two independent things now stop it. The call sites no longer read this through `.future` at
+/// all: FreeBedPicker WATCHES it from `build`, so a listener exists for as long as the picker
+/// is on screen and the teardown cannot happen. And hoisting the reads to before the first
+/// await means it would still not throw if some future call site forgot. Neither is load-
+/// bearing alone, which is the point — see the note at the top of assign_bed_sheet.dart.
+///
+/// The second effect is the one a warden feels: two round trips became one. `beds` and `rooms`
+/// do not depend on each other, so waiting for the first before asking for the second was
+/// costing a whole extra RTT of a stairwell 3G connection every time the picker opened.
+///
+/// Leaving `roomsRequest` unawaited on the failure path is safe: riverpod calls `ignore()` on
+/// the future behind `.future` before completing it with an error, so a failure there cannot
+/// surface as an unhandled async error. The error that reaches the screen is the FIRST real
+/// one, with its own message intact — which `Future.wait` would have replaced with a
+/// ParallelWaitError nobody can read.
 final freeBedOptionsProvider =
     FutureProvider.autoDispose.family<List<FreeBed>, String>((ref, hostelId) async {
-  final beds = await ref.watch(freeBedsProvider(hostelId).future);
-  final rooms = await ref.watch(roomOccupancyProvider(hostelId).future);
+  final bedsRequest = ref.watch(freeBedsProvider(hostelId).future);
+  final roomsRequest = ref.watch(roomOccupancyProvider(hostelId).future);
+  final beds = await bedsRequest;
+  final rooms = await roomsRequest;
   final byRoom = {for (final r in rooms) r.roomId: r};
 
   final options = [
@@ -301,6 +327,9 @@ void refreshFees(WidgetRef ref) {
   ref.invalidate(studentFeeHistoryProvider);
   ref.invalidate(studentMonthFeeProvider);
   ref.invalidate(hostelStatsProvider);
+  // The "who paid" list is a reading of the same rows. A warden who takes ₹6,200 and then looks
+  // at what has come in today must not be shown a list that predates their own receipt.
+  ref.invalidate(recentPaymentsProvider);
 }
 
 /// A complaint moved along the workflow.

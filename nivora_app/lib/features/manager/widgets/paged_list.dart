@@ -53,7 +53,13 @@ class PagedList<T> extends StatelessWidget {
         onRetry: onRefresh,
         // The loading and failure states are scrollable too, or pull-to-refresh is the one
         // gesture that cannot rescue a screen that failed to load.
-        loading: ListView(padding: padding, children: [?header, const Spinner()]),
+        loading: ListView(
+          padding: padding,
+          // Explicit rather than inherited from ScrollView's `primary` inference — the same
+          // reasoning as the empty state below, and as the warden's copy of this file.
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [?header, const Spinner()],
+        ),
         builder: (page) {
           if (page.isEmpty) {
             return ListView(

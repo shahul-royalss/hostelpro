@@ -56,6 +56,9 @@ final class RoomRepository extends Repository {
           why: 'beds for room $roomId came back empty; rooms.capacity >= 1 and '
               'app.rooms_capacity_sync guarantee a bed row for every room that exists, so the '
               'room is either gone or outside this caller\'s policy',
+          // ...or the caller was `anon` because the session died on the way. Only a live token
+          // earns the sentence above.
+          standing: sessionStanding,
         ).map(Bed.fromJson).toList(growable: false);
       });
 
@@ -85,7 +88,7 @@ final class RoomRepository extends Repository {
     String? roomNumber,
     int? capacity,
   }) =>
-      guard(() async {
+      guardWrite(() async {
         final patch = <String, dynamic>{
           'room_number': ?roomNumber,
           'capacity': ?capacity,
@@ -100,5 +103,6 @@ final class RoomRepository extends Repository {
             .select(Room.columns)
             .single();
         return Room.fromJson(row);
-      });
+      }, unresolved: 'Reload the room before changing it again — a capacity change adds or '
+          'removes bed rows, so the room may already look different.');
 }

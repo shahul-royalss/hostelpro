@@ -1,0 +1,26 @@
+-- ═══════════════════════════════════════════════════════════════════════════════════════════
+-- Pin the search_path on app.mfa_required_roles()
+--
+-- Supabase's database linter (0011_function_search_path_mutable) flagged this as the only
+-- outstanding SECURITY-category lint on the project that we can fix in SQL.
+--
+-- Why it matters. app.mfa_required_roles() is `grant execute`d to `authenticated`
+-- (db/migrations/2026-08-31-mfa-enforcement.sql), and it is called by app.mfa_satisfied(),
+-- which is the predicate the MFA gate hangs off in RLS. A function with no pinned search_path
+-- resolves unqualified names against whatever search_path the caller happens to have set.
+--
+-- Why the practical risk here was already nil, stated plainly so nobody "re-fixes" this in a
+-- panic later: the body is a single literal array cast to a fully-qualified type
+-- (`public.user_role[]`). There is no unqualified table, function, or operator reference to
+-- capture. app.mfa_satisfied() is SECURITY DEFINER with `set search_path = public`, so the
+-- nested call already ran under a known path.
+--
+-- This is therefore defence-in-depth and lint hygiene, not an incident. It is applied because
+-- it is free and provably behaviour-preserving: an IMMUTABLE function returning a constant.
+--
+-- Empty search_path is safe precisely because the body qualifies public.user_role itself.
+--
+-- See docs/server-health.md §5.
+-- ═══════════════════════════════════════════════════════════════════════════════════════════
+
+alter function app.mfa_required_roles() set search_path = '';

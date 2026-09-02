@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/auth_controller.dart' show studentLoginDomain;
 import '../../../core/theme/tokens.dart';
 import '../../../shared/glass/glass.dart';
 import '../data/warden_providers.dart';
@@ -36,6 +37,19 @@ import 'student_credentials_dialog.dart';
 ///
 /// The bed is required for a second reason of its own: it travels in the SAME call, so a
 /// resident who exists but is nowhere is not a state this flow can produce.
+///
+/// ── WHICH BOX BECOMES THE LOGIN ──────────────────────────────────────────────────────────
+///
+/// The email box is the one thing here that is optional AND consequential. If it is filled in,
+/// that address is the resident's login id; if it is blank, their phone number is, mapped to
+/// the synthetic address in [studentLoginDomain]. There is no third state where both work:
+/// answering "which account owns this phone number?" at sign-in would need a lookup on an
+/// unauthenticated endpoint, and that is an enumeration oracle over a population of young
+/// residents. One account, one login id, printed on the credentials screen.
+///
+/// It stays optional because a hostel resident may genuinely not have an email — the phone
+/// mapping exists for exactly that person — and a mandatory box would be answered with an
+/// invented address, which GoTrue would then hold forever.
 ///
 /// ── EVERY MESSAGE HERE IS THE SERVER'S OWN ───────────────────────────────────────────────
 ///
@@ -102,6 +116,13 @@ class _RegisterStudentSheetState extends ConsumerState<_RegisterStudentSheet> {
   CapturedDocument? _idProof;
   CapturedDocument? _photo;
   bool _busy = false;
+
+  /// Whether the email box currently holds anything.
+  ///
+  /// Not cosmetic: an email, when there is one, IS the login id, and the phone number is not.
+  /// The helper text under both boxes has to move with this or the warden reads the form off
+  /// the screen and hands the resident the wrong half of their credentials.
+  bool _hasEmail = false;
 
   /// Field messages, keyed by the flat names index.ts uses — 'fullName', 'phone', 'bedId',
   /// 'idProofType', 'idProof', 'photo'. ONE MAP for both sources: what this form worked out on
@@ -273,16 +294,23 @@ class _RegisterStudentSheetState extends ConsumerState<_RegisterStudentSheet> {
     if (picked != null && mounted) setState(() => _joining = picked);
   }
 
+  /// THE TAP THAT DID NOTHING. This is the control the warden reported: they tapped it, and no
+  /// sheet, no spinner and no message came back, with 45 free beds in the building.
+  ///
+  /// It used to `await ref.read(freeBedOptionsProvider(…).future)` BEFORE opening the sheet.
+  /// That provider is autoDispose and nothing was listening to it, so it was torn down mid-read
+  /// and threw UnmountedRefException out of `.future`; with no try/catch here the exception went
+  /// to the zone and this method simply never reached its next line. The full account is at the
+  /// top of assign_bed_sheet.dart.
+  ///
+  /// Nothing is awaited before the sheet now. [FreeBedPicker] watches the provider itself, which
+  /// both keeps it alive while the picker is open and gives the load somewhere visible to
+  /// happen. A tap always produces a sheet; what the sheet then says is the truth about the
+  /// building or about the failure.
   Future<void> _pickBed() async {
-    final beds = await ref.read(freeBedOptionsProvider(widget.hostelId).future);
-    if (!mounted) return;
     final chosen = await showGlassSheet<FreeBed>(
       context: context,
-      builder: (_) => FreeBedPicker(
-        beds: beds,
-        title: 'Choose a bed',
-        subtitle: '${beds.length} free',
-      ),
+      builder: (_) => FreeBedPicker(hostelId: widget.hostelId, title: 'Choose a bed'),
     );
     if (chosen != null && mounted) {
       setState(() {
@@ -358,14 +386,62 @@ class _RegisterStudentSheetState extends ConsumerState<_RegisterStudentSheet> {
               textInputAction: TextInputAction.next,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               onChanged: (_) => _clear('phone'),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Phone number',
-                // Not "if an account is created" any more. It always is, and this number is
-                // what they type on the sign-in screen.
-                helperText: 'This is the login id they sign in with',
-                prefixIcon: Icon(Icons.phone_outlined),
+                // Not "if an account is created" any more. It always is — and which of these
+                // two boxes becomes the login depends on whether the other one is filled in.
+                helperText: _hasEmail
+                    ? 'For contact and the fee ledger'
+                    : 'This is the login id they sign in with',
+                prefixIcon: const Icon(Icons.phone_outlined),
               ),
               validator: (v) => _errorOr('phone', () => _phoneValidator(v)),
+            ),
+            const SizedBox(height: Space.sm),
+            // OPTIONAL, AND DELIBERATELY SO. A hostel resident may genuinely not have an email
+            // — that is the whole reason phone login exists — and a required box here would be
+            // answered with an invented address. That is worse than a blank one: public.users
+            // carries a UNIQUE index on lower(email) and GoTrue never releases a taken address,
+            // so a borrowed or mistyped address permanently squats on somebody else's login.
+            //
+            // When it IS given it becomes the login, not a second way in. See
+            // createStudentAuthUser in the Edge Function.
+            TextFormField(
+              key: _fieldKeys['email'],
+              controller: _email,
+              enabled: !_busy,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              onChanged: (v) {
+                _clear('email');
+                final has = v.trim().isNotEmpty;
+                if (has != _hasEmail) setState(() => _hasEmail = has);
+              },
+              decoration: InputDecoration(
+                labelText: 'Email',
+                helperText: _hasEmail
+                    ? 'This is the login id they sign in with'
+                    : 'Optional — without one they sign in with their phone number',
+                helperMaxLines: 2,
+                prefixIcon: const Icon(Icons.alternate_email_rounded),
+              ),
+              validator: (v) => _errorOr('email', () {
+                final text = (v ?? '').trim();
+                if (text.isEmpty) return null;
+                if (text.length > 160) return 'Keep this under 160 characters.';
+                // The same shape index.ts's EMAIL_RE accepts, so an address is not taken here
+                // and refused there.
+                if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(text)) {
+                  return 'Enter a valid email';
+                }
+                // The phone-mapping namespace is reserved — isStudentLoginEmail() in the Edge
+                // Function refuses it too. An address in it would mint the login id belonging
+                // to another resident's phone number and lock that person out for good.
+                if (text.toLowerCase().endsWith('@$studentLoginDomain')) {
+                  return 'Enter a real email address';
+                }
+                return null;
+              }),
             ),
             const SizedBox(height: Space.sm),
             TextFormField(
@@ -503,71 +579,27 @@ class _RegisterStudentSheetState extends ConsumerState<_RegisterStudentSheet> {
                       _clear('photo');
                     },
             ),
-            const SizedBox(height: Space.sm),
-            TextFormField(
-              key: _fieldKeys['email'],
-              controller: _email,
-              enabled: !_busy,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.done,
-              onChanged: (_) => _clear('email'),
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                prefixIcon: Icon(Icons.alternate_email_rounded),
-              ),
-              validator: (v) => _errorOr('email', () {
-                final text = (v ?? '').trim();
-                if (text.isEmpty) return null;
-                if (text.length > 160) return 'Keep this under 160 characters.';
-                // The same shape index.ts's EMAIL_RE accepts, so an address is not taken here
-                // and refused there.
-                return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(text)
-                    ? null
-                    : 'Enter a valid email';
-              }),
-            ),
 
             const SizedBox(height: Space.lg),
-            Container(
-              padding: const EdgeInsets.all(Space.sm),
-              decoration: BoxDecoration(
-                color: context.tones.chipFill(NivoraColors.info),
-                borderRadius: Radii.rControl,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.info_outline_rounded, size: IconSize.sm, color: context.tones.info),
-                  const SizedBox(width: Space.xs),
-                  Expanded(
-                    child: Text(
-                      'This also creates their app login. The temporary password appears once, '
-                      'on the next screen — copy it before you close it, because it is stored '
-                      'nowhere.',
-                      style: t.textTheme.bodySmall,
-                    ),
-                  ),
-                ],
+            // assign-bed-review.png's billing notice, which is the design's one aside: a
+            // `surface-container-highest` well, `rounded-lg`, a violet glyph, body copy. This
+            // and the refusal below used to be two hand-rolled boxes at 0.08 / 0.32 — numbers
+            // nobody could re-derive, and not the measured chip recipe either.
+            InfoCallout(
+              icon: Icons.info_outline_rounded,
+              child: Text(
+                'This also creates their app login. The temporary password appears once, '
+                'on the next screen — copy it before you close it, because it is stored '
+                'nowhere.',
+                style: t.textTheme.bodySmall,
               ),
             ),
             if (_banner != null) ...[
               const SizedBox(height: Space.sm),
-              Container(
-                padding: const EdgeInsets.all(Space.sm),
-                decoration: BoxDecoration(
-                  color: context.tones.error.withValues(alpha: 0.08),
-                  borderRadius: Radii.rControl,
-                  border: Border.all(color: context.tones.error.withValues(alpha: 0.32)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.error_outline_rounded,
-                        size: IconSize.sm, color: context.tones.error),
-                    const SizedBox(width: Space.xs),
-                    Expanded(child: Text(_banner!, style: t.textTheme.bodySmall)),
-                  ],
-                ),
+              InfoCallout(
+                icon: Icons.error_outline_rounded,
+                tone: NivoraColors.error,
+                child: Text(_banner!, style: t.textTheme.bodySmall),
               ),
             ],
             const SizedBox(height: Space.md),

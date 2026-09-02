@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/theme/theme.dart';
 import 'package:mobile/core/theme/tokens.dart';
 import 'package:mobile/data/models/models.dart';
+import 'package:mobile/data/providers.dart';
 import 'package:mobile/features/student/student_section.dart';
 import 'package:mobile/features/student/complaints_screen.dart';
 import 'package:mobile/features/student/fees_screen.dart';
@@ -94,11 +95,28 @@ Complaint complaint({
       updatedAt: DateTime.utc(2026, 8, 19, 19, 35),
     );
 
-Future<void> show(WidgetTester tester, Widget child) async {
+/// The hostel's contact card, as `st_hostel_contacts()` returns it.
+///
+/// Only [PayAtDeskNote] reads it among the widgets in this file — it names the warden the rent
+/// is handed to — but every `show()` supplies it, because a provider left un-overridden in a
+/// widget test reaches for a Supabase client that does not exist and then Riverpod 3 RETRIES it
+/// on a timer, which fails the test in a place that has nothing to do with what broke.
+const deskContacts = HostelContacts(
+  hostelName: 'Sunrise Residency',
+  wardenName: 'Priya Nair',
+  wardenPhone: '9000000002',
+);
+
+Future<void> show(WidgetTester tester, Widget child, {HostelContacts? contacts}) async {
   await tester.pumpWidget(
-    MaterialApp(
-      theme: NivoraTheme.light(),
-      home: Scaffold(body: SingleChildScrollView(child: child)),
+    ProviderScope(
+      overrides: [
+        hostelContactsProvider.overrideWith((ref) async => contacts),
+      ],
+      child: MaterialApp(
+        theme: NivoraTheme.light(),
+        home: Scaffold(body: SingleChildScrollView(child: child)),
+      ),
     ),
   );
   await tester.pump();
@@ -114,9 +132,14 @@ Future<void> show(WidgetTester tester, Widget child) async {
 /// assertion is unambiguous and a regression is visible rather than arguable.
 Future<void> showDark(WidgetTester tester, Widget child) async {
   await tester.pumpWidget(
-    MaterialApp(
-      theme: NivoraTheme.dark(),
-      home: Scaffold(body: SingleChildScrollView(child: child)),
+    ProviderScope(
+      overrides: [
+        hostelContactsProvider.overrideWith((ref) async => deskContacts),
+      ],
+      child: MaterialApp(
+        theme: NivoraTheme.dark(),
+        home: Scaffold(body: SingleChildScrollView(child: child)),
+      ),
     ),
   );
   await tester.pump();
@@ -234,11 +257,12 @@ void main() {
 
   // ───────────────────────────────────────────────────────────────────────────
   group('RentCard', () {
-    testWidgets('an unpaid month leads with what is owed and offers to pay', (tester) async {
-      var tapped = false;
+    testWidgets('an unpaid month leads with what is owed, and says where to pay it',
+        (tester) async {
       await show(
         tester,
-        RentCard(periodMonth: '2026-08', row: unpaidRow, onPay: () => tapped = true),
+        const RentCard(periodMonth: '2026-08', row: unpaidRow),
+        contacts: deskContacts,
       );
 
       expect(find.text('RENT · AUGUST'), findsOneWidget);
@@ -247,27 +271,72 @@ void main() {
       expect(find.text('UNPAID'), findsOneWidget);
       expect(find.text('Received so far'), findsOneWidget);
 
-      await tester.tap(find.text('Pay rent'));
-      expect(tapped, isTrue);
+      // ═══ THE PROPERTY THIS WHOLE CHANGE EXISTS FOR ═══
+      // There is NO CHECKOUT. Rent is handed over at the warden's desk, and the card says so
+      // instead of offering a button that opens a payment flow the server cannot complete.
+      expect(find.text('Or pay cash at the desk'), findsOneWidget);
+      expect(
+        find.textContaining('Hand ₹6,200 to Priya Nair'),
+        findsOneWidget,
+        reason: 'the panel repeats the balance the hero prints, and names the real warden',
+      );
+
+      // This card takes money. Asserted on the WIDGET as well as the words: the cream
+      // FilledButton is the app's one "do it now" affordance and rent is what it is spent on.
+      // EXACTLY ONE — a second cream button on the card would mean the desk panel had grown an
+      // affordance of its own, which is the thing that must never happen (paying at the desk is
+      // something a person does at an office, not something this app can do).
+      expect(find.byType(FilledButton), findsOneWidget);
+      // The figure on the button is the BALANCE from the ledger row, never the month's rent.
+      expect(find.text('Pay ₹6,200 now'), findsOneWidget);
+    });
+
+    testWidgets('with no contact card, the panel still says where to pay', (tester) async {
+      // st_hostel_contacts can be in flight, can fail, and can genuinely have no warden on the
+      // hostel. None of those change what a resident is supposed to do with their rent, so the
+      // panel degrades to the sentence without a name rather than vanishing or erroring.
+      await show(tester, const RentCard(periodMonth: '2026-08', row: unpaidRow));
+
+      expect(find.text('Or pay cash at the desk'), findsOneWidget);
+      expect(find.textContaining('Hand ₹6,200 to your warden'), findsOneWidget);
+      expect(find.textContaining('Desk:'), findsNothing);
     });
 
     testWidgets('a part payment shows the balance, not the rent', (tester) async {
-      await show(tester, RentCard(periodMonth: '2026-08', row: partialRow, onPay: () {}));
+      await show(
+        tester,
+        RentCard(periodMonth: '2026-08', row: partialRow),
+        contacts: deskContacts,
+      );
 
       // The hero figure answers "what do I still owe", which is not "what is my rent".
       expect(find.text('₹3,000'), findsNWidgets(2)); // outstanding, and received so far
       expect(find.text('₹6,000'), findsOneWidget); // rent for the month
       expect(find.text('PARTLY PAID'), findsOneWidget);
       expect(find.textContaining('16 Aug 2026'), findsOneWidget);
-      expect(find.textContaining('UPI'), findsOneWidget);
+      // The MODE OF THE PAYMENT THAT CAME IN, matched exactly. A loose `textContaining('UPI')`
+      // also matches the checkout button's own "UPI, cards, net banking and wallets" subtitle,
+      // which says what a resident COULD pay with and is a different sentence entirely.
+      expect(find.text('16 Aug 2026 · UPI'), findsOneWidget);
+      // The panel asks for the BALANCE, not the month's rent. A part-payer handing over ₹6,000
+      // again is the mistake this line exists to prevent.
+      expect(find.textContaining('Hand ₹3,000'), findsOneWidget);
     });
 
-    testWidgets('a paid month says so and does not offer to pay again', (tester) async {
-      await show(tester, RentCard(periodMonth: '2026-08', row: paidRow, onPay: () {}));
+    testWidgets('a paid month says so and asks for nothing', (tester) async {
+      await show(
+        tester,
+        const RentCard(periodMonth: '2026-08', row: paidRow),
+        contacts: deskContacts,
+      );
 
       expect(find.text('paid in full'), findsOneWidget);
       expect(find.text('PAID'), findsOneWidget);
-      expect(find.text('Pay rent'), findsNothing);
+      // A settled month is not asked to visit the desk, and nothing offers to take money for
+      // it — checked on the prefix rather than one label, so renaming cannot reintroduce it.
+      expect(find.text('Or pay cash at the desk'), findsNothing);
+      expect(find.textContaining('Pay '), findsNothing);
+      expect(find.byType(FilledButton), findsNothing);
     });
 
     testWidgets('no ledger row says so rather than drawing zero rupees', (tester) async {

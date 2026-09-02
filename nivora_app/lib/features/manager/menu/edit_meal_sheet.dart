@@ -11,10 +11,11 @@ import '../widgets/manager_ui.dart';
 
 /// Write what is being served.
 ///
-/// TABLE: public.menus, upserted on its own unique key (hostel_id, day_of_week, meal). The
-/// manager is the ONLY role that may write it; everyone in the hostel may read it
-/// (menus_select is `can_read_hostel`), which is why a careless save here is visible to every
-/// resident immediately.
+/// TABLE: public.menus, upserted on its own unique key (hostel_id, day_of_week, meal), through
+/// the shared [MenuRepository] — the same file the residents' week is read from. The manager is
+/// the ONLY role that may write it; everyone in the hostel may read it (menus_select is
+/// hostel-wide), which is why a careless save here is on every resident's home screen the
+/// moment it lands.
 ///
 /// `items` is one free-text column, not a list of dishes. This form matches the column rather
 /// than inventing structure the database cannot store: a chip editor here would have to
@@ -78,7 +79,7 @@ class _EditMealSheetState extends ConsumerState<_EditMealSheet> {
       // An empty string is a real value in this column (it is NOT NULL, default ''), so
       // clearing a meal is a save rather than a delete — and the row keeps its updated_at, so
       // the week still shows when somebody last touched it.
-      action: () => ref.read(managerRepositoryProvider).saveMeal(
+      action: () => ref.read(menuRepositoryProvider).saveMeal(
             hostelId: widget.hostelId,
             day: widget.day,
             meal: widget.meal,

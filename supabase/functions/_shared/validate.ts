@@ -232,6 +232,23 @@ export function studentLoginEmail(phone: string): string {
   return normalizePhone(phone) + "@" + STUDENT_LOGIN_DOMAIN;
 }
 
+/**
+ * Is this address inside the reserved phone-mapping namespace?
+ *
+ * It matters because a REAL email is now allowed to become a student's login (see
+ * warden-register-student). Without this check a warden could type
+ * "9812345678@student.hostelpro.local" into the email box and mint the login id that belongs
+ * to a phone number they do not control — and, worse, permanently block the resident who
+ * actually holds that number from ever being registered, because GoTrue would report the
+ * address as taken and nothing in the UI would explain why.
+ *
+ * The domain is not a real mail domain, so nobody can legitimately own an address in it.
+ * Only studentLoginEmail() may write here.
+ */
+export function isStudentLoginEmail(email: string): boolean {
+  return email.trim().toLowerCase().endsWith("@" + STUDENT_LOGIN_DOMAIN);
+}
+
 function isRealDate(iso: string): boolean {
   const [y, m, d] = iso.split("-").map(Number);
   if (m < 1 || m > 12 || d < 1 || d > 31) return false;

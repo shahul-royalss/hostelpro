@@ -37,6 +37,11 @@ Function is a server, not a browser. Every screen completes inside the app.
 | `warden-register-student` | `warden` | Creates a student login, uploads photo + ID proof, writes the students row and assigns a bed | **on** (default) |
 | `razorpay-order` | `student` | Opens a Razorpay order for the caller's own outstanding rent | **on** (default) |
 | `razorpay-webhook` | Razorpay (no user) | Receives payment webhooks, signature-verified | **off** — see §5 |
+| `email-verification` | any signed-in user | Reports whether the caller's address is proved — and records the proof when GoTrue says the confirmation link was opened | **on** (default) |
+
+`email-verification` is the only one of these that is **not** on the critical path of anything.
+It does not send mail: the app asks GoTrue for the confirmation link directly. If this function
+is down, no link is lost and none stops working — see §7.4.
 
 `verify_jwt` is a platform-level gate, and it is **not** the authorisation check. The anon key is
 itself a valid project JWT and sails straight through it. Every function above re-derives who the
@@ -245,7 +250,7 @@ before anything is created.
 
 ```jsonc
 {
-  "fullName": "…", "phone": "9876500042", "email": "optional", "dateOfJoining": "2026-08-25",
+  "fullName": "…", "phone": "9876500042", "email": "optional — see below", "dateOfJoining": "2026-08-25",
   "guardianName": "…", "guardianPhone": "9876500043", "permanentAddress": "…",
   "idProofType": "Aadhaar" | "PAN" | "Passport" | "Driving licence" | "Voter ID" | "Other",
   "bedId": "<uuid>", "monthlyFee": 7500,
@@ -269,8 +274,101 @@ HTML document is rejected rather than stored. Compress camera photos on the devi
 }
 ```
 
-The student's **login id is their phone number**; `loginId` is what they type on the sign-in
-screen.
+`loginId` is what the resident types on the sign-in screen, and **which of the two it is depends
+on `email`**:
+
+| `email` in the request | auth user's address | `loginId` returned | duplicate message on 409 |
+|---|---|---|---|
+| omitted / empty | `<phone>@student.hostelpro.local` | the phone number | "A student with this **phone number** already has an account." |
+| present | that address, lowercased | that address | "A student with this **email address** already has an account." |
+
+`email` is optional and stays optional: a hostel resident may genuinely not have one, which is
+the reason the phone mapping exists. It is not a second way in — an account has exactly one
+login id, because resolving both would need a phone→account lookup on an unauthenticated
+endpoint, which is an account-enumeration oracle. Read `loginId` rather than deriving it; the
+server is the only party that knows which box the login came from.
+
+An address ending in `@student.hostelpro.local` is **rejected** (`fieldErrors.email`,
+"Enter a real email address"). That namespace belongs to the phone mapping, and an address
+inside it would claim the login id of whoever holds that number — permanently, because GoTrue
+never releases a registered address.
+
+`public.users` carries a UNIQUE index on `lower(email) WHERE email IS NOT NULL`, and it is
+**global, not per hostel**. Two residents at two different hostels therefore cannot share one
+address — which matches GoTrue's own one-account-per-address rule, so the two agree. Residents
+with no email are unaffected: the index is partial.
+
+To give an already-registered, phone-mapped resident a real email login, see
+`db/migrations/2026-08-31-student-email-login.sql` → `app.attach_student_login_email()`. It
+renames the login in auth.users, auth.identities, public.users and public.students in one
+transaction; the password and any live session survive, and the phone number stops working as a
+login.
+
+### `email-verification`
+
+```jsonc
+{ "action": "status" }
+```
+
+```jsonc
+"data": { "email": "…", "verified": true, "verifiedAt": "2026-09-01T…Z", "required": false }
+```
+
+One action, and it is a **question that sometimes writes**. For a caller who has already proved
+their address it is a plain read. For one who has not, it asks
+`public.email_link_proof(<caller>)` whether GoTrue has recorded the confirmation link being
+opened, and stamps `public.users.email_verified_at` if it has.
+
+That is why the app calls it on every return to the foreground: the user opens the link in a
+browser or a mail app, and nothing else tells this system when that happened.
+
+**Why there is a server here at all, when the mail is sent by GoTrue.** Only the service role
+may write `email_verified_at` — `app.users_update_guard` raises `42501` for every other writer,
+including the account holder and the super admin. Something that has *seen* GoTrue accept the
+link has to be the thing that writes it, and that cannot be the phone.
+
+**What breaks if it is down:** the banner stays on screen for a little longer. The click is
+already recorded in GoTrue's own tables (`auth.flow_state.auth_code_issued_at` and
+`auth.audit_log_entries`), so the next `status` call picks it up. Contrast with the flow this
+replaced, where the same function *sent* the code and a timeout meant no code at all — that is
+the whole reason for the change. Full argument:
+`db/migrations/2026-09-02-email-link-proof-pkce.sql`, which also records why the first attempt
+read `auth.mfa_amr_claims` and why that table can never gain a row for a PKCE link click.
+
+#### What the project owner must have set, or no link ever arrives
+
+1. **Authentication → Emails → Magic Link template must contain `{{ .ConfirmationURL }}`.**
+   That is Supabase's stock template, so an untouched project is already correct. It is listed
+   because the previous, code-based flow asked for `{{ .Token }}` in that template; a template
+   edited to show only the six digits now sends mail with nothing to click.
+2. **Authentication → Attack Protection → CAPTCHA must be OFF** (or the app must supply a
+   token, which it does not). CAPTCHA refuses `/auth/v1/otp` outright. Checked live on
+   2026-09-01 and it is currently **off** — `POST /auth/v1/otp` reaches user lookup and answers
+   `otp_disabled` rather than `captcha_failed`. If it is ever switched on, the app says so in
+   those words rather than blaming the user's connection.
+3. **A working mail sender.** Supabase's built-in SMTP is rate-limited to a handful of messages
+   an hour and is not for production; a real SMTP provider belongs in
+   Authentication → Emails → SMTP Settings before this ships to a hostel.
+4. **Authentication → URL Configuration → Redirect URLs — ONE ENTRY IS STILL MISSING.** The app
+   asks for `app.nivora.mobile://verify-email`, a custom scheme whose intent filter opens
+   Nivora, so that the link signs the person in and that sign-in *is* the proof. GoTrue accepts
+   a `redirect_to` only if it is on the allow-list or shares a hostname with the Site URL, and a
+   custom scheme shares a hostname with nothing — so it needs the allow-list entry.
+
+   Site URL itself is **already correct** (`https://hostelpro-three.vercel.app`); earlier
+   revisions of this file said `http://localhost:3000`, which the owner has since fixed. It does
+   not need to change again.
+
+   Measured 2026-09-01 by asking `/auth/v1/verify` to redirect a dead token and reading the
+   `Location` header: `app.nivora.mobile://verify-email` and a deliberately bogus URL are both
+   **silently substituted** with the Site URL, while a same-host URL is honoured. GoTrue never
+   refuses an unlisted redirect out loud, so there is no error for the app to catch and no way
+   for this server to detect the condition.
+
+   It costs the sign-in-by-link, **never the verification** — GoTrue matches the token at
+   `/auth/v1/verify` before it redirects, and `public.email_link_proof()` reads that back from
+   GoTrue's own tables afterwards. The exact string to paste, and every fallback, are in
+   `docs/email-verification.md` §0 and §4.
 
 ---
 

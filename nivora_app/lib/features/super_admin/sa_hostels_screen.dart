@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../common/refresh.dart';
 import 'create/create_wizard_screen.dart';
 import 'data/sa_providers.dart';
 import 'sa_hostel_detail_screen.dart';
@@ -59,13 +60,39 @@ class _SaHostelsScreenState extends ConsumerState<SaHostelsScreen> {
     super.dispose();
   }
 
+  /// Non-null when the last attempt at the next page failed. Drawn in the footer, with a way
+  /// to ask again — see [SaLoadMoreFooter].
+  AppFailure? _loadMoreError;
+
+  /// Stops the scroll listener re-firing into a request that is already running, and stops it
+  /// hammering a connection that has just refused: after a failure the next page is asked for
+  /// by TAP, not by scrolling past the same pixel again.
+  bool _loadingMore = false;
+
   void _onScroll() {
     if (!_scroll.hasClients) return;
     // 400dp before the end: far enough that the next page usually lands before the reader
     // reaches the gap, close enough that it is not fetched for a flick that turns around.
     if (_scroll.position.pixels < _scroll.position.maxScrollExtent - 400) return;
+    _loadMore();
+  }
+
+  /// THE FAILURE IS KEPT. `PagedNotifier.loadMore` returns it rather than throwing, and this
+  /// used to be `unawaited(...)` — so a page that did not load left the footer's spinner
+  /// turning for ever with nothing on screen to read and nothing to tap.
+  Future<void> _loadMore() async {
+    if (_loadingMore || _loadMoreError != null) return;
+    _loadingMore = true;
     final query = ref.read(saHostelFilterProvider);
-    unawaited(ref.read(saHostelListProvider(query).notifier).loadMore());
+    final failure = await ref.read(saHostelListProvider(query).notifier).loadMore();
+    _loadingMore = false;
+    if (!mounted || failure == null) return;
+    setState(() => _loadMoreError = failure);
+  }
+
+  void _retryLoadMore() {
+    setState(() => _loadMoreError = null);
+    _loadMore();
   }
 
   void _search(String value) {
@@ -147,6 +174,8 @@ class _SaHostelsScreenState extends ConsumerState<SaHostelsScreen> {
                 page: page,
                 query: query,
                 scroll: _scroll,
+                loadMoreError: _loadMoreError,
+                onRetryLoadMore: _retryLoadMore,
                 onClearFilters: () {
                   _timer?.cancel();
                   _controller.clear();
@@ -221,6 +250,8 @@ class _HostelList extends ConsumerWidget {
     required this.page,
     required this.query,
     required this.scroll,
+    required this.loadMoreError,
+    required this.onRetryLoadMore,
     required this.onClearFilters,
     required this.verdict,
     required this.onRecheck,
@@ -238,6 +269,10 @@ class _HostelList extends ConsumerWidget {
 
   /// Re-runs both reads. The only exit from [SaEmptyVerdict.unverified].
   final VoidCallback onRecheck;
+
+  /// The next page's failure, and the way to ask for it again.
+  final AppFailure? loadMoreError;
+  final VoidCallback onRetryLoadMore;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -270,6 +305,11 @@ class _HostelList extends ConsumerWidget {
 
             SaEmptyVerdict.refused => const SaNotPermitted(),
 
+            // NOT SaNotPermitted, and not SaUnverified's "check again" either. The read
+            // that would have explained this emptiness died with the access token, so the
+            // only honest thing on screen is the way to get a live one.
+            SaEmptyVerdict.credentialDead => const SaSessionEnded(),
+
             // Only here is the emptiness a fact, so only here is an empty state drawn.
             SaEmptyVerdict.confirmed => query.isFiltered
                 ? SaEmpty(
@@ -298,9 +338,9 @@ class _HostelList extends ConsumerWidget {
     }
 
     return RefreshIndicator(
-      onRefresh: () async {
+      onRefresh: () {
         ref.invalidate(saHostelListProvider(query));
-        await ref.read(saHostelListProvider(query).future);
+        return settleRefresh(context, () => ref.read(saHostelListProvider(query).future));
       },
       child: ListView.separated(
         controller: scroll,
@@ -313,7 +353,15 @@ class _HostelList extends ConsumerWidget {
         itemCount: page.items.length + 1,
         separatorBuilder: (_, _) => const SizedBox(height: Space.sm),
         itemBuilder: (context, index) {
-          if (index == page.items.length) return _ListFooter(page: page);
+          if (index == page.items.length) {
+            return SaLoadMoreFooter(
+              hasMore: page.hasMore,
+              shown: page.items.length,
+              noun: 'hostel',
+              error: loadMoreError,
+              onRetry: onRetryLoadMore,
+            );
+          }
           final hostel = page.items[index];
           return SaHostelCard(
             hostel: hostel,
@@ -322,32 +370,6 @@ class _HostelList extends ConsumerWidget {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-/// The end of the list: either "loading more", or the honest total on screen.
-class _ListFooter extends StatelessWidget {
-  const _ListFooter({required this.page});
-  final PagedResult<SaHostelRow> page;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: Space.md),
-      child: Center(
-        child: page.hasMore
-            ? const SizedBox(
-                height: 22,
-                width: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            // "20 hostels shown" would be a claim about the platform; this is a claim about the
-            // list, which is the only one this screen can make honestly.
-            : Text('${plural(page.items.length, 'hostel')} shown',
-                style: t.textTheme.bodySmall),
       ),
     );
   }

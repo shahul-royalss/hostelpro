@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/perf/tab_warmer.dart';
+import '../../core/theme/tokens.dart';
 import '../../data/providers.dart';
+import '../../shared/glass/glass.dart';
 import 'complaints/warden_complaints_screen.dart';
 import 'data/warden_providers.dart';
 import 'fees/warden_fees_screen.dart';
@@ -81,7 +83,13 @@ class _WardenShellState extends ConsumerState<WardenShell> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final index = ref.watch(wardenTabProvider);
+    // CLAMPED, like the owner's, the student's and the super admin's sections already are.
+    // [wardenTabProvider] is a plain `Notifier<int>` whose `go()` takes any int, and every
+    // caller today passes a literal in range — but an IndexedStack handed an index past its
+    // last child does not fall back to anything. In a release build the assert that would have
+    // caught it is compiled out and the render object dereferences null, so the tab bar keeps
+    // drawing over a body that is nothing at all. One deep link off by one is the whole cost.
+    final index = ref.watch(wardenTabProvider).clamp(0, 4);
     final hostelId = ref.watch(currentHostelIdProvider);
 
     // A tap must never wait for the warmer: the selected tab is mounted in the same build
@@ -111,37 +119,60 @@ class _WardenShellState extends ConsumerState<WardenShell> {
           _mounted.contains(4) ? const WardenComplaintsScreen() : const SizedBox.shrink(),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: (i) => ref.read(wardenTabProvider.notifier).go(i),
-        // 64dp keeps every destination above the 48dp minimum with room for the label — at
-        // 1.0x. NavigationBar honours this height literally, so at 1.4x the label was clipped
-        // against the icon; scaling it and capping the growth keeps the bar off the content.
-        height: MediaQuery.textScalerOf(context).scale(64).clamp(64.0, 88.0),
-        backgroundColor: t.colorScheme.surface,
-        indicatorColor: t.colorScheme.primary.withValues(alpha: 0.12),
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: [
-          const NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Home'),
-          const NavigationDestination(
-              icon: Icon(Icons.people_alt_rounded), label: 'Students'),
-          const NavigationDestination(
-              icon: Icon(Icons.meeting_room_rounded), label: 'Rooms'),
-          NavigationDestination(
-            icon: _Badged(
-              count: stats?.studentsUnpaid,
-              child: const Icon(Icons.payments_rounded),
-            ),
-            label: 'Payments',
+      // THE FIGMA FILE DRAWS NO TAB BAR. Every `screen-warden-*` frame ends in an iOS home
+      // indicator (4:721, 4:819) and nothing else, so there is no bar in the file to copy and
+      // this shape is the app's own: `surface-container` — the design's raised fill, which is
+      // what its own bars and icon buttons paint — with a rounded top and one `#292E33`
+      // hairline along it, which is the only edge treatment the file uses anywhere.
+      //
+      // The colours, the indicator and the label size come from the theme's navigationBarTheme;
+      // all this adds is the shape, which a NavigationBar cannot express on its own. The
+      // hairline is GlassSurface.edgeColor so it moves with the rest of the app's pane edges.
+      bottomNavigationBar: DecoratedBox(
+        decoration: BoxDecoration(
+          color: GlassWeight.regular.surfaceOf(t.colorScheme),
+          borderRadius: Radii.rSheetTop,
+          border: Border(
+            top: BorderSide(color: GlassSurface.edgeColor(context), width: Strokes.hairline),
           ),
-          NavigationDestination(
-            icon: _Badged(
-              count: stats?.openComplaints,
-              child: const Icon(Icons.report_problem_rounded),
-            ),
-            label: 'Complaints',
+        ),
+        child: ClipRRect(
+          borderRadius: Radii.rSheetTop,
+          child: NavigationBar(
+            selectedIndex: index,
+            onDestinationSelected: (i) => ref.read(wardenTabProvider.notifier).go(i),
+            // 64dp keeps every destination above the 48dp minimum with room for the label — at
+            // 1.0x. NavigationBar honours this height literally, so at 1.4x the label was
+            // clipped against the icon; scaling it and capping the growth keeps the bar off the
+            // content.
+            height: MediaQuery.textScalerOf(context).scale(64).clamp(64.0, 88.0),
+            // Transparent: the shape above paints the fill, and a second opaque colour inside
+            // the clip would square the corners off again.
+            backgroundColor: Colors.transparent,
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            destinations: [
+              const NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Home'),
+              const NavigationDestination(
+                  icon: Icon(Icons.people_alt_rounded), label: 'Students'),
+              const NavigationDestination(
+                  icon: Icon(Icons.meeting_room_rounded), label: 'Rooms'),
+              NavigationDestination(
+                icon: _Badged(
+                  count: stats?.studentsUnpaid,
+                  child: const Icon(Icons.payments_rounded),
+                ),
+                label: 'Payments',
+              ),
+              NavigationDestination(
+                icon: _Badged(
+                  count: stats?.openComplaints,
+                  child: const Icon(Icons.report_problem_rounded),
+                ),
+                label: 'Complaints',
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

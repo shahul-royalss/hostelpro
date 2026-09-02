@@ -8,27 +8,30 @@ import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../../shared/glass/glass.dart';
+import '../auth/verify_email_screen.dart';
+import '../common/refresh.dart';
+import '../settings/security_screen.dart';
 import 'create/create_wizard_screen.dart';
 import 'data/sa_models.dart';
 import 'data/sa_providers.dart';
 import 'widgets/sa_ui.dart';
 
-/// SA-1 — the platform at a glance.
+/// SA-1 — the platform at a glance. FIGMA `screen-dashboard`, node 4:125.
 ///
 /// RPCs: public.rpc_sa_dashboard() (via the shared saStatsProvider),
 ///       public.rpc_sa_onboarding_series(), public.security_alerts (open count).
 ///
-/// ── ONE HERO FIGURE, NOT A WALL OF CARDS ─────────────────────────────────────────────────
+/// ── THE MOCKUP'S SHAPE, WHICH IS NOT THE SHAPE THIS SCREEN HAD ───────────────────────────
 ///
-/// rpc_sa_dashboard returns seven numbers and the temptation is to draw seven equal tiles. Six
-/// panes of equal weight say nothing about which one matters, and this screen has a clear
-/// answer to that: hostels on the platform is what the business IS, so it gets the 40pt figure
-/// and everything else is arranged around it in decreasing order of "does this need me today".
+/// 4:125 is one document, not a stack of cards. Four small KPI tiles two-up, a hairline, a
+/// section in 12px caps, a hairline, another section, and so on to the bottom. Nothing on it is
+/// set larger than 16px. This screen used to lead with a 32pt hero figure inside a full-width
+/// pane and then four more full-width panes under it — a shape that made every number look
+/// equally like the point and pushed the two sections that are actually about ACTION
+/// (subscription health, outstanding alerts) below the fold on a 360dp phone.
 ///
-/// The band under the hero is the only part that is about ACTION. Expiring, expired and
-/// unacknowledged alerts are the three things a platform admin is the only person able to fix,
-/// and each one opens the tab that lists exactly what it counted — the number and the list it
-/// leads to are the same query, so they cannot disagree.
+/// The order is the mockup's: KPIs · subscription health · onboarding · security. What sits
+/// above them, and is not in the mockup at all, is the create banner — see [_CreateBanner].
 ///
 /// ── NOTHING HERE IS COMPUTED FROM A PAGE ─────────────────────────────────────────────────
 ///
@@ -36,6 +39,16 @@ import 'widgets/sa_ui.dart';
 /// ABSENT: rpc_sa_dashboard does not return it, and deriving it from the twenty hostels that
 /// happen to be on page one would be wrong by exactly the amount that did not fit. Occupancy is
 /// shown per hostel on the Hostels tab, where the row carries its own counted beds.
+///
+/// ── AND THE SECURITY SECTION IS A COUNT, NOT A LIST ──────────────────────────────────────
+///
+/// 4:201 draws the two most recent alerts in full. This screen may not read them. The product
+/// owner's requirement — held down by test/super_admin_warmup_test.dart — is that the Overview
+/// has the network to ITSELF for its first paint, and that the other three tabs' data is warmed
+/// behind it on a stagger. Watching `saAlertsProvider` here would put a fourth request in the
+/// first frame, contend with `rpc_sa_dashboard`, and make the Security tab's warm-up arrive
+/// twice. The count that `saOpenAlertCountProvider` already reads is what this screen is
+/// entitled to, so the section is drawn in the mockup's row anatomy around that one number.
 class SaOverviewScreen extends ConsumerWidget {
   const SaOverviewScreen({super.key});
 
@@ -44,39 +57,56 @@ class SaOverviewScreen extends ConsumerWidget {
     final stats = ref.watch(saStatsProvider);
 
     return SaScreen(
-      title: 'Platform',
+      title: 'Platform overview',
       subtitle: _greeting(ref.watch(sessionProvider)?.fullName),
       actions: [
-        IconButton(
+        // Two-factor enrolment. Every role's header carries one — see
+        // features/settings/security_screen.dart.
+        SaIconButton(
+          icon: Icons.shield_outlined,
+          tooltip: 'Security',
+          onPressed: () => openSecurity(context),
+        ),
+        SaIconButton(
+          icon: Icons.logout_rounded,
           tooltip: 'Sign out',
           onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
-          icon: const Icon(Icons.logout_rounded),
         ),
       ],
-      onRefresh: () async {
+      // Bounded, and it says so when it fails. This used to be a bare
+      // `await ref.read(saStatsProvider.future)`: on a backend that accepts the socket and
+      // never answers, riverpod's own retry schedule held the spinner for over two minutes and
+      // then threw the failure out of the callback unhandled. See features/common/refresh.dart.
+      onRefresh: () {
         ref.invalidate(saStatsProvider);
         ref.invalidate(saOnboardingProvider);
         ref.invalidate(saOpenAlertCountProvider);
-        await ref.read(saStatsProvider.future);
+        return settleRefresh(context, () => ref.read(saStatsProvider.future));
       },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // The super admin is the account this matters most for: creating an owner is the
+          // single most consequential mint in the product, and requireVerifiedEmail() in
+          // sa-create-owner will refuse it until this banner is answered.
+          const VerifyEmailBanner(),
+          _CreateBanner(
+            onCreate: () => Navigator.of(context).push(CreateWizardScreen.route()),
+          ),
+          const SaSectionRule(),
           saAsync<SaStats?>(
             stats,
-            loading: () => const _HeroSkeleton(),
+            loading: () => const _PlatformSkeleton(),
             error: (e) => SaError(error: e, onRetry: () => ref.invalidate(saStatsProvider)),
             // Zero rows is a refusal expressed as emptiness, not an empty platform. See
             // DashboardRepository.superAdminStats.
             data: (value) =>
                 value == null ? const SaNotPermitted() : _Platform(stats: value),
           ),
-          const SizedBox(height: Space.lg),
+          const SaSectionRule(),
           const _Onboarding(),
-          const SizedBox(height: Space.lg),
-          _CreateBanner(
-            onCreate: () => Navigator.of(context).push(CreateWizardScreen.route()),
-          ),
+          const SaSectionRule(),
+          const _Security(),
         ],
       ),
     );
@@ -90,228 +120,150 @@ class SaOverviewScreen extends ConsumerWidget {
   }
 }
 
-/// The hero, the attention band and the two supporting figures.
+/// The KPI block and the subscription-health bar — 4:140 and 4:160.
 class _Platform extends ConsumerWidget {
   const _Platform({required this.stats});
   final SaStats stats;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── THE ONE ELEVATED THING ON THIS SCREEN ──
-        GlassCard(
-          padding: const EdgeInsets.all(Space.lg),
-          semanticLabel: '${stats.totalHostels} hostels on the platform',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('HOSTELS ON NIVORA', style: t.textTheme.labelSmall),
-              const SizedBox(height: Space.xxs),
-              Text(count(stats.totalHostels), style: t.textTheme.headlineLarge),
-              const SizedBox(height: Space.xs),
-              Text(
-                '${plural(stats.totalOwners, 'owner')} · '
-                '${plural(stats.totalStudents, 'resident')} in residence',
-                style: t.textTheme.bodyMedium,
-              ),
-            ],
+        // 4:141 and 4:150 — two rows of two, 8dp apart, in the mockup's own order.
+        _KpiRow(
+          left: SaKpiTile(
+            label: 'Subscription revenue',
+            value: money(stats.monthlySubscriptionRevenue),
+            // Says exactly what the SQL sums: rows CREATED this calendar month, which is new
+            // sales plus renewals — not a recurring monthly figure. Labelling the tile "MRR"
+            // would be a different number the database does not hold.
+            semantics: 'Subscription revenue, from subscriptions started or renewed this '
+                'calendar month: ${money(stats.monthlySubscriptionRevenue)}',
+          ),
+          right: SaKpiTile(
+            label: 'Hostels',
+            value: count(stats.totalHostels),
+            semantics: 'Hostels on Nivora: ${count(stats.totalHostels)}',
           ),
         ),
-        const SizedBox(height: Space.lg),
-
-        // ── WHAT NEEDS THE ADMIN TODAY ──
-        SaHeading(
-          title: 'Needs attention',
+        const SizedBox(height: Space.xs),
+        _KpiRow(
+          left: SaKpiTile(
+            label: 'Owners',
+            value: count(stats.totalOwners),
+            semantics: 'Owner accounts that can sign in and run a property: '
+                '${count(stats.totalOwners)}',
+          ),
+          right: SaKpiTile(
+            label: 'Residents',
+            value: count(stats.totalStudents),
+            semantics: 'Residents in residence across every hostel: '
+                '${count(stats.totalStudents)}',
+          ),
+        ),
+        const SaSectionRule(),
+        const SaHeading(
+          title: 'Subscription health',
           caption: 'An expired subscription makes a hostel read-only for everyone in it.',
         ),
-        Row(
-          children: [
-            Expanded(
-              child: _AttentionTile(
-                label: 'Expiring',
-                value: stats.expiringSubs,
-                caption: '15 days or fewer',
-                icon: Icons.schedule_rounded,
-                tone: context.tones.warning,
-                onTap: () => _openSubscriptions(ref, SubscriptionState.expiring),
-              ),
-            ),
-            const SizedBox(width: Space.sm),
-            Expanded(
-              child: _AttentionTile(
-                label: 'Expired',
-                value: stats.expiredSubs,
-                caption: 'Read-only now',
-                icon: Icons.lock_rounded,
-                tone: context.tones.error,
-                onTap: () => _openSubscriptions(ref, SubscriptionState.expired),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: Space.sm),
-        const _AlertsTile(),
-        const SizedBox(height: Space.lg),
-
-        // ── REPORTING ──
-        SaHeading(title: 'This month'),
-        Row(
-          children: [
-            Expanded(
-              child: GlassStatCard(
-                label: 'Subscription revenue',
-                value: money(stats.monthlySubscriptionRevenue),
-                // Says exactly what the SQL sums: rows CREATED this calendar month, which is
-                // new sales plus renewals — not a recurring monthly figure. Labelling it "MRR"
-                // would be a different number the database does not hold.
-                caption: 'Subscriptions started or renewed this month',
-                icon: Icons.payments_rounded,
-              ),
-            ),
-            const SizedBox(width: Space.sm),
-            Expanded(
-              child: GlassStatCard(
-                label: 'Active subscriptions',
-                value: count(stats.activeSubs),
-                caption: 'of ${plural(stats.totalHostels, 'hostel')}',
-                icon: Icons.verified_rounded,
-                tone: NivoraColors.success,
-              ),
-            ),
-          ],
-        ),
+        _Health(stats: stats),
       ],
     );
   }
-
-  /// Lands the admin on the list the number was counting, already filtered.
-  static void _openSubscriptions(WidgetRef ref, SubscriptionState state) {
-    ref.read(saSubscriptionFilterProvider.notifier).set(state);
-    ref.read(saTabProvider.notifier).go(SaTabs.subscriptions);
-  }
 }
 
-/// One of the two subscription-health tiles.
+/// Two KPI tiles side by side, both as tall as the taller one.
 ///
-/// Drawn flat and tinted only when there is something to report: a red "0 expired" tile every
-/// morning is how a red tile stops meaning anything by Wednesday.
-class _AttentionTile extends StatelessWidget {
-  const _AttentionTile({
-    required this.label,
-    required this.value,
-    required this.caption,
-    required this.icon,
-    required this.tone,
-    required this.onTap,
-  });
+/// [IntrinsicHeight] IS THE POINT OF THIS WIDGET. `CrossAxisAlignment.stretch` cannot do the job
+/// on its own: the whole screen lives inside a `SingleChildScrollView`, so the Row's own height
+/// constraint is unbounded and "stretch to my height" resolves to infinity — the layout assert
+/// this class was written to fix. Two small tiles is the size of subtree an intrinsic pass is
+/// cheap on, and the alternative — letting a two-line label leave a visible step in the middle
+/// of the grid — is the one thing that makes a KPI block look broken.
+class _KpiRow extends StatelessWidget {
+  const _KpiRow({required this.left, required this.right});
 
-  final String label;
-  final int value;
-  final String caption;
-  final IconData icon;
-  final Color tone;
-  final VoidCallback onTap;
+  final Widget left;
+  final Widget right;
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final quiet = value == 0;
-    final accent = quiet ? t.colorScheme.outline : tone;
-
-    return SaTapCard(
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Icon(icon, size: IconSize.sm, color: accent),
-              const SizedBox(width: Space.xs),
-              Expanded(
-                child: Text(label.toUpperCase(),
-                    style: t.textTheme.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-              ),
-            ],
-          ),
-          const SizedBox(height: Space.xs),
-          Text(
-            count(value),
-            style: t.textTheme.headlineMedium?.copyWith(color: quiet ? null : tone),
-          ),
-          const SizedBox(height: Space.xxs),
-          Text(quiet ? 'None' : caption, style: t.textTheme.bodySmall),
+          Expanded(child: left),
+          const SizedBox(width: Space.xs),
+          Expanded(child: right),
         ],
       ),
     );
   }
 }
 
-/// Unacknowledged security alerts, and the way into the console.
-class _AlertsTile extends ConsumerWidget {
-  const _AlertsTile();
+/// The design's segmented health bar — 4:162 with the legend at 4:166.
+///
+/// ── THE DENOMINATOR IS NOT `totalHostels` ────────────────────────────────────────────────
+///
+/// `app.subscription_state(h.id)` returns exactly one of active / expiring / expired per hostel,
+/// so the three counts are mutually exclusive and their SUM is the number of hostels the server
+/// actually classified. That sum is the denominator, and [SaSegmentBar] gets it by construction
+/// from the flex factors. Dividing by `totalHostels` instead would silently fold "has no
+/// subscription at all" into the picture as missing percentage points, and a bar that fails to
+/// reach the end of its own track invites exactly the wrong conclusion — that something lapsed —
+/// when the truth is that a hostel was never sold one.
+class _Health extends ConsumerWidget {
+  const _Health({required this.stats});
+  final SaStats stats;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
-    final open = ref.watch(saOpenAlertCountProvider);
+    final classified = stats.activeSubs + stats.expiringSubs + stats.expiredSubs;
+    if (classified == 0) {
+      return const SaEmpty(
+        icon: Icons.receipt_long_outlined,
+        title: 'No subscriptions yet',
+        message: 'Nothing on the platform has been sold a subscription, so there is no health '
+            'to report. The first one is created with the hostel.',
+      );
+    }
 
-    return saAsync<int>(
-      open,
-      loading: () => const SaSkeletonCard(lines: 1, height: 76),
-      // An alert console that cannot be read is itself worth saying out loud, quietly.
-      error: (e) => SaError(
-        error: e,
-        compact: true,
-        onRetry: () => ref.invalidate(saOpenAlertCountProvider),
-      ),
-      data: (value) {
-        final tone = value == 0 ? t.colorScheme.outline : context.tones.error;
-        return SaTapCard(
-          onTap: () => ref.read(saTabProvider.notifier).go(SaTabs.security),
-          child: Row(
-            children: [
-              Icon(
-                value == 0 ? Icons.shield_outlined : Icons.gpp_maybe_rounded,
-                size: IconSize.lg,
-                color: tone,
-              ),
-              const SizedBox(width: Space.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('SECURITY', style: t.textTheme.labelSmall),
-                    const SizedBox(height: Space.xxs),
-                    Text(
-                      value == 0
-                          ? 'Nothing outstanding'
-                          : '${plural(value, 'alert')} awaiting acknowledgement',
-                      style: t.textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: Space.xxs),
-                    Text(
-                      'Raised by the audit trail when it spots a pattern — a burst of failed '
-                      'logins, or a session probing for rows it cannot read.',
-                      style: t.textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: Space.xs),
-              Icon(Icons.chevron_right_rounded, color: t.colorScheme.outline),
-            ],
-          ),
-        );
-      },
+    // Each band opens the list its number was counting, already filtered — the number and the
+    // list it leads to are the same query, so they cannot disagree.
+    return SaSegmentBar(
+      segments: [
+        SaSegment(
+          label: 'Active',
+          value: stats.activeSubs,
+          tone: NivoraColors.success,
+          onTap: () => _openSubscriptions(ref, SubscriptionState.active),
+        ),
+        SaSegment(
+          label: 'Expiring',
+          value: stats.expiringSubs,
+          tone: NivoraColors.warning,
+          onTap: () => _openSubscriptions(ref, SubscriptionState.expiring),
+        ),
+        SaSegment(
+          label: 'Expired',
+          value: stats.expiredSubs,
+          tone: NivoraColors.error,
+          onTap: () => _openSubscriptions(ref, SubscriptionState.expired),
+        ),
+      ],
     );
   }
 }
 
-/// Twelve months of hostels joining the platform. public.rpc_sa_onboarding_series().
+/// Lands the admin on the list the number was counting, already filtered.
+void _openSubscriptions(WidgetRef ref, SubscriptionState state) {
+  ref.read(saSubscriptionFilterProvider.notifier).set(state);
+  ref.read(saTabProvider.notifier).go(SaTabs.subscriptions);
+}
+
+/// Twelve months of hostels joining the platform — the mockup's growth chart at 4:177.
+/// public.rpc_sa_onboarding_series().
 ///
 /// DRAWN BY HAND rather than with a charting library, for twelve integers. The series is
 /// generated by `generate_series` and zero-filled server-side, so a short bar is a quiet month
@@ -325,71 +277,174 @@ class _Onboarding extends ConsumerWidget {
     final t = Theme.of(context);
     final series = ref.watch(saOnboardingProvider);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SaHeading(title: 'Onboarding', caption: 'Hostels added, last 12 months'),
-        saAsync<List<OnboardingPoint>>(
-          series,
-          loading: () => const SaSkeletonCard(lines: 3, height: 150),
-          error: (e) => SaError(
+    return saAsync<List<OnboardingPoint>>(
+      series,
+      loading: () => const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SaHeading(title: 'Hostel onboarding'),
+          SaSkeletonCard(lines: 3, height: 132),
+        ],
+      ),
+      error: (e) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SaHeading(title: 'Hostel onboarding'),
+          SaError(
             error: e,
             compact: true,
             onRetry: () => ref.invalidate(saOnboardingProvider),
           ),
-          data: (points) {
-            if (points.isEmpty) {
-              // NOT "no history yet", which is what this used to say. rpc_sa_onboarding_series
-              // is a generate_series over twelve months with a count per month and
-              // `where app.is_super_admin()` on the end: a Super Admin gets twelve rows on the
-              // day the platform is created, because a month with nothing in it is still a row.
-              // NO rows at all is the refusal, and only the refusal. Said plainly rather than
-              // as a second alarm — the hero above has already said it in full.
-              return const SaEmpty(
+        ],
+      ),
+      data: (points) {
+        if (points.isEmpty) {
+          // NOT "no history yet". rpc_sa_onboarding_series is a generate_series over twelve
+          // months with a count per month and `where app.is_super_admin()` on the end: a Super
+          // Admin gets twelve rows on the day the platform is created, because a month with
+          // nothing in it is still a row. NO rows at all is the refusal, and only the refusal.
+          // Said plainly rather than as a second alarm — the block above has already said it
+          // in full.
+          return const Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SaHeading(title: 'Hostel onboarding'),
+              SaEmpty(
                 icon: Icons.lock_outline_rounded,
                 title: 'Onboarding history withheld',
                 message: 'The server returns twelve months for the Super Admin whether or not '
                     'anything happened in them, so nothing coming back means this account was '
                     'not given the series — not that the platform is new.',
-              );
-            }
-            final peak = points.fold<int>(0, (m, p) => p.hostels > m ? p.hostels : m);
-            final total = points.fold<int>(0, (s, p) => s + p.hostels);
-            final latest = points.last;
+              ),
+            ],
+          );
+        }
 
-            return FlatSurface(
-              padding: const EdgeInsets.all(Space.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    latest.hostels == 0
-                        ? 'None yet in ${monthLabel(latest.month)}'
-                        : '${plural(latest.hostels, 'hostel')} in ${monthLabel(latest.month)}',
-                    style: t.textTheme.titleMedium,
+        final total = points.fold<int>(0, (s, p) => s + p.hostels);
+        final latest = points.last;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 4:178 puts the section label on the left and one figure in the gold on the right.
+            SaHeading(
+              title: 'Hostel onboarding',
+              caption: 'Added per month, last ${plural(points.length, 'month')} · '
+                  '${plural(total, 'hostel')} over the period',
+              accent: _momLabel(points),
+            ),
+            const SizedBox(height: Space.xs),
+            SaBarChart(
+              bars: [
+                for (final point in points)
+                  SaBar(
+                    label: monthShort(point.month),
+                    value: point.hostels,
+                    caption: '${monthLabel(point.month)}: ${plural(point.hostels, 'hostel')}',
                   ),
-                  const SizedBox(height: Space.xxs),
-                  Text('${plural(total, 'hostel')} over the period',
-                      style: t.textTheme.bodySmall),
-                  const SizedBox(height: Space.md),
-                  SizedBox(
-                    height: 88,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+              ],
+            ),
+            const SizedBox(height: Space.xs),
+            Text(
+              latest.hostels == 0
+                  ? 'None yet in ${monthLabel(latest.month)}'
+                  : '${plural(latest.hostels, 'hostel')} in ${monthLabel(latest.month)}',
+              style: t.textTheme.titleSmall,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// The gold figure the design puts at the right of the growth section's title — 4:180, `+14% MoM`.
+///
+/// ARITHMETIC ON THE SERIES THE SERVER RETURNED, not a stored metric and not an invented one:
+/// `rpc_sa_onboarding_series` hands back a count per month, and the change from the previous
+/// month to the latest is a function of two of those counts. This is the one place a derived
+/// figure is allowed on this screen, and it is allowed because both of its inputs are on the
+/// chart directly beneath it.
+///
+/// NULL RATHER THAN A NUMBER whenever the change cannot be stated honestly: with fewer than two
+/// months there is nothing to compare, and from a previous month of ZERO every percentage is
+/// either undefined or absurd — one hostel after a quiet month is not "+100% growth". The slot
+/// is simply not drawn in those cases, which is what an accent slot is for.
+///
+/// The previous month is NAMED. "+14% MoM" leaves the reader to guess which two months; naming
+/// one of them costs three characters and removes the guess.
+String? _momLabel(List<OnboardingPoint> points) {
+  if (points.length < 2) return null;
+  final now = points[points.length - 1].hostels;
+  final before = points[points.length - 2].hostels;
+  if (before == 0) return null;
+  final pct = ((now - before) / before * 100).round();
+  return '${pct > 0 ? '+' : ''}$pct% vs ${monthShort(points[points.length - 2].month)}';
+}
+
+/// Unacknowledged security alerts, and the way into the console — 4:201.
+///
+/// A COUNT AND NOT THE MOCKUP'S TWO ROWS. See the class note on [SaOverviewScreen]: reading the
+/// alert log here would cost the Overview its uncontended first paint, which is the thing the
+/// warm-up tests exist to protect. The row below is the mockup's alert-row anatomy — the tinted
+/// caps badge, the sentence in cream, one meta line — around the number this screen may read.
+class _Security extends ConsumerWidget {
+  const _Security();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context);
+    final open = ref.watch(saOpenAlertCountProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SaHeading(title: 'Security alerts'),
+        saAsync<int>(
+          open,
+          loading: () => const SaSkeletonCard(lines: 1, height: 72),
+          // An alert console that cannot be read is itself worth saying out loud, quietly.
+          error: (e) => SaError(
+            error: e,
+            compact: true,
+            onRetry: () => ref.invalidate(saOpenAlertCountProvider),
+          ),
+          data: (value) {
+            final quiet = value == 0;
+            final tone = quiet ? NivoraColors.textMuted : NivoraColors.error;
+            return FlatSurface(
+              weight: GlassWeight.regular,
+              padding: const EdgeInsets.all(Space.xs),
+              onTap: () => ref.read(saTabProvider.notifier).go(SaTabs.security),
+              child: Row(
+                children: [
+                  StateBadge(label: quiet ? 'Clear' : 'Open', tone: tone),
+                  const SizedBox(width: Space.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        for (final point in points)
-                          Expanded(
-                            child: _Bar(
-                              // A month with no hostels still draws a 2dp stub, so twelve
-                              // months read as twelve months rather than as a gap in the data.
-                              fraction: peak == 0 ? 0 : point.hostels / peak,
-                              value: point.hostels,
-                              month: point.month,
-                              highlight: point.month == latest.month,
-                            ),
-                          ),
+                        Text(
+                          quiet
+                              ? 'Nothing outstanding'
+                              : '${plural(value, 'alert')} awaiting acknowledgement',
+                          style: t.textTheme.bodyMedium
+                              ?.copyWith(color: t.colorScheme.onSurface),
+                        ),
+                        const SizedBox(height: Space.xxs / 2),
+                        Text(
+                          'Raised by the audit trail when it spots a pattern — a burst of '
+                          'failed logins, or a session probing for rows it cannot read.',
+                          style: t.textTheme.bodySmall,
+                        ),
                       ],
                     ),
+                  ),
+                  const SizedBox(width: Space.xs),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: IconSize.md,
+                    color: t.colorScheme.outline,
                   ),
                 ],
               ),
@@ -401,67 +456,14 @@ class _Onboarding extends ConsumerWidget {
   }
 }
 
-class _Bar extends StatelessWidget {
-  const _Bar({
-    required this.fraction,
-    required this.value,
-    required this.month,
-    required this.highlight,
-  });
-
-  final double fraction;
-  final int value;
-  final String month;
-  final bool highlight;
-
-  static const _plotHeight = 56.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final tone = highlight ? t.colorScheme.primary : t.colorScheme.primary.withValues(alpha: 0.45);
-
-    return Semantics(
-      label: '${monthLabel(month)}: ${plural(value, 'hostel')}',
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text(
-              value == 0 ? '' : '$value',
-              style: t.textTheme.labelSmall,
-              maxLines: 1,
-            ),
-            const SizedBox(height: Space.xxs),
-            // Flexible, because the column's 88dp budget also has to fit the two labels, whose
-            // heights are the font's business, not ours. At full _plotHeight the peak month's
-            // bar could exceed what is left and paint an overflow stripe across the chart; a
-            // loose fit lets that one bar give up the couple of pixels instead.
-            Flexible(
-              child: Container(
-                height: (_plotHeight * fraction).clamp(2.0, _plotHeight),
-                decoration: BoxDecoration(
-                  color: tone,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.tiny)),
-                ),
-              ),
-            ),
-            const SizedBox(height: Space.xxs),
-            Text(
-              monthShort(month),
-              style: t.textTheme.labelSmall,
-              maxLines: 1,
-              overflow: TextOverflow.clip,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// The way into the create wizard, stated as what it does rather than as a plus button.
+///
+/// NOT IN 4:125, AND KEPT ANYWAY. The mockup's dashboard has no controls on it at all — it is a
+/// reporting screen. Onboarding an owner is the one thing only this console can do, and burying
+/// it behind a plus glyph in the header would trade a legible action for a faithful screenshot.
+/// It is drawn in the design's own language — raised surface, caps label, the cream filled
+/// button — and it sits above the first hairline so the mockup's document starts, intact, below
+/// it.
 class _CreateBanner extends StatelessWidget {
   const _CreateBanner({required this.onCreate});
   final VoidCallback onCreate;
@@ -470,9 +472,10 @@ class _CreateBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return FlatSurface(
+      weight: GlassWeight.regular,
       padding: const EdgeInsets.all(Space.md),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
@@ -503,25 +506,33 @@ class _CreateBanner extends StatelessWidget {
   }
 }
 
-class _HeroSkeleton extends StatelessWidget {
-  const _HeroSkeleton();
+class _PlatformSkeleton extends StatelessWidget {
+  const _PlatformSkeleton();
 
   @override
   Widget build(BuildContext context) {
+    // Mirrors what actually arrives: two rows of two short tiles, then the health section.
+    // A skeleton whose shape differs from the loaded screen makes the content appear to jump.
     return const Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SaSkeletonCard(lines: 2, height: 148),
-        SizedBox(height: Space.lg),
         Row(
           children: [
-            Expanded(child: SaSkeletonCard(lines: 1, height: 110)),
-            SizedBox(width: Space.sm),
-            Expanded(child: SaSkeletonCard(lines: 1, height: 110)),
+            Expanded(child: SaSkeletonCard(lines: 1, height: 72)),
+            SizedBox(width: Space.xs),
+            Expanded(child: SaSkeletonCard(lines: 1, height: 72)),
           ],
         ),
-        SizedBox(height: Space.sm),
-        SaSkeletonCard(lines: 2, height: 96),
+        SizedBox(height: Space.xs),
+        Row(
+          children: [
+            Expanded(child: SaSkeletonCard(lines: 1, height: 72)),
+            SizedBox(width: Space.xs),
+            Expanded(child: SaSkeletonCard(lines: 1, height: 72)),
+          ],
+        ),
+        SaSectionRule(),
+        SaSkeletonCard(lines: 2, height: 108),
       ],
     );
   }

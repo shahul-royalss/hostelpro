@@ -58,9 +58,9 @@ class _AddStaffSheet extends ConsumerStatefulWidget {
   final String? hostelName;
   final StaffRole initialRole;
 
-  /// Roles that already have an active holder. Drawn as disabled segments rather than hidden,
-  /// so the owner can see that the post exists and is filled — §4.3 is a rule about their PG,
-  /// not a missing feature.
+  /// Roles that already have an active holder. Their card is drawn as taken rather than
+  /// hidden, so the owner can see that the post exists and is filled — §4.3 is a rule about
+  /// their PG, not a missing feature.
   final Set<StaffRole> taken;
 
   @override
@@ -215,6 +215,10 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // add-staff-details.png's head: a `label-caps` step marker in `primary` over the
+            // step's own title. The mockup says "STEP 1 OF 3"; this flow has two steps, not
+            // three — the permissions step it counts does not exist here (see the report) —
+            // so the marker names the sheet instead of counting to a step that never arrives.
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -222,9 +226,13 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('ADD STAFF', style: t.textTheme.labelSmall),
                       Text(
-                        widget.hostelName ?? 'This PG',
+                        'ADD STAFF',
+                        style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary),
+                      ),
+                      const SizedBox(height: Space.xxs / 2),
+                      Text(
+                        'Add ${_role.label.toLowerCase()}',
                         style: t.textTheme.titleLarge,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -239,6 +247,12 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                 ),
               ],
             ),
+            const SizedBox(height: Space.xxs),
+            Text(
+              'Enter the personal details and assign a role. They get their own login for '
+              '${widget.hostelName ?? 'this PG'}.',
+              style: t.textTheme.bodySmall,
+            ),
             const SizedBox(height: Space.md),
             Flexible(
               child: SingleChildScrollView(
@@ -246,16 +260,34 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _RolePicker(
-                      value: _role,
-                      taken: widget.taken,
-                      enabled: !_busy,
-                      onChanged: _pickRole,
-                    ),
+                    Text('SELECT ROLE', style: t.textTheme.labelSmall),
                     const SizedBox(height: Space.xs),
-                    Text(_role.blurb, style: t.textTheme.bodySmall),
+                    for (final role in StaffRole.values) ...[
+                      if (role != StaffRole.values.first) const SizedBox(height: Space.xs),
+                      StaffRoleCard(
+                        role: role,
+                        selected: role == _role,
+                        // A taken post is drawn as taken rather than hidden: §4.3 is a rule
+                        // about the owner's PG, not a missing feature.
+                        taken: widget.taken.contains(role),
+                        enabled: !_busy && !widget.taken.contains(role),
+                        onTap: () => _pickRole(role),
+                      ),
+                    ],
+                    const SizedBox(height: Space.md),
+                    Divider(color: t.colorScheme.outlineVariant, height: Strokes.hairline),
                     const SizedBox(height: Space.md),
 
+                    // The design labels every field with a `label-caps` eyebrow ABOVE the box
+                    // and puts an example inside it. `FloatingLabelBehavior.always` plus a
+                    // hint is exactly that arrangement, and it keeps the label a part of the
+                    // field for screen readers rather than a loose line of text near it.
+                    //
+                    // THE HINTS DESCRIBE THE SHAPE, THEY DO NOT INVENT A PERSON. The mockup
+                    // fills them with "John Doe" and "+91 98765 43210"; a placeholder is the
+                    // one place invented-looking data sits inside a real control, and a hint
+                    // that reads like a filled-in field is worth nothing anyway. The email one
+                    // keeps `example.com`, which is the reserved domain and cannot be anybody.
                     TextField(
                       controller: _name,
                       enabled: !_busy,
@@ -265,6 +297,8 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                       onChanged: (_) => _touched('fullName'),
                       decoration: InputDecoration(
                         labelText: 'Full name',
+                        floatingLabelBehavior: FloatingLabelBehavior.always,
+                        hintText: 'First and last name',
                         errorText: _errors['fullName'],
                       ),
                     ),
@@ -280,6 +314,8 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                       onChanged: (_) => _touched('email'),
                       decoration: InputDecoration(
                         labelText: 'Email',
+                        floatingLabelBehavior: FloatingLabelBehavior.always,
+                        hintText: 'name@example.com',
                         // This is not a contact detail. It is what they will type to sign in,
                         // and it is unique across the whole platform.
                         helperText: 'This is their login id.',
@@ -303,9 +339,18 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                       onSubmitted: (_) => _submit(),
                       decoration: InputDecoration(
                         labelText: 'Phone (optional)',
+                        floatingLabelBehavior: FloatingLabelBehavior.always,
+                        hintText: '10-digit mobile number',
                         errorText: _errors['phone'],
                       ),
                     ),
+                    const SizedBox(height: Space.sm),
+
+                    // The mockup's `ASSIGN TO PROPERTY` control, drawn as a fact rather than a
+                    // dropdown. The sheet is always opened FOR a PG — the caller passes its id
+                    // — so a picker here would be a control with one option that cannot change
+                    // where the account lands.
+                    _AssignedProperty(hostelName: widget.hostelName),
 
                     if (_banner != null) ...[
                       const SizedBox(height: Space.md),
@@ -349,37 +394,135 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
   }
 }
 
-/// Manager or Warden. A taken post is shown disabled rather than removed.
-class _RolePicker extends StatelessWidget {
-  const _RolePicker({
-    required this.value,
-    required this.taken,
+/// One choosable role — add-staff-details.png's `SELECT ROLE` card.
+///
+/// The design draws each role as a card of its own: an icon badge top-left, a radio top-right,
+/// the role's name in a title and what the person actually does underneath. That is a strictly
+/// better control than the segmented button this replaces, and not only cosmetically — the
+/// segments had room for the word "Manager" and nothing else, so the blurb could only be shown
+/// for whichever role was already selected. Here both descriptions are on screen while the
+/// choice is being made, which is when they are worth reading.
+///
+/// PUBLIC because owner_staff_test.dart drives §4.3 through it: a post with an active holder
+/// arrives here as [taken], and the test asserts that such a card cannot be chosen.
+class StaffRoleCard extends StatelessWidget {
+  const StaffRoleCard({
+    super.key,
+    required this.role,
+    required this.selected,
     required this.enabled,
-    required this.onChanged,
+    required this.onTap,
+    this.taken = false,
   });
 
-  final StaffRole value;
-  final Set<StaffRole> taken;
+  final StaffRole role;
+  final bool selected;
+
+  /// False while a create is in flight, or when this post is [taken].
   final bool enabled;
-  final ValueChanged<StaffRole> onChanged;
+
+  /// This PG already has an active holder for this role.
+  final bool taken;
+
+  final VoidCallback onTap;
+
+  IconData get _icon => switch (role) {
+        StaffRole.manager => Icons.manage_accounts_rounded,
+        StaffRole.warden => Icons.shield_rounded,
+      };
 
   @override
   Widget build(BuildContext context) {
-    return SegmentedButton<StaffRole>(
-      segments: [
-        for (final role in StaffRole.values)
-          ButtonSegment<StaffRole>(
-            value: role,
-            label: Text(role.label),
-            enabled: enabled && !taken.contains(role),
-            tooltip: taken.contains(role)
-                ? 'This PG already has an active ${role.label.toLowerCase()}'
-                : null,
+    final t = Theme.of(context);
+    final scheme = t.colorScheme;
+    final accent = selected ? scheme.primary : scheme.outline;
+    return Semantics(
+      button: true,
+      selected: selected,
+      enabled: enabled,
+      label: taken
+          ? '${role.label}. This PG already has an active ${role.label.toLowerCase()}.'
+          : '${role.label}. ${role.blurb}',
+      child: Opacity(
+        // A taken post stays legible — it is information, not clutter — but visibly out of
+        // reach. Not a colour of its own: the design ships no "disabled" role.
+        opacity: enabled ? 1 : 0.5,
+        child: FlatSurface(
+          weight: GlassWeight.regular,
+          borderRadius: Radii.rControl,
+          padding: const EdgeInsets.all(Space.sm),
+          onTap: enabled ? onTap : null,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  ToneBadge(icon: _icon, tone: accent, tinted: selected),
+                  const Spacer(),
+                  Icon(
+                    selected
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: IconSize.lg,
+                    color: accent,
+                  ),
+                ],
+              ),
+              const SizedBox(height: Space.xs),
+              Text(
+                role.label,
+                style: t.textTheme.titleMedium?.copyWith(
+                  color: selected ? scheme.primary : null,
+                ),
+              ),
+              const SizedBox(height: Space.xxs / 2),
+              Text(
+                taken
+                    ? 'This PG already has an active ${role.label.toLowerCase()}.'
+                    : role.blurb,
+                style: t.textTheme.bodySmall,
+              ),
+            ],
           ),
-      ],
-      selected: {value},
-      showSelectedIcon: false,
-      onSelectionChanged: enabled ? (s) => onChanged(s.first) : null,
+        ),
+      ),
+    );
+  }
+}
+
+/// Which PG the new login will belong to. A fact, in the shape of the mockup's control.
+class _AssignedProperty extends StatelessWidget {
+  const _AssignedProperty({required this.hostelName});
+
+  final String? hostelName;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return FlatSurface(
+      weight: GlassWeight.regular,
+      borderRadius: Radii.rControl,
+      padding: const EdgeInsets.all(Space.sm),
+      child: Row(
+        children: [
+          const ToneBadge(icon: Icons.apartment_rounded),
+          const SizedBox(width: Space.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('ASSIGNED PROPERTY', style: t.textTheme.labelSmall),
+                Text(
+                  hostelName ?? 'This PG',
+                  style: t.textTheme.bodyMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

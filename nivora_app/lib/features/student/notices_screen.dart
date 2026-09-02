@@ -3,9 +3,10 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../common/refresh.dart';
+import '../../shared/illustrations.dart';
 import 'widgets/common.dart';
 import 'widgets/notice.dart';
 import 'widgets/paged_list.dart';
@@ -38,21 +39,22 @@ class _Notices extends ConsumerWidget {
     final provider = noticesProvider(hostelId);
     return StudentPagedList<Notice>(
       value: ref.watch(provider),
-      onRefresh: () async {
+      // BOUNDED. The bare `await ref.read(provider.future)` had no deadline, and riverpod 3
+      // retries a failed provider ten times behind a future it does not complete — so a
+      // resident on a hostel Wi-Fi that had stopped answering held this spinner for over two
+      // minutes. See features/common/refresh.dart.
+      onRefresh: () {
         ref.invalidate(provider);
-        try {
-          await ref.read(provider.future);
-        } catch (_) {
-          // The section draws its own failure state. Letting this escape would leave the
-          // refresh spinner turning forever.
-        }
+        return settleRefresh(context, () => ref.read(provider.future));
       },
       onLoadMore: () => ref.read(provider.notifier).loadMore(),
+      // No tone: an empty noticeboard is neither good news nor bad, and [EmptyNote]'s
+      // untinted glyph is the design's own neutral outline for exactly that case.
       empty: const EmptyNote(
+        illustration: EmptyArt.notices,
         icon: Icons.campaign_outlined,
         title: 'No notices yet',
         message: 'Announcements from the hostel owner appear here.',
-        tone: NivoraColors.textMuted,
       ),
       itemBuilder: (_, notice) => NoticeTile(notice: notice, expanded: true),
     );

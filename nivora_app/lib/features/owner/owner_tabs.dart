@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/perf/tab_warmer.dart';
 import '../../data/providers.dart';
 import 'owner_dashboard_screen.dart';
+import 'owner_payments_screen.dart';
 import 'owner_pg_list_screen.dart';
 import 'owner_providers.dart';
+import 'owner_students_screen.dart';
 import 'staff/owner_staff_screen.dart';
 import 'staff/staff_providers.dart';
 
@@ -28,12 +30,14 @@ import 'staff/staff_providers.dart';
 /// role_shell.dart so the two can be checked against each other.
 const ownerTabCount = 5;
 
-/// The body for one tab, or null for a tab no feature has built yet (Students, Payments).
+/// The body for one tab, or null for a tab slot nothing has claimed.
 /// The shell supplies the "not built yet" placeholder for those, so this file cannot pretend
 /// to cover them.
 Widget? ownerTabScreen(int index) => switch (index) {
       0 => const OwnerDashboardScreen(),
       1 => const OwnerPgListScreen(),
+      2 => const OwnerStudentsScreen(),
+      3 => const OwnerPaymentsScreen(),
       4 => const OwnerStaffScreen(),
       _ => null,
     };
@@ -91,10 +95,12 @@ class _OwnerSectionState extends ConsumerState<OwnerSection> {
     //  2. The PGs tab — the most likely next tap: every owned PG's per-card stats. The active
     //     PG's stats are already in flight from the Dashboard; reading the same provider joins
     //     that request rather than repeating it.
-    //  3. Staff, behind More — rarely opened, so it warms last, but "rarely" is exactly when
+    //  3. Payments — "who paid", one page of rpc_recent_payments. It warms after the PG cards
+    //     because the Dashboard already answers HOW MUCH came in; this tab answers WHO, which
+    //     is the follow-up question rather than the first one.
+    //  4. Staff, behind More — rarely opened, so it warms last, but "rarely" is exactly when
     //     it is opened in a hurry.
-    // Students and Payments have no screens yet, so there is nothing to warm for them.
-    _warmer = TabWarmer([_warmCashflow, _warmPgCards, _warmStaff])..start();
+    _warmer = TabWarmer([_warmCashflow, _warmPgCards, _warmStudents, _warmPayments, _warmStaff])..start();
   }
 
   @override
@@ -133,6 +139,21 @@ class _OwnerSectionState extends ConsumerState<OwnerSection> {
       for (final h in owned)
         ref.read(hostelStatsProvider(StatsQuery(hostelId: h.id, periodMonth: period)).future),
     ]);
+  }
+
+  /// The roster's FIRST page only, with no search term — the same StudentQuery the screen
+  /// builds when it opens cold. A term-scoped warm would be a different family key and would
+  /// warm a cache the screen never reads.
+  Future<void> _warmStudents() async {
+    final hostelId = await _activeHostelId();
+    if (hostelId == null) return;
+    await ref.read(studentsProvider(StudentQuery(hostelId: hostelId)).future);
+  }
+
+  Future<void> _warmPayments() async {
+    final hostelId = await _activeHostelId();
+    if (hostelId == null) return;
+    await ref.read(recentPaymentsProvider(hostelId).future);
   }
 
   Future<void> _warmStaff() async {

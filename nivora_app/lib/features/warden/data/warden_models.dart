@@ -171,3 +171,59 @@ class VisitorLog {
     );
   }
 }
+
+/// The four deferred-erasure columns on public.students, read on their own.
+///
+/// NOT FOLDED INTO [Student]. The shared model is the roster row every role reads; this is the
+/// state of one legal obligation, wanted by exactly one screen — the resident sheet, after
+/// somebody has been checked out — and read fresh at the moment it is about to be acted on. A
+/// warden about to cancel a deletion must not be looking at a date cached when the list loaded.
+///
+/// The request itself is raised server-side by public.wd_vacate_student, one month out; see
+/// db/migrations/2026-09-02-retention-and-erasure.sql for why the DATE is stored rather than
+/// derived from `requested_at + 1 month` in each client.
+class ErasureSchedule {
+  const ErasureSchedule({
+    required this.studentId,
+    this.requestedAt,
+    this.dueAt,
+    this.erasedAt,
+  });
+
+  static const columns = 'id, erasure_requested_at, erasure_due_at, erased_at';
+
+  final String studentId;
+  final DateTime? requestedAt;
+  final DateTime? dueAt;
+
+  /// Non-null means it has already run: this record is a tombstone, and only the rent ledger
+  /// still hangs off its id.
+  final DateTime? erasedAt;
+
+  /// A deletion is scheduled and has not happened yet — the only state that can be cancelled.
+  bool get isPending => dueAt != null && erasedAt == null;
+
+  bool get isErased => erasedAt != null;
+
+  /// Whole days until the purge, or null when nothing is scheduled.
+  ///
+  /// CAN BE ZERO OR NEGATIVE, and the screen must say so rather than rounding up to "1 day":
+  /// the job runs once a night at 03:15, so a request that came due this morning is genuinely
+  /// still cancellable and genuinely overdue. Claiming a day that is not there would be a
+  /// promise this app cannot keep.
+  int? get daysLeft {
+    final due = dueAt;
+    if (due == null || erasedAt != null) return null;
+    return due.toLocal().difference(DateTime.now()).inDays;
+  }
+
+  factory ErasureSchedule.fromJson(Map<String, dynamic> row) {
+    const src = 'students';
+    return ErasureSchedule(
+      studentId: reqString(row, src, 'id'),
+      requestedAt: optTimestamp(row, src, 'erasure_requested_at'),
+      dueAt: optTimestamp(row, src, 'erasure_due_at'),
+      erasedAt: optTimestamp(row, src, 'erased_at'),
+    );
+  }
+}

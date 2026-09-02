@@ -4,11 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/version/update_banner.dart';
 import '../../shared/glass/glass.dart';
 import '../manager/manager_shell.dart';
 import '../super_admin/sa_shell.dart';
 import '../warden/warden_shell.dart';
 import '../owner/owner_tabs.dart';
+import '../settings/security_screen.dart';
 import '../student/student_section.dart';
 
 /// Per-role navigation. Each role gets the tabs its job needs — the brief's point that forcing
@@ -63,8 +65,18 @@ class RoleShell extends ConsumerStatefulWidget {
 class _RoleShellState extends ConsumerState<RoleShell> {
   int _index = 0;
 
+  /// THE ONE MOUNTING POINT FOR THE "A NEW BUILD EXISTS" NOTICE.
+  ///
+  /// This widget is what the router draws for every one of the five role homes — the three
+  /// shells below are reached THROUGH it — so wrapping here reaches every signed-in screen with
+  /// a single edit, rather than five that four future roles would have to remember. It draws
+  /// nothing at all unless public.app_releases names a build newer than this one; see
+  /// core/version/update_banner.dart.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      UpdateBannerHost(child: _shell(context));
+
+  Widget _shell(BuildContext context) {
     // A role whose screens are built owns its own shell: its tabs need per-screen headers,
     // badges and a selected index that other screens can move. The placeholder below stays for
     // the roles still to come, and each takes this same one-line exit as it lands. The tab list
@@ -95,6 +107,13 @@ class _RoleShellState extends ConsumerState<RoleShell> {
                       ),
                     ],
                   ),
+                ),
+                // Two-factor enrolment, reachable from every role's header rather than buried
+                // in one role's settings — see features/settings/security_screen.dart.
+                IconButton(
+                  tooltip: 'Security',
+                  onPressed: () => openSecurity(context),
+                  icon: const Icon(Icons.shield_outlined),
                 ),
                 IconButton(
                   tooltip: 'Sign out',
@@ -135,7 +154,7 @@ class _RoleShellState extends ConsumerState<RoleShell> {
     // The owner's section owns its bodies the way the student's does — an IndexedStack over
     // the tabs actually visited — and additionally warms the unvisited tabs' data in the
     // background so a tap lands on drawn numbers, not a skeleton. The tabs nothing has built
-    // yet (Students, Payments) still show this shell's placeholder, passed in so the copy and
+    // yet (Students) still show this shell's placeholder, passed in so the copy and
     // the label stay in one place. See OwnerSection.
     if (widget.role == UserRole.owner) {
       return OwnerSection(tabIndex: _index, placeholder: (_) => _placeholder(t, tabs));

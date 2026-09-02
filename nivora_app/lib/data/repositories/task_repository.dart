@@ -54,6 +54,11 @@ final class TaskRepository extends Repository {
       });
 
   Future<Task?> byId(String taskId) => guard(() async {
+        // A null from here is drawn as a sentence about the reader ("not visible",
+        // "belongs to another hostel", "no record for this account"). That sentence is
+        // earned only when a live credential asked — a dead session makes this an
+        // anonymous read whose null means nothing. See Repository.requireLiveSession.
+        requireLiveSession('tasks.byId');
         final row = await db
             .from('tasks')
             .select(Task.columns)
@@ -73,7 +78,7 @@ final class TaskRepository extends Repository {
     String? description,
     DateTime? dueDate,
   }) =>
-      guard(() async {
+      guardWrite(() async {
         final creator = db.auth.currentUser?.id;
         if (creator == null) {
           throw const SignedOutFailure('Sign in again to assign a task.');
@@ -91,7 +96,8 @@ final class TaskRepository extends Repository {
             .select(Task.columns)
             .single();
         return Task.fromJson(row);
-      });
+      }, unresolved: 'Check the task list before assigning it again — a second task notifies '
+          'the manager a second time.');
 
   /// Move a task's status. Both roles may call it.
   ///
@@ -102,7 +108,7 @@ final class TaskRepository extends Repository {
     required String taskId,
     required TaskStatus status,
   }) =>
-      guard(() async {
+      guardWrite(() async {
         final row = await db
             .from('tasks')
             .update({'status': status.wire})
@@ -110,7 +116,8 @@ final class TaskRepository extends Repository {
             .select(Task.columns)
             .single();
         return Task.fromJson(row);
-      });
+      }, unresolved: 'Reload the task before moving it again; moving it to the same status a '
+          'second time is safe and notifies nobody twice.');
 
   /// Edit the substance of a task. Owner only — a manager's attempt is reverted by the trigger.
   Future<Task> update({
@@ -120,7 +127,7 @@ final class TaskRepository extends Repository {
     DateTime? dueDate,
     String? assignedTo,
   }) =>
-      guard(() async {
+      guardWrite(() async {
         final patch = <String, dynamic>{
           'title': ?title,
           'description': ?description,
@@ -137,5 +144,6 @@ final class TaskRepository extends Repository {
             .select(Task.columns)
             .single();
         return Task.fromJson(row);
-      });
+      }, unresolved: 'Reload the task to see which details were saved; saving the same ones '
+          'again is safe.');
 }

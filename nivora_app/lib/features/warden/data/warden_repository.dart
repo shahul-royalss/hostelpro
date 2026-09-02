@@ -1,17 +1,22 @@
 library;
 
-import 'dart:convert';
-import 'dart:typed_data';
-
-import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../data/capture.dart';
 import '../../../data/models/models.dart';
 // The row-shape coercers are not in the models barrel — see the note there. Imported directly,
 // exactly as warden_models.dart does, so a wrong key in the function's response names itself.
 import '../../../data/models/parse.dart';
 import '../../../data/repositories/repository.dart';
 import 'warden_models.dart';
+
+/// The camera / photo picker and the bytes it hands back MOVED to lib/data/capture.dart when a
+/// second flow — a resident attaching a photo to a complaint — needed the same 1600px/q70
+/// compression and the same 3 MB ceiling. Re-exported here so every existing import of
+/// [CapturedDocument], [DocumentCapture] or [CaptureSource] through this file still resolves,
+/// and so there is exactly one definition of each to tune.
+export '../../../data/capture.dart'
+    show CaptureSource, CapturedDocument, DocumentCapture, PluginDocumentCapture;
 
 /// The writes and reads the warden needs that lib/data does not carry yet.
 ///
@@ -88,7 +93,7 @@ final class WardenRepository extends Repository implements StudentRegistrations 
     } on FunctionException catch (error, stack) {
       final rejection = _rejectionFrom(error);
       if (rejection != null) return rejection;
-      Error.throwWithStackTrace(_failureFrom(error), stack);
+      Error.throwWithStackTrace(failureFrom(error), stack);
     } catch (error, stack) {
       Error.throwWithStackTrace(AppFailure.from(error), stack);
     }
@@ -106,6 +111,65 @@ final class WardenRepository extends Repository implements StudentRegistrations 
       );
     }
     return RegistrationSucceeded(RegisteredStudent.fromJson(data.cast<String, dynamic>()));
+  }
+
+  /// Mint a NEW temporary password for a resident who has lost theirs, and show it once.
+  ///
+  /// THE PASSWORD IS NOT STORED ANYWHERE AND NEVER WAS. The owner asked for the temporary
+  /// password to be kept on the student list so a warden could read it back; that was declined
+  /// in favour of this, and the reasoning matters more than the feature: a readable password
+  /// lets any warden, manager or owner sign in AS a resident, and turns any database leak into
+  /// a set of working logins rather than useless hashes. Regenerating solves the same real
+  /// problem — the slip got lost — and leaves nothing to steal.
+  ///
+  /// The server does the privileged half (auth admin, hostel check, audit trail, killing the
+  /// old sessions) in supabase/functions/warden-student-credentials. This is the client of it.
+  Future<StudentCredentials> resetStudentPassword(String studentId) async {
+    final data = await _credentialsCall('reset-password', {'studentId': studentId});
+    final creds = data['credentials'];
+    if (creds is! Map) {
+      throw RowShapeError('warden-student-credentials', 'credentials',
+          'the function answered without credentials — check its logs');
+    }
+    return StudentCredentials.fromJson(creds.cast<String, dynamic>());
+  }
+
+  /// Correct a resident's email address, or clear it back to a phone-only login.
+  ///
+  /// Returns the login id the resident must now type. Changing the address also clears their
+  /// verification — app.users_update_guard nulls email_verified_at on any change — so the
+  /// caller has to say so rather than let it surprise them.
+  Future<String> setStudentEmail(String studentId, String? email) async {
+    final data = await _credentialsCall('set-email', {
+      'studentId': studentId,
+      'email': email == null || email.trim().isEmpty ? null : email.trim(),
+    });
+    return reqString(data, 'warden-student-credentials', 'loginId');
+  }
+
+  /// The shared call/unwrap for both actions above. Same envelope contract as
+  /// registerStudent: `{ data: {...} }` on success, FunctionException otherwise.
+  Future<Map<String, dynamic>> _credentialsCall(
+    String action,
+    Map<String, dynamic> body,
+  ) async {
+    final FunctionResponse response;
+    try {
+      response = await db.functions.invoke(
+        'warden-student-credentials',
+        body: {'action': action, ...body},
+      );
+    } on FunctionException catch (error, stack) {
+      Error.throwWithStackTrace(failureFrom(error), stack);
+    } catch (error, stack) {
+      Error.throwWithStackTrace(AppFailure.from(error), stack);
+    }
+    final envelope = response.data;
+    if (envelope is! Map || envelope['data'] is! Map) {
+      throw RowShapeError('warden-student-credentials', '(body)',
+          'expected a JSON object envelope');
+    }
+    return (envelope['data'] as Map).cast<String, dynamic>();
   }
 
   /// A refusal the warden can act on in the form, or null if this was not one.
@@ -170,7 +234,12 @@ final class WardenRepository extends Repository implements StudentRegistrations 
 
   /// Everything that is not about the input, in the sealed type the rest of the data layer
   /// throws — so the sheet's existing error handling covers it without a special case.
-  static AppFailure _failureFrom(FunctionException error) {
+  ///
+  /// PUBLIC, and named the way `staffFailureFrom` in features/owner/staff is named. It was a
+  /// private static, which meant the one branch below that is easy to get wrong — a 404 with no
+  /// body — could not be asserted anywhere. A mapping from a status code to a sentence a warden
+  /// reads at the desk is exactly the kind of rule that wants a test.
+  static AppFailure failureFrom(FunctionException error) {
     final message = _messageFrom(error.details);
 
     if (error is FunctionsFetchException || error.status == 0) {
@@ -198,6 +267,27 @@ final class WardenRepository extends Repository implements StudentRegistrations 
       403 => AccessDeniedFailure(
           message ?? 'Only a warden can register a resident.',
           technical: error.toString(),
+        ),
+      // ═══ A 404 WITH NO BODY IS NOT A MISSING BED ═══
+      // Two completely different things arrive as 404 here. The function ran, decided the bed
+      // is gone, and said so in its `{ ok: false, error }` envelope — that is [message], and
+      // "reload and pick another" is exactly right. OR the request never reached a function at
+      // all because wd-register-student is not deployed on this project, in which case the
+      // gateway answers 404 with nothing in it and [message] is null.
+      //
+      // Telling a warden with a queue at the desk to reload and pick another bed, when every
+      // bed will fail identically forever, is the same class of mistake as the console telling
+      // its super admin to sign in as the super admin. The precedent is the 404 branch in
+      // features/auth/email_verification_service.dart, added after exactly this cost a live
+      // session; this follows it.
+      //
+      // [NotFoundFailure] for both, because both are "it is not there" and neither is
+      // retryable — what differs is WHAT is not there, and that is the whole of the sentence.
+      404 when message == null => NotFoundFailure(
+          'Registering a resident is not available on this server yet. Nothing was created. '
+              'Ask your administrator to enable it.',
+          technical: 'wd-register-student answered 404 with no body, so nothing decided that a '
+              'bed was missing — the Edge Function is not deployed on this project. $error',
         ),
       404 => NotFoundFailure(
           message ?? 'That bed could not be found. Reload and pick another.',
@@ -299,6 +389,56 @@ final class WardenRepository extends Repository implements StudentRegistrations 
             .order('full_name', ascending: true)
             .limit(limit);
         return rows.map(Student.fromJson).toList(growable: false);
+      });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // THE DEFERRED ERASURE
+  //
+  // Checking somebody out RAISES a deletion request dated one month out; it does not delete
+  // anything. public.wd_vacate_student writes the check-out and the request in one UPDATE, the
+  // nightly retention job carries it out when the date passes, and until then it can be
+  // withdrawn — a resident who leaves in March and is back in April is an ordinary week in a
+  // PG. The three calls below are what the resident sheet needs to SHOW that and act on it.
+  //
+  // What actually happens at the due date, and why the fee ledger survives it, is in
+  // db/migrations/2026-09-02-retention-and-erasure.sql.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /// Whether a deletion is scheduled for this resident, and for when.
+  ///
+  /// Null when the row is not visible to this caller — a resident of another hostel, or a
+  /// session that has quietly died. [requireLiveSession] is not used here because a null is
+  /// rendered as "nothing scheduled" and never as a claim about who the caller is.
+  Future<ErasureSchedule?> erasure(String studentId) => guard(() async {
+        final row = await db
+            .from('students')
+            .select(ErasureSchedule.columns)
+            .eq('id', studentId)
+            .maybeSingle();
+        return row == null ? null : ErasureSchedule.fromJson(row);
+      });
+
+  /// Withdraw a scheduled deletion. The returning-resident path.
+  ///
+  /// [guard], not [guardWrite]: repeating this cannot double anything. The RPC clears three
+  /// columns that are already null the second time and answers "No deletion is scheduled for
+  /// this resident." — a sentence the warden can read and act on, which is a better outcome
+  /// after a timeout than "we cannot tell you whether that worked".
+  ///
+  /// Deliberately NOT gated on the subscription server-side: a hostel behind on its bill must
+  /// still be able to stop a record being destroyed.
+  Future<void> cancelErasure(String studentId) => guard(() async {
+        await db.rpc('wd_cancel_student_erasure', params: {'p_student_id': studentId});
+      });
+
+  /// Schedule a deletion by hand, one month out — for somebody who was checked out before this
+  /// existed, or whose request was cancelled and who has now really gone.
+  ///
+  /// Returns the date it will run. [guard] again: the RPC coalesces, so a second call returns
+  /// the SAME date rather than pushing the deadline out by another month.
+  Future<DateTime?> requestErasure(String studentId) => guard(() async {
+        final due = await db.rpc('wd_request_student_erasure', params: {'p_student_id': studentId});
+        return due is String ? DateTime.tryParse(due) : null;
       });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -413,7 +553,7 @@ final class WardenRepository extends Repository implements StudentRegistrations 
 // fields at once, a phone number already taken, a bed occupied between loading the list and
 // pressing Register, a rollback that itself failed — are precisely the states worth holding
 // down in `flutter test`. A test needs a stand-in for them. Same shape and same reasoning as
-// `RentPayments` in the payment repository and `SaPlatformWrites` in the Super Admin's.
+// `RentDesk` in the fee repository and `SaPlatformWrites` in the Super Admin's.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// public.students.id_proof_type, and ID_PROOF_TYPES in warden-register-student/index.ts.
@@ -436,38 +576,6 @@ enum IdProofType implements WireValue {
 
   @override
   String get label => wire;
-}
-
-/// One file on its way to the private bucket, held as bytes because that is what has to be
-/// base64-encoded into the request body.
-///
-/// NO PATH, DELIBERATELY. A `File` would tie this to dart:io and make the whole registration
-/// path untestable off a device; bytes are what the wire needs and what a test can supply.
-final class CapturedDocument {
-  const CapturedDocument({required this.bytes, required this.name});
-
-  final Uint8List bytes;
-
-  /// The picker's own file name, for the "Aadhaar.jpg · 214 KB" line under the button. It is
-  /// NOT sent: storage.ts chooses the object's path and sniffs its real type from the leading
-  /// bytes, because a name and a declared MIME type are claims, not evidence.
-  final String name;
-
-  int get sizeBytes => bytes.length;
-
-  /// The per-file ceiling storage.ts enforces after decoding. Checked here too so a warden
-  /// learns their scan is too big before four megabytes crawl up a stairwell 3G connection.
-  static const maxBytes = 3 * 1024 * 1024;
-
-  bool get isTooLarge => sizeBytes > maxBytes;
-
-  String get sizeLabel {
-    if (sizeBytes < 1024) return '$sizeBytes B';
-    if (sizeBytes < 1024 * 1024) return '${(sizeBytes / 1024).round()} KB';
-    return '${(sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
-
-  String toBase64() => base64Encode(bytes);
 }
 
 /// Everything warden-register-student accepts, in the order docs/edge-functions.md §7 lists it.
@@ -493,10 +601,15 @@ final class StudentRegistration {
 
   final String fullName;
 
-  /// Already normalised to ten digits. This becomes the resident's LOGIN ID, so the
-  /// normalisation is not cosmetic: studentLoginEmail() maps it to a synthetic address that
-  /// both clients have to derive identically or the account cannot be signed in to.
+  /// Already normalised to ten digits. This becomes the resident's LOGIN ID when [email] is
+  /// null, so the normalisation is not cosmetic: studentLoginEmail() maps it to a synthetic
+  /// address that both clients have to derive identically or the account cannot be signed in
+  /// to. It also carries the students_phone_active_key uniqueness either way.
   final String phone;
+
+  /// Optional, and consequential: when it is present THIS is the login id and the phone
+  /// mapping is not used for this resident at all. Optional because a hostel resident may
+  /// genuinely not have an address — see the sheet's header comment.
   final String? email;
   final DateTime dateOfJoining;
   final String guardianName;
@@ -541,8 +654,10 @@ final class StudentCredentials {
 
   final String name;
 
-  /// The resident's PHONE NUMBER. Students sign in by phone, not by email — the synthetic
-  /// address the auth user actually carries is an implementation detail neither client shows.
+  /// What the resident types on the sign-in screen: the EMAIL the warden collected, or their
+  /// PHONE NUMBER when they gave none. The server picks — see createStudentAuthUser — so this
+  /// is read, never derived. In the phone case the synthetic address the auth user actually
+  /// carries stays an implementation detail neither client shows.
   final String loginId;
   final String password;
 
@@ -624,57 +739,4 @@ abstract interface class StudentRegistrations {
   /// Returns [RegistrationRejected] when the server refused the INPUT; throws [AppFailure] for
   /// everything else.
   Future<RegistrationOutcome> registerStudent(StudentRegistration draft);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// THE DOCUMENT CAPTURE
-//
-// Lives beside the repository because it is the other half of the same boundary — one side
-// collects the bytes, the other posts them — exactly as `RazorpayCheckout` sits beside the
-// payment repository for the same reason.
-//
-// BEHIND AN INTERFACE BECAUSE IT IS A MethodChannel. `image_picker` asks the platform for a
-// camera or a photo picker, and a widget test has no platform on the other end of one:
-// constructing the real thing in a test turns the registration flow into a hang rather than a
-// mistake. Tests override `documentCaptureProvider`.
-//
-// AND NO BROWSER. The picker opens Android's own photo picker or the camera activity. There is
-// no upload page, no signed-URL hand-off and no "finish this on the website" — the bytes go
-// into the same JSON body as the rest of the form.
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Where a document came from. Two entry points because a warden at the desk photographs the
-/// card in front of them, and a warden entering a record later already has the scan.
-enum CaptureSource { camera, gallery }
-
-/// Picks one image and hands back its bytes. One implementation for the device, one for tests.
-abstract interface class DocumentCapture {
-  /// Completes with null when the person backed out of the picker — which is not an error and
-  /// must not be reported as one.
-  Future<CapturedDocument?> pick(CaptureSource source);
-}
-
-/// The real one.
-///
-/// THE COMPRESSION IS NOT OPTIONAL. A modern phone camera produces 4–8 MB per frame and
-/// storage.ts refuses anything over 3 MB after decoding, so an uncompressed capture would fail
-/// at the server after the whole file had already been pushed up whatever connection a
-/// stairwell offers. `maxWidth` and `imageQuality` are applied by the plugin natively, before
-/// the bytes ever reach Dart — 1600px at quality 70 is a legible photograph of an ID card at
-/// roughly 200–400 KB. docs/edge-functions.md §7 says to compress on the device; this is that.
-final class PluginDocumentCapture implements DocumentCapture {
-  PluginDocumentCapture([ImagePicker? picker]) : _picker = picker ?? ImagePicker();
-
-  final ImagePicker _picker;
-
-  @override
-  Future<CapturedDocument?> pick(CaptureSource source) async {
-    final file = await _picker.pickImage(
-      source: source == CaptureSource.camera ? ImageSource.camera : ImageSource.gallery,
-      maxWidth: 1600,
-      imageQuality: 70,
-    );
-    if (file == null) return null;
-    return CapturedDocument(bytes: await file.readAsBytes(), name: file.name);
-  }
 }

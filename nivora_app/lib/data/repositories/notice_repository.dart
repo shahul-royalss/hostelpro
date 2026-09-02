@@ -3,10 +3,30 @@ library;
 import '../models/models.dart';
 import 'repository.dart';
 
+/// The two writes behind the owner's noticeboard, as an interface.
+///
+/// The list is a plain read, and a screen that reads is tested by overriding the provider that
+/// holds the answer. These two are not: one FANS OUT A NOTIFICATION to every person in the
+/// audience — a thing that cannot be undone by deleting the notice afterwards — and the other
+/// takes a notice off every one of those people's screens. Their interesting states (a
+/// validator refusing an empty body, an owner whose subscription has lapsed, a retraction RLS
+/// refused) are exactly what belongs in `flutter test`, and a test needs a stand-in for them.
+/// Same shape and same reasoning as `OwnerStaffWrites`.
+abstract interface class NoticeWrites {
+  Future<Notice> create({
+    required String hostelId,
+    required String title,
+    required String body,
+    NoticeAudience audience,
+  });
+
+  Future<void> softDelete({required String noticeId});
+}
+
 /// Announcements — the noticeboard.
 ///
 /// TABLES: public.announcements.
-final class NoticeRepository extends Repository {
+final class NoticeRepository extends Repository implements NoticeWrites {
   const NoticeRepository(super.db);
 
   /// The noticeboard for whoever is asking, newest first.
@@ -40,6 +60,11 @@ final class NoticeRepository extends Repository {
       });
 
   Future<Notice?> byId(String noticeId) => guard(() async {
+        // A null from here is drawn as a sentence about the reader ("not visible",
+        // "belongs to another hostel", "no record for this account"). That sentence is
+        // earned only when a live credential asked — a dead session makes this an
+        // anonymous read whose null means nothing. See Repository.requireLiveSession.
+        requireLiveSession('announcements.byId');
         final row = await db
             .from('announcements')
             .select(Notice.columns)
@@ -53,13 +78,14 @@ final class NoticeRepository extends Repository {
   /// `author_user_id` must equal auth.uid() — the insert policy checks it, so a notice cannot
   /// be published under another name even by a caller who edits the request. Posting also fans
   /// out a notification to every user in the audience, via app.announcements_after_insert.
+  @override
   Future<Notice> create({
     required String hostelId,
     required String title,
     required String body,
     NoticeAudience audience = NoticeAudience.all,
   }) =>
-      guard(() async {
+      guardWrite(() async {
         final authorId = db.auth.currentUser?.id;
         if (authorId == null) {
           throw const SignedOutFailure('Sign in again to post a notice.');
@@ -76,7 +102,8 @@ final class NoticeRepository extends Repository {
             .select(Notice.columns)
             .single();
         return Notice.fromJson(row);
-      });
+      }, unresolved: 'Check the noticeboard before posting again — posting notifies everyone in '
+          'the audience, and a second notice notifies them a second time.');
 
   /// Edit a notice already posted. Owner only.
   ///
@@ -88,7 +115,7 @@ final class NoticeRepository extends Repository {
     String? body,
     NoticeAudience? audience,
   }) =>
-      guard(() async {
+      guardWrite(() async {
         final patch = <String, dynamic>{
           'title': ?title,
           'body': ?body,
@@ -104,5 +131,30 @@ final class NoticeRepository extends Repository {
             .select(Notice.columns)
             .single();
         return Notice.fromJson(row);
-      });
+      }, unresolved: 'Reload the notice to see which version was saved; editing again is safe, '
+          'because an edit does not re-notify anyone.');
+
+  /// Retract a notice. Owner only. Soft: `deleted_at` is stamped, the row survives.
+  ///
+  /// ═══ WHY THIS IS AN RPC AND NOT `.update({'deleted_at': ...})` ═══
+  /// Because the plain update is REFUSED, and not by a policy anyone can loosen from here.
+  /// `announcements_select` is `deleted_at is null and (...)`, and PostgreSQL applies a table's
+  /// SELECT policy to the NEW row of an UPDATE — a row may not be updated out of the updater's
+  /// own visibility. Stamping `deleted_at` makes the new row invisible under that policy, so
+  /// the write comes back 42501 for the hostel's real owner, at aal2, with a WITH CHECK that
+  /// provably passes. Measured against a scratch table whose UPDATE policy was literally
+  /// `with check (true)`: still refused. And `announcements_delete` is service-role only, so
+  /// there is no hard-delete fallback either.
+  ///
+  /// `ow_delete_announcement` re-checks ownership and the §4.4 read-only gate server-side and
+  /// raises 42501 on either, which surfaces here as [AccessDeniedFailure] or [ReadOnlyFailure].
+  /// See db/migrations/2026-09-02-announcement-soft-delete.sql.
+  ///
+  /// IDEMPOTENT ON THE SERVER, which is why the unresolved advice can be as calm as it is: a
+  /// notice already retracted, or an id that is gone, returns quietly rather than raising.
+  @override
+  Future<void> softDelete({required String noticeId}) => guardWrite(() async {
+        await db.rpc('ow_delete_announcement', params: {'p_announcement_id': noticeId});
+      }, unresolved: 'Reload the noticeboard to see whether it went; retracting the same notice '
+          'again is safe, because the server treats a second retraction as already done.');
 }

@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../common/refresh.dart';
+import '../../../shared/illustrations.dart';
 import '../actions/register_student_sheet.dart';
 import '../widgets/paged_list.dart';
 import '../widgets/warden_ui.dart';
@@ -99,19 +101,31 @@ class _WardenStudentsScreenState extends ConsumerState<WardenStudentsScreen> {
     );
     final students = ref.watch(studentsProvider(query));
 
+    // The design's list header carries a count on the right ("48 students", 4:759). The
+    // repository pages, so a count is only TRUE once the last page is in — `hasMore` is the
+    // server's own word for that. While more pages exist the right-hand slot is left empty
+    // rather than reporting the twenty rows that happen to be downloaded.
+    final page = students.value;
+    final total = (page != null && !page.hasMore) ? page.items.length : null;
+
     return WardenScreen(
       title: 'Residents',
       subtitle: _term.isEmpty ? null : 'Matching "$_term"',
       actions: [
-        IconButton.filledTonal(
+        HeaderAction(
           tooltip: 'Register a resident',
-          icon: const Icon(Icons.person_add_alt_1_rounded),
+          icon: Icons.person_add_alt_1_rounded,
           onPressed: () => showRegisterStudentSheet(context, hostelId: hostelId),
         ),
       ],
       child: PagedList<Student>(
         value: students,
-        onRefresh: () async => ref.invalidate(studentsProvider(query)),
+        // See features/common/refresh.dart. The roster is kept on screen through a failed
+        // reload, so the gesture has to report its own outcome or it reports nothing.
+        onRefresh: () {
+          ref.invalidate(studentsProvider(query));
+          return settleRefresh(context, () => ref.read(studentsProvider(query).future));
+        },
         onLoadMore: () => ref.read(studentsProvider(query).notifier).loadMore(),
         header: Padding(
           padding: const EdgeInsets.only(bottom: Space.sm),
@@ -139,26 +153,34 @@ class _WardenStudentsScreenState extends ConsumerState<WardenStudentsScreen> {
                 ),
               ),
               const SizedBox(height: Space.sm),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final option in _Roster.values)
-                      Padding(
-                        padding: const EdgeInsets.only(right: Space.xs),
-                        child: ChoiceChip(
-                          label: Text(option.label),
-                          selected: _roster == option,
-                          onSelected: (_) => setState(() => _roster = option),
-                        ),
+              // `chips` (4:747): gold-filled for the one that is on, raised surface behind a
+              // hairline for the rest. Material's ChoiceChip — a capsule with a check mark
+              // that slides in, in the scheme's secondaryContainer — is in no frame of the
+              // file.
+              FilterBar<_Roster>(
+                options: _Roster.values,
+                selected: _roster,
+                labelOf: (option) => option.label,
+                onSelected: (option) => setState(() => _roster = option),
+              ),
+              const SizedBox(height: Space.md),
+              // `list-header` (4:757): the caps heading with the count opposite it.
+              SectionLabel(
+                label: 'Student directory',
+                trailing: total == null
+                    ? null
+                    : Text(
+                        '$total ${total == 1 ? 'resident' : 'residents'}',
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
-                  ],
-                ),
               ),
             ],
           ),
         ),
         empty: EmptyState(
+          // The artwork is for the hostel that has nobody on it YET. A search that matched
+          // nothing is a different sentence and keeps the glyph — see EmptyArt.
+          illustration: _term.isEmpty ? EmptyArt.residents : null,
           icon: _term.isEmpty ? Icons.people_outline_rounded : Icons.search_off_rounded,
           title: _term.isEmpty ? 'Nobody on this list yet' : 'No match for "$_term"',
           detail: _term.isEmpty
@@ -191,9 +213,18 @@ class _StudentRow extends ConsumerWidget {
       placement = (match != null && match.isNotEmpty) ? 'Room ${match.first.roomNumber}' : 'Placed';
     }
 
+    // `student-row` (4:761), exactly: a 32dp avatar, the name at 13/600, ONE quiet 11/400
+    // line of placement under it, and the state badge hard against the right edge. Nothing
+    // else is on the row in the file, and the two things that used to be — a glyphed metadata
+    // pair and a second right-hand column carrying the rent — are what made the list twice as
+    // tall as the design's.
+    //
+    // THE PHONE NUMBER MOVED, IT DID NOT GO. It is the resident sheet's subtitle, one tap
+    // away, and the search field above this list still matches on it.
     return TapRow(
       onTap: () => showStudentSheet(context, studentId: student.id),
-      semanticLabel: '${student.fullName}, $placement, ${student.status.label}',
+      semanticLabel: '${student.fullName}, $placement, ${student.phone}, '
+          '${student.status.label}',
       child: Row(
         children: [
           Avatar(name: student.fullName, tone: toneFor(context, student.status)),
@@ -204,13 +235,13 @@ class _StudentRow extends ConsumerWidget {
               children: [
                 Text(
                   student.fullName,
-                  style: t.textTheme.titleMedium,
+                  style: t.textTheme.titleSmall?.copyWith(color: t.colorScheme.onSurface),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: Space.xxs / 2),
                 Text(
-                  '${student.phone} · $placement',
+                  '$placement · ${money(student.monthlyFee)}',
                   style: t.textTheme.bodySmall,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -219,15 +250,10 @@ class _StudentRow extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: Space.xs),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(money(student.monthlyFee), style: t.textTheme.titleSmall),
-              const SizedBox(height: Space.xxs),
-              if (student.status != StudentStatus.active)
-                StatusPill(status: student.status, dense: true),
-            ],
-          ),
+          // The design badges EVERY row, including the ordinary one. A list where only the
+          // exceptions are marked makes a reader check each unmarked row to see whether it is
+          // fine or whether the badge simply failed to draw.
+          StatusPill(status: student.status),
         ],
       ),
     );

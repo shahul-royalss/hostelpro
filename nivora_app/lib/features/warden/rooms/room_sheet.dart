@@ -7,6 +7,7 @@ import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
 import '../../../shared/glass/glass.dart';
+import '../../../shared/rooms/edit_room_sheet.dart';
 import '../actions/assign_bed_sheet.dart';
 import '../actions/sheet_scaffold.dart';
 import '../data/warden_providers.dart';
@@ -30,6 +31,8 @@ Future<void> showRoomSheet(
   required String roomId,
   required String roomNumber,
   required int floorNumber,
+  required int capacity,
+  required int occupied,
 }) {
   return showGlassSheet<void>(
     context: context,
@@ -37,6 +40,8 @@ Future<void> showRoomSheet(
       roomId: roomId,
       roomNumber: roomNumber,
       floorNumber: floorNumber,
+      capacity: capacity,
+      occupied: occupied,
     ),
   );
 }
@@ -46,11 +51,15 @@ class _RoomSheet extends ConsumerWidget {
     required this.roomId,
     required this.roomNumber,
     required this.floorNumber,
+    required this.capacity,
+    required this.occupied,
   });
 
   final String roomId;
   final String roomNumber;
   final int floorNumber;
+  final int capacity;
+  final int occupied;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -60,7 +69,35 @@ class _RoomSheet extends ConsumerWidget {
     return SheetBody(
       title: 'Room $roomNumber',
       subtitle: 'Floor $floorNumber',
-      child: AsyncSection<List<Bed>>(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // The RLS admits the warden AND the owner to rooms_update (widened 2026-09-02; it
+          // used to admit only the warden, while this sheet told the warden the opposite).
+          // The person standing in the corridor when a room is split is usually this one.
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () async {
+                final changed = await showEditRoomSheet(
+                  context,
+                  roomId: roomId,
+                  roomNumber: roomNumber,
+                  capacity: capacity,
+                  occupied: occupied,
+                  floorNumber: floorNumber,
+                );
+                if (!changed || !context.mounted) return;
+                ref.invalidate(bedsInRoomProvider(roomId));
+                refreshBeds(ref);
+                Navigator.of(context).pop();
+              },
+              icon: const Icon(Icons.edit_outlined, size: IconSize.sm),
+              label: const Text('Edit room'),
+            ),
+          ),
+          AsyncSection<List<Bed>>(
         value: beds,
         onRetry: () => ref.invalidate(bedsInRoomProvider(roomId)),
         builder: (bedRows) {
@@ -68,7 +105,7 @@ class _RoomSheet extends ConsumerWidget {
             return const EmptyState(
               icon: Icons.bed_outlined,
               title: 'This room has no beds',
-              detail: 'Bed rows follow the room capacity, which only the owner can change.',
+              detail: 'Bed rows follow the room capacity. Use Edit room to change it.',
             );
           }
           // The names are a nicety; the beds are the point. If the resident query is still in
@@ -87,13 +124,19 @@ class _RoomSheet extends ConsumerWidget {
                   StatusPill.text(
                     label: '${bedRows.length - free} of ${bedRows.length} occupied',
                     tone: Theme.of(context).colorScheme.primary,
+                    dot: true,
                   ),
                   const SizedBox(width: Space.xs),
                   if (free > 0)
-                    StatusPill.text(label: '$free free', tone: context.tones.success),
+                    StatusPill.text(
+                      label: '$free free',
+                      tone: context.tones.success,
+                      dot: true,
+                    ),
                 ],
               ),
               const SizedBox(height: Space.md),
+              const SectionLabel(label: 'Beds'),
               for (final bed in bedRows)
                 Padding(
                   padding: const EdgeInsets.only(bottom: Space.xs),
@@ -103,15 +146,20 @@ class _RoomSheet extends ConsumerWidget {
                     occupant: bed.studentId == null ? null : byBed[bed.id],
                   ),
                 ),
-              const SizedBox(height: Space.xs),
-              Text(
-                'Beds are free or occupied — the database has no maintenance state, so this '
-                'screen does not invent one.',
-                style: Theme.of(context).textTheme.bodySmall,
+              const SizedBox(height: Space.md),
+              InfoCallout(
+                icon: Icons.info_outline_rounded,
+                child: Text(
+                  'Beds are free or occupied — the database has no maintenance state, so this '
+                  'screen does not invent one.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
             ],
           );
         },
+          ),
+        ],
       ),
     );
   }
@@ -120,7 +168,16 @@ class _RoomSheet extends ConsumerWidget {
 /// What can be done to a bed that somebody is in.
 enum _BedAction { move, free }
 
-/// One bed. Free beds ask to be filled; occupied ones lead to the person in them.
+/// One bed, in the shape rooms-beds-directory.png draws a bed row.
+///
+/// An OCCUPIED bed is a bed badge, the occupant's name, and their check-in date underneath —
+/// the mockup's `Rahul Singh / Check-in: 12 Aug`. That date is `students.date_of_joining`, a
+/// real column this sheet already has on the row it is drawing; nothing about it is invented.
+///
+/// A FREE bed is the mockup's inset "Available" row: a violet-edged well, `Ready for
+/// assignment` underneath, and a round `+` at the right. The design draws it INSIDE the room
+/// card rather than as a peer of the occupied rows, which is what the tone on the surrounding
+/// [TapRow] does here.
 class _BedRow extends ConsumerWidget {
   const _BedRow({required this.bed, required this.roomNumber, required this.occupant});
 
@@ -138,6 +195,7 @@ class _BedRow extends ConsumerWidget {
     if (bed.isFree) {
       return TapRow(
         semanticLabel: 'Bed ${bed.bedNumber}, free',
+        tone: t.colorScheme.primary,
         onTap: () => showFillBedSheet(context, ref, bed: bed, bedLabel: label),
         child: Row(
           children: [
@@ -147,17 +205,20 @@ class _BedRow extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Bed ${bed.bedNumber}', style: t.textTheme.titleMedium),
-                  Text('Free', style: t.textTheme.bodySmall?.copyWith(
-                    color: context.tones.success,
-                  )),
+                  Text('Available', style: t.textTheme.titleMedium),
+                  Text('Bed ${bed.bedNumber} · ready for assignment',
+                      style: t.textTheme.bodySmall,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
-            FilledButton.tonal(
+            // The mockup's round `+`: a filled violet disc at the right edge of an available
+            // bed. IconButton.filled gives it the 48dp target a warden needs; the design's own
+            // circle is smaller than anything you can hit standing up.
+            IconButton.filled(
+              tooltip: 'Assign this bed',
+              icon: const Icon(Icons.add_rounded),
               onPressed: () => showFillBedSheet(context, ref, bed: bed, bedLabel: label),
-              style: FilledButton.styleFrom(minimumSize: const Size(88, 48)),
-              child: const Text('Assign'),
             ),
           ],
         ),
@@ -183,8 +244,15 @@ class _BedRow extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  resident == null ? 'Bed ${bed.bedNumber}' : resident.phone,
+                  // The mockup's second line under an occupant is their check-in date. Where
+                  // the resident row was not readable there is no date either, so the bed says
+                  // only what it knows.
+                  resident == null
+                      ? 'Bed ${bed.bedNumber}'
+                      : 'Check-in ${shortDate(resident.dateOfJoining)}',
                   style: t.textTheme.bodySmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -206,7 +274,6 @@ class _BedRow extends ConsumerWidget {
                 PopupMenuItem(
                   value: _BedAction.move,
                   child: ListTile(
-                    dense: true,
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(Icons.swap_horiz_rounded),
                     title: Text('Move to another bed'),

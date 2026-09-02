@@ -34,11 +34,11 @@ against the JWT. Both hold even if this entire app were recompiled with `role = 
 | 2 Architecture | **done** | Riverpod + go_router + Supabase; folders under `lib/core`, `lib/features`, `lib/shared` |
 | 3 Foundation | **done** | Tokens, both themes, glass system, router, auth, session restore, login, MFA, role shells |
 | 4 Core PG system | **done** | PGs, floors, rooms, beds, students, allocations — owner and warden |
-| 5 Operations | **done** | Payments (native Razorpay), complaints, notices, tasks, expenses, menus |
+| 5 Operations | **done** | Rent recorded at the warden's desk (no in-app checkout in v1), complaints, notices, tasks, expenses, menus |
 | 6 Owner analytics | **done** | Occupancy, collections trend, portfolio; super-admin platform console |
 | 7 Polish | **done** | Minimal glass, measured contrast, skeletons, empty and error states |
 | 8 Security | **done** | RLS inherited; both secrets held in Edge Functions, never on the device |
-| 9 Testing | **done** | 316 tests: routing, roles, data layer, contrast, payments, super admin |
+| 9 Testing | **done** | Routing, roles, data layer, contrast, the desk payment loop, super admin |
 | 10 Store readiness | partial | Icons, splash, signing, bundled fonts and a verified release script done; Play listing and the deploy of the Edge Functions are not |
 
 ### What is genuinely NOT done
@@ -46,8 +46,17 @@ against the JWT. Both hold even if this entire app were recompiled with `role = 
 Two things, and neither is cosmetic:
 
 **The Edge Functions are written but not deployed.** They need a Supabase access token this
-machine does not have. Until `docs/edge-functions.md` is followed, Create Owner and Pay Rent
-fail at runtime no matter how finished the screens look.
+machine does not have. Until `docs/edge-functions.md` is followed, Create Owner fails at runtime
+no matter how finished the screen looks.
+
+**Rent is paid at the warden's desk in v1 — there is no checkout in the app.** The
+`razorpay-order` / `razorpay-webhook` functions are deployed but hold no Razorpay credentials,
+so the money path never worked; a Pay button that opens a flow the server cannot complete is
+worse than no button. The resident's rent card now says where to hand the money over, the warden
+records it (`wd_record_payment`) and can correct a mistyped figure (`wd_correct_payment`), and
+the owner's Payments tab answers "who paid" (`rpc_recent_payments`). The server functions stay
+for a later version; the client plugin, its Gradle pin and its R8 keeps were removed and each
+place says what to put back.
 
 **No live round-trip has ever been exercised from a device.** Norton Web/Mail Shield intercepts
 TLS on the development machine and presents its own certificate; Windows trusts it and Android

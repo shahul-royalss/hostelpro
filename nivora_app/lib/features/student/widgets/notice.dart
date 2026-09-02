@@ -28,27 +28,36 @@ class NoticeTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final forStudentsOnly = notice.audience == NoticeAudience.students;
+    // The mockups draw a notice as an accented card led by a round tinted glyph. The rail and
+    // the glyph are `primary` on every notice, not a colour per notice: a hue that changed row
+    // to row would be a status code nobody had defined, and which notices reach this device was
+    // already decided by the select policy. The one real distinction the row carries — who the
+    // notice is addressed to — is said in a word, by the pill.
     return OutlineCard(
+      accent: t.colorScheme.primary,
+      // The rail eats into the leading edge, so the content is inset past it rather than
+      // starting under it.
+      padding: const EdgeInsets.fromLTRB(Space.md + Space.xs, Space.md, Space.md, Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.campaign_rounded, size: IconSize.md, color: t.colorScheme.primary),
-              const SizedBox(width: Space.xs),
+              const ToneBadge(icon: Icons.campaign_rounded),
+              const SizedBox(width: Space.sm),
               Expanded(
-                child: Text(
-                  notice.title,
-                  style: t.textTheme.titleMedium,
-                  maxLines: expanded ? 3 : 2,
-                  overflow: TextOverflow.ellipsis,
+                child: Padding(
+                  // Centres a one-line title against the badge.
+                  padding: const EdgeInsets.only(top: Space.xxs),
+                  child: Text(
+                    notice.title,
+                    style: t.textTheme.titleMedium,
+                    maxLines: expanded ? 3 : 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
-              if (forStudentsOnly) ...[
-                const SizedBox(width: Space.xs),
-                StatusPill(label: 'For residents', tone: NivoraColors.info),
-              ],
             ],
           ),
           const SizedBox(height: Space.xs),
@@ -61,10 +70,29 @@ class NoticeTile extends StatelessWidget {
               overflow: expanded ? null : TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(height: Space.xs),
-          Text(
-            '${dayLabel(notice.createdAt.toLocal())} · ${relativeTime(notice.createdAt)}',
-            style: t.textTheme.labelSmall,
+          const SizedBox(height: Space.sm),
+          // The mockup's footer reads "Posted 2 hours ago by Aarthi". The name is not built:
+          // `announcements` stores `author_user_id`, and a resident cannot read `public.users`
+          // at all — `st_hostel_contacts()` hands back the staff card and nothing that could
+          // resolve an arbitrary author id. What is left is the part that is true.
+          //
+          // The audience pill sits HERE and not up beside the title, which is where it used to
+          // be. Two labels of unknown length competing for one row is a layout that works until
+          // someone turns their text up: measured at 320dp and 1.3x, "FOR RESIDENTS" and a
+          // three-line title overran the card. A Wrap cannot overflow — the pill drops under the
+          // timestamp — and the footer is where "when, and who for" belong together anyway.
+          Wrap(
+            spacing: Space.xs,
+            runSpacing: Space.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                '${dayLabel(notice.createdAt.toLocal())} · ${relativeTime(notice.createdAt)}',
+                style: t.textTheme.labelSmall,
+              ),
+              if (forStudentsOnly)
+                const StatusPill(label: 'For residents', tone: NivoraColors.info),
+            ],
           ),
         ],
       ),

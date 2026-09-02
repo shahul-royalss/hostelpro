@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../common/refresh.dart';
 import '../data/warden_providers.dart';
 import '../widgets/paged_list.dart';
 import '../widgets/warden_ui.dart';
@@ -47,32 +48,36 @@ class WardenComplaintsScreen extends ConsumerWidget {
 
     return WardenScreen(
       title: 'Complaints',
-      subtitle: filter.label,
       child: PagedList<Complaint>(
         value: complaints,
-        onRefresh: () async {
+        // Bounded, and it SPEAKS. Invalidating and returning left the spinner to retract in
+        // the same frame — a pull that looked ignored — and AsyncSection keeps the rows a
+        // warden is reading through a failed reload, so a queue that did not refresh said
+        // nothing at all. See features/common/refresh.dart.
+        onRefresh: () {
           ref.invalidate(complaintsProvider(query));
           ref.invalidate(hostelStatsProvider);
+          return settleRefresh(context, () => ref.read(complaintsProvider(query).future));
         },
         onLoadMore: () => ref.read(complaintsProvider(query).notifier).loadMore(),
         header: Padding(
           padding: const EdgeInsets.only(bottom: Space.sm),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (final option in ComplaintFilter.values)
-                  Padding(
-                    padding: const EdgeInsets.only(right: Space.xs),
-                    child: ChoiceChip(
-                      label: Text(option.label),
-                      selected: filter == option,
-                      onSelected: (_) =>
-                          ref.read(complaintFilterProvider.notifier).set(option),
-                    ),
-                  ),
-              ],
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // `chips` (4:747): the gold-filled chip is the filter that is on.
+              FilterBar<ComplaintFilter>(
+                options: ComplaintFilter.values,
+                selected: filter,
+                labelOf: (option) => option.label,
+                onSelected: (option) =>
+                    ref.read(complaintFilterProvider.notifier).set(option),
+              ),
+              // The design's list header over the queue. It names the filter that is actually
+              // on screen rather than a fixed word, so the heading and the chips cannot say
+              // different things.
+              SectionLabel(label: filter.label),
+            ],
           ),
         ),
         empty: EmptyState(
@@ -85,6 +90,9 @@ class WardenComplaintsScreen extends ConsumerWidget {
           detail: filter == ComplaintFilter.needsAction
               ? 'Every complaint in this hostel has been resolved.'
               : 'Try another filter.',
+          // An empty queue is the good outcome here, and the halo says so in mint rather than
+          // in the neutral grey a missing list gets.
+          tone: filter == ComplaintFilter.needsAction ? NivoraColors.success : null,
         ),
         itemBuilder: (context, complaint) => _ComplaintRow(complaint: complaint),
       ),
@@ -99,48 +107,46 @@ class _ComplaintRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final tone = toneFor(context, complaint.status);
 
+    // warden-maintenance-dashboard.png's ticket card: the subject on its own line with the
+    // state chip opposite it, a hairline, then the facts underneath in glyphed metadata. The
+    // mockup's facts are a room and a resident's name; the complaints query returns neither
+    // (public.complaints carries a student_id and no room at all), so the two this app really
+    // has take their place rather than a room number being invented.
     return TapRow(
       onTap: () => showComplaintSheet(context, complaintId: complaint.id),
+      padding: const EdgeInsets.all(Space.md),
       semanticLabel:
           '${complaint.title}, ${complaint.category.label}, ${complaint.status.label}, '
           'raised ${age(complaint.createdAt)}',
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: Space.xxxl,
-            height: Space.xxxl,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: context.tones.chipFill(tone),
-              borderRadius: Radii.rControl,
-            ),
-            child: Icon(categoryIcon(complaint.category), size: IconSize.lg, color: tone),
-          ),
-          const SizedBox(width: Space.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
                   complaint.title,
-                  style: t.textTheme.titleMedium,
-                  maxLines: 1,
+                  style: t.textTheme.titleSmall?.copyWith(color: t.colorScheme.onSurface),
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: Space.xxs / 2),
-                Text(
-                  '${complaint.category.label} · ${age(complaint.createdAt)}',
-                  style: t.textTheme.bodySmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: Space.xs),
+              // `complaint-card` (4:710) heads its row with the category badge and puts the
+              // age opposite it, both above the body copy. The status is the badge here
+              // because the CATEGORY is already spoken by the glyph on the meta line, and
+              // "which of these do I still have to do something about" is the question a queue
+              // is opened to answer.
+              StatusPill(status: complaint.status),
+            ],
           ),
-          const SizedBox(width: Space.xs),
-          StatusPill(status: complaint.status, dense: true),
+          const SizedBox(height: Space.xs),
+          MetaLine([
+            (categoryIcon(complaint.category), complaint.category.label),
+            (Icons.schedule_rounded, age(complaint.createdAt)),
+          ]),
         ],
       ),
     );

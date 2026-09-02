@@ -52,6 +52,7 @@ class FeePayment {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+
   /// Never negative: an overpayment is not a debt.
   double get balance {
     final remaining = amountDue - amountPaid;
@@ -121,6 +122,7 @@ class FeeLedgerRow {
   final DateTime? paidOn;
   final PaymentMode? mode;
 
+
   double get balance {
     final remaining = amountDue - amountPaid;
     return remaining > 0 ? remaining : 0;
@@ -141,6 +143,105 @@ class FeeLedgerRow {
       status: wireOrThrow(FeeStatus.values, row['status'], src, 'status'),
       paidOn: optDate(row, src, 'paid_on'),
       mode: PaymentMode.tryParse(optString(row, 'mode')),
+    );
+  }
+}
+
+/// One row of public.rpc_recent_payments(hostel) — money that actually came in, with the name
+/// of the person who took it.
+///
+/// WHY THIS IS NOT A [FeePayment]. A payment row on its own answers "how does this month
+/// stand"; the owner's question is "who paid, and who took it", and neither name is on
+/// `fee_payments` — `student_id` and `recorded_by` are uuids. The RPC does both joins under a
+/// definer because a warden cannot read an owner's `users` row, so half of `recordedByName`
+/// would otherwise come back null for rows an owner recorded themselves.
+///
+/// `amountPaid` IS THE MONTH'S TOTAL, NOT THE LAST HANDOVER. `wd_record_payment` upserts and
+/// ADDS, so one row is one month per resident and it carries the cumulative figure. A list of
+/// these is a list of months that have received money, most recently touched first — not a
+/// transaction log, because the schema does not keep one.
+class RecentPayment {
+  const RecentPayment({
+    required this.id,
+    required this.studentId,
+    required this.fullName,
+    required this.periodMonth,
+    required this.amountDue,
+    required this.amountPaid,
+    required this.status,
+    required this.recordedAt,
+    this.roomNumber,
+    this.bedNumber,
+    this.paidOn,
+    this.mode,
+    this.notes,
+    this.recordedBy,
+    this.recordedByName,
+    this.recordedByRole,
+  });
+
+  final String id;
+  final String studentId;
+
+  /// The resident's name, from public.students.
+  final String fullName;
+
+  /// Null while the resident has no room assigned.
+  final String? roomNumber;
+  final int? bedNumber;
+
+  /// 'YYYY-MM'.
+  final String periodMonth;
+  final double amountDue;
+
+  /// Everything received against this month, cumulative. See the class doc.
+  final double amountPaid;
+  final FeeStatus status;
+
+  /// The day the money changed hands, as the desk entered it. Can be backdated, which is why
+  /// it is not what the list is ordered by.
+  final DateTime? paidOn;
+  final PaymentMode? mode;
+  final String? notes;
+
+  /// The staff account that recorded it, and its name — null for a row whose recorder has
+  /// since been deleted, which is a fact worth showing rather than papering over.
+  final String? recordedBy;
+  final String? recordedByName;
+
+  /// 'warden' | 'owner' | … — `users.role` as Postgres stores it. Kept as the WIRE value
+  /// because this layer does not import `UserRole` (it lives in core/auth/session.dart, which
+  /// no model may depend on); the screen that prints it owns the label.
+  final String? recordedByRole;
+
+  /// `fee_payments.updated_at` — when the desk last touched this month. The list's own order.
+  final DateTime recordedAt;
+
+
+  double get balance {
+    final remaining = amountDue - amountPaid;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  factory RecentPayment.fromJson(Map<String, dynamic> row) {
+    const src = 'rpc_recent_payments';
+    return RecentPayment(
+      id: reqString(row, src, 'id'),
+      studentId: reqString(row, src, 'student_id'),
+      fullName: reqString(row, src, 'full_name'),
+      roomNumber: optString(row, 'room_number'),
+      bedNumber: optInt(row, src, 'bed_number'),
+      periodMonth: reqString(row, src, 'period_month'),
+      amountDue: reqDouble(row, src, 'amount_due'),
+      amountPaid: reqDouble(row, src, 'amount_paid'),
+      status: wireOrThrow(FeeStatus.values, row['status'], src, 'status'),
+      paidOn: optDate(row, src, 'paid_on'),
+      mode: PaymentMode.tryParse(optString(row, 'mode')),
+      notes: optString(row, 'notes'),
+      recordedBy: optString(row, 'recorded_by'),
+      recordedByName: optString(row, 'recorded_by_name'),
+      recordedByRole: optString(row, 'recorded_by_role'),
+      recordedAt: reqTimestamp(row, src, 'recorded_at'),
     );
   }
 }

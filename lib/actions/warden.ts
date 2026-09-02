@@ -80,7 +80,10 @@ export async function registerStudent(formData: FormData): Promise<ActionResult<
 
     let account: Awaited<ReturnType<typeof createStudentAuthUser>>;
     try {
-      account = await createStudentAuthUser({ fullName: input.fullName, phone: input.phone, hostelId });
+      // input.email is what the resident will type on the sign-in screen when they gave one;
+      // without it the login stays the phone number. Same rule as the Edge Function the mobile
+      // app posts to — see createStudentAuthUser.
+      account = await createStudentAuthUser({ fullName: input.fullName, phone: input.phone, hostelId, email: input.email || null });
     } catch (e) {
       const msg = errorMessage(e);
       if (/SERVICE_ROLE_KEY/i.test(msg)) {

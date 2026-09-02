@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../common/refresh.dart';
+import '../../../shared/glass/glass.dart';
+import '../../../shared/illustrations.dart';
 import '../actions/record_payment_sheet.dart';
 import '../data/warden_providers.dart';
 import '../students/student_sheet.dart';
@@ -45,15 +48,33 @@ class WardenFeesScreen extends ConsumerWidget {
     final filter = ref.watch(feeFilterProvider);
     final query = FeeLedgerQuery(hostelId: hostelId, periodMonth: month, status: filter);
     final ledger = ref.watch(feeLedgerProvider(query));
+    // ═══ A SECOND READ THAT MAY NOT BLOCK THE FIRST ═══
+    // `public.payment_refunds` is a child table; no fee RPC returns it. This is a qualifier on
+    // figures the ledger read already produced, so it is taken as `.value ?? empty`: while it
+    // is in flight, and if it fails outright, the collections list draws exactly as it always
+    // did. A refund line is worth having; it is not worth a warden being unable to take rent
+    // because a secondary query timed out.
+    final refunds =
+        ref.watch(hostelRefundsProvider(StatsQuery(hostelId: hostelId, periodMonth: month)))
+                .value ??
+            RefundIndex.empty;
 
     return WardenScreen(
       title: 'Collections',
       subtitle: monthLabel(month),
       child: PagedList<FeeLedgerRow>(
         value: ledger,
-        onRefresh: () async {
+        // Bounded, and it says what happened. See features/common/refresh.dart: an invalidate
+        // that returns immediately retracts the spinner in the same frame, and AsyncSection
+        // holds the old ledger through a failed reload — so a warden chasing rent could be
+        // reading yesterday's rows with nothing on screen to say so.
+        onRefresh: () {
           ref.invalidate(feeLedgerProvider(query));
           ref.invalidate(hostelStatsProvider);
+          // The refund read is a second query behind the same rows; a refresh that left it
+          // stale would show today's ledger annotated with yesterday's refunds.
+          ref.invalidate(hostelRefundsProvider);
+          return settleRefresh(context, () => ref.read(feeLedgerProvider(query).future));
         },
         onLoadMore: () => ref.read(feeLedgerProvider(query).notifier).loadMore(),
         header: Padding(
@@ -70,6 +91,9 @@ class WardenFeesScreen extends ConsumerWidget {
           ),
         ),
         empty: EmptyState(
+          // Only the whole month with nobody on it. "Nobody is unpaid this month" is a filter
+          // result, not an empty ledger, and keeps the glyph.
+          illustration: filter == null ? EmptyArt.payments : null,
           icon: Icons.receipt_long_outlined,
           title: filter == null
               ? 'Nobody on the ledger for ${monthLabel(month)}'
@@ -78,7 +102,11 @@ class WardenFeesScreen extends ConsumerWidget {
               ? 'The ledger lists every current resident. Register someone to start it.'
               : 'Try another filter, or a different month.',
         ),
-        itemBuilder: (context, row) => _LedgerRow(row: row, month: month),
+        itemBuilder: (context, row) => _LedgerRow(
+          row: row,
+          month: month,
+          refunds: refunds.forMonth(row.studentId, month),
+        ),
       ),
     );
   }
@@ -99,9 +127,12 @@ class _MonthStepper extends ConsumerWidget {
 
     return Row(
       children: [
-        IconButton.filledTonal(
+        // The file's only icon button is `bell-icon-container` (4:656): a 32dp raised square
+        // at the 8 corner. Material's filledTonal circle in `secondaryContainer` is not a
+        // shape this design draws.
+        HeaderAction(
           tooltip: 'Previous month',
-          icon: const Icon(Icons.chevron_left_rounded),
+          icon: Icons.chevron_left_rounded,
           onPressed: () => ref.read(selectedMonthProvider.notifier).step(-1),
         ),
         Expanded(
@@ -116,9 +147,9 @@ class _MonthStepper extends ConsumerWidget {
             ],
           ),
         ),
-        IconButton.filledTonal(
+        HeaderAction(
           tooltip: 'Next month',
-          icon: const Icon(Icons.chevron_right_rounded),
+          icon: Icons.chevron_right_rounded,
           onPressed:
               canGoForward ? () => ref.read(selectedMonthProvider.notifier).step(1) : null,
         ),
@@ -133,6 +164,11 @@ class _MonthStepper extends ConsumerWidget {
 }
 
 /// Collected against outstanding, for the month on screen.
+///
+/// THE SHAPE IS resident-profile.png's two-up: a pair of figure cards side by side, the money
+/// already in in a neutral card and the money still owed in a card tinted its own colour, each
+/// under a `label-caps` eyebrow. The meter runs the full width underneath, on the design's own
+/// `bg-surface-bright` track.
 class _MonthSummary extends ConsumerWidget {
   const _MonthSummary({required this.hostelId, required this.month});
   final String hostelId;
@@ -154,67 +190,128 @@ class _MonthSummary extends ConsumerWidget {
         // Guarded rather than assumed: a month with no residents divides by zero, and a
         // progress bar that reports 100% collected on an empty hostel is a lie.
         final ratio = total <= 0 ? null : (data.feesCollected / total).clamp(0.0, 1.0);
+        final owing = data.feesPending > 0;
 
-        return Container(
+        return GlassCard(
           padding: const EdgeInsets.all(Space.md),
-          decoration: BoxDecoration(
-            color: t.colorScheme.surface,
-            borderRadius: Radii.rCard,
-            border: Border.all(color: t.colorScheme.outlineVariant),
-          ),
+          semanticLabel: '${money(data.feesCollected)} collected, '
+              '${money(data.feesPending)} outstanding',
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('COLLECTED', style: t.textTheme.labelSmall),
-                        Text(money(data.feesCollected), style: t.textTheme.headlineMedium),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text('OUTSTANDING', style: t.textTheme.labelSmall),
-                      Text(
-                        money(data.feesPending),
-                        style: t.textTheme.titleSmall?.copyWith(
-                          color: data.feesPending > 0 ? context.tones.error : null,
-                        ),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: _Figure(
+                        label: 'Collected',
+                        value: money(data.feesCollected),
+                        tone: NivoraColors.success,
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(width: Space.xs),
+                    Expanded(
+                      child: _Figure(
+                        label: 'Outstanding',
+                        value: money(data.feesPending),
+                        tone: owing ? NivoraColors.error : null,
+                        tinted: owing,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               if (ratio != null) ...[
-                const SizedBox(height: Space.sm),
+                const SizedBox(height: Space.md),
                 ClipRRect(
                   borderRadius: Radii.rPill,
                   child: LinearProgressIndicator(
                     value: ratio,
-                    minHeight: Space.xs,
-                    // Track = still owed, fill = collected. Both resolved for this theme.
-                    backgroundColor: context.tones.chipFill(NivoraColors.error),
+                    // The design's meter: `bg-surface-bright` channel, `bg-primary` fill. The
+                    // track used to be a red tint, which drew the eye to the part of the month
+                    // that had not happened yet.
+                    backgroundColor: t.colorScheme.surfaceBright,
                     valueColor: AlwaysStoppedAnimation(context.tones.success),
                   ),
                 ),
               ],
-              const SizedBox(height: Space.xs),
-              Text(
-                '${data.studentsPaid} paid · ${data.studentsUnpaid} still owing',
-                style: t.textTheme.bodySmall,
-              ),
+              const SizedBox(height: Space.sm),
+              MetaLine([
+                (Icons.check_circle_outline_rounded, '${data.studentsPaid} paid'),
+                (Icons.schedule_rounded, '${data.studentsUnpaid} still owing'),
+              ]),
             ],
           ),
         );
       },
     );
   }
+}
+
+/// One half of the two-up: a `label-caps` eyebrow over a `title-md` figure, in a well of its
+/// own when the figure carries a meaning.
+class _Figure extends StatelessWidget {
+  const _Figure({
+    required this.label,
+    required this.value,
+    this.tone,
+    this.tinted = false,
+  });
+
+  final String label;
+  final String value;
+  final Color? tone;
+
+  /// Tints the whole well, the way the mockup's TOTAL DUES card is tinted coral. Reserved for
+  /// the figure that is a call to act.
+  final bool tinted;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final accent = tone == null ? null : context.tones.resolve(tone!);
+    return Container(
+      padding: const EdgeInsets.all(Space.sm),
+      decoration: BoxDecoration(
+        color: tinted && accent != null
+            ? context.tones.chipFill(accent)
+            : t.colorScheme.surfaceContainer,
+        borderRadius: Radii.rControl,
+        border: Border.all(
+          color: tinted && accent != null
+              ? context.tones.chipBorder(accent)
+              : t.colorScheme.outlineVariant,
+          width: Strokes.hairline,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CapsLabel(label, tone: accent, dot: accent != null),
+          const SizedBox(height: Space.xxs),
+          Text(
+            value,
+            style: t.textTheme.headlineSmall?.copyWith(color: accent),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The compact one-liner on a ledger row. The verb carries the status: `rz_reverse_fee` only
+/// moves the ledger for a PROCESSED refund, so a pending one has not changed the figure beside
+/// it and must not claim to have.
+String _refundLine(RefundInfo r) {
+  final amount = money(r.amount);
+  final on = r.on;
+  if (!r.isSettled) {
+    return on == null ? '$amount refund pending' : '$amount refund requested ${shortDate(on)}';
+  }
+  return on == null ? '$amount refunded' : '$amount refunded ${shortDate(on)}';
 }
 
 class _FeeFilterChips extends ConsumerWidget {
@@ -225,25 +322,27 @@ class _FeeFilterChips extends ConsumerWidget {
     final selected = ref.watch(feeFilterProvider);
     final notifier = ref.read(feeFilterProvider.notifier);
 
+    // `chips` (4:747). The filter is a NULLABLE status rather than a plain enum, so this
+    // builds the row out of [FilterPill] directly instead of going through [FilterBar].
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
           Padding(
             padding: const EdgeInsets.only(right: Space.xs),
-            child: ChoiceChip(
-              label: const Text('Everyone'),
+            child: FilterPill(
+              label: 'Everyone',
               selected: selected == null,
-              onSelected: (_) => notifier.set(null),
+              onTap: () => notifier.set(null),
             ),
           ),
           for (final status in FeeStatus.values)
             Padding(
               padding: const EdgeInsets.only(right: Space.xs),
-              child: ChoiceChip(
-                label: Text(status.label),
+              child: FilterPill(
+                label: status.label,
                 selected: selected == status,
-                onSelected: (_) => notifier.set(status),
+                onTap: () => notifier.set(status),
               ),
             ),
         ],
@@ -253,9 +352,12 @@ class _FeeFilterChips extends ConsumerWidget {
 }
 
 class _LedgerRow extends StatelessWidget {
-  const _LedgerRow({required this.row, required this.month});
+  const _LedgerRow({required this.row, required this.month, this.refunds = const []});
   final FeeLedgerRow row;
   final String month;
+
+  /// This resident's refunds for this month, from `public.payment_refunds`.
+  final List<RefundInfo> refunds;
 
   @override
   Widget build(BuildContext context) {
@@ -268,8 +370,10 @@ class _LedgerRow extends StatelessWidget {
             : 'Room ${row.roomNumber} · Bed ${row.bedNumber}';
 
     return TapRow(
-      semanticLabel:
-          '${row.fullName}, ${row.status.label}, ${money(row.balance)} outstanding',
+      semanticLabel: '${row.fullName}, ${row.status.label}, '
+          '${money(row.balance)} outstanding'
+          '${refunds.map((r) => ', ${money(r.amount)} '
+              '${r.isSettled ? 'refunded' : 'refund pending'}').join()}',
       // The row IS the action. A separate "collect" button would be a second target to hit and
       // a second thing to explain; the only reason to open a ledger row is to take money.
       onTap: () => showRecordPaymentSheet(
@@ -288,12 +392,47 @@ class _LedgerRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(row.fullName,
-                    style: t.textTheme.titleMedium,
+                    style: t.textTheme.titleSmall?.copyWith(color: t.colorScheme.onSurface),
                     maxLines: 1, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: Space.xxs / 2),
                 Text(placement,
                     style: t.textTheme.bodySmall,
                     maxLines: 1, overflow: TextOverflow.ellipsis),
+                // ═══ THE WARDEN IS THE ONE WHO GETS ASKED, IN PERSON ═══
+                //
+                // A refund reaches this screen as a status that has quietly moved from PAID
+                // back to PARTLY PAID or UNPAID — indistinguishable, at the desk, from a
+                // resident who simply never paid. So the row says it in words, on the resident's
+                // own line, where a warden reading the list finds it before the conversation
+                // starts rather than during it.
+                //
+                // [NivoraColors.info] and not the amber the status pill beside it may be
+                // wearing: two different facts about the same month must not wear one colour.
+                // See [RefundNote] in features/student/widgets/rent.dart for the full reasoning
+                // behind the tone; it is the same decision, made once.
+                //
+                // A pending refund says so in its own words. The warden is the person who will
+                // be asked "where is my money", and "instructed" and "gone" are the two
+                // different answers to that question.
+                for (final r in refunds) ...[
+                  const SizedBox(height: Space.xxs / 2),
+                  Row(
+                    children: [
+                      Icon(Icons.assignment_return_rounded,
+                          size: IconSize.sm, color: context.tones.info),
+                      const SizedBox(width: Space.xxs),
+                      Expanded(
+                        child: Text(
+                          _refundLine(r),
+                          style: t.textTheme.bodySmall
+                              ?.copyWith(color: context.tones.info),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -308,7 +447,7 @@ class _LedgerRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: Space.xxs),
-              StatusPill(status: row.status, dense: true),
+              StatusPill(status: row.status),
             ],
           ),
           IconButton(

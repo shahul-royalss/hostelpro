@@ -23,27 +23,38 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
 
   return (
     <form action={action} className="flex flex-col gap-5" noValidate>
-      {/* Voluntary change must be reauthenticated; the forced first-login change is exempt
-          (the temporary password was just used to sign in). The server re-decides this. */}
-      {!forced && (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="currentPassword">Current password</Label>
-          <div className="relative">
-            <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <Input
-              id="currentPassword"
-              name="currentPassword"
-              type="password"
-              autoComplete="current-password"
-              className="pl-10"
-              aria-invalid={!!fieldErrors.currentPassword}
-              required
-              autoFocus
-            />
-          </div>
-          {fieldErrors.currentPassword?.[0] ? <p className="text-xs text-red">{fieldErrors.currentPassword[0]}</p> : null}
+      {/* ASKED ON BOTH PATHS SINCE 2026-09-01. This field used to be hidden for a forced
+          change, on the reasoning that the temporary password had just been used to sign in.
+          Supabase Auth disagrees: this project has
+          GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD on, and
+          PUT /auth/v1/user {password} answers 400 current_password_required without it —
+          measured against the live project. Every account here is routed to this page before it
+          can reach anything else, so a hidden field meant nobody could finish a first login.
+
+          The LABEL is what keeps it from reading as a bug: on a forced change the reader is
+          holding a temporary password somebody handed them, and "Current password" sends them
+          hunting for one they never chose. What `forced` still decides is reauthentication,
+          in changePassword() — and that decision is made from the profile row, not from here. */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="currentPassword">{forced ? "Temporary password" : "Current password"}</Label>
+        <div className="relative">
+          <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <Input
+            id="currentPassword"
+            name="currentPassword"
+            type="password"
+            autoComplete="current-password"
+            className="pl-10"
+            aria-invalid={!!fieldErrors.currentPassword}
+            required
+            autoFocus
+          />
         </div>
-      )}
+        {forced ? (
+          <p className="text-xs text-muted">The one you were given, to confirm it is you.</p>
+        ) : null}
+        {fieldErrors.currentPassword?.[0] ? <p className="text-xs text-red">{fieldErrors.currentPassword[0]}</p> : null}
+      </div>
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="password">New password</Label>
@@ -59,7 +70,6 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
             onChange={(e) => setPw(e.target.value)}
             aria-invalid={!!fieldErrors.password}
             required
-            autoFocus={forced}
           />
           <button
             type="button"

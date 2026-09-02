@@ -13,7 +13,8 @@
     "lint:sast": "eslint app components lib hooks db middleware.ts",
     "security:scan": "node scripts/security-scan.mjs",
     "security:rls": "node scripts/_qa-rls-attack.mjs",
-    "security:all": "npm run typecheck && npm run lint:sast && npm run security:scan"
+    "security:all": "npm run typecheck && npm run lint:sast && npm run security:scan && npm run test:webhook-signature",
+    "test:webhook-signature": "tsx --conditions=react-server scripts/_qa-webhook-signature.mts"
   },
   "dependencies": {
     "@avenra/liquid-glass": "^1.2.0",

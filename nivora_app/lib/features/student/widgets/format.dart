@@ -60,9 +60,6 @@ String monthEyebrow(String periodMonth) {
 /// nothing to convert here — calling `.toLocal()` on one would be a no-op at best.
 String dayLabel(DateTime day) => DateFormat('d MMM yyyy').format(day);
 
-/// A day without its year: '19 Aug'. For a row whose year is obvious from context.
-String shortDayLabel(DateTime day) => DateFormat('d MMM').format(day);
-
 /// How long ago something happened, in the shortest form that is still exact enough.
 ///
 /// [now] is injectable so this is testable without waiting for the clock. Timestamps arrive

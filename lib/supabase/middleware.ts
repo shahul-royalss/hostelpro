@@ -19,13 +19,20 @@ const PUBLIC_PATHS = [
   // session gate they redirect to /login, which is exactly where the user already is and stuck.
   "/forgot-password",
   "/reset-password",
+  // Where the mobile app's email-confirmation link lands. GoTrue has already verified the
+  // one-time token by the time the browser gets here, so this page proves nothing and reads
+  // nothing - it exists so that "did it work?" has an answer other than a 404. It MUST be
+  // public: the browser that opens a link from an inbox is, in the overwhelming majority of
+  // cases, not signed into the web app at all, and behind the session gate every confirmation
+  // would land on /login looking like a failure.
+  "/verify-email",
   "/manifest.webmanifest",
   "/icons",
   "/api/health",
   "/robots.txt",
 ];
 /** Paths a signed-in user may reach without completing MFA / password change */
-const AUTH_STEP_PATHS = ["/mfa", "/change-password", "/api/health"];
+const AUTH_STEP_PATHS = ["/mfa", "/change-password", "/api/health", "/verify-email"];
 
 function startsWithAny(pathname: string, list: string[]) {
   return list.some((p) => pathname === p || pathname.startsWith(p + "/"));

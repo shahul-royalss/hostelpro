@@ -2,8 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, FileText, ShieldCheck, UserMinus } from "lucide-react";
 import { Callout, DocHeader } from "./layout";
+import { LEGAL_VERSION } from "@/lib/legal-config";
 
-const UPDATED = "2026-08-21";
+// The publication date of the Terms + Privacy pair, and the string an in-app acceptance is
+// recorded against. It lives in lib/legal-config.ts so that this page, its three siblings, the
+// Android app and public.legal_versions cannot drift apart — see the note on LEGAL_VERSION
+// there, which explains why bumping it re-asks every user for their agreement.
+const UPDATED = LEGAL_VERSION;
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
 

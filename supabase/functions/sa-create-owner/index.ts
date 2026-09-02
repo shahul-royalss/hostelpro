@@ -62,6 +62,7 @@ import { dbError } from "../_shared/errors.ts";
 import { fail, HttpError, ok, preflight, readJsonBody, toResponse } from "../_shared/http.ts";
 import { enforceRateLimit } from "../_shared/ratelimit.ts";
 import { callerClient } from "../_shared/supabase.ts";
+import { requireVerifiedEmail } from "../_shared/verification.ts";
 import { normalizePhone, Validator } from "../_shared/validate.ts";
 
 /** 64 KB. This payload is a handful of short strings and numbers, never a file. */
@@ -138,6 +139,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // Identity first: an unauthenticated or under-privileged caller is refused before the
     // request body is read, let alone acted on.
     const caller = await requireCaller(req, "super_admin");
+    // An unproved address must not be able to mint another login. This endpoint is the one
+    // place where "somebody typed an email" turns into credentials, and until the caller has
+    // answered a code sent to their own address there is nothing behind their identity but a
+    // password somebody else may have chosen for them. See _shared/verification.ts.
+    requireVerifiedEmail(caller);
     const input = parseBody(await readJsonBody(req, MAX_BODY_BYTES));
 
     // Per-caller, durable (Postgres-backed) and FAIL-CLOSED: this endpoint mints a credential,

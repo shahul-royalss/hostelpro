@@ -11,6 +11,7 @@ import {
   isLiveKey,
   isRazorpayConfigured,
   MIN_ORDER_PAISE,
+  ORDER_ID_RE,
   razorpayClient,
   razorpayKeyId,
   toPaise,
@@ -40,7 +41,6 @@ import { toPeriodMonth } from "@/lib/utils";
  */
 
 const NOT_CONFIGURED = "Online payment isn't set up yet. You can still pay at the warden desk.";
-const ORDER_ID_RE = /^order_[A-Za-z0-9]{6,30}$/;
 
 /** How long an unpaid order is offered again instead of minting a new one. */
 const REUSE_WINDOW_MS = 15 * 60 * 1000;

@@ -80,6 +80,17 @@ final _notice = Notice(
   updatedAt: DateTime.utc(2026, 8, 19, 19, 35),
 );
 
+/// One row of public.menus, for the home screen's "today" section.
+MenuEntry _meal(MenuDay day, Meal meal, String items) => MenuEntry(
+      id: '${day.wire}-${meal.wire}',
+      hostelId: '8fc3f95c-497a-4204-af5a-510a6c811136',
+      day: day,
+      meal: meal,
+      items: items,
+      createdAt: DateTime.utc(2026, 8, 30),
+      updatedAt: DateTime.utc(2026, 8, 31, 9),
+    );
+
 PagedResult<T> one<T>(List<T> items) =>
     PagedResult<T>(items: items, page: 0, pageSize: 20, hasMore: false);
 
@@ -98,6 +109,21 @@ class _FakeNotices extends NoticesNotifier {
 
   @override
   Future<PagedResult<Notice>> fetchPage(int page) async => one(items);
+}
+
+/// One resident's months, as a fixed page.
+///
+/// `holdWhileSignedIn` is off because the real one asks `sessionProvider` — which these tests
+/// do not stand up — and the hold is not what any of them are about.
+class _FakeHistory extends StudentFeeHistoryNotifier {
+  _FakeHistory(super.studentId, this.page);
+  final PagedResult<FeePayment> page;
+
+  @override
+  bool get holdWhileSignedIn => false;
+
+  @override
+  Future<PagedResult<FeePayment>> fetchPage(int _) async => page;
 }
 
 /// The same family provider, refusing. Used to prove a failed read looks like a failed read.
@@ -126,6 +152,13 @@ Future<void> showScreen(
   AppFailure? rentFailure,
   AppFailure? roommatesFailure,
   AppFailure? complaintsFailure,
+  AppFailure? menuFailure,
+
+  /// The week's food. DEFAULTS TO A HOSTEL THAT HAS PLANNED NOTHING, which is the state the
+  /// live tenant is actually in — no rows in public.menus at all — and which every test in this
+  /// file that is not about the menu should be looking at, because it draws a sentence rather
+  /// than an error panel and so cannot be mistaken for one.
+  WeeklyMenu? menu,
 }) async {
   // A tall viewport, because these are lazily-built lists: on a 600dp test window the sections
   // below the fold are never built, and "the notice is not on screen" would look identical to
@@ -151,7 +184,7 @@ Future<void> showScreen(
         }),
         hostelContactsProvider.overrideWith((ref) async => _contacts),
         studentFeeHistoryProvider
-            .overrideWith((ref, id) async => history ?? one<FeePayment>(const [])),
+            .overrideWith2((id) => _FakeHistory(id, history ?? one<FeePayment>(const []))),
         // A family override replaces every instance at once and is handed no argument, so the
         // fakes carry a stand-in key. Nothing reads it: fetchPage is overridden, and the key
         // only exists so the real notifier can build a query.
@@ -161,6 +194,10 @@ Future<void> showScreen(
               : _FailingComplaints(const ComplaintQuery(hostelId: 'h'), complaintsFailure),
         ),
         noticesProvider.overrideWith2((_) => _FakeNotices('h', notices)),
+        weeklyMenuProvider.overrideWith((ref, hostelId) async {
+          if (menuFailure != null) throw menuFailure;
+          return menu ?? const WeeklyMenu.empty();
+        }),
         // THE TRIPWIRE. Present on every screen test in this file, checked in tearDown.
         hostelStatsProvider.overrideWith((ref, query) {
           statsWereRead = true;
@@ -214,6 +251,49 @@ void main() {
     expect(find.text('1 complaint still open'), findsOneWidget);
     expect(find.text('Bathroom tap leaking on 1st floor'), findsOneWidget);
     expect(find.text('Water supply maintenance on Sunday'), findsOneWidget);
+  });
+
+  testWidgets("today's food sits under the rent card, never above it", (tester) async {
+    // THE OWNER'S ONE CONSTRAINT ON WHERE THIS WENT: money first, food second. Rent is why
+    // this app gets opened; the menu is what gets read most often after it. Anything that
+    // pushes "still to pay" off the first screen is a regression, and it is a regression a
+    // screenshot review would not catch on a tall test window.
+    final today = MenuDay.of(DateTime.now());
+    await showScreen(
+      tester,
+      const StudentHomeScreen(),
+      rent: partialRow,
+      complaints: [_openComplaint],
+      menu: WeeklyMenu([
+        _meal(today, Meal.breakfast, 'Idli, sambar, coconut chutney'),
+        _meal(today, Meal.dinner, 'Chapati, dal fry'),
+      ]),
+    );
+
+    final rent = tester.getTopLeft(find.text('RENT · AUGUST')).dy;
+    final food = tester.getTopLeft(find.text("Today's food")).dy;
+    final complaints = tester.getTopLeft(find.text('Your complaints')).dy;
+    expect(rent, lessThan(food), reason: 'rent must stay first on the screen');
+    expect(food, lessThan(complaints), reason: 'food is asked about more often than a ticket');
+
+    // Today's two written meals, and the two nobody has written — said as unwritten, not as
+    // an empty plate.
+    expect(find.text('Idli, sambar, coconut chutney'), findsOneWidget);
+    expect(find.text('Chapati, dal fry'), findsOneWidget);
+    expect(find.text('Not planned yet'), findsNWidgets(2));
+
+    // And the rest of the week is one tap away rather than twenty-eight lines down the page.
+    expect(find.text('WHOLE WEEK'), findsOneWidget);
+  });
+
+  testWidgets('a hostel that has planned nothing is not an error on the home screen',
+      (tester) async {
+    // The live tenant is in exactly this state: public.menus is empty. It is a sentence about
+    // who fills the menu in, not a failed read — the two must never look the same.
+    await showScreen(tester, const StudentHomeScreen(), rent: partialRow);
+
+    expect(find.text('No menu put up yet'), findsOneWidget);
+    expect(find.byType(ErrorNote), findsNothing);
   });
 
   testWidgets('home with nothing outstanding says so rather than showing an empty list',

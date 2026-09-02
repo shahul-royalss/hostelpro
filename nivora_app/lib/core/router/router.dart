@@ -7,6 +7,8 @@ import '../auth/session.dart';
 import '../../features/auth/change_password_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/mfa_screen.dart';
+import '../../features/legal/consent_gate.dart';
+import '../../features/settings/security_screen.dart';
 import '../../features/shell/role_shell.dart';
 import '../../features/splash/splash_screen.dart';
 
@@ -34,7 +36,55 @@ const _publicRoutes = {loginRoute};
 const splashRoute = '/splash';
 const loginRoute = '/login';
 const mfaRoute = '/mfa';
+
+/// Where a privileged account with NO second factor is held.
+///
+/// Not a settings page reached from a menu: it is the ONLY destination this app will draw for
+/// [AuthNeedsMfaEnrolment], and the redirect below puts it back in front of anyone who navigates
+/// away. The server is granting that session grace — see mfaGate() — and this is the screen that
+/// ends the grace. It is separate from [mfaRoute] because the two ask for different things:
+/// /mfa wants a code from a factor that exists, this wants a factor to exist at all.
+const mfaEnrolRoute = '/mfa-setup';
 const changePasswordRoute = '/change-password';
+
+/// EVERY PATH THIS APP REGISTERS, AND THE SCREEN BEHIND IT.
+///
+/// It is a map rather than a hand-written `routes:` list so a test can ask the question no test
+/// could ask before: does every location [resolveRedirect] can return actually have a screen?
+/// A redirect to a path with no GoRoute is not an error anyone sees — go_router falls through
+/// to [errorBuilder] — and a phase whose destination is missing is a frame that draws nothing.
+/// Both are black rectangles on a phone, and both are invisible to `flutter analyze` and to
+/// every test that checks one route at a time.
+///
+/// The router below is BUILT from this map, so the route table and [appRoutes] cannot drift
+/// apart: adding a destination means adding it here, and test/router_redirect_test.dart then
+/// exercises every AuthPhase against it automatically, without being told it exists.
+final appScreens = <String, WidgetBuilder>{
+  splashRoute: (_) => const SplashScreen(),
+  loginRoute: (_) => const LoginScreen(),
+  mfaRoute: (_) => const MfaScreen(),
+  // The ONLY destination this app draws for AuthNeedsMfaEnrolment. See [mfaEnrolRoute].
+  mfaEnrolRoute: (_) => const SecurityScreen(required: true),
+  changePasswordRoute: (_) => const ChangePasswordScreen(),
+  // One shell per role. Each owns its own navigation, because forcing five roles through one
+  // tab bar is what makes an operational tool feel like an admin template.
+  //
+  // WRAPPED IN [ConsentGate], and this is the whole of the signed-in surface: every role's
+  // subtree renders through its role home, so one wrapper here covers all five without a
+  // redirect arm. The pre-app obligations above — change password, second-factor enrolment —
+  // are deliberately OUTSIDE it: somebody forced to change a temporary password must not have
+  // to accept a privacy policy before they are allowed to secure their own account.
+  //
+  // NOTE WHAT THIS DOES NOT TOUCH. [resolveRedirect] below is unchanged. Consent is fetched
+  // rather than carried in the session row, and folding a fetched condition into a pure
+  // routing function would have made test/router_redirect_test.dart's every-phase-against-
+  // every-route matrix depend on data it cannot see. See features/legal/consent_gate.dart.
+  for (final entry in roleHome.entries)
+    entry.value: (_) => ConsentGate(child: RoleShell(role: entry.key)),
+};
+
+/// Every location the app can legitimately be at. Derived, never restated.
+Set<String> get appRoutes => appScreens.keys.toSet();
 
 /// The routing decision, extracted as a pure function so it can be tested without a widget
 /// tree, an emulator or a network. The hang above was invisible to `flutter analyze` and to
@@ -44,6 +94,23 @@ const changePasswordRoute = '/change-password';
 ///
 /// Returns the location to redirect to, or null to stay put.
 String? resolveRedirect({
+  required AsyncValue<AuthPhase> phase,
+  required String here,
+}) {
+  final to = _decide(phase: phase, here: here);
+  // NEVER REDIRECT TO WHERE WE ALREADY ARE, whatever the rule below concluded.
+  //
+  // go_router counts a redirect to the current location as a redirect and runs the decision
+  // again on the result, so any rule that can return its own input is an infinite loop. It does
+  // not crash: after five hops go_router gives up with a GoException and draws [errorBuilder],
+  // which is a "Not found" card where a screen should be. Every arm below is written to avoid
+  // that on its own — this makes it structural rather than a property each new arm has to
+  // remember, and it is asserted for every phase against every route in
+  // test/router_redirect_test.dart.
+  return to == here ? null : to;
+}
+
+String? _decide({
   required AsyncValue<AuthPhase> phase,
   required String here,
 }) {
@@ -61,6 +128,13 @@ String? resolveRedirect({
     return here == mfaRoute ? null : mfaRoute;
   }
 
+  // Above the signed-in branch on purpose. This account IS signed in as far as the Auth server
+  // and — under the grace arm — as far as Postgres is concerned, so nothing further down would
+  // stop it reaching a role home. Enrolment is the whole of what it may do.
+  if (value is AuthNeedsMfaEnrolment) {
+    return here == mfaEnrolRoute ? null : mfaEnrolRoute;
+  }
+
   if (value is AuthSignedIn) {
     final session = value.session;
 
@@ -69,12 +143,19 @@ String? resolveRedirect({
       return changePasswordRoute;
     }
 
-    final home = roleHome[session.role]!;
+    // TOTAL, not `roleHome[...]!`. The bang could not fire today — NivoraSession.fromRow throws
+    // on a role this build cannot name, so an unknown role never becomes an AuthSignedIn — but
+    // it is the wrong shape of code to leave in a redirect callback. An exception thrown in here
+    // does not surface as a crash the user can report; it surfaces as a frame that never draws.
+    // A role with no home is an identity this build cannot route, which is the login screen's
+    // case, and the guard in [resolveRedirect] keeps that from looping on /login.
+    final home = roleHome[session.role] ?? loginRoute;
 
     // Anything that is not a real destination for a signed-in user sends them home. The
     // splash is listed first because it is the one every cold start passes through.
     if (here == splashRoute ||
         here == mfaRoute ||
+        here == mfaEnrolRoute ||
         here == '/' ||
         _publicRoutes.contains(here)) {
       return home;
@@ -118,21 +199,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       here: state.matchedLocation,
     ),
 
+    // Built from [appScreens], so what the redirect can reach and what the router can draw are
+    // one list. See the comment there.
     routes: [
-      GoRoute(path: splashRoute, builder: (_, _) => const SplashScreen()),
-      GoRoute(path: loginRoute, builder: (_, _) => const LoginScreen()),
-      GoRoute(path: mfaRoute, builder: (_, _) => const MfaScreen()),
-      GoRoute(
-        path: changePasswordRoute,
-        builder: (_, _) => const ChangePasswordScreen(),
-      ),
-      // One shell per role. Each owns its own navigation, because forcing five roles through
-      // one tab bar is what makes an operational tool feel like an admin template.
-      for (final entry in roleHome.entries)
-        GoRoute(
-          path: entry.value,
-          builder: (_, _) => RoleShell(role: entry.key),
-        ),
+      for (final entry in appScreens.entries)
+        GoRoute(path: entry.key, builder: (context, _) => entry.value(context)),
     ],
 
     errorBuilder: (_, state) => _Placeholder(

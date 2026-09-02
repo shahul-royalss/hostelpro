@@ -29,7 +29,7 @@ final saRepositoryProvider = Provider<SaRepository>(
 /// holding the answer. These two are not: one mints a credential that exists exactly once, the
 /// other is the only mutation the database permits on an evidence table. Their interesting
 /// states are worth holding down in `flutter test`, which needs a fake in this slot. See
-/// SaPlatformWrites — and RentPayments, which is in this shape for the same reason.
+/// SaPlatformWrites — and RentDesk, which is in this shape for the same reason.
 final saPlatformWritesProvider = Provider<SaPlatformWrites>(
   (ref) => ref.watch(saRepositoryProvider),
 );
@@ -314,7 +314,16 @@ class SaAlertsNotifier extends AsyncNotifier<List<SecurityAlert>> {
   /// Admin nor the owner of the alert's hostel.
   Future<AppFailure?> acknowledge(int alertId, String byUserId) async {
     final current = state.value;
-    if (current == null) return null;
+    // NOT `return null`. Null is this method's word for "it worked", and returning it without
+    // having written anything is how a tap on Acknowledge came back silent and unchanged: the
+    // card cleared its spinner, showed no message, and the alert stayed open. There are no rows
+    // to stamp because the list is not loaded, which is a state worth saying out loud.
+    if (current == null) {
+      return const UnexpectedFailure(
+        'The alert list is not loaded, so nothing was acknowledged. Pull to refresh and try '
+        'again.',
+      );
+    }
     try {
       await ref.read(saPlatformWritesProvider).acknowledgeAlert(alertId);
       state = AsyncData([

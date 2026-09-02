@@ -23,6 +23,7 @@ import 'package:mobile/features/warden/home/warden_home_screen.dart';
 import 'package:mobile/features/warden/rooms/warden_rooms_screen.dart';
 import 'package:mobile/features/warden/actions/register_student_sheet.dart';
 import 'package:mobile/features/warden/widgets/warden_ui.dart';
+import 'package:mobile/shared/glass/glass.dart';
 
 const _hostelId = 'h1';
 
@@ -274,15 +275,27 @@ void main() {
       expect(find.text('Full'), findsOneWidget);
     });
 
-    testWidgets('the heading counts the very rows it is drawing', (tester) async {
+    testWidgets('the summary counts the very rows it is drawing', (tester) async {
       await _pumpRooms(tester, rooms: _threeRooms());
-      // 3 + 3 + 3 beds, 3 + 1 + 1 taken. Computed from the same list as the tiles, so the
-      // header and the grid cannot drift apart.
-      expect(find.text('5 of 9 beds occupied · 4 free'), findsOneWidget);
+      // 3 + 3 + 3 beds, 3 + 1 + 1 taken. The figures used to be a sentence in the header bar;
+      // rooms-beds-directory.png makes them the hero card at the top of the grid, and they are
+      // still one fold over the very list the tiles below are drawn from, so the summary and
+      // the grid cannot drift apart.
+      final summary = find.byType(GlassCard);
+      expect(summary, findsOneWidget);
+      Finder inSummary(String text) =>
+          find.descendant(of: summary, matching: find.text(text));
+      expect(inSummary('9'), findsOneWidget, reason: 'total beds');
+      expect(inSummary('5'), findsOneWidget, reason: 'occupied');
+      expect(inSummary('4'), findsOneWidget, reason: 'free');
+      expect(inSummary('3'), findsOneWidget, reason: 'rooms');
     });
 
     testWidgets('storeys are grouped and labelled', (tester) async {
       await _pumpRooms(tester, rooms: _threeRooms());
+      // UPPERCASE, because Figma's section headings are (`quick-actions-section` 4:691,
+      // `complaints-section` 4:708, `list-header` 4:758 are all `uppercase`). The title-case
+      // heading with a rule running off to the right came from the superseded Stitch screens.
       expect(find.text('FLOOR 1'), findsOneWidget);
       expect(find.text('FLOOR 2'), findsOneWidget);
     });
@@ -293,13 +306,18 @@ void main() {
       expect(find.text('No rooms yet'), findsOneWidget);
     });
 
-    testWidgets('the legend names the only two states the schema has', (tester) async {
-      // public.bed_status is exactly ('free','occupied'). A "maintenance" swatch here would be
-      // a colour for data that cannot exist.
+    testWidgets('the summary names the only two states the schema has', (tester) async {
+      // public.bed_status is exactly ('free','occupied'). rooms-beds-directory.png shows a
+      // MAINTENANCE figure beside OCCUPIED and FREE; it is absent here, and absent rather than
+      // zero, because a zero would claim nothing is broken and the database cannot say that.
+      //
+      // The standalone pip legend is gone: the summary card labels each figure with the very
+      // dot colour the pips are painted, so the figures are the key.
       await _pumpRooms(tester, rooms: _threeRooms());
-      expect(find.text('Occupied'), findsOneWidget);
-      expect(find.text('Free'), findsOneWidget);
+      expect(find.text('OCCUPIED'), findsOneWidget);
+      expect(find.text('FREE'), findsOneWidget);
       expect(find.textContaining('aintenance'), findsNothing);
+      expect(find.textContaining('AINTENANCE'), findsNothing);
     });
   });
 
@@ -318,7 +336,10 @@ void main() {
     testWidgets('each queue shows its own count', (tester) async {
       await _pumpHome(tester, stats: _stats(), onSite: 2);
 
-      expect(find.text('Rent owed'.toUpperCase()), findsOneWidget);
+      // The stat card's eyebrow is UPPERCASE — `stats-grid` (4:672, 4:677, 4:682, 4:686) sets
+      // every one of them `text-[10px] uppercase`. The sentence-case version came from the
+      // superseded Stitch dashboard.
+      expect(find.text('RENT OWED'), findsOneWidget);
       expect(find.text('6'), findsOneWidget); // students unpaid
       expect(find.text('3'), findsOneWidget); // complaints not resolved
       expect(find.text('1'), findsOneWidget); // leave requests pending

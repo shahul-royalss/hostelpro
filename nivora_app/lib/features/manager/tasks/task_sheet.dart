@@ -135,15 +135,15 @@ class _TaskSheetState extends ConsumerState<_TaskSheet> {
             ),
 
           const SizedBox(height: Space.lg),
-          Text('MOVE IT ALONG', style: t.textTheme.labelSmall),
-          const SizedBox(height: Space.xs),
+          const SectionLabel(label: 'Move it along'),
+          const SizedBox(height: Space.sm),
           Wrap(
             spacing: Space.xs,
             runSpacing: Space.xs,
             children: [
               for (final status in TaskStatus.values)
-                ChoiceChip(
-                  label: Text(status.label),
+                ToggleChip(
+                  label: status.label,
                   selected: task.status == status,
                   onSelected: _busy ? null : (_) => _setStatus(status),
                 ),

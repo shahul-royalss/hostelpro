@@ -2,7 +2,10 @@ library;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/auth/session_standing.dart';
 import '../models/models.dart';
+
+export '../../core/auth/session_standing.dart' show SessionStanding;
 
 /// Shared plumbing for every repository.
 ///
@@ -21,7 +24,71 @@ abstract base class Repository {
 
   /// The anon-key client. There is no other client in this app, by design.
   final SupabaseClient db;
+
+  /// WHAT CREDENTIAL THE QUESTION WAS ASKED WITH, sampled at the moment an answer is being
+  /// interpreted rather than at the moment it was sent.
+  ///
+  /// Read it ONLY to decide what a SILENCE meant. It is not a permission check and it does not
+  /// gate anything: row-level security decides what may be read, and it does so against the
+  /// token the server received, not against this. What it is for is the three helpers below,
+  /// each of which is about to make a claim concerning WHO THE CALLER IS, and none of which may
+  /// make that claim while this app cannot vouch for the token it sent.
+  ///
+  /// The full mechanism, and the live incident that produced it, are in
+  /// core/auth/session_standing.dart. The short version: a dead session does not make requests
+  /// fail, it makes them go out as `anon`, and `anon` is refused in exactly the same shape as a
+  /// person in the wrong role.
+  SessionStanding get sessionStanding => sessionStandingOf(db);
+
+  /// REFUSE TO ASK A QUESTION THIS CLIENT CANNOT SIGN, when a null answer to it would be read
+  /// as a fact about the caller.
+  ///
+  /// The `.maybeSingle()` reads in this layer all document their null the same way — "null when
+  /// the row is not visible to this caller" — and every screen above them turns that into a
+  /// sentence about the reader: "no resident record for this account", "it belongs to another
+  /// hostel". Those are true when the server looked at a real credential and declined. They are
+  /// invented when the request went out under the anon key because the session had died, which
+  /// is what supabase does rather than failing (core/auth/session_standing.dart).
+  ///
+  /// So this is a PRE-FLIGHT, not a post-hoc reinterpretation: called before the request, it
+  /// keeps the anonymous read from happening at all. It is emphatically NOT an authorization
+  /// check — row-level security is, on the server, against the token it actually received. All
+  /// this decides is whether asking could produce an answer worth believing.
+  ///
+  /// [what] names the read, for the technical text only.
+  void requireLiveSession(String what) {
+    final failure = credentialFailure(sessionStanding, what);
+    if (failure != null) throw failure;
+  }
 }
+
+/// WHAT THE CREDENTIAL ITSELF MAKES OF THIS, or null when the credential was good and any
+/// emptiness is therefore genuinely about the caller.
+///
+/// The one rule, in one place, used two ways: [Repository.requireLiveSession] asks it BEFORE a
+/// read whose null would be read as a fact about the reader, and the three helpers below ask it
+/// AFTER an empty answer they were about to attribute to somebody. Both need the same sentence,
+/// and the one thing worse than a misleading refusal is two of the three sites being fixed.
+///
+/// [context] names the read and appears only in [AppFailure.technical], which debugPrint carries
+/// and release builds strip.
+AppFailure? credentialFailure(SessionStanding standing, String context) => switch (standing) {
+      SessionStanding.live => null,
+      SessionStanding.none => SignedOutFailure(
+          'You are not signed in any more, so Nivora asked the server as nobody. Sign in again '
+          'to see this.',
+          technical: '$context: this client held NO session, so the request either went out '
+              'under the anon key (supabase AuthHttpClient fills the Authorization header with '
+              'it) or was not worth sending — either way nothing that came back is about this '
+              'account',
+        ),
+      SessionStanding.expired => SessionExpiredFailure(
+          'Your sign-in expired before this loaded. Nothing is wrong with your account — sign '
+          'in again to carry on.',
+          technical: '$context: the held access token was past its expiry, so a refusal by role '
+              'cannot be told apart from a refusal by dead token here and neither is claimed',
+        ),
+    };
 
 /// The rows a set-returning RPC came back with.
 ///
@@ -59,17 +126,31 @@ Map<String, dynamic>? rpcRow(Object? data, String fn) {
 ///
 /// [refusal] is shown to the user, so write it as the plain sentence it is: nobody is at fault,
 /// and there is nothing to retry.
+///
+/// ═══ [standing] IS REQUIRED, AND IT IS THE WHOLE POINT OF THE 2026-09-01 CHANGE ═══
+/// "The RPC's WHERE clause excluded this caller" is a claim about a PERSON, and this function
+/// used to make it from the one fact that cannot support it on its own. A super admin whose
+/// token had quietly died was told to go and sign in as the super admin — the account he was
+/// already using. The emptiness was real; the attribution was invented.
+///
+/// So the refusal is now only ever named when [standing] is [SessionStanding.live]: a token
+/// that existed, and had not expired, at the moment this answer was read. Anything else is a
+/// statement about the credential and says so instead. Pass `sessionStanding` from [Repository]
+/// — never a literal — so the value is sampled here rather than assumed.
 Map<String, dynamic> rpcRowOrRefusal(
   Object? data,
   String fn, {
   required String refusal,
+  required SessionStanding standing,
 }) {
   final row = rpcRow(data, fn);
   if (row != null) return row;
-  throw AccessDeniedFailure(
-    refusal,
-    technical: '$fn returned zero rows — its WHERE clause excluded this caller',
-  );
+  throw credentialFailure(standing, fn) ??
+      AccessDeniedFailure(
+        refusal,
+        technical: '$fn returned zero rows to a live session — its WHERE clause excluded '
+            'this caller',
+      );
 }
 
 /// The row from an RPC WHOSE EMPTINESS MEANS THE CALLER HAS NO SUCH THING, not that the thing
@@ -80,17 +161,24 @@ Map<String, dynamic> rpcRowOrRefusal(
 /// retryable either — but they are different sentences, and a screen that says "ask your warden
 /// to check your registration" when the honest answer is "this console is staff-only" sends
 /// someone to bother the wrong person.
+///
+/// [standing] carries the same obligation it carries on [rpcRowOrRefusal], for the same reason.
+/// "Ask your warden to check your registration" is a real errand for a real person, and sending
+/// a resident on it because their token expired on the bus is the student-facing shape of the
+/// bug that started this.
 Map<String, dynamic> rpcRowOrMissing(
   Object? data,
   String fn, {
   required String missing,
+  required SessionStanding standing,
 }) {
   final row = rpcRow(data, fn);
   if (row != null) return row;
-  throw NotFoundFailure(
-    missing,
-    technical: '$fn returned zero rows for this caller',
-  );
+  throw credentialFailure(standing, fn) ??
+      NotFoundFailure(
+        missing,
+        technical: '$fn returned zero rows to a live session',
+      );
 }
 
 /// Rows from a read WHERE AN EMPTY RESULT IS NOT A POSSIBLE ANSWER.
@@ -100,13 +188,17 @@ Map<String, dynamic> rpcRowOrMissing(
 /// exists at all — so zero rows says something about the CALLER's reach, not about the data.
 /// Passing a query here is a claim about db/schema.sql; [why] is where that claim gets written
 /// down, and it travels into the failure's technical text so the next person can check it.
+///
+/// [standing] again: "that room is not one this account can open" is a sentence about an
+/// account, and a dead token produces the identical empty list.
 List<Map<String, dynamic>> rowsOrMissing(
   List<Map<String, dynamic>> rows, {
   required String missing,
   required String why,
+  required SessionStanding standing,
 }) {
   if (rows.isNotEmpty) return rows;
-  throw NotFoundFailure(missing, technical: why);
+  throw credentialFailure(standing, why) ?? NotFoundFailure(missing, technical: why);
 }
 
 /// The row returned by an RPC declared `returns <composite>` — for example wd_record_payment,

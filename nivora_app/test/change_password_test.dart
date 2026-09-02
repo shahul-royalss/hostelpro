@@ -5,6 +5,7 @@ import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
 import 'package:mobile/core/router/router.dart';
 import 'package:mobile/core/theme/theme.dart';
+import 'package:mobile/features/auth/change_password_screen.dart';
 
 /// Every account this platform creates — an owner made by the super admin, staff made by an
 /// owner, a student made by a warden — arrives with `must_change_password = true`. The router
@@ -50,6 +51,30 @@ void main() {
     }
   }
 
+  /// Mount the screen on its own, for the states the router will not route to.
+  Future<void> pumpScreen(
+    WidgetTester tester, {
+    required bool mustChangePassword,
+  }) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(
+            () => _StubAuth(AuthSignedIn(sessionFor(mustChangePassword: mustChangePassword))),
+          ),
+        ],
+        child: MaterialApp(
+          theme: NivoraTheme.light(),
+          debugShowCheckedModeBanner: false,
+          home: const ChangePasswordScreen(),
+        ),
+      ),
+    );
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
+
   testWidgets('a new account owing a password change gets a usable form, not a dead end',
       (tester) async {
     await pump(tester, AuthSignedIn(sessionFor(mustChangePassword: true)));
@@ -65,8 +90,49 @@ void main() {
     // The way out, so the screen can never trap someone who cannot finish right now.
     expect(find.widgetWithText(TextButton, 'Sign out'), findsOneWidget);
 
-    // A forced change must NOT demand the temporary password the user just typed to get here.
+    // ── THIS ASSERTION USED TO SAY THE OPPOSITE, AND THE SERVER SETTLED IT ──
+    // It read: "A forced change must NOT demand the temporary password the user just typed to
+    // get here", and pinned `find.widgetWithText(TextFormField, 'Current password')` to
+    // findsNothing. Measured against the live project on 2026-09-01:
+    //
+    //     PUT /auth/v1/user {"password":"…"}                     -> 400 current_password_required
+    //     PUT /auth/v1/user {"password":"…","current_password":"…"} -> 200
+    //
+    // `GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD` is on for this project, so the
+    // two-field screen this test was protecting could not complete a single password change —
+    // and every account on the platform is routed through it before it can reach anything else.
+    // The old assertion was not defending a rule; it was defending a form that did not work.
+    //
+    // What replaces it keeps the part that was really at stake: the label. A person on this
+    // screen is holding a temporary password somebody read out to them, and "Current password"
+    // sends them looking for one they never chose.
+    expect(find.widgetWithText(TextFormField, 'Temporary password'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Current password'), findsNothing);
+  });
+
+  testWidgets('a voluntary change asks for the current password by that name', (tester) async {
+    // The same field, the other reader: somebody who chose their own password and is changing
+    // it. The router only ever sends an account here while the flag is set, so this one mounts
+    // the screen directly rather than routing to it.
+    await pumpScreen(tester, mustChangePassword: false);
+
+    expect(find.text('Change your password'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'Current password'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'Temporary password'), findsNothing);
+  });
+
+  testWidgets('the temporary password is required before anything is sent', (tester) async {
+    // The field is not decoration. An empty one must stop the submit locally rather than spend
+    // a round trip to be told `current_password_required` by GoTrue.
+    await pump(tester, AuthSignedIn(sessionFor(mustChangePassword: true)));
+
+    await tester.enterText(find.widgetWithText(TextFormField, 'New password'), 'correct1horse');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Confirm new password'), 'correct1horse');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save password'));
+    await tester.pump();
+
+    expect(find.text('Enter the temporary password you were given'), findsOneWidget);
   });
 
   testWidgets('the password rules match the web app, and are enforced before any request',

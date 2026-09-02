@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { STUDENT_LOGIN_DOMAIN } from "@/lib/utils";
 
 /* ───────────────────────── shared pieces ───────────────────────── */
 
@@ -40,7 +41,22 @@ export type IdProofType = (typeof ID_PROOF_TYPES)[number];
 export const personalStepSchema = z.object({
   fullName: z.string().trim().min(2, "Enter the student's full name").max(120),
   phone: phone10,
-  email: z.string().trim().email("Enter a valid email").max(160).or(z.literal("")).optional(),
+  /**
+   * OPTIONAL, and it is the resident's LOGIN when it is present (createStudentAuthUser).
+   *
+   * The refine keeps the phone-mapping namespace reserved: "@student.hostelpro.local" is not a
+   * real mail domain, and an address inside it would mint the login id belonging to some other
+   * resident's phone number — locking that person out of registration permanently, because
+   * GoTrue never releases a taken address. Mirrored in the Edge Function by isStudentLoginEmail().
+   */
+  email: z
+    .string()
+    .trim()
+    .email("Enter a valid email")
+    .max(160)
+    .refine((v) => !v.toLowerCase().endsWith(`@${STUDENT_LOGIN_DOMAIN}`), "Enter a real email address")
+    .or(z.literal(""))
+    .optional(),
   dateOfJoining: isoDate,
 });
 

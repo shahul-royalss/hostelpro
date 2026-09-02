@@ -39,26 +39,41 @@ export class HttpError extends Error {
   readonly fieldErrors?: FieldErrors;
   /** Extra top-level keys merged into the failure body (used by the rollback report). */
   readonly extra?: Record<string, unknown>;
+  /**
+   * Response headers this failure needs on the wire. Added for `Retry-After` on a 429: a
+   * throttle that only says "wait" in prose is unreadable to anything but a human, and the
+   * status line is the half of the answer that generic HTTP tooling understands.
+   */
+  readonly headers?: Record<string, string>;
 
-  constructor(status: number, message: string, opts: { fieldErrors?: FieldErrors; extra?: Record<string, unknown> } = {}) {
+  constructor(
+    status: number,
+    message: string,
+    opts: { fieldErrors?: FieldErrors; extra?: Record<string, unknown>; headers?: Record<string, string> } = {},
+  ) {
     super(message);
     this.name = "HttpError";
     this.status = status;
     this.fieldErrors = opts.fieldErrors;
     this.extra = opts.extra;
+    this.headers = opts.headers;
   }
 }
 
-export function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: BASE_HEADERS });
+export function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(body), { status, headers: { ...BASE_HEADERS, ...headers } });
 }
 
 export function ok<T>(data: T, message?: string): Response {
   return jsonResponse({ ok: true, data, message }, 200);
 }
 
-export function fail(error: string, status = 400, opts: { fieldErrors?: FieldErrors; extra?: Record<string, unknown> } = {}): Response {
-  return jsonResponse({ ok: false, error, fieldErrors: opts.fieldErrors, ...(opts.extra ?? {}) }, status);
+export function fail(
+  error: string,
+  status = 400,
+  opts: { fieldErrors?: FieldErrors; extra?: Record<string, unknown>; headers?: Record<string, string> } = {},
+): Response {
+  return jsonResponse({ ok: false, error, fieldErrors: opts.fieldErrors, ...(opts.extra ?? {}) }, status, opts.headers ?? {});
 }
 
 export function preflight(): Response {
@@ -94,7 +109,7 @@ export async function readJsonBody(req: Request, maxBytes = 12 * 1024 * 1024): P
  */
 export function toResponse(err: unknown): Response {
   if (err instanceof HttpError) {
-    return fail(err.message, err.status, { fieldErrors: err.fieldErrors, extra: err.extra });
+    return fail(err.message, err.status, { fieldErrors: err.fieldErrors, extra: err.extra, headers: err.headers });
   }
   console.error("[nivora] unhandled:", err instanceof Error ? `${err.name}: ${err.message}` : String(err).slice(0, 500));
   return fail("Something went wrong. Please try again.", 500);

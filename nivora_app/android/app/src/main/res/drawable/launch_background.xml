@@ -1,12 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
+<!--
+  The Android launch window, i.e. what is on screen between the launcher tap and Flutter's
+  first frame.
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
-</layer-list>
+  IT IS A SINGLE COLOUR ON PURPOSE, AND THAT COLOUR IS THE DESIGN'S GROUND. Flutter's first
+  frame is the splash screen, which paints #0B0D0F, so anything else here is a flash. There
+  was one: this file used to be a <layer-list> holding @android:color/white, and the
+  drawable-v21/ copy that actually won on every supported device held
+  ?android:colorBackground, which resolves to WHITE under LaunchTheme's Theme.Light parent.
+  A light-mode phone opened Nivora with a white rectangle that snapped to near-black.
+
+  The -v21 variant is deleted rather than fixed: it only existed because ?android: attributes
+  needed API 21, and minSdk has been above that for years, so it was the live file and this
+  one was dead. One file now, correct on every API level.
+
+  A <color> root rather than a <layer-list> also matters on Android 12+, where the system
+  splash screen adopts windowBackground when — and only when — it is a single colour. A
+  layer-list falls back to the theme's colorBackground, which is the white this removes.
+
+  If a logo is ever added here it must be a <layer-list> again, and windowSplashScreenBackground
+  must then be set explicitly in values-v31/ to keep Android 12 from falling back to white.
+-->
+<color xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/nivora_ground_light" />

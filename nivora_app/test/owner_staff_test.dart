@@ -25,6 +25,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/theme/theme.dart';
 import 'package:mobile/data/models/models.dart';
 import 'package:mobile/features/owner/owner_providers.dart';
+import 'package:mobile/features/owner/staff/add_staff_sheet.dart';
 import 'package:mobile/features/owner/staff/owner_staff_screen.dart';
 import 'package:mobile/features/owner/staff/staff_credentials_dialog.dart';
 import 'package:mobile/features/owner/staff/staff_models.dart';
@@ -664,16 +665,19 @@ void main() {
       await tester.tap(find.text('Add warden'));
       await tester.pumpAndSettle();
 
-      final picker = tester.widget<SegmentedButton<StaffRole>>(
-        find.byType(SegmentedButton<StaffRole>),
-      );
-      final manager =
-          picker.segments.firstWhere((s) => s.value == StaffRole.manager);
-      final warden = picker.segments.firstWhere((s) => s.value == StaffRole.warden);
+      // The picker is two [StaffRoleCard]s rather than a SegmentedButton — the design draws
+      // each role as a card with its own description, so both descriptions are readable while
+      // the choice is being made. Same behaviour under test: the post that already has an
+      // active holder cannot be chosen, and the free one is what the sheet opened on.
+      StaffRoleCard card(StaffRole role) => tester.widget<StaffRoleCard>(
+            find.byWidgetPredicate((w) => w is StaffRoleCard && w.role == role),
+          );
 
-      expect(manager.enabled, isFalse);
-      expect(warden.enabled, isTrue);
-      expect(picker.selected, {StaffRole.warden});
+      expect(card(StaffRole.manager).enabled, isFalse);
+      expect(card(StaffRole.manager).taken, isTrue);
+      expect(card(StaffRole.warden).enabled, isTrue);
+      expect(card(StaffRole.warden).selected, isTrue);
+      expect(card(StaffRole.manager).selected, isFalse);
     });
   });
 

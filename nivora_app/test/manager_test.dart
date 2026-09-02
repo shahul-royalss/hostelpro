@@ -30,6 +30,7 @@ import 'package:mobile/features/manager/tasks/manager_tasks_screen.dart';
 import 'package:mobile/features/manager/tasks/task_sheet.dart';
 import 'package:mobile/features/manager/widgets/manager_ui.dart';
 import 'package:mobile/features/shell/role_shell.dart';
+import 'package:mobile/shared/glass/glass.dart';
 
 const _hostelId = 'h1';
 const _managerId = 'u-manager';
@@ -434,7 +435,15 @@ void main() {
         expect(find.widgetWithText(ChoiceChip, label), findsOneWidget, reason: label);
       }
       expect(find.widgetWithText(ChoiceChip, 'All'), findsOneWidget);
-      expect(find.byType(ChoiceChip), findsNWidgets(7));
+      // Scoped to the category strip, which is the screen's one horizontal scroller. The
+      // out/in switch beside it is now the same ToggleChip the Figma frames use for a
+      // selected tab (4:1265) rather than a Material SegmentedButton, so an unscoped count of
+      // this widget type would be counting two different controls.
+      expect(
+        find.descendant(
+            of: find.byType(SingleChildScrollView), matching: find.byType(ChoiceChip)),
+        findsNWidgets(7),
+      );
 
       // Categories from the COMPLAINT enum, which is a different type on a different table.
       expect(find.widgetWithText(ChoiceChip, 'Wi-Fi'), findsNothing);
@@ -725,6 +734,158 @@ void main() {
 
   // ───────────────────────────────────────────────────────────────────────────
   //
+  // THE RESTYLE ITSELF. These pin the decisions that separate Figma `4:1159` /
+  // `4:1236` from the Stitch mockup the screens were built against before it. They are
+  // structural rather than pixel assertions: which widget draws a group, how many panes are
+  // on a page, which fill a selected tab takes. A pixel test would fail on a font metric.
+  group('the manager screens are the Figma frames, not the Stitch card stack', () {
+    testWidgets('a group is announced by an uppercase eyebrow, not wrapped in a titled card',
+        (tester) async {
+      await _pumpHome(tester);
+
+      // 4:1196 and 4:1214: `text-[#6f747a] text-[11px] uppercase`, no box under it. The string
+      // is uppercased by SectionLabel, because a TextStyle cannot.
+      expect(find.text("TODAY'S TASKS"), findsOneWidget);
+      expect(find.text('MONEY IN AND OUT'), findsOneWidget);
+      expect(find.text('DO IT NOW'), findsOneWidget);
+
+      // The Stitch headings these replaced — sentence case, inside a card, behind a glyph.
+      expect(find.text('Task board'), findsNothing);
+      expect(find.text('Money this month'), findsNothing);
+    });
+
+    testWidgets('the dashboard has exactly one pane on it, and it is the header',
+        (tester) async {
+      await _pumpHome(tester);
+
+      // Every frame in the file is flat: an opaque fill and a 1px hairline, no shadow and no
+      // second rung of elevation. The old screen put its jobs figure on a raised pane as "the
+      // one hero per screen"; 4:1159 has no hero and nothing lifted off the ground.
+      expect(find.byType(GlassSurface), findsOneWidget);
+      expect(
+        find.descendant(of: find.byType(GlassHeader), matching: find.byType(GlassSurface)),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the KPI grid is four equal tiles — 4:1177', (tester) async {
+      await _pumpHome(tester);
+      expect(find.byType(StatCard), findsNWidgets(4));
+    });
+
+    testWidgets('three tiles fed by one read report one failure, not three', (tester) async {
+      // Spent today, spent this month and recorded in all come out of managerFinanceProvider.
+      // That is one request with one outcome, so a failure collapses them to a single card
+      // beside the job tile — which still keeps its own face, because it is a different read.
+      await _pumpHome(
+        tester,
+        financeError: const OfflineFailure('Cannot reach Nivora.'),
+      );
+
+      expect(find.byType(FailedStat), findsOneWidget);
+      expect(find.byType(StatCard), findsOneWidget, reason: 'the job tile is unaffected');
+      expect(find.text('4'), findsOneWidget);
+    });
+
+    testWidgets('the selected day tab is the gold fill; the rest are the raised surface',
+        (tester) async {
+      // 4:1265 is `bg-[#c9a96e]` with `text-[#0b0d0f]`; 4:1262 is `bg-[#171a1e]` under a
+      // hairline. The scheme is read from the tree rather than named, because these widget
+      // tests deliberately run on the stock theme — see the note at the top of this file.
+      await _pumpMenu(tester);
+      final scheme = Theme.of(tester.element(find.text('WED'))).colorScheme;
+
+      Color fillUnder(String day) => tester
+          .widgetList<Material>(
+              find.ancestor(of: find.text(day), matching: find.byType(Material)))
+          .first
+          .color!;
+
+      expect(fillUnder('WED'), scheme.primary, reason: 'Wednesday is the pinned day');
+      expect(fillUnder('MON'), scheme.surfaceContainer);
+    });
+
+    testWidgets('a planned meal takes the gold heading, an unplanned one the muted ink',
+        (tester) async {
+      // 4:1283 sets every meal name in the accent — but every meal on that frame is planned.
+      // The unplanned case is the one the frame does not draw, and it has to stay visibly
+      // different, because "how much of today is written" is the whole question this screen
+      // answers.
+      await _pumpMenu(tester);
+      final scheme = Theme.of(tester.element(find.text('BREAKFAST'))).colorScheme;
+
+      expect(tester.widget<Text>(find.text('BREAKFAST')).style?.color, scheme.primary);
+      expect(tester.widget<Text>(find.text('DINNER')).style?.color, isNot(scheme.primary));
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  //
+  // THE SMALLEST PHONE THIS APP SUPPORTS, WITH THE LARGEST TYPE ANDROID HANDS OUT.
+  //
+  // Every one of these caught a real overflow while the Figma restyle was being written, and
+  // none of them was visible at 1.0x on a 390dp test window: a two-tile row, a legend, a
+  // status-and-due meta line and a lakh-sized ledger figure each fit at ordinary size and each
+  // ran off the right edge at 1.6x on a 320dp phone. A layout error is a black-and-yellow
+  // barber pole across a manager's screen in the field, and the analyzer cannot see one.
+  //
+  // The figures are deliberately the widest the columns allow — seven-figure rupees, a
+  // three-figure job count, a task title that fills two lines.
+  group('every manager screen survives 320dp at the largest text scale', () {
+    Future<void> pumpNarrow(WidgetTester tester, Widget screen,
+        {Object? finance}) async {
+      tester.view.physicalSize = const Size(320, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _narrowOverrides(finance: finance).cast(),
+          child: MaterialApp(
+            home: MediaQuery(
+              data: const MediaQueryData(textScaler: TextScaler.linear(1.6)),
+              child: Scaffold(body: screen),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(tester.takeException(), isNull);
+    }
+
+    testWidgets('home', (tester) async => pumpNarrow(tester, const ManagerHomeScreen()));
+
+    testWidgets('home with the money read still in flight', (tester) async {
+      // The KPI grid collapses its three money tiles to one card here, so this is a different
+      // layout from the loaded one and gets its own probe.
+      await pumpNarrow(
+        tester,
+        const ManagerHomeScreen(),
+        finance: managerFinanceProvider.overrideWith((ref, id) => _pending<FinanceWindow>()),
+      );
+    });
+
+    testWidgets('home with the money read failed', (tester) async {
+      await pumpNarrow(
+        tester,
+        const ManagerHomeScreen(),
+        finance: managerFinanceProvider.overrideWith((ref, id) =>
+            Future<FinanceWindow>.error(
+                const OfflineFailure('Cannot reach Nivora. Check your connection.'))),
+      );
+    });
+
+    testWidgets('expenses', (tester) async =>
+        pumpNarrow(tester, const ManagerExpensesScreen()));
+
+    testWidgets('tasks', (tester) async => pumpNarrow(tester, const ManagerTasksScreen()));
+
+    testWidgets('menu', (tester) async => pumpNarrow(tester, const ManagerMenuScreen()));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  //
   // tokens.dart is the single source for colour, spacing, radius, icon size and duration.
   // These are the values manager_ui.dart had inlined where warden_ui.dart — the copy that was
   // already correct — reads the token.
@@ -743,7 +904,8 @@ void main() {
       expect(box.borderRadius, Radii.rControl);
     });
 
-    testWidgets('an empty section and a failed one share one token icon size', (tester) async {
+    testWidgets('an empty section and a failed one both draw the shared state card, not two '
+        'inventions', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
@@ -755,10 +917,28 @@ void main() {
         ),
       );
 
-      // 36 and 32 were two people guessing. IconSize.xl is the decision.
-      final sizes = tester.widgetList<Icon>(find.byType(Icon)).map((i) => i.size);
-      expect(sizes, everyElement(IconSize.xl));
-      expect(sizes.length, 2);
+      // Figma 4:1562, `screen-empty-error-skeleton`, draws empty and error as the SAME raised
+      // card with the same hairline, differing only in the caps tag and the body. Both of this
+      // role's notes are now that shared card — 36 and 32 used to be two people guessing at an
+      // icon size in two separate hand-rolled columns.
+      expect(find.byType(StateCard), findsNWidgets(2));
+
+      // The tag is a real word, not the spec frame's own "ERROR STATE" label for a designer.
+      expect(find.text('ERROR'), findsOneWidget);
+      expect(find.text('EMPTY STATE'), findsNothing);
+
+      // ONE glyph on the pair, and it belongs to the empty state: 4:1588 gives the error card
+      // no icon at all, because its sentence is the message. A red pictogram over a section
+      // that merely did not load reads as "the app is broken".
+      final icons = tester.widgetList<Icon>(find.byType(Icon)).toList();
+      expect(icons.length, 1);
+      // It sits inside the design's 1.5px outlined square (4:1579), so it is a step down from
+      // the old bare 32dp glyph rather than the same number in a new place.
+      expect(icons.single.size, IconSize.xl - Space.xs);
+
+      // Offline is retryable, but nothing was wired to retry it — so no button is offered. A
+      // control that cannot help is worse than no control.
+      expect(find.widgetWithText(FilledButton, 'Try again'), findsNothing);
     });
 
     testWidgets('a quick action and a detail row use the token icon sizes', (tester) async {
@@ -977,6 +1157,81 @@ void _tallView(WidgetTester tester) {
 /// A read that never answers. The point of the class: "still loading" has to be reachable in a
 /// test, or the state that is supposed to look different from a failure cannot be checked.
 Future<T> _pending<T>() => Completer<T>().future;
+
+/// The widest content every column can legally hold, for the 320dp / 1.6x probes.
+///
+/// Seven-figure rupees (a real hostel books in lakhs), a job count in three digits, and a task
+/// title long enough to wrap. Nothing here is drawn by any other test — these fixtures exist to
+/// make the columns as wide as the database allows them to be.
+FinanceWindow _wideWindow() => FinanceWindow(
+      days: [
+        for (var d = 1; d <= 5; d++)
+          FinanceDay(day: DateTime(2026, 8, d), revenue: 1234567, expense: 987654),
+      ],
+      monthStart: DateTime(2026, 8),
+      trendStart: DateTime(2026, 7, 23),
+      today: DateTime(2026, 8, 5),
+    );
+
+List<Task> _wideTasks() {
+  final today = _midnight(DateTime.now());
+  return [
+    Task(
+      id: 'w1',
+      hostelId: _hostelId,
+      assignedTo: _managerId,
+      title: 'Approve the kitchen vegetable purchase list for the whole of next week',
+      dueDate: today.subtract(const Duration(days: 12)),
+      status: TaskStatus.inProgress,
+      createdBy: _ownerId,
+      createdAt: DateTime.utc(2026, 8, 1),
+      updatedAt: DateTime.utc(2026, 8, 1),
+    ),
+    Task(
+      id: 'w2',
+      hostelId: _hostelId,
+      assignedTo: _managerId,
+      title: 'Review shift roster for mess staff',
+      dueDate: today,
+      status: TaskStatus.done,
+      createdBy: _ownerId,
+      createdAt: DateTime.utc(2026, 8, 2),
+      updatedAt: DateTime.utc(2026, 8, 2),
+    ),
+  ];
+}
+
+List<Expense> _wideExpenses() => [
+      Expense(
+        id: 'w-e1',
+        hostelId: _hostelId,
+        date: DateTime(2026, 8, 24),
+        category: ExpenseCategory.maintenance,
+        amount: 1234567.89,
+        note: 'Annual servicing of both lifts, the borewell pump and the kitchen chimney',
+        createdAt: DateTime.utc(2026, 8, 24),
+        updatedAt: DateTime.utc(2026, 8, 24),
+      ),
+    ];
+
+/// Every read a manager screen makes, stubbed. [finance] replaces the finance override rather
+/// than being appended to it — Riverpod asserts when one family is overridden twice in a
+/// container, so the stalled and failed variants have to swap it out, not stack on top.
+List<Object> _narrowOverrides({Object? finance}) => [
+      ..._baseOverrides,
+      hostelProvider.overrideWith((ref, id) => _hostel(HostelStatus.active)),
+      taskLoadProvider.overrideWith((ref, id) => const TaskLoad(open: 128, overdue: 41)),
+      finance ?? managerFinanceProvider.overrideWith((ref, id) => _wideWindow()),
+      tasksProvider.overrideWith2(
+        (_) => _FakeTasks(const TaskQuery(hostelId: _hostelId), _wideTasks()),
+      ),
+      managerExpensesProvider.overrideWith2(
+        (_) => _FakeExpenses(const ExpenseQuery(hostelId: _hostelId), _wideExpenses()),
+      ),
+      managerRevenuesProvider.overrideWith2((_) => _FakeRevenues(_hostelId, const [])),
+      menuDayProvider.overrideWith(() => _PinnedDay(MenuDay.wed)),
+      weeklyMenuProvider.overrideWith((ref, id) => _menu()),
+    ];
 
 /// The task sheet, opened the way a manager opens it. The name map is the read under test.
 Future<void> _openTaskSheet(

@@ -31,23 +31,49 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
+  # cupertino_icons is DELIBERATELY ABSENT. It ships one thing — the CupertinoIcons font — and
+  # this app draws zero CupertinoIcons glyphs; every icon is Material, via uses-material-design
+  # below. The CupertinoPageTransitionsBuilder in lib/core/theme/theme.dart comes from the SDK's
+  # package:flutter/cupertino.dart and does NOT need this package, which is the reason it kept
+  # getting re-added.
   flutter_riverpod: ^3.4.2
   go_router: ^17.5.0
   supabase_flutter: ^2.17.2
-  drift: ^2.34.3
-  sqlite3_flutter_libs: ^0.6.0+eol
+  # drift, drift_dev, sqlite3_flutter_libs and build_runner are DELIBERATELY ABSENT. They were
+  # added for an on-device cache that was never built, and the tree proves it: no DriftDatabase,
+  # no @DataClassName, no LazyDatabase, no build.yaml, and not one generated .g.dart anywhere.
+  # Every screen reads Supabase directly through lib/data/repositories. Between them they carried
+  # a per-ABI native SQLite build (sqlite3_flutter_libs bundles libsqlite3) and a code generator
+  # with nothing to generate. If an offline cache is built later, all four come back together.
   path_provider: ^2.1.6
   path: ^1.9.1
   intl: ^0.20.3
   google_fonts: ^8.2.1
   fl_chart: ^1.2.0
   flutter_svg: ^2.3.0
+  # ONLINE PAYMENT IS BACK IN THE APP. This was absent for v1, when rent was taken only at the
+  # warden's desk; the rule "everything has to be done in the application" is what brought it
+  # back. The two companions the removal note named have been restored with it: the version pin
+  # in android/build.gradle.kts (this plugin declares com.razorpay:checkout:1.6.+, and a dynamic
+  # range cannot resolve offline) and the R8 keeps in android/app/proguard-rules.pro (the SDK
+  # builds its payment screens reflectively and is blank without them).
   razorpay_flutter: ^1.4.5
-  firebase_core: ^4.13.0
-  firebase_messaging: ^16.5.0
+  # firebase_core / firebase_messaging ARE DELIBERATELY ABSENT, and were removed rather than
+  # left in place, because they could never have worked:
+  #
+  #   * ZERO Dart files referenced either package — nothing called Firebase.initializeApp(),
+  #     nothing asked for an FCM token, nothing registered a message handler;
+  #   * android/app/google-services.json was ABSENT, without which initializeApp() throws;
+  #   * the com.google.gms.google-services Gradle plugin was never applied.
+  #
+  # So this was several MB of native library that no code path could reach — and worse than dead
+  # weight: shipping the FCM SDK while the Play Data Safety form declares no device identifiers
+  # is an inconsistency a reviewer can see in the manifest merge.
+  #
+  # TO ADD REAL PUSH LATER, in this order: create a Firebase project, put its google-services.json
+  # in android/app/, apply the google-services plugin, add both packages back, then write the code
+  # that asks for a token and a server path that sends to it. The packages are the LAST step, not
+  # the first — putting them back alone reproduces exactly the state just removed.
   share_plus: ^13.3.0
   image_picker: ^1.2.3
 
@@ -61,8 +87,6 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
-  build_runner: ^2.16.0
-  drift_dev: ^2.34.5
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -75,20 +99,42 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # THE TYPEFACE SHIPS WITH THE APP, it is not fetched.
+  # THE TYPEFACES SHIP WITH THE APP. Nothing is fetched. ONE FAMILY: Inter.
   #
   # google_fonts downloads from fonts.gstatic.com at RUNTIME by default and caches the result.
   # That means the very first launch on a new phone needs a working network just to render the
   # intended type — and if it does not have one, the app silently falls back to the system font
   # and looks like a different product. That is precisely the launch a client sees in a meeting
-  # room on bad wifi. Declaring the files here makes google_fonts resolve them from the bundle
-  # instead, and GoogleFonts.config.allowRuntimeFetching = false in main.dart turns any missed
-  # font into a loud failure in debug rather than a silent download in production.
+  # room on bad wifi. Declaring the directory here makes google_fonts resolve the faces from the
+  # bundle instead, and GoogleFonts.config.allowRuntimeFetching = false in main.dart turns any
+  # missed weight into a loud failure in debug rather than a silent download in production.
   #
-  # Four weights because the type scale uses exactly four. Adding a fifth to a TextStyle without
-  # adding its file here reintroduces the download for that one weight.
+  # FIVE STATIC FILES, FIVE WEIGHTS. google_fonts matches a bundled asset by FILENAME —
+  # `Inter-<Variant>.ttf` — so the directory carries Regular 400, Medium 500, SemiBold 600,
+  # Bold 700 and ExtraBold 800, which is exactly the set lib/core/theme/typography.dart asks
+  # for. Adding a sixth weight to a TextStyle without adding its file reintroduces the download
+  # for that one weight.
+  #
+  # EVERY FILE IS A DISTINCT FACE, AND THAT WAS CHECKED RATHER THAN ASSUMED. This project has
+  # twice shipped byte-identical files under different weight names, which registers N copies of
+  # the same 400 face and makes every heading render regular while the pubspec looks correct.
+  # The five files here have five different md5s, five different `glyf` tables and five
+  # different OS/2 usWeightClass values (400/500/600/700/800).
+  #
+  # PLUS JAKARTA SANS IS GONE. Figma uses Inter only; the variable Jakarta file and its `fonts:`
+  # declaration were removed with this change. Do not re-add a second family without a mockup
+  # that shows one.
   assets:
     - google_fonts/
+
+    # THE EMPTY-STATE ARTWORK. Four wordless PNGs — see lib/shared/illustrations.dart for what
+    # is true of every file in here. The directory is declared rather than the four paths so a
+    # fifth drawing is one file to add and nothing to remember; the constants in EmptyArt are
+    # what the app actually references, so an undeclared or misnamed file fails at the call
+    # site rather than silently.
+    #
+    # 480px each, transparent, two inks, ~87KB for all four together.
+    - assets/illustrations/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

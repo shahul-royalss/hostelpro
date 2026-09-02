@@ -129,32 +129,41 @@ class _LoadedState extends ConsumerState<_Loaded> {
           const SizedBox(height: Space.md),
           _Buttons(status: complaint.status, busy: _busy, onMove: _move, onResolve: _resolve),
 
+          const SectionLabel(label: 'Issue details'),
+          _Facts(complaint: complaint),
           if (complaint.description != null) ...[
-            const SectionLabel(label: 'What was reported'),
-            Text(complaint.description!, style: t.textTheme.bodyLarge),
+            const SizedBox(height: Space.sm),
+            // ticket-detail-view.png sets the reported wording in a well INSIDE the card — a
+            // deeper surface with its own hairline — so it reads as somebody's words rather
+            // than as the app's. surface-container-lowest is the design's own deepest well.
+            Container(
+              padding: const EdgeInsets.all(Space.sm),
+              decoration: BoxDecoration(
+                color: t.colorScheme.surfaceContainerLowest,
+                borderRadius: Radii.rControl,
+                border: Border.all(
+                  color: t.colorScheme.outlineVariant,
+                  width: Strokes.hairline,
+                ),
+              ),
+              child: Text(complaint.description!, style: t.textTheme.bodyLarge),
+            ),
           ],
-          if (complaint.photoUrl != null)
-            Padding(
-              padding: const EdgeInsets.only(top: Space.xs),
-              child: Row(
-                children: [
-                  Icon(Icons.image_outlined,
-                      size: IconSize.sm, color: t.colorScheme.onSurfaceVariant),
-                  const SizedBox(width: Space.xs),
-                  Expanded(
-                    child: Text(
-                      // photo_url is a key into a PRIVATE bucket, not a link. Showing it as an
-                      // image would need a signed URL this screen does not mint, and a broken
-                      // image icon is worse than saying plainly that there is one.
-                      'A photo was attached. Open it from the web console.',
-                      style: t.textTheme.bodySmall,
-                    ),
-                  ),
-                ],
+          if (complaint.photoUrl != null) ...[
+            const SizedBox(height: Space.sm),
+            InfoCallout(
+              icon: Icons.image_outlined,
+              child: Text(
+                // photo_url is a key into a PRIVATE bucket, not a link. Showing it as an image
+                // would need a signed URL this screen does not mint, and a broken image icon is
+                // worse than saying plainly that there is one.
+                'A photo was attached. Open it from the web console.',
+                style: t.textTheme.bodySmall,
               ),
             ),
+          ],
 
-          const SectionLabel(label: 'Raised by'),
+          const SectionLabel(label: 'Resident'),
           _RaisedBy(studentId: complaint.studentId),
 
           if (complaint.resolutionNote != null) ...[
@@ -162,7 +171,7 @@ class _LoadedState extends ConsumerState<_Loaded> {
             Text(complaint.resolutionNote!, style: t.textTheme.bodyMedium),
           ],
 
-          const SectionLabel(label: 'History'),
+          const SectionLabel(label: 'Activity'),
           _Timeline(complaintId: complaint.id),
         ],
       ),
@@ -170,7 +179,106 @@ class _LoadedState extends ConsumerState<_Loaded> {
   }
 }
 
+/// The facts card at the top of ticket-detail-view.png: `label-caps` eyebrows over their
+/// values, two to a row.
+///
+/// THE MOCKUP'S THIRD FACT IS NOT BUILT. It heads this card with a TICKET ID (`#MNT-8842`) and
+/// a PRIORITY (`⚠ High`). public.complaints has neither: its key is a uuid with no human-facing
+/// form, and there is no priority column at all. Minting a ticket number here would be a
+/// reference no other part of the system could resolve, and a priority would be a judgement the
+/// database never recorded. What is left is what the row really carries.
+class _Facts extends StatelessWidget {
+  const _Facts({required this.complaint});
+  final Complaint complaint;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return FlatSurface(
+      weight: GlassWeight.regular,
+      padding: const EdgeInsets.all(Space.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _Fact(
+                  label: 'Category',
+                  value: complaint.category.label,
+                  tone: t.colorScheme.primary,
+                ),
+              ),
+              Expanded(
+                child: _Fact(
+                  label: 'Status',
+                  value: complaint.status.label,
+                  tone: toneFor(context, complaint.status),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Space.sm),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _Fact(
+                  label: 'Reported',
+                  value: '${shortDate(complaint.createdAt)} · '
+                      '${timeOfDay(complaint.createdAt)}',
+                ),
+              ),
+              Expanded(
+                child: complaint.resolvedAt == null
+                    ? const SizedBox.shrink()
+                    : _Fact(
+                        label: 'Resolved',
+                        value: '${shortDate(complaint.resolvedAt!)} · '
+                            '${timeOfDay(complaint.resolvedAt!)}',
+                        tone: NivoraColors.success,
+                      ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Fact extends StatelessWidget {
+  const _Fact({required this.label, required this.value, this.tone});
+  final String label;
+  final String value;
+  final Color? tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final accent = tone == null ? null : context.tones.resolve(tone!);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CapsLabel(label),
+        const SizedBox(height: Space.xxs / 2),
+        Text(
+          value,
+          style: t.textTheme.titleSmall?.copyWith(color: accent ?? t.colorScheme.onSurface),
+        ),
+      ],
+    );
+  }
+}
+
 /// open → in progress → resolved, with where this one has got to.
+///
+/// THE SHAPE IS assign-bed-select-bed.png's stepper: a filled disc with a tick behind, a ringed
+/// disc for where you are, a hollow one ahead, `label-caps` underneath, and a connector that is
+/// solid up to the current step and a hairline after it. It used to be three identical circles
+/// joined by three identical bars, which said "three steps" without saying which one you were
+/// standing on.
 class _Workflow extends StatelessWidget {
   const _Workflow({required this.status});
   final ComplaintStatus status;
@@ -187,13 +295,19 @@ class _Workflow extends StatelessWidget {
     final reached = _order.indexOf(status);
 
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (var i = 0; i < _order.length; i++) ...[
           if (i > 0)
             Expanded(
               child: Container(
-                height: Space.xxs / 2,
-                margin: const EdgeInsets.symmetric(horizontal: Space.xxs),
+                height: Strokes.hairline * 2,
+                // The connector sits on the discs' centre line, not on the labels below.
+                margin: EdgeInsets.only(
+                  top: Space.sm - Strokes.hairline,
+                  left: Space.xxs,
+                  right: Space.xxs,
+                ),
                 color: i <= reached
                     ? toneFor(context, _order[i])
                     : t.colorScheme.outlineVariant,
@@ -214,21 +328,25 @@ class _Workflow extends StatelessWidget {
                     color: i <= reached
                         ? toneFor(context, _order[i])
                         : t.colorScheme.outlineVariant,
-                    width: Strokes.hairline,
+                    // The step you are ON is the one with the thicker ring, which is the only
+                    // place tokens.dart lets a border grow.
+                    width: i == reached ? Strokes.focus : Strokes.hairline,
                   ),
                 ),
                 child: i < reached
                     ? Icon(Icons.check_rounded,
                         size: IconSize.xs, color: toneFor(context, _order[i]))
-                    : null,
+                    : ToneDot(
+                        tone: i == reached
+                            ? toneFor(context, _order[i])
+                            : t.colorScheme.outlineVariant,
+                        size: Space.xs - 2,
+                      ),
               ),
               const SizedBox(height: Space.xxs),
-              Text(
+              CapsLabel(
                 _order[i].label,
-                style: t.textTheme.labelSmall?.copyWith(
-                  color: i <= reached ? toneFor(context, _order[i]) : null,
-                  letterSpacing: 0,
-                ),
+                tone: i <= reached ? toneFor(context, _order[i]) : null,
               ),
             ],
           ),
@@ -317,7 +435,7 @@ class _RaisedBy extends ConsumerWidget {
               children: [
                 Text(student.fullName, style: t.textTheme.titleMedium,
                     maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text(student.phone, style: t.textTheme.bodySmall),
+                MetaLine([(Icons.phone_outlined, student.phone)]),
               ],
             ),
           ),
@@ -349,38 +467,58 @@ class _Timeline extends ConsumerWidget {
         if (list.isEmpty) {
           return Text('No history recorded.', style: t.textTheme.bodySmall);
         }
+        // ticket-detail-view.png's activity list is a rail: a toned dot per entry, joined by a
+        // hairline that runs from one to the next and stops at the last. The dots used to float
+        // unconnected, which is a list of events rather than a history of one thing.
         return Column(
           children: [
-            for (final event in list)
-              Padding(
-                padding: const EdgeInsets.only(bottom: Space.xs),
+            for (var i = 0; i < list.length; i++)
+              IntrinsicHeight(
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Container(
-                      width: Space.xs,
-                      height: Space.xs,
-                      margin: const EdgeInsets.only(top: Space.xxs, right: Space.sm),
-                      decoration: BoxDecoration(
-                        color: toneFor(context, event.status),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    Expanded(
+                    SizedBox(
+                      width: Space.md,
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(event.status.label, style: t.textTheme.bodyMedium?.copyWith(
-                            color: t.colorScheme.onSurface,
-                          )),
-                          if (event.note != null)
-                            Text(event.note!, style: t.textTheme.bodySmall),
+                          Padding(
+                            padding: const EdgeInsets.only(top: Space.xxs),
+                            child: ToneDot(tone: toneFor(context, list[i].status)),
+                          ),
+                          if (i != list.length - 1)
+                            Expanded(
+                              child: Container(
+                                width: Strokes.hairline,
+                                margin: const EdgeInsets.symmetric(vertical: Space.xxs),
+                                color: t.colorScheme.outlineVariant,
+                              ),
+                            ),
                         ],
                       ),
                     ),
-                    Text(
-                      '${shortDate(event.createdAt)} ${timeOfDay(event.createdAt)}',
-                      style: t.textTheme.bodySmall,
+                    const SizedBox(width: Space.xs),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: Space.sm),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              list[i].status.label,
+                              style: t.textTheme.titleSmall?.copyWith(
+                                color: t.colorScheme.onSurface,
+                              ),
+                            ),
+                            Text(
+                              '${shortDate(list[i].createdAt)} · '
+                              '${timeOfDay(list[i].createdAt)}',
+                              style: t.textTheme.bodySmall,
+                            ),
+                            if (list[i].note != null)
+                              Text(list[i].note!, style: t.textTheme.bodyMedium),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),

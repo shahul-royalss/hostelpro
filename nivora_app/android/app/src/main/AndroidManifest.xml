@@ -35,6 +35,49 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!--
+              THE EMAIL CONFIRMATION LINK COMES BACK HERE.
+
+              GoTrue matches the one-time token at /auth/v1/verify and then 302s to whatever
+              `redirect_to` the app asked for. That destination is this filter, so the link
+              opens NIVORA rather than a web page: supabase_flutter's deep-link observer sees
+              the `?code=` on the incoming Uri, exchanges it for a session using the PKCE code
+              verifier it stored when it asked for the mail, and the person is SIGNED IN BY THE
+              LINK. That sign-in is the proof the owner asked for.
+
+              A browser can never complete that exchange - it does not hold the verifier - which
+              is why the previous landing-page design could only ever show a page and hope.
+
+              A CUSTOM SCHEME, AND NOT http/https, DELIBERATELY.
+              An <data android:scheme="https"> filter would offer this app as a handler for
+              ordinary web links and, without a verified Digital Asset Link, Android would show
+              a disambiguation sheet on somebody else's URLs. `app.nivora.mobile` is this app's
+              own applicationId used as a scheme (see android/app/build.gradle.kts), which is
+              the reverse-DNS form Android and RFC 3986 both allow and which nothing else on the
+              device can claim. The scheme AND the host are both pinned, so the ONLY Uri this
+              filter accepts is app.nivora.mobile://verify-email[?...]. No http, no https, no
+              bare scheme wildcard.
+
+              MUST BE MIRRORED IN THE SUPABASE DASHBOARD or no link ever arrives here: paste
+
+                  app.nivora.mobile://verify-email
+
+              into Authentication -> URL Configuration -> Redirect URLs. Measured against this
+              project on 2026-09-01: GoTrue does not refuse an unlisted redirect, it SILENTLY
+              substitutes the Site URL, so a missing entry looks like a working link that opens
+              the wrong thing. docs/email-verification.md has the whole procedure.
+
+              The activity is launchMode="singleTop", so a link tapped while NIVORA is already
+              running is delivered to the existing instance via onNewIntent rather than starting
+              a second copy of the app.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="app.nivora.mobile" android:host="verify-email"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
@@ -51,6 +94,25 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+
+        <!--
+          UPI APPS MUST BE VISIBLE OR THEY DO NOT EXIST.
+
+          From Android 11 (API 30) — and this app targets 36 — package visibility is filtered by
+          default: an app cannot see what else is installed unless it declares what it is looking
+          for here. Razorpay's checkout builds its "Pay using GPay / PhonePe / Paytm" list by
+          resolving this exact intent, so WITHOUT this block that list resolves empty and the
+          sheet silently drops UPI intent altogether.
+
+          That is the single most-used way to pay rent in India, and the failure is invisible: no
+          crash, no error, no log — just a checkout that quietly offers cards and netbanking to a
+          resident who has never owned a card. It also cannot be caught on an older test device,
+          because the filtering only applies at API 30+.
+        -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="upi"/>
         </intent>
     </queries>
 </manifest>

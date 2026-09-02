@@ -112,15 +112,33 @@ export async function changePassword(_prev: ActionResult | null, formData: FormD
   const supabase = await createClient();
 
   /**
-   * Reauthentication (checklist §8): a *voluntary* change must prove the current password,
-   * so a hijacked session (stolen cookie, unlocked laptop) cannot be used to lock the real
-   * owner out. The forced first-login change is exempt — the user just authenticated with
-   * the temporary password. Whether it is forced is read from the DB, never from the form.
+   * THE PASSWORD IN HAND IS REQUIRED ON BOTH PATHS, AND SUPABASE IS THE ONE WHO DECIDED THAT.
+   *
+   * This block used to exempt the forced first-login change on the reasoning that the user had
+   * just authenticated with the temporary password. Measured against the live project on
+   * 2026-09-01:
+   *
+   *     PUT /auth/v1/user {"password":"…"}                        -> 400 current_password_required
+   *     PUT /auth/v1/user {"password":"…","current_password":"…"} -> 200
+   *
+   * GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD is on for this project, so the
+   * exempt path could not complete a single password change — and every account this platform
+   * creates is redirected to /change-password before it can reach anything else.
+   *
+   * What `must_change_password` still decides is REAUTHENTICATION (checklist §8): a voluntary
+   * change spends a throttled password grant first, so a hijacked session — a stolen cookie, an
+   * unlocked laptop — cannot be used to lock the real owner out. A forced change does not,
+   * because GoTrue is about to check the very same password one call below and a second grant
+   * would only widen the guessing oracle. Which case applies is read from the DB, never from
+   * the form.
    */
+  if (!parsed.data.currentPassword) {
+    const label = user.must_change_password
+      ? "Enter the temporary password you were given."
+      : "Enter your current password.";
+    return fail(label, { currentPassword: [label] });
+  }
   if (!user.must_change_password) {
-    if (!parsed.data.currentPassword) {
-      return fail("Enter your current password.", { currentPassword: ["Enter your current password."] });
-    }
     const { error: reauthError } = await supabase.auth.signInWithPassword({
       email: user.authEmail ?? "",
       password: parsed.data.currentPassword,
@@ -131,8 +149,26 @@ export async function changePassword(_prev: ActionResult | null, formData: FormD
     }
   }
 
-  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+  const { error } = await supabase.auth.updateUser({
+    password: parsed.data.password,
+    // What turns the call above from a 400 into a 200. GoTrue verifies it against the stored
+    // hash, which on the forced path is the only check the password gets. Snake-case because
+    // that is what @supabase/auth-js names the field on UserAttributes (types.d.ts:423) —
+    // gotrue-dart spells the same wire field `currentPassword`.
+    current_password: parsed.data.currentPassword,
+  });
   if (error) {
+    // Matched on the CODE for the two current-password verdicts, because GoTrue's message is
+    // wrong for one of them: a *wrong* current password answers `current_password_invalid` with
+    // the text "Current password required when setting new password.", which tells somebody who
+    // typed it that they did not. Both get a sentence about the field they can see.
+    const code = (error as { code?: string }).code;
+    if (code === "current_password_invalid" || code === "current_password_required") {
+      const label = user.must_change_password
+        ? "That temporary password is not right. Use the one you were given, exactly as it was written."
+        : "Your current password is incorrect.";
+      return fail(label, { currentPassword: [label] });
+    }
     return fail(
       /same password|different from the old/i.test(error.message)
         ? "Choose a password different from your temporary one."

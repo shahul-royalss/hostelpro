@@ -30,6 +30,17 @@ export const ORDER_ID_RE = /^order_[A-Za-z0-9]{6,30}$/;
 /** A payment id is `pay_` + base62. Same reasoning. */
 export const PAYMENT_ID_RE = /^pay_[A-Za-z0-9]{6,30}$/;
 
+/**
+ * A refund id is `rfnd_` + base62.
+ *
+ * This one carries more weight than the other two. It is the IDEMPOTENCY KEY for a ledger
+ * REVERSAL — the unique index payment_refunds_refund_key is built on it — so a malformed value
+ * reaching the database would either fail the write or, worse, claim a row that is not the
+ * refund being described. Shape-checked at the door like the others, even though the HMAC has
+ * already proved the delivery came from Razorpay: a signed body is authentic, not well-formed.
+ */
+export const REFUND_ID_RE = /^rfnd_[A-Za-z0-9]{6,30}$/;
+
 /** What a student is told when the merchant account was never configured. */
 export const NOT_CONFIGURED =
   "Online payment isn't set up yet. You can still pay at the warden desk.";

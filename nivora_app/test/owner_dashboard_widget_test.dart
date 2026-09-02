@@ -173,19 +173,27 @@ List<ActivityItem> _activity() => [
 ];
 
 void main() {
-  testWidgets('the hero is the month\'s collections, with what it means underneath', (
-    tester,
-  ) async {
+  testWidgets('the money cards say what came in and what has not', (tester) async {
     await _pumpDashboard(tester);
 
     // Not asserted against a fixed greeting: "Good morning" depends on the clock the test
     // happens to run under, and a test that fails at 5pm is worse than no test.
     expect(find.textContaining('Ananya'), findsOneWidget);
     expect(find.text('Sunrise Residency'), findsOneWidget);
+
+    // Figma 4:437 splits what used to be one hero card across two cells of the KPI grid: what
+    // is IN on the left of the top row, what is OWED on the left of the bottom one. Both halves
+    // of the fee ledger still reach the screen — this asserts the same rpc_hostel_stats fields
+    // as before, in the two places the design now puts them.
     expect(find.text('COLLECTED IN AUGUST'), findsOneWidget);
     expect(find.text('₹50,200'), findsOneWidget);
-    expect(find.text('₹33,800 still to collect from 6 residents.'), findsOneWidget);
-    expect(find.text('6 of 12 residents have paid in full.'), findsOneWidget);
+    expect(find.text('of ₹84,000 billed'), findsOneWidget);
+    // 50,200 of 84,000 — the meter prints its own share, in its own tone.
+    expect(find.text('60%'), findsOneWidget);
+
+    expect(find.text('PENDING FEES'), findsOneWidget);
+    expect(find.text('₹33,800'), findsOneWidget);
+    expect(find.text('6 outstanding bills'), findsOneWidget);
   });
 
   testWidgets('a first load is a skeleton of the real layout, not a spinner', (tester) async {
@@ -199,18 +207,27 @@ void main() {
     expect(find.textContaining('Ananya'), findsOneWidget);
   });
 
-  testWidgets('occupancy states the figure and the vacancy', (tester) async {
+  testWidgets('occupancy leads with the rate and states the count under it', (tester) async {
     await _pumpDashboard(tester);
 
+    // 4:437's occupancy card: the percentage IS the figure, with the ratio it came from on
+    // the line below. The meter does not repeat the percentage a second time.
+    expect(find.text('OCCUPANCY'), findsOneWidget);
+    expect(find.text('33%'), findsOneWidget);
     expect(find.text('12 of 36 beds filled'), findsOneWidget);
-    expect(find.text('33% occupancy — 24 beds vacant.'), findsOneWidget);
   });
 
-  testWidgets('only outstanding things appear under NEEDS YOU', (tester) async {
+  testWidgets('NEEDS YOU lists only what the KPI grid does not already carry', (tester) async {
     await _pumpDashboard(tester);
 
-    expect(find.text('6 residents have not paid'), findsOneWidget);
-    expect(find.text('3 complaints still open'), findsOneWidget);
+    // Unpaid fees and open complaints have a card each on the grid above, so repeating them
+    // as rows here would be the same fact twice, three centimetres apart.
+    expect(find.text('COMPLAINTS'), findsOneWidget);
+    expect(find.text('3 open'), findsOneWidget);
+    expect(find.text('6 residents have not paid'), findsNothing);
+    expect(find.text('3 complaints still open'), findsNothing);
+
+    // What the grid has no card for still gets a row.
     expect(find.text('1 task not done'), findsOneWidget);
     // pending_leaves is zero for this hostel, so it is absent rather than shown as "0".
     expect(find.textContaining('leave request'), findsNothing);
@@ -246,17 +263,20 @@ void main() {
     expect(find.textContaining('Fee collections are counted separately'), findsOneWidget);
   });
 
-  testWidgets('recent activity puts complaints and notices on one timeline', (tester) async {
+  // RECENT ACTIVITY WAS REMOVED FROM THIS DASHBOARD, at the product owner's request, and the
+  // two tests that covered it went with it rather than being softened into passing. What it
+  // showed is not lost: complaints have their own screen behind the Complaints card (with the
+  // author, the photo and the timeline, which the feed never carried), and the latest notice
+  // is still on the dashboard in its own section. The replacement is asserted below.
+  testWidgets('the complaints card is the way into the complaints screen', (tester) async {
     await _pumpDashboard(tester);
 
-    expect(find.text('Geyser not heating'), findsOneWidget);
-    expect(find.text('Water tanker on Sunday'), findsOneWidget);
-    expect(find.text('Open'), findsOneWidget);
-  });
-
-  testWidgets('an empty feed says what would appear there', (tester) async {
-    await _pumpDashboard(tester, activity: const AsyncData(<ActivityItem>[]));
-    expect(find.text('Nothing has happened yet'), findsOneWidget);
+    // Present even when nothing is open: "None open" is a claim an owner may want to check.
+    // The label is drawn UPPERCASE by KpiTile — the design's caps eyebrow — so the finder has
+    // to match what is rendered, not what the source string says.
+    expect(find.text('COMPLAINTS'), findsOneWidget);
+    expect(find.text('Tap to read them'), findsOneWidget);
+    expect(find.textContaining('Nothing has happened yet'), findsNothing);
   });
 
   testWidgets('a lapsed subscription is stated, and offers no button it cannot honour', (
@@ -279,14 +299,15 @@ void main() {
     await _pumpDashboard(tester, statsError: const OfflineFailure('no route to host'));
 
     expect(find.text('No connection'), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Try again'), findsOneWidget);
+    // Figma 4:1596: the retry on an error card is the CREAM filled button, not an outline.
+    expect(find.widgetWithText(FilledButton, 'Try again'), findsOneWidget);
   });
 
   testWidgets('a refusal by row-level security offers no retry', (tester) async {
     await _pumpDashboard(tester, statsError: const AccessDeniedFailure('rls said no'));
 
     expect(find.text('Not your PG'), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Try again'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Try again'), findsNothing);
   });
 
   testWidgets('an owner with one PG gets a line of text, not a menu of one', (tester) async {

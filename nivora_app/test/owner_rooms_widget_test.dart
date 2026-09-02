@@ -158,9 +158,15 @@ void main() {
 
       expect(find.text('Sunrise Residency'), findsOneWidget);
       expect(find.text('12 MG Road, Pune'), findsOneWidget);
-      expect(find.text('50% occupancy — 4 beds vacant.'), findsOneWidget);
-      expect(find.textContaining('₹21,000 collected in August'), findsOneWidget);
+      // Figma 4:536's card puts each figure on a labelled row with the value hard right,
+      // rather than in a paragraph of sentences. Same two rpc_hostel_stats fields.
+      expect(find.text('Beds occupied'), findsOneWidget);
+      expect(find.text('4/8'), findsOneWidget);
+      expect(find.text('Collected in August'), findsOneWidget);
+      expect(find.text('₹21,000'), findsOneWidget);
       expect(find.text('2 complaints still open.'), findsOneWidget);
+      // Every card is badged with its status, not only the ones in trouble.
+      expect(find.text('Active'), findsOneWidget);
       // The PG the dashboard is currently showing is marked, so the switcher and this list
       // never disagree about which one is which.
       expect(find.text('On your dashboard'), findsOneWidget);

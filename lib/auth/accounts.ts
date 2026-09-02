@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generatePassword } from "@/lib/auth/password";
-import { normalizePhone, studentLoginEmail } from "@/lib/utils";
+import { normalizePhone, STUDENT_LOGIN_DOMAIN, studentLoginEmail } from "@/lib/utils";
 import type { UserRole } from "@/lib/roles";
 
 /**
@@ -22,18 +22,30 @@ export interface CreatedAccount {
 
 interface CreateAuthUserArgs {
   role: UserRole;
-  email: string; // for students: studentLoginEmail(phone)
+  email: string; // students: their real address, or studentLoginEmail(phone) when they gave none
   fullName: string;
   phone?: string | null;
   hostelId?: string | null;
+  /**
+   * What to say when GoTrue reports the address is taken. Defaults to the staff sentence.
+   * A student's is passed in, because it has to name what the warden actually typed — the
+   * phone number or the email — and only the caller knows which produced this login.
+   */
+  duplicateMessage?: string;
 }
 
-async function createAuthUser({ role, email, fullName, phone, hostelId }: CreateAuthUserArgs) {
+async function createAuthUser({ role, email, fullName, phone, hostelId, duplicateMessage }: CreateAuthUserArgs) {
   const admin = createAdminClient();
   const password = generatePassword();
   const { data, error } = await admin.auth.admin.createUser({
     email: email.toLowerCase(),
     password,
+    // NOT a proof of ownership — see the long note on the same line in
+    // supabase/functions/_shared/accounts.ts. The project has "Confirm email" ON, so GoTrue
+    // would refuse the temporary password to an unconfirmed user; this flag only keeps that
+    // password working. Whether the person actually reads the address is recorded in
+    // public.users.email_verified_at, which starts null and is written only by the
+    // email-verification Edge Function.
     email_confirm: true,
     phone_confirm: false,
     user_metadata: { full_name: fullName, phone: phone ?? null },
@@ -41,11 +53,7 @@ async function createAuthUser({ role, email, fullName, phone, hostelId }: Create
   });
   if (error || !data.user) {
     if (error?.message?.toLowerCase().includes("already been registered") || error?.status === 422) {
-      throw new Error(
-        role === "student"
-          ? "A student with this phone number already has an account."
-          : "An account with this email already exists.",
-      );
+      throw new Error(duplicateMessage ?? "An account with this email already exists.");
     }
     throw new Error(error?.message ?? "Could not create the account.");
   }
@@ -101,25 +109,46 @@ export async function createStaffAccount(args: {
 }
 
 /**
- * Create the auth user for a student (login = phone number).
- * The public.users + students rows are created by the wd_register_student RPC
- * (called by the warden's server action, RLS-checked). Returns the temp password.
+ * Create the auth user for a student.
+ *
+ * LOGIN = the resident's own email when the warden collected one, otherwise their phone
+ * number mapped through studentLoginEmail(). Email is optional and stays optional — a hostel
+ * resident may genuinely not have one, which is why the phone mapping exists at all — but when
+ * it is present it is the login, not an alternative to it. resolveLoginEmail() in lib/utils.ts
+ * already resolves both forms of what is typed on the sign-in screen, and the Flutter client
+ * holds a byte-identical copy; keep all three in step.
+ *
+ * This mirrors supabase/functions/warden-register-student/index.ts, which is the path the
+ * mobile app takes. The two MUST agree: a resident registered on the web and one registered on
+ * a phone have to end up with the same kind of login, or "what do I type?" has two answers.
+ *
+ * The public.users + students rows are created by the wd_register_student RPC (called by the
+ * warden's server action, RLS-checked). Returns the temp password.
  */
 export async function createStudentAuthUser(args: {
   fullName: string;
   phone: string;
   hostelId: string;
+  /** The resident's real address, already validated. Empty / undefined means they gave none. */
+  email?: string | null;
 }): Promise<CreatedAccount> {
   const phone = normalizePhone(args.phone);
   if (phone.length < 10) throw new Error("Enter a valid 10-digit phone number.");
+  const email = args.email?.trim().toLowerCase() || null;
+  // Nobody may claim an address inside the phone-mapping namespace: it would mint the login id
+  // belonging to another resident's number and block them from ever being registered.
+  if (email && email.endsWith(`@${STUDENT_LOGIN_DOMAIN}`)) throw new Error("Enter a real email address");
   const { userId, password } = await createAuthUser({
     role: "student",
-    email: studentLoginEmail(phone),
+    email: email ?? studentLoginEmail(phone),
     fullName: args.fullName,
     phone,
     hostelId: args.hostelId,
+    duplicateMessage: email
+      ? "A student with this email address already has an account."
+      : "A student with this phone number already has an account.",
   });
-  return { userId, loginId: phone, password };
+  return { userId, loginId: email ?? phone, password };
 }
 
 /** Regenerate a temporary password (SA → owner, Owner → manager/warden). Shown once. */

@@ -187,19 +187,35 @@ class _Dot extends StatelessWidget {
                 ? t.colorScheme.outline
                 : t.colorScheme.outlineVariant;
 
+    // The design draws the CURRENT step as a SOLID disc with the numeral knocked out of it, and
+    // every other step as an outline. That contrast is the whole point of the row: at a glance
+    // you should see where you are, not read four rings and work it out. A tinted wash behind an
+    // outline — which is what this used to be — makes the active step the same shape as the
+    // others and only slightly brighter.
+    //
+    // The fill is `primaryContainer`, which in this palette is the CREAM `#F5F3EE` with
+    // near-black on it, not the gold and not a violet. It is the same fill as the wizard's own
+    // Continue button, so the step you are on and the button that advances it are visibly the
+    // same object. (An earlier version of this comment said "violet": that was the Stitch
+    // palette, which this app no longer ships.)
+    final filled = active;
     return Container(
-      height: 26,
-      width: 26,
+      height: Space.xxl,
+      width: Space.xxl,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: active ? color.withValues(alpha: 0.14) : Colors.transparent,
-        border: Border.all(color: color, width: active ? Strokes.focus : Strokes.hairline),
+        color: filled ? t.colorScheme.primaryContainer : Colors.transparent,
+        border: filled
+            ? null
+            : Border.all(color: color, width: Strokes.hairline),
       ),
       child: done
-          ? Icon(Icons.check_rounded, size: 14, color: color)
+          ? Icon(Icons.check_rounded, size: IconSize.xs, color: color)
           : Text('${index + 1}',
-              style: t.textTheme.labelSmall?.copyWith(color: color)),
+              style: t.textTheme.labelSmall?.copyWith(
+                color: filled ? t.colorScheme.onPrimaryContainer : color,
+              )),
     );
   }
 }
@@ -213,13 +229,17 @@ class _Banner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final tone = context.tones.warning;
+    final tones = context.tones;
+    final tone = tones.warning;
+    // The design's own badge recipe — a 10% fill of the tone under a full-strength hairline of
+    // it (4:1576, 4:204, 4:210). It used to be 0.08 over 0.32, two alphas typed in by eye that
+    // were a light-theme pair painted twice; NivoraSemantics is where the measured numbers live.
     return Container(
       padding: const EdgeInsets.all(Space.sm),
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.08),
+        color: tones.chipFill(tone),
         borderRadius: Radii.rControl,
-        border: Border.all(color: tone.withValues(alpha: 0.32)),
+        border: Border.all(color: tones.chipBorder(tone), width: Strokes.hairline),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -410,7 +430,10 @@ class _OwnerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return Opacity(
-      opacity: owner.isActive ? 1 : 0.6,
+      // Dim.readOnly is the design's own "you can look at this, you cannot use it" (4:1539).
+      // An owner whose account is inactive is refused by the Edge Function, so the row is
+      // exactly that: readable, not pickable.
+      opacity: owner.isActive ? 1 : Dim.readOnly,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: Radii.rCard,
@@ -526,13 +549,14 @@ class _HostelStep extends ConsumerWidget {
           maxLines: 3,
           optional: true,
         ),
-        Container(
+        // A plain raised surface, not a gold wash. The design tints a panel only when it is
+        // saying something is WRONG — the state badges and the read-only band. This one is
+        // describing what the server is about to do, which is neither good news nor bad, so it
+        // gets the raised fill and lets the gold glyph do the pointing.
+        FlatSurface(
+          weight: GlassWeight.regular,
+          borderRadius: Radii.rControl,
           padding: const EdgeInsets.all(Space.sm),
-          decoration: BoxDecoration(
-            color: t.colorScheme.primary.withValues(alpha: 0.06),
-            borderRadius: Radii.rControl,
-            border: Border.all(color: t.colorScheme.outlineVariant),
-          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -633,10 +657,11 @@ class _ReviewStep extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
     final controller = ref.read(createWizardProvider.notifier);
+    final tones = context.tones;
     final draft = state.draft;
     final newOwner = draft.mode == OwnerMode.create;
+    final reviewTone = newOwner ? tones.warning : tones.info;
 
     // The picked row is looked up rather than stored on the draft: the draft carries the id,
     // which is what the server needs, and the name/email shown here must come from the same
@@ -721,16 +746,15 @@ class _ReviewStep extends ConsumerWidget {
             ('Notes', draft.notes.trim().isEmpty ? '—' : draft.notes.trim()),
           ],
         ),
+        // The design's badge recipe again — 10% fill, full-strength hairline, both from
+        // NivoraSemantics. Amber when a password is about to exist for exactly one dialog;
+        // the neutral info tone when nothing secret is being minted.
         Container(
           padding: const EdgeInsets.all(Space.sm),
           decoration: BoxDecoration(
-            color: (newOwner ? context.tones.warning : t.colorScheme.primary)
-                .withValues(alpha: 0.08),
+            color: tones.chipFill(reviewTone),
             borderRadius: Radii.rControl,
-            border: Border.all(
-              color: (newOwner ? context.tones.warning : t.colorScheme.primary)
-                  .withValues(alpha: 0.30),
-            ),
+            border: Border.all(color: tones.chipBorder(reviewTone), width: Strokes.hairline),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -738,7 +762,7 @@ class _ReviewStep extends ConsumerWidget {
               Icon(
                 newOwner ? Icons.key_rounded : Icons.info_outline_rounded,
                 size: IconSize.sm,
-                color: newOwner ? context.tones.warning : t.colorScheme.primary,
+                color: reviewTone,
               ),
               const SizedBox(width: Space.xs),
               Expanded(
@@ -748,7 +772,7 @@ class _ReviewStep extends ConsumerWidget {
                           'stored nowhere — copy it before closing the dialog.'
                       : 'No new login is created. The owner keeps their existing password and '
                           'will see a hostel switcher in their dashboard.',
-                  style: t.textTheme.bodySmall,
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
             ],
@@ -815,33 +839,31 @@ class _SuccessPanel extends ConsumerWidget {
         Space.xxl + MediaQuery.paddingOf(context).bottom,
       ),
       children: [
-        GlassCard(
-          padding: const EdgeInsets.all(Space.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.check_circle_rounded,
-                  size: IconSize.lg + 12, color: context.tones.success),
-              const SizedBox(height: Space.sm),
-              Text('${state.draft.hostelName} is live', style: t.textTheme.titleLarge),
-              const SizedBox(height: Space.xs),
-              Text(
-                result.issuedLogin
-                    ? 'The owner login, the hostel, ${plural(state.draft.rooms, 'room')} and '
-                        '${plural(state.draft.totalBeds, 'bed')} were created, along with the '
-                        'first subscription.'
-                    : 'The hostel, ${plural(state.draft.rooms, 'room')} and '
-                        '${plural(state.draft.totalBeds, 'bed')} were created under the '
-                        'existing owner, along with its own subscription. No new login was '
-                        'issued.',
-                style: t.textTheme.bodyMedium,
-              ),
-            ],
+        // The design already specifies what a screen looks like when its whole job is to report
+        // a state: a raised card, a caps tag in the tone, an outlined glyph, a title and a
+        // support line (4:1575 / 4:1578). This is that shape, filled with what the server
+        // actually created — rather than the bespoke card with a filled tick this used to be,
+        // which was the only success treatment in the app that looked like nothing else in it.
+        StateCard(
+          badge: 'Created',
+          tone: NivoraColors.success,
+          child: StateBody(
+            icon: Icons.check_rounded,
+            tone: NivoraColors.success,
+            title: '${state.draft.hostelName} is live',
+            message: result.issuedLogin
+                ? 'The owner login, the hostel, ${plural(state.draft.rooms, 'room')} and '
+                    '${plural(state.draft.totalBeds, 'bed')} were created, along with the '
+                    'first subscription.'
+                : 'The hostel, ${plural(state.draft.rooms, 'room')} and '
+                    '${plural(state.draft.totalBeds, 'bed')} were created under the '
+                    'existing owner, along with its own subscription. No new login was issued.',
           ),
         ),
         const SizedBox(height: Space.md),
         if (result.credentials != null)
           FlatSurface(
+            weight: GlassWeight.regular,
             padding: const EdgeInsets.all(Space.md),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -910,18 +932,26 @@ class _StepShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(title, style: t.textTheme.titleLarge),
-        const SizedBox(height: Space.xxs),
-        Text(description, style: t.textTheme.bodySmall),
-        const SizedBox(height: Space.md),
-        for (final child in children) ...[
-          child,
+    // The design gives every step its own pane — "Owner Details" and the fields under it read as
+    // one object, separated from the stepper above and the action bar below. Loose text on the
+    // page background made the title look like a section heading for the whole screen rather
+    // than the label of this step's form.
+    return FlatSurface(
+      padding: const EdgeInsets.all(Space.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(title, style: t.textTheme.titleMedium),
+          const SizedBox(height: Space.xxs),
+          Text(description, style: t.textTheme.bodySmall),
           const SizedBox(height: Space.md),
+          for (final (i, child) in children.indexed) ...[
+            child,
+            // No trailing gap after the last field: the pane's own padding closes the card.
+            if (i != children.length - 1) const SizedBox(height: Space.md),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -1204,9 +1234,9 @@ class _Footer extends ConsumerWidget {
               onPressed: state.submitting ? null : controller.submit,
               icon: state.submitting
                   ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      height: IconSize.md,
+                      width: IconSize.md,
+                      child: CircularProgressIndicator(strokeWidth: Strokes.glyph),
                     )
                   : const Icon(Icons.check_rounded, size: IconSize.sm),
               label: Text(newOwner ? 'Create owner & hostel' : 'Create hostel'),

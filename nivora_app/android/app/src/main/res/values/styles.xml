@@ -13,6 +13,19 @@
 
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
-        <item name="android:windowBackground">?android:colorBackground</item>
+        <!--
+          The design's ground, not ?android:colorBackground.
+
+          The inherited attribute is WHITE under this Light parent, and this theme is swapped
+          in the moment the process starts — before the first Flutter frame, not after it. So
+          the launch window handed off to a white window, which handed off to Flutter painting
+          #0B0D0F: two flashes on a light-mode phone, on every cold start. Pinning it to the
+          same colour the splash paints makes the whole handoff invisible.
+
+          The values-night/ copy of this file says the same thing for the same reason; the
+          colour is deliberately identical in both, because the app's launch is brand-dark
+          whatever the phone's theme is. See lib/features/splash/splash_screen.dart.
+        -->
+        <item name="android:windowBackground">@color/nivora_ground_light</item>
     </style>
 </resources>

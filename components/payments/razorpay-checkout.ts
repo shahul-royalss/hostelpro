@@ -118,10 +118,56 @@ export function loadRazorpayCheckout(): Promise<RazorpayCheckoutCtor> {
   return inFlight;
 }
 
-/** Open the modal. Resolves with the instance so the caller can close it. */
-export async function openRazorpayCheckout(options: RazorpayCheckoutOptions): Promise<RazorpayCheckoutInstance> {
+/**
+ * The shape Checkout emits on the `payment.failed` event. Everything is optional
+ * because it comes from a third party — `description` is the sentence a bank
+ * actually wrote ("insufficient funds"), and is the one worth showing a student.
+ */
+export interface RazorpayPaymentFailedPayload {
+  error?: {
+    code?: string;
+    description?: string;
+    reason?: string;
+    source?: string;
+    step?: string;
+    metadata?: { order_id?: string; payment_id?: string };
+  };
+}
+
+/** Reads the human sentence out of a `payment.failed` payload, defensively. */
+export function paymentFailureReason(payload: unknown): string | null {
+  const err = (payload as RazorpayPaymentFailedPayload | null)?.error;
+  if (!err || typeof err !== "object") return null;
+  const text = [err.description, err.reason].find((v) => typeof v === "string" && v.trim().length > 0);
+  // Third-party text, rendered as text — never as markup — and capped so a long
+  // gateway string cannot push the sheet's buttons off screen.
+  return text ? text.trim().slice(0, 160) : null;
+}
+
+/**
+ * Open the modal. Resolves with the instance so the caller can close it.
+ *
+ * `events` are registered BEFORE open(), which is the whole reason they are a
+ * parameter rather than something the caller attaches to the returned instance:
+ * a payment can fail — a declined card on the first tap — before the promise
+ * above has resolved, and a handler attached afterwards would miss it. The one
+ * event that matters here is `payment.failed`; Checkout reports success through
+ * `options.handler`, not through an event.
+ */
+export async function openRazorpayCheckout(
+  options: RazorpayCheckoutOptions,
+  events?: Record<string, (payload: unknown) => void>,
+): Promise<RazorpayCheckoutInstance> {
   const Checkout = await loadRazorpayCheckout();
   const instance = new Checkout(options);
+  for (const [name, handler] of Object.entries(events ?? {})) {
+    // A third-party constructor: if this build has no `on`, the modal must still open.
+    try {
+      instance.on(name, handler);
+    } catch {
+      /* older checkout.js — the sheet still learns the outcome by polling */
+    }
+  }
   instance.open();
   return instance;
 }

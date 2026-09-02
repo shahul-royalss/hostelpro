@@ -127,5 +127,4 @@ abstract final class ReceiptMotion {
   /// The feed judder, in logical pixels of horizontal travel. Sub-pixel by design: it should
   /// be felt and not seen.
   static const judder = 0.6;
-  static const judderPeriod = Duration(milliseconds: 90);
 }

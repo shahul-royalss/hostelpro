@@ -26,6 +26,11 @@ final class HostelRepository extends Repository {
   /// an error with a retry that could not help. Turning it into a throw would take that wording
   /// away and replace it with an alarm.
   Future<Hostel?> byId(String hostelId) => guard(() async {
+        // A null from here is drawn as a sentence about the reader ("not visible",
+        // "belongs to another hostel", "no record for this account"). That sentence is
+        // earned only when a live credential asked — a dead session makes this an
+        // anonymous read whose null means nothing. See Repository.requireLiveSession.
+        requireLiveSession('hostels.byId');
         final row = await db
             .from('hostels')
             .select(Hostel.columns)
@@ -69,6 +74,9 @@ final class HostelRepository extends Repository {
           'st_hostel_contacts',
           missing: 'Your account is not attached to a hostel, so there are no contact details '
               'to show. Ask your warden to check your registration.',
+          // A resident sent to their warden over an expired token is an errand invented by
+          // this app. The sentence above is only earned while the session is alive.
+          standing: sessionStanding,
         ));
       });
 
@@ -81,10 +89,11 @@ final class HostelRepository extends Repository {
     required String hostelId,
     required String rules,
   }) =>
-      guard(() async {
+      guardWrite(() async {
         await db.rpc('ow_update_hostel_rules', params: {
           'p_hostel_id': hostelId,
           'p_rules': rules,
         });
-      });
+      }, unresolved: 'Reopen the rules to see which version the hostel is holding; saving the '
+          'same text again is safe.');
 }

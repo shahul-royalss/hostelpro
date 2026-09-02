@@ -3,13 +3,24 @@
 import * as React from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Clock, Lock, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Clock, Info, Lock, ShieldCheck } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { createRentOrder, getRentPaymentStatus, type RentPaymentStatus } from "@/lib/actions/payments";
+import {
+  createRentOrder,
+  getRentPaymentStatus,
+  type RentPaymentState,
+  type RentPaymentStatus,
+} from "@/lib/actions/payments";
 import { formatINR, formatPeriodMonth } from "@/lib/utils";
 import { PaymentReceipt } from "./payment-receipt";
-import { loadRazorpayCheckout, openRazorpayCheckout, type RazorpayCheckoutInstance } from "./razorpay-checkout";
+import {
+  loadRazorpayCheckout,
+  openRazorpayCheckout,
+  paymentFailureReason,
+  type RazorpayCheckoutInstance,
+  type RazorpayCheckoutSuccess,
+} from "./razorpay-checkout";
 
 /**
  * The rent payment sheet.
@@ -41,6 +52,70 @@ const POLL_TIMEOUT_MS = 45_000;
 
 type Phase = "summary" | "starting" | "checkout" | "confirming" | "success" | "slow" | "error";
 
+type VerifyOutcome =
+  /** Razorpay really did produce this callback. Go and watch for settlement. */
+  | { outcome: "verified"; state: RentPaymentState }
+  /** It did not. Nothing was paid, and the student must not be told to wait. */
+  | { outcome: "rejected"; error: string }
+  /** We could not tell — our endpoint, not the payment. Fall through to polling. */
+  | { outcome: "unknown" };
+
+/**
+ * Ask our own server whether Checkout's success callback is genuine.
+ *
+ * The callback runs in this browser, and this browser can be told anything, so it
+ * is checked before the sheet shows the reassuring screen. The check is a real
+ * HMAC over `order_id|payment_id`, done on the server with a secret that is not
+ * here — see app/api/payments/verify/route.ts.
+ *
+ * What comes back does NOT decide whether the fee is paid. Only the signed
+ * webhook does that; `state` here is the server reporting where settlement has
+ * got to, and the sheet keeps polling for it either way.
+ *
+ * A network failure or a 5xx returns "unknown" ON PURPOSE. If our verifier is
+ * down, the student's money has still moved and the webhook will still credit it;
+ * stranding a real payment behind our own outage would be the worse bug of the
+ * two. Only an explicit 4xx — a signature that did not verify, an order that is
+ * not theirs — is allowed to say no.
+ */
+async function verifyCheckout(success: RazorpayCheckoutSuccess): Promise<VerifyOutcome> {
+  try {
+    const res = await fetch("/api/payments/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // Same-origin: the session cookie rides along, and the route refuses
+      // anything with a foreign Origin.
+      credentials: "same-origin",
+      cache: "no-store",
+      body: JSON.stringify({
+        razorpay_order_id: success.razorpay_order_id,
+        razorpay_payment_id: success.razorpay_payment_id,
+        razorpay_signature: success.razorpay_signature,
+      }),
+    });
+
+    const body: unknown = await res.json().catch(() => null);
+    const payload = (body ?? {}) as { verified?: unknown; state?: unknown; error?: unknown };
+
+    if (res.ok && payload.verified === true) {
+      const state = typeof payload.state === "string" ? (payload.state as RentPaymentState) : "pending";
+      return { outcome: "verified", state };
+    }
+    if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+      return {
+        outcome: "rejected",
+        error:
+          typeof payload.error === "string" && payload.error.length > 0
+            ? payload.error
+            : "We couldn't confirm that payment. Nothing has been marked paid.",
+      };
+    }
+    return { outcome: "unknown" };
+  } catch {
+    return { outcome: "unknown" };
+  }
+}
+
 export function PayRentSheet({
   open,
   onOpenChange,
@@ -57,6 +132,10 @@ export function PayRentSheet({
   const router = useRouter();
   const [phase, setPhase] = React.useState<Phase>("summary");
   const [error, setError] = React.useState<string | null>(null);
+  /** A calm, non-alarming sentence for an outcome that is not a failure — the
+   *  student closing the modal. An empty screen is not an answer (CLAUDE.md:
+   *  every control must do something visible), and "error" would be a lie. */
+  const [notice, setNotice] = React.useState<string | null>(null);
   const [amount, setAmount] = React.useState<number | undefined>(amountDueHint);
   const [period, setPeriod] = React.useState<string | undefined>(periodHint);
   const [testMode, setTestMode] = React.useState(false);
@@ -78,6 +157,7 @@ export function PayRentSheet({
       const t = setTimeout(() => {
         setPhase("summary");
         setError(null);
+        setNotice(null);
         setStatus(null);
         settled.current = false;
       }, 250);
@@ -140,6 +220,7 @@ export function PayRentSheet({
 
   async function startPayment() {
     setError(null);
+    setNotice(null);
     setPhase("starting");
     settled.current = false;
 
@@ -162,33 +243,76 @@ export function PayRentSheet({
     setReceiptFor({ hostelName: order.hostelName, studentName: order.studentName });
 
     try {
-      checkout.current = await openRazorpayCheckout({
-        key: order.keyId,
-        order_id: order.orderId,
-        amount: order.amountPaise,
-        currency: order.currency,
-        name: order.hostelName,
-        description: `${formatPeriodMonth(order.period)} rent`,
-        prefill: order.prefill,
-        theme: { color: "#1C2B45" },
-        retry: { enabled: false },
-        modal: {
-          confirm_close: true,
-          ondismiss: () => {
-            if (settled.current || !alive.current) return;
-            setPhase("summary");
+      checkout.current = await openRazorpayCheckout(
+        {
+          key: order.keyId,
+          order_id: order.orderId,
+          amount: order.amountPaise,
+          currency: order.currency,
+          name: order.hostelName,
+          description: `${formatPeriodMonth(order.period)} rent`,
+          prefill: order.prefill,
+          theme: { color: "#1C2B45" },
+          retry: { enabled: false },
+          modal: {
+            confirm_close: true,
+            ondismiss: () => {
+              // The student closed the sheet themselves. That is a decision, not a
+              // fault: say so in plain words and leave the Pay button ready.
+              if (settled.current || !alive.current) return;
+              setNotice("Payment cancelled — nothing has been charged. You can try again whenever you like.");
+              setPhase("summary");
+            },
+          },
+          handler: (success) => {
+            // ADVISORY. This callback is JavaScript running in a browser; it is not
+            // evidence of anything until the server has checked its signature, and
+            // it never credits a fee — the signed webhook does that.
+            settled.current = true;
+            if (!alive.current) return;
+            setPhase("confirming");
+            void (async () => {
+              const verdict = await verifyCheckout(success);
+              if (!alive.current) return;
+
+              if (verdict.outcome === "rejected") {
+                // The triple did not verify. Do NOT fall through to polling: the
+                // "still working on it" screen would be a false reassurance for a
+                // payment that was never made.
+                setError(verdict.error);
+                setPhase("error");
+                return;
+              }
+
+              // Verified, or unverifiable because our own endpoint is unreachable.
+              // Either way the webhook is the thing that credits, so go and watch
+              // the server until it says so.
+              void poll(order.orderId);
+            })();
           },
         },
-        handler: () => {
-          // Advisory only — the payment is credited by the signed webhook, and the
-          // sheet believes the server, not this callback.
-          settled.current = true;
-          if (!alive.current) return;
-          setPhase("confirming");
-          void poll(order.orderId);
+        {
+          // Registered before the modal opens — a card can be declined on the first
+          // tap, before openRazorpayCheckout() has even resolved.
+          "payment.failed": (payload: unknown) => {
+            settled.current = true;
+            if (!alive.current) return;
+            const reason = paymentFailureReason(payload);
+            setError(
+              reason
+                ? `${reason} Nothing has been charged — you can try again, or pay at the warden desk.`
+                : "The payment did not go through. Nothing has been charged — you can try again, or pay at the warden desk.",
+            );
+            setPhase("error");
+          },
         },
-      });
-      if (alive.current) setPhase("checkout");
+      );
+      // `!settled.current` matters now that a handler can fire BEFORE this line.
+      // A card declined on the first tap resolves through `payment.failed` while
+      // openRazorpayCheckout() is still awaiting; without this guard the phase it
+      // set would be overwritten by "checkout" and the student would be left
+      // looking at "Payment window open…" over a modal that had already failed.
+      if (alive.current && !settled.current) setPhase("checkout");
     } catch (e) {
       if (!alive.current) return;
       setError(e instanceof Error ? e.message : "The payment window could not open. Please try again.");
@@ -230,6 +354,16 @@ export function PayRentSheet({
                 <p className="flex items-start gap-2 rounded-control bg-red-soft px-3 py-2.5 text-[13px] text-red">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
                   <span>{error}</span>
+                </p>
+              ) : null}
+
+              {/* Cancelling is not failing, so it does not get the red treatment.
+                  It does get said out loud — closing the modal used to drop the
+                  student back here with no explanation at all. */}
+              {phase === "summary" && notice ? (
+                <p className="flex items-start gap-2 rounded-control bg-sand-soft px-3 py-2.5 text-[13px] text-sand-deep">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+                  <span>{notice}</span>
                 </p>
               ) : null}
 

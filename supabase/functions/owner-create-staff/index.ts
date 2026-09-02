@@ -51,6 +51,7 @@ import { dbError } from "../_shared/errors.ts";
 import { fail, HttpError, ok, preflight, readJsonBody, toResponse } from "../_shared/http.ts";
 import { enforceRateLimit } from "../_shared/ratelimit.ts";
 import { callerClient } from "../_shared/supabase.ts";
+import { requireVerifiedEmail } from "../_shared/verification.ts";
 import { assertWritable, requireOwnedHostel } from "../_shared/tenant.ts";
 import { normalizePhone, Validator } from "../_shared/validate.ts";
 
@@ -79,6 +80,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   try {
     const caller = await requireCaller(req, "owner");
+    // See sa-create-owner: an account that has not proved its own address does not get to
+    // create others. _shared/verification.ts holds the reasoning and the exemption.
+    requireVerifiedEmail(caller);
     const input = parseBody(await readJsonBody(req, MAX_BODY_BYTES));
 
     // Tenant resolution: the body may name the hostel, but ownership is what decides.

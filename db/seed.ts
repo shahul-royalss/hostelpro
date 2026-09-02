@@ -203,6 +203,9 @@ async function createAuthUser(a: AuthArgs): Promise<string> {
   const payload = {
     email,
     password: a.password,
+    // Keeps the seeded password working (the project has "Confirm email" ON). It is NOT a
+    // verification: public.users.email_verified_at is left null for every seeded account, so a
+    // seeded login is held to the same emailed-code proof as a real one.
     email_confirm: true,
     user_metadata: { full_name: a.fullName, phone: a.phone ?? null },
     app_metadata: { role: a.role, hostel_id: a.hostelId ?? null, must_change_password: false },

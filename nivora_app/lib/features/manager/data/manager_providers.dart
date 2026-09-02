@@ -8,6 +8,8 @@ import '../../../data/providers.dart';
 import 'manager_models.dart';
 import 'manager_repository.dart';
 
+export '../../../data/providers.dart' show menuRepositoryProvider, weeklyMenuProvider;
+
 /// Providers for the manager's four tabs.
 ///
 /// HAND-WRITTEN, matching lib/data/providers.dart — no codegen, nothing to regenerate.
@@ -254,12 +256,12 @@ final managerFinanceProvider =
   );
 });
 
-/// The mess menu for the week. public.menus. Session-held: it backs the Menu tab.
-final weeklyMenuProvider =
-    FutureProvider.autoDispose.family<WeeklyMenu, String>((ref, hostelId) {
-  holdForSession(ref);
-  return ref.watch(managerRepositoryProvider).weeklyMenu(hostelId);
-});
+// THE MESS MENU FOR THE WEEK — public.menus — IS DECLARED IN lib/data/providers.dart AND
+// RE-EXPORTED FROM THIS FILE (see the export beside the imports), because the manager is no
+// longer the only role that reads these rows: a resident's home screen now watches the same
+// provider. The re-export keeps that invisible to this directory — the manager screens, and
+// the manager tests that override `weeklyMenuProvider` off this import, are addressing the one
+// and only instance of it.
 
 /// Owner, manager and warden of this hostel, by name. public.users.
 final hostelStaffProvider =

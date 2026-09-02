@@ -93,6 +93,12 @@ final class DashboardRepository extends Repository {
           data,
           'rpc_sa_dashboard',
           refusal: 'Platform figures are only visible to a Nivora super admin.',
+          // THE LINE THAT MAKES THE REFUSAL HONEST. Zero rows here is a refusal only if the
+          // question was asked with a credential that was alive when the answer arrived; a
+          // dead one is sent as `anon`, which this function refuses in exactly the same shape.
+          // See core/auth/session_standing.dart — this is the call that told a super admin he
+          // was not the super admin.
+          standing: sessionStanding,
         ));
       });
 

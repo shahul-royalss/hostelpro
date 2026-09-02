@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { LEGAL, isConfigured } from "@/lib/legal-config";
+import { LEGAL, LEGAL_VERSION, isConfigured } from "@/lib/legal-config";
 import Link from "next/link";
 import { Callout, DataTable, DocBody, DocHeader, Section, TableOfContents } from "../layout";
 
@@ -22,7 +22,11 @@ const OPERATOR = {
 
 const PLACEHOLDERS_UNSET = !isConfigured;
 
-const UPDATED = "2026-08-21";
+// The publication date of the Terms + Privacy pair, and the string an in-app acceptance is
+// recorded against. It lives in lib/legal-config.ts so that this page, its three siblings, the
+// Android app and public.legal_versions cannot drift apart — see the note on LEGAL_VERSION
+// there, which explains why bumping it re-asks every user for their agreement.
+const UPDATED = LEGAL_VERSION;
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
 
@@ -46,7 +50,7 @@ const SECTIONS = [
   { id: "resident-data", title: "Resident data and the operator's duties" },
   { id: "content", title: "Content you put into the service" },
   { id: "subscription", title: "Subscription, and read-only mode" },
-  { id: "payments", title: "Payments are recorded, not processed" },
+  { id: "payments", title: "Payments" },
   { id: "availability", title: "Availability, backups and support" },
   { id: "suspension", title: "Suspension and termination" },
   { id: "ip", title: "Intellectual property" },
@@ -335,13 +339,30 @@ export default function TermsOfServicePage() {
           </p>
         </Section>
 
-        <Section id="payments" title="9. Payments are recorded, not processed">
+        <Section id="payments" title="9. Payments">
           <p>
-            {APP_NAME} is not a payment service. The fee ledger records payments that have already
-            been made to the hostel somewhere else — in cash, by UPI or by bank transfer — together
-            with the amount, the date and a label saying which of those three it was. The app{" "}
-            <strong>never takes, holds, transfers or refunds money</strong>, and it stores no card
-            number, bank account number or UPI handle.
+            Rent reaches the hostel one of two ways, and {APP_NAME} is not the one holding it in
+            either.
+          </p>
+          <ul>
+            <li>
+              <strong>At the desk.</strong> A warden records a payment already made in cash, by UPI
+              or by bank transfer, with the amount, the date and a label saying which it was. The
+              ledger entry reflects what a member of staff recorded; it is not independent
+              confirmation that money changed hands.
+            </li>
+            <li>
+              <strong>Online, if the resident chooses.</strong> The payment is taken by{" "}
+              <strong>Razorpay</strong> on Razorpay&rsquo;s own page, under Razorpay&rsquo;s terms.
+              {" "}{APP_NAME} passes it the payer&rsquo;s name, email, phone and the amount, and
+              receives back only a confirmation and the transaction identifiers.
+            </li>
+          </ul>
+          <p>
+            In neither case does {APP_NAME}{" "}
+            <strong>take, hold, transfer or refund money</strong>, and in neither case does it store
+            a card number, a bank account number, a UPI ID or a CVV — those are entered on
+            Razorpay&rsquo;s page and never reach us.
           </p>
           <p>
             Rent, deposits, refunds and any dispute about them are entirely between the resident and
@@ -446,6 +467,16 @@ export default function TermsOfServicePage() {
             changes are notified to the Operator before they take effect, and continued use of the
             service after that date is acceptance of the revised terms. If the Operator does not
             accept a material change, it may terminate before the change takes effect.
+          </p>
+          <p>
+            <strong>Individual account holders are asked directly.</strong> These terms and the{" "}
+            <Link href="/legal/privacy">Privacy Policy</Link> are presented together in the app
+            before it can be used, and the fact that you accepted them — which version, and when —
+            is recorded. Both documents carry a version, currently{" "}
+            <strong>{UPDATED}</strong>. When either changes materially the version changes with it
+            and you are asked to read and accept again on your next visit, so nobody is silently
+            moved onto terms they have not seen. Declining is a real option: the app cannot be used
+            without accepting, and the same screen offers to sign you out.
           </p>
         </Section>
 

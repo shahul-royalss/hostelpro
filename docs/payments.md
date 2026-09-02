@@ -295,14 +295,23 @@ then confirm:
 
 ### Housekeeping
 
-Abandoned checkouts leave `created` rows behind. Call this alongside `app.apply_retention()`:
+Abandoned checkouts leave `created` rows behind. This is the sweeper for them:
 
 ```sql
 select public.rz_expire_stale_intents();   -- default: older than 1 day
 ```
 
-It never touches a row that already carries a payment id, so a late capture can still claim its
-order.
+> **Do not run this yet, and do not schedule it.** The line below used to say that a late capture
+> could still claim an expired order. It cannot. `rz_record_capture()` claims only
+> `status in ('created','failed')`, so a genuine capture arriving against an `expired` row is
+> refused — with the misleading message `Order already settled by a different payment.`, which the
+> webhook classifies as permanent and answers `200`. The resident's money is taken and the fee
+> ledger never moves. Reproduced against the live database in
+> [`razorpay-money-path.md`](./razorpay-money-path.md) §9 F2, which also has the fix. Nothing
+> schedules this function today (`cron.job` has three jobs, none of them this one), so the problem
+> is latent — running it by hand is what creates it.
+
+It never touches a row that already carries a payment id.
 
 ---
 

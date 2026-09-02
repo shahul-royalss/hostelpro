@@ -4,13 +4,15 @@ allprojects {
         mavenCentral()
     }
 
-    // razorpay_flutter declares `com.razorpay:checkout:1.6.+` — a DYNAMIC version range. A
-    // range makes Gradle re-fetch maven-metadata.xml on every resolve to learn what "+" means
-    // today, which (a) breaks --offline builds outright, since a range cannot be resolved from
-    // cache, and (b) hands this machine's TLS-intercepting antivirus a fresh network fetch to
-    // kill. It also means a Razorpay release nobody reviewed can walk into the app on any
-    // clean build — the same reason lockfiles exist. Pinned to the version already in the
-    // local cache and in every artifact shipped so far. Bump it deliberately, not implicitly.
+    // THE RAZORPAY PIN. razorpay_flutter declares `com.razorpay:checkout:1.6.+` — a DYNAMIC
+    // version range, which makes Gradle re-fetch maven-metadata.xml on every resolve to learn
+    // what "+" means today. That breaks `--offline` outright (a range cannot be resolved from
+    // cache), hands this machine's TLS-intercepting antivirus a fresh network fetch to kill —
+    // the release pipeline has died on exactly that HEAD request — and lets a Razorpay release
+    // nobody reviewed walk into the app on any clean build, which is the reason lockfiles exist.
+    //
+    // Forced to 1.6.41: the version already in this machine's Gradle cache and in every artifact
+    // shipped so far. Raise it deliberately, never by leaving the range open.
     configurations.all {
         resolutionStrategy {
             force("com.razorpay:checkout:1.6.41")

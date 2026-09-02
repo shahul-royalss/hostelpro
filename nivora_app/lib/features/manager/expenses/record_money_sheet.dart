@@ -155,8 +155,8 @@ class _RecordMoneySheetState extends ConsumerState<_RecordMoneySheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(_isOut ? 'CATEGORY' : 'SOURCE', style: t.textTheme.labelSmall),
-            const SizedBox(height: Space.xs),
+            SectionLabel(label: _isOut ? 'Category' : 'Source'),
+            const SizedBox(height: Space.sm),
             // The choices ARE the Postgres enum, in its declared order. Nothing is added here
             // and nothing is hidden: a category that is not in public.expense_category cannot
             // be stored, and one that is would silently become "other".
@@ -166,16 +166,16 @@ class _RecordMoneySheetState extends ConsumerState<_RecordMoneySheet> {
               children: _isOut
                   ? [
                       for (final c in ExpenseCategory.values)
-                        ChoiceChip(
-                          label: Text(c.label),
+                        ToggleChip(
+                          label: c.label,
                           selected: _category == c,
                           onSelected: (_) => setState(() => _category = c),
                         ),
                     ]
                   : [
                       for (final s in RevenueSource.values)
-                        ChoiceChip(
-                          label: Text(s.label),
+                        ToggleChip(
+                          label: s.label,
                           selected: _source == s,
                           onSelected: (_) => setState(() => _source = s),
                         ),

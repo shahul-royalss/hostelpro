@@ -15,7 +15,7 @@ import 'sa_models.dart';
 /// rollback that itself failed, an acknowledgement refused by RLS — are the states worth
 /// holding down in `flutter test`, and a test needs a stand-in for them.
 ///
-/// The same reasoning (and the same shape) as `RentPayments` in the payment repository: the
+/// The same reasoning (and the same shape) as `RentDesk` in the fee repository: the
 /// concrete class stays `final`, and the one seam a test needs is named.
 abstract interface class SaPlatformWrites {
   /// Marks one security alert as seen. public.ack_security_alert(bigint).
@@ -235,7 +235,7 @@ final class SaRepository extends Repository implements SaPlatformWrites {
     } on FunctionException catch (error, stack) {
       final rejection = _rejectionFrom(error);
       if (rejection != null) return rejection;
-      Error.throwWithStackTrace(_failureFrom(error), stack);
+      Error.throwWithStackTrace(failureFrom(error), stack);
     } catch (error, stack) {
       Error.throwWithStackTrace(AppFailure.from(error), stack);
     }
@@ -303,7 +303,11 @@ final class SaRepository extends Repository implements SaPlatformWrites {
 
   /// Everything that is not about the input, in the same sealed type the rest of the data layer
   /// throws — so a screen's existing error handling covers it without a special case.
-  static AppFailure _failureFrom(FunctionException error) {
+  ///
+  /// PUBLIC for the same reason WardenRepository.failureFrom is: the 404 branch below decides
+  /// whether a platform admin goes looking for an owner row or for a missing deployment, and a
+  /// private static could not be held down by a test.
+  static AppFailure failureFrom(FunctionException error) {
     final message = _messageFrom(error.details);
 
     if (error is FunctionsFetchException || error.status == 0) {
@@ -321,6 +325,19 @@ final class SaRepository extends Repository implements SaPlatformWrites {
       403 => AccessDeniedFailure(
           message ?? 'Only a Super Admin can create owners and hostels.',
           technical: error.toString(),
+        ),
+      // THE SECOND OF THE TWO MISLEADING MESSAGES THIS PASS IS ABOUT. A 404 from
+      // `functions.invoke` is either the function saying an owner is missing — in its
+      // `{ ok: false, error }` envelope, which is [message] — or the gateway saying the
+      // function itself is not there, with no body at all. Reported as "that owner account
+      // could not be found", a missing deployment sends a platform admin hunting for an owner
+      // row that exists, which is the same shape of wrong answer as the console's "not
+      // permitted". Precedent: the 404 branch in features/auth/email_verification_service.dart.
+      404 when message == null => NotFoundFailure(
+          'Creating owners and hostels is not available on this server yet. Nothing was '
+              'created. The sa-create-owner function needs to be deployed.',
+          technical: 'sa-create-owner answered 404 with no body — the Edge Function is not '
+              'deployed on this project, so nothing decided that an owner was missing. $error',
         ),
       404 => NotFoundFailure(
           message ?? 'That owner account could not be found.',

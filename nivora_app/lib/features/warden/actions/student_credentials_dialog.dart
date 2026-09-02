@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../shared/glass/glass.dart';
 import '../data/warden_repository.dart';
+import '../widgets/warden_ui.dart';
 
 /// The resident's login, shown once (Hard rule §4.9).
 ///
@@ -31,10 +32,13 @@ import '../data/warden_repository.dart';
 ///
 /// ── AND WHY BOTH HALVES ARE ON SCREEN ────────────────────────────────────────────────────
 ///
-/// A student signs in with their PHONE NUMBER, not an email — `studentLoginEmail()` maps it to
-/// a synthetic address neither client ever shows. The pair is what the resident needs, so the
-/// pair is what is displayed and what "Copy both" puts on the clipboard. Showing the password
-/// alone would hand over half a credential.
+/// A student signs in with the email the warden collected, or — when they gave none — with
+/// their phone number, which `studentLoginEmail()` maps to a synthetic address neither client
+/// ever shows. Exactly one of the two is their login, and this dialog is the ONLY place anyone
+/// is told which: the server picked it, so the label here is read off what came back rather
+/// than assumed. The pair is what the resident needs, so the pair is what is displayed and
+/// what "Copy both" puts on the clipboard. Showing the password alone would hand over half a
+/// credential; showing the wrong half is worse, because it looks right.
 class StudentCredentialsDialog extends StatefulWidget {
   const StudentCredentialsDialog({super.key, required this.credentials, this.bedLabel});
 
@@ -70,8 +74,12 @@ class _StudentCredentialsDialogState extends State<StudentCredentialsDialog> {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final c = widget.credentials;
+    // The server decided which of the two the login is; an '@' is what tells them apart, and
+    // the phone branch cannot contain one — phone10() strips every non-digit.
+    final byEmail = c.loginId.contains('@');
+    final loginLabel = byEmail ? 'Email (login)' : 'Phone (login)';
     final both = '${c.name}\n'
-        'Phone (login): ${c.loginId}\n'
+        '$loginLabel: ${c.loginId}\n'
         'Temporary password: ${c.password}';
 
     return PopScope(
@@ -92,16 +100,7 @@ class _StudentCredentialsDialogState extends State<StudentCredentialsDialog> {
               children: [
                 Row(
                   children: [
-                    Container(
-                      height: 40,
-                      width: 40,
-                      decoration: BoxDecoration(
-                        color: context.tones.chipFill(t.colorScheme.primary),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.key_rounded,
-                          size: IconSize.md, color: t.colorScheme.primary),
-                    ),
+                    const IconBadge(icon: Icons.key_rounded),
                     const SizedBox(width: Space.sm),
                     Expanded(
                       child: Column(
@@ -121,13 +120,18 @@ class _StudentCredentialsDialogState extends State<StudentCredentialsDialog> {
                 ),
                 const SizedBox(height: Space.sm),
                 Text(
-                  'Give these to ${c.name}. They sign in with their phone number, and will be '
+                  'Give these to ${c.name}. They sign in with '
+                  '${byEmail ? 'this email address' : 'their phone number'}, and will be '
                   'asked to set their own password the first time.',
                   style: t.textTheme.bodyMedium,
                 ),
                 const SizedBox(height: Space.md),
 
-                _CredentialRow(label: 'Phone (login)', value: c.loginId, copyLabel: 'phone number'),
+                _CredentialRow(
+                  label: loginLabel,
+                  value: c.loginId,
+                  copyLabel: byEmail ? 'email address' : 'phone number',
+                ),
                 const SizedBox(height: Space.xs),
                 _CredentialRow(
                   label: 'Temporary password',
@@ -137,28 +141,16 @@ class _StudentCredentialsDialogState extends State<StudentCredentialsDialog> {
                 ),
 
                 const SizedBox(height: Space.md),
-                Container(
-                  padding: const EdgeInsets.all(Space.sm),
-                  decoration: BoxDecoration(
-                    color: context.tones.warning.withValues(alpha: 0.08),
-                    borderRadius: Radii.rControl,
-                    border: Border.all(color: context.tones.warning.withValues(alpha: 0.32)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.warning_amber_rounded,
-                          size: IconSize.sm, color: context.tones.warning),
-                      const SizedBox(width: Space.xs),
-                      Expanded(
-                        child: Text(
-                          'This password is shown once and is stored nowhere — not in Nivora, '
-                          'not in the audit log. Copy it now. If it is lost, only the owner can '
-                          'issue a new one.',
-                          style: t.textTheme.bodySmall,
-                        ),
-                      ),
-                    ],
+                // The design's aside, tinted amber. It carried 0.08 / 0.32 by hand; those are
+                // now NivoraSemantics' measured chip alphas, in one place.
+                InfoCallout(
+                  icon: Icons.warning_amber_rounded,
+                  tone: NivoraColors.warning,
+                  child: Text(
+                    'This password is shown once and is stored nowhere — not in Nivora, '
+                    'not in the audit log. Copy it now. If it is lost, only the owner can '
+                    'issue a new one.',
+                    style: t.textTheme.bodySmall,
                   ),
                 ),
 
@@ -283,7 +275,23 @@ class _CopyButtonState extends State<CopyButton> {
   bool _copied = false;
 
   Future<void> _copy() async {
-    await Clipboard.setData(ClipboardData(text: widget.text));
+    // Clipboard.setData is a platform channel and CAN throw. Uncaught, the tick never appears
+    // and the warden is left unsure whether they hold the password — on the ONE screen that
+    // shows a new resident's temporary password, once, and never again. Silence here is the
+    // most expensive silence in the app: the remedy is to read it off the screen while it is
+    // still up, and the warden has to know to do that.
+    try {
+      await Clipboard.setData(ClipboardData(text: widget.text));
+    } catch (e) {
+      debugPrint('clipboard copy failed: ${e.runtimeType} $e');
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Could not copy. Write it down from the screen before closing.'),
+        ),
+      );
+      return;
+    }
     if (!mounted) return;
     setState(() => _copied = true);
     // Long enough to be read, short enough that a second copy is obviously a second copy.

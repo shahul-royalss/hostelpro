@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { LEGAL, isConfigured } from "@/lib/legal-config";
+import { LEGAL, LEGAL_VERSION, isConfigured } from "@/lib/legal-config";
 import Link from "next/link";
 import { Callout, DataTable, DocBody, DocHeader, Section, TableOfContents } from "../layout";
 
@@ -21,7 +21,11 @@ const CONTACT = {
 
 const PLACEHOLDERS_UNSET = !isConfigured;
 
-const UPDATED = "2026-08-21";
+// The publication date of the Terms + Privacy pair, and the string an in-app acceptance is
+// recorded against. It lives in lib/legal-config.ts so that this page, its three siblings, the
+// Android app and public.legal_versions cannot drift apart — see the note on LEGAL_VERSION
+// there, which explains why bumping it re-asks every user for their agreement.
+const UPDATED = LEGAL_VERSION;
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
 
@@ -234,8 +238,20 @@ export default function PrivacyPolicyPage() {
                 "Irreversible SHA-256 hashes of the login identifier only — never a readable phone number, email or IP address",
                 "Pseudonymous",
               ],
+              [
+                "Your agreement to these documents",
+                "Which version of the Terms of Use and this Privacy Policy you accepted, when you accepted it, and whether you were using the app or the website. No IP address and no device details are stored with it",
+                "Everyone who signs in",
+              ],
             ]}
           />
+          <p>
+            The last row is the record of the permission the rest of this table depends on.{" "}
+            {APP_NAME} asks you to read and accept both documents before you can use it, and stores
+            the fact that you did — because a consent that cannot be evidenced afterwards is not
+            worth having asked for. When either document changes materially, its version changes
+            and you are asked again, so you are never quietly moved onto text you have not seen.
+          </p>
         </Section>
 
         <Section id="not-collected" title="4. What is never collected">
@@ -248,9 +264,13 @@ export default function PrivacyPolicyPage() {
               <strong>No date of birth or age.</strong> The system has no age field of any kind.
             </li>
             <li>
-              <strong>No card, bank account or UPI handle.</strong> Fee payments happen offline; the
-              app records only that a payment was made, how much, and whether it was cash, UPI or a
-              bank transfer. {APP_NAME} never takes, holds or moves money.
+              <strong>No card number, bank account, UPI ID or CVV.</strong> This is still true now
+              that rent can be paid inside the app, and the reason has changed rather than
+              weakened: those details are typed into{" "}
+              <strong>Razorpay&rsquo;s own payment page</strong> and never reach {APP_NAME} at all.
+              What comes back is a reference saying that a payment of a stated amount succeeded.
+              Rent paid at the desk in cash is recorded by your warden as a cash entry. {APP_NAME}{" "}
+              never holds your money in either case. See §8.
             </li>
             <li>
               <strong>No location data, no device contacts, no calendar, no biometrics, no
@@ -271,8 +291,15 @@ export default function PrivacyPolicyPage() {
               they are read only by the server.
             </li>
             <li>
-              <strong>No email or SMS is sent.</strong> There is no messaging provider connected, so
-              nothing about you leaves the platform through a message.
+              <strong>No SMS, and no marketing email of any kind.</strong> {APP_NAME} sends only
+              the few emails you ask it for or that keep the account secure — a link to confirm
+              your address, a password reset. They are delivered through Google&rsquo;s mail
+              service, which therefore sees your email address and the message (§8). Nothing is
+              sent to promote anything, and there is no mailing list to be on.
+            </li>
+            <li>
+              <strong>No push notifications.</strong> Notifications appear inside the app when you
+              open it. The Android build registers no device token with any notification service.
             </li>
           </ul>
         </Section>
@@ -374,26 +401,30 @@ export default function PrivacyPolicyPage() {
           <h3>Applied by the hostel operator</h3>
           <p>
             These are the standard periods. A hostel&rsquo;s own legal duties can extend them, never
-            shorten them.
+            shorten them. They are stated as commitments rather than as automation because that is
+            what they currently are: the daily job above is being extended to cover them, and until
+            it does, meeting them is the operator&rsquo;s responsibility. You may ask your hostel at
+            any time to erase something sooner.
           </p>
           <DataTable
             head={["Data", "Kept for"]}
             rows={[
               [
                 "ID-proof scan and photograph",
-                "Removed by the hostel on request, and no later than the resident record below. Verification has already served its purpose by check-out, so ask for it earlier if you wish",
+                "Erased with the resident record below, and earlier on request. Verification has already served its purpose by check-out, so there is nothing to be gained by keeping the scan afterwards — ask for it sooner if you wish",
               ],
               [
                 "Resident record and the linked account",
-                "Kept while you live at the hostel, and removed on request after you check out — see “Asking us to delete your data” below. Fee and payment records are held longer where the hostel has an accounting duty",
+                "Kept while you live at the hostel, then erased one month after your departure is recorded. That covers a re-admission and a final settlement; beyond it the hostel has no use for a former resident’s guardian phone number and permanent address",
               ],
               ["Visitor log entries", "12 months"],
               ["Leave requests", "12 months"],
-              ["Complaints and their history", "12 months after the complaint is resolved"],
-              ["Announcements and staff tasks", "24 months"],
+              ["Complaints and their history", "2 months after the complaint is resolved"],
+              ["Notices posted to the noticeboard", "2 months"],
+              ["Staff tasks", "24 months"],
               [
                 "Fee, expense, revenue and subscription records",
-                "The accounting-record period the hostel is legally required to observe — 8 years by default in India. These are not deleted on a privacy schedule",
+                "Kept indefinitely. This is the one exception, and it is not the hostel’s to waive: a business has a statutory duty to keep records of money received, and those duties run for years. What survives is the transaction, not you — see the note directly below",
               ],
               [
                 "Security alerts that are still open",
@@ -403,10 +434,11 @@ export default function PrivacyPolicyPage() {
           />
           <p>
             <strong>Where those two rules collide, the person is removed rather than the record.</strong>{" "}
-            A former resident&rsquo;s fee ledger may have to survive for the accounting period, while
-            their guardian&rsquo;s phone number and permanent address should not. In that case the
-            record is anonymised: the name, phone, email, photograph, guardian details, address and
-            ID proof are stripped out and the financial figures are left behind attached to nobody.
+            A former resident&rsquo;s fee ledger has to survive, while their guardian&rsquo;s phone
+            number and permanent address must not. In that case the record is anonymised: the name,
+            phone, email, photograph, guardian details, address and ID proof are stripped out and
+            the financial figures are left behind attached to nobody. &ldquo;Kept indefinitely&rdquo;
+            above therefore describes an amount and a date, not a person.
           </p>
         </Section>
 
@@ -448,12 +480,13 @@ export default function PrivacyPolicyPage() {
           </p>
           <p>
             Paying rent inside the app is optional. If you use it, the card, UPI or netbanking
-            details are collected by <strong>Razorpay on Razorpay&rsquo;s own page</strong> and are
-            never sent to us — we never see and never store a card number, a UPI ID, a CVV or a
-            bank account. What we keep is the record of the payment itself: the amount, the
-            currency, Razorpay&rsquo;s order and payment identifiers, and which method you chose
-            (for example &ldquo;upi&rdquo;). If you pay your warden in cash instead, Razorpay
-            receives nothing about you at all.
+            details are collected by{" "}
+            <strong>Razorpay, in Razorpay&rsquo;s own checkout</strong> — the payment sheet on
+            Android, or Razorpay&rsquo;s page on the web — and are never sent to us. We never see
+            and never store a card number, a UPI ID, a CVV or a bank account. What we keep is the
+            record of the payment itself: the amount, the currency, Razorpay&rsquo;s order and
+            payment identifiers, and which method you chose (for example &ldquo;upi&rdquo;). If you
+            pay your warden in cash instead, Razorpay receives nothing about you at all.
           </p>
           <DataTable
             head={["Provider", "What they do", "What they hold"]}
@@ -478,8 +511,17 @@ export default function PrivacyPolicyPage() {
                 "Processing an online rent payment, only when you choose to pay in the app",
                 "Your name, email and phone, so the payment can be attributed to you, plus the payment details you enter on their page. We receive back only the amount, the identifiers and the method",
               ],
+              [
+                "Google",
+                "Delivering the account emails — a confirmation link, a password reset",
+                "Your email address and the contents of those messages. No marketing email is ever sent",
+              ],
             ]}
           />
+          <p>
+            That is the complete list. There is no analytics vendor, no advertising network, no
+            crash-reporting service, no customer-messaging tool and no AI provider in the picture.
+          </p>
           <p>
             <strong>
               We do not sell personal data, share it with advertisers or data brokers, or use it to
@@ -493,10 +535,9 @@ export default function PrivacyPolicyPage() {
 
         <Section id="location" title="9. Where it is stored">
           <p>
-            The database, authentication service and file storage are operated by Supabase; the
-            application is hosted by Vercel. The specific hosting region for this deployment is a
-            configuration setting held by the operator, who will tell you what it is on request —
-            this page does not guess at it.
+            The database, authentication service and file storage are operated by Supabase in the{" "}
+            <strong>ap-southeast-1 region — Singapore</strong>. The application is hosted by
+            Vercel. Data is encrypted in transit and at rest.
           </p>
           <p>
             The DPDP Act permits transfer of personal data outside India except to countries the

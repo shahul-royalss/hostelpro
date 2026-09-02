@@ -37,6 +37,16 @@ export type AuditAction =
   // See docs/payments.md §7 for the reconciliation query.
   | "payment.order.created" | "payment.captured" | "payment.credited" | "payment.failed"
   | "payment.webhook.rejected" | "payment.reconcile.required"
+  // Refunds. Four actions rather than one, because a refund has four distinct
+  // moments and only the last one is money leaving the hostel's books:
+  //   pending    Razorpay accepted the INSTRUCTION (refund.created). Nothing moved.
+  //   processed  the money left the merchant account (refund.processed).
+  //   failed     the instruction died (refund.failed). Nothing moved.
+  //   reversed   public.fee_payments.amount_paid actually came down.
+  // `reversed` is the one an owner will one day need explained, so it is the one
+  // that carries the amount and the resulting fee status.
+  | "payment.refund.pending" | "payment.refund.processed" | "payment.refund.failed"
+  | "payment.refund.reversed"
   // Google Play account-deletion policy. The request IS the record: nobody in the app holds a
   // DELETE privilege on students/users (db/rls-policies.sql), so fulfilment is the manual
   // runbook in docs/account-deletion.md and this row is what proves the ask was made.

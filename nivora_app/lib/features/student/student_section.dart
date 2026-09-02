@@ -107,6 +107,14 @@ List<Warmer> studentTabWarmers(WidgetRef ref) {
         complaintsProvider(ComplaintQuery(hostelId: me.hostelId, openOnly: true)).future,
       );
     },
+    // Home below the fold again, and the pushed week view behind it: the mess menu. ONE
+    // instance serves both — the same family key — so warming it here means "Whole week" opens
+    // on data rather than on a skeleton, without a second request for the same 28 rows.
+    () async {
+      final me = await ref.read(myStudentProvider.future);
+      if (me == null) return;
+      await ref.read(weeklyMenuProvider(me.hostelId).future);
+    },
   ];
 }
 

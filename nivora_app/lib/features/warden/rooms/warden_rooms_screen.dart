@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../common/refresh.dart';
+import '../../../shared/glass/glass.dart';
 import '../widgets/warden_ui.dart';
 import 'room_sheet.dart';
 
@@ -24,8 +26,26 @@ import 'room_sheet.dart';
 /// pips as if they were addressable beds would be a lie the data cannot support.
 ///
 /// THERE IS NO MAINTENANCE STATE. public.bed_status is exactly ('free','occupied'); a bed under
-/// repair is not something this schema can express. Inventing a third colour here would mean
-/// inventing data, so the legend says two things and means them.
+/// repair is not something this schema can express. The superseded Stitch directory drew a
+/// MAINTENANCE figure on its summary card and an "Under Repair" bed row underneath; both are
+/// omitted here rather than drawn as a zero, because a zero would read as "nothing is broken"
+/// and that is a claim the database cannot make. The summary and the pips name two states and
+/// mean them.
+///
+/// THE LEGEND IS GONE AND THE SUMMARY REPLACED IT. The hero card labels each figure with its
+/// own dot in the very colours the pips below are painted, so the figures ARE the key. A
+/// separate legend strip repeated the same two swatches a centimetre lower.
+///
+/// ── ON THE FIGMA FRAME FOR THIS SCREEN ───────────────────────────────────────────────────
+///
+/// `screen-warden-room-management` is node 4:821. It could not be read while this restyle was
+/// made — the Figma MCP account hit its plan's tool-call ceiling after `screen-warden-dashboard`
+/// (4:640) and `screen-warden-students-list` (4:723). So this screen is built from the shared
+/// language those two DO pin down and the file's own tokens: the 56dp header with its brand
+/// dot, uppercase section headings, the card fill behind a hairline at the 8 corner, the 4px
+/// state badge, and 16/700 cream card titles. Anything the frame specifies beyond that —
+/// most likely a floor filter across the top, since 4:660 puts one on the dashboard — is NOT
+/// implemented here and should be checked against 4:821 by whoever next has quota.
 class WardenRoomsScreen extends ConsumerWidget {
   const WardenRoomsScreen({super.key});
 
@@ -34,7 +54,7 @@ class WardenRoomsScreen extends ConsumerWidget {
     final hostelId = ref.watch(currentHostelIdProvider);
     if (hostelId == null) {
       return const WardenScreen(
-        title: 'Rooms',
+        title: 'Rooms & beds',
         child: EmptyState(
           icon: Icons.apartment_rounded,
           title: 'No hostel on this account',
@@ -44,22 +64,30 @@ class WardenRoomsScreen extends ConsumerWidget {
     }
 
     final occupancy = ref.watch(roomOccupancyProvider(hostelId));
-    final rooms = occupancy.value;
-    final beds = rooms?.fold<int>(0, (sum, r) => sum + r.capacity) ?? 0;
-    final taken = rooms?.fold<int>(0, (sum, r) => sum + r.occupied) ?? 0;
 
     return WardenScreen(
-      title: 'Rooms',
-      // Counted from the very rows drawn below, so the heading can never disagree with the grid.
-      subtitle: rooms == null ? null : '$taken of $beds beds occupied · ${beds - taken} free',
+      // The building's figures used to be a sentence in this bar. They are now the mockup's
+      // hero card at the top of the grid (_BuildingSummary) — same fold over the same list, so
+      // the summary still cannot disagree with the tiles beneath it.
+      title: 'Rooms & beds',
       child: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(roomOccupancyProvider(hostelId)),
+        // The grid is the one screen a warden pulls standing in a stairwell, which is also
+        // where the signal goes. Bounded and spoken — see features/common/refresh.dart.
+        onRefresh: () {
+          ref.invalidate(roomOccupancyProvider(hostelId));
+          return settleRefresh(context, () => ref.read(roomOccupancyProvider(hostelId).future));
+        },
         child: AsyncSection<List<RoomOccupancy>>(
           value: occupancy,
           onRetry: () => ref.invalidate(roomOccupancyProvider(hostelId)),
           builder: (list) {
             if (list.isEmpty) {
               return ListView(
+                // Named rather than inherited from ScrollView's `primary` inference, which
+                // holds only while this list has no controller of its own. A hostel showing
+                // no rooms is precisely when a warden pulls, so the gesture must not depend
+                // on a default nothing in this file mentions.
+                physics: const AlwaysScrollableScrollPhysics(),
                 children: const [
                   EmptyState(
                     icon: Icons.meeting_room_outlined,
@@ -105,8 +133,12 @@ class _FloorList extends StatelessWidget {
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.xxxl),
+          // Same reason as the empty state above: a small building fits on one screen, and
+          // content that fits over-scrolls only because a controller-less vertical list is
+          // `primary`. Stated, so adding a ScrollController here cannot silently kill the pull.
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            const _Legend(),
+            _BuildingSummary(rooms: rooms),
             for (final entry in floors.entries) ...[
               SectionLabel(
                 label: 'Floor ${entry.key}',
@@ -131,6 +163,92 @@ class _FloorList extends StatelessWidget {
   }
 }
 
+/// The building in four figures — rooms-beds-directory.png's hero card.
+///
+/// The mockup runs TOTAL BEDS / OCCUPIED / FREE / MAINTENANCE as a two-by-two of `label-caps`
+/// eyebrows over `headline-lg` figures, each eyebrow marked with its state's dot, and it is the
+/// first thing on the screen. Three of those four are figures this app has.
+///
+/// THE FOURTH IS NOT BUILT AND IS NOT FAKED. public.bed_status is exactly ('free','occupied');
+/// a bed under repair is not a state this schema can hold, so the MAINTENANCE cell is absent
+/// rather than drawn as a zero. A zero would read as "nothing is broken", which is a claim the
+/// database cannot make.
+///
+/// Every figure is folded from the very list the grid below is drawing, so the card and the
+/// tiles cannot drift apart.
+class _BuildingSummary extends StatelessWidget {
+  const _BuildingSummary({required this.rooms});
+  final List<RoomOccupancy> rooms;
+
+  @override
+  Widget build(BuildContext context) {
+    final beds = rooms.fold<int>(0, (sum, r) => sum + r.capacity);
+    final taken = rooms.fold<int>(0, (sum, r) => sum + r.occupied);
+
+    return GlassCard(
+      padding: const EdgeInsets.all(Space.md),
+      semanticLabel: '$beds beds, $taken occupied, ${beds - taken} free',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(child: _Figure(label: 'Total beds', value: '$beds')),
+              Expanded(
+                child: _Figure(
+                  label: 'Occupied',
+                  value: '$taken',
+                  tone: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Space.md),
+          Row(
+            children: [
+              Expanded(
+                child: _Figure(
+                  label: 'Free',
+                  value: '${beds - taken}',
+                  tone: NivoraColors.success,
+                ),
+              ),
+              Expanded(child: _Figure(label: 'Rooms', value: '${rooms.length}')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One cell of the summary: a dotted `label-caps` eyebrow over a `headline-lg` figure.
+class _Figure extends StatelessWidget {
+  const _Figure({required this.label, required this.value, this.tone});
+  final String label;
+  final String value;
+  final Color? tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final accent = tone == null ? null : context.tones.resolve(tone!);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CapsLabel(label, tone: accent, dot: accent != null),
+        const SizedBox(height: Space.xxs),
+        Text(
+          value,
+          style: t.textTheme.headlineMedium?.copyWith(color: accent),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+}
+
 class _FloorSummary extends StatelessWidget {
   const _FloorSummary({required this.rooms});
   final List<RoomOccupancy> rooms;
@@ -138,16 +256,21 @@ class _FloorSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final free = rooms.fold<int>(0, (sum, r) => sum + r.free);
-    return Text(
+    return CapsLabel(
       free == 0 ? 'full' : '$free free',
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: free == 0 ? null : context.tones.success,
-          ),
+      tone: free == 0 ? null : NivoraColors.success,
+      dot: free != 0,
     );
   }
 }
 
 /// One room. Big enough to hit without aiming: the whole tile is the target.
+///
+/// rooms-beds-directory.png heads each room card with the room number in `primary` and a
+/// `label-caps` bed count on the right; that pairing is what this tile borrows. The pips stay,
+/// because the mockup's per-bed rows need a bed-to-person mapping the grid's RPC does not
+/// return — see the note on [WardenRoomsScreen]. Tapping through to the room sheet is where
+/// that mapping exists.
 class _RoomTile extends StatelessWidget {
   const _RoomTile({required this.room});
   final RoomOccupancy room;
@@ -166,14 +289,16 @@ class _RoomTile extends StatelessWidget {
       label: 'Room ${room.roomNumber}, ${room.occupied} of ${room.capacity} beds occupied',
       child: Material(
         color: t.colorScheme.surface,
-        borderRadius: Radii.rCard,
+        borderRadius: Radii.rControl,
         child: InkWell(
-          borderRadius: Radii.rCard,
+          borderRadius: Radii.rControl,
           onTap: () => showRoomSheet(
             context,
             roomId: room.roomId,
             roomNumber: room.roomNumber,
             floorNumber: room.floorNumber,
+            capacity: room.capacity,
+            occupied: room.occupied,
           ),
           child: Container(
             // Scaled with its own text. A fixed 116 was sized against 1.0x type; at 1.4x the
@@ -181,7 +306,9 @@ class _RoomTile extends StatelessWidget {
             height: MediaQuery.textScalerOf(context).scale(_tileHeight),
             padding: const EdgeInsets.all(Space.sm),
             decoration: BoxDecoration(
-              borderRadius: Radii.rCard,
+              // A grid tile is one of the file's SMALL cards, so it takes the 8 corner its
+              // list rows take rather than a full card's 12.
+              borderRadius: Radii.rControl,
               border: Border.all(
                 // A room with space says so before you read it.
                 color: full
@@ -194,11 +321,24 @@ class _RoomTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  room.roomNumber,
-                  style: t.textTheme.titleLarge,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        room.roomNumber,
+                        // Cream at 16/700, which is what every card title in the Figma file
+                        // is. It used to be 20/700 in the gold: that is the accent this design
+                        // spends on ONE thing per screen, and twelve gold room numbers in a
+                        // grid leave the free-bed count — the answer the screen exists to
+                        // give — with nothing louder than itself.
+                        style: t.textTheme.titleMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    // `2 BEDS`, exactly as the mockup labels each room card.
+                    CapsLabel('${room.capacity} beds'),
+                  ],
                 ),
                 _BedPips(capacity: room.capacity, occupied: room.occupied),
                 Text(
@@ -260,54 +400,6 @@ class _BedPips extends StatelessWidget {
           ),
         if (capacity > _max)
           Text('+${capacity - _max}', style: t.textTheme.labelSmall),
-      ],
-    );
-  }
-}
-
-class _Legend extends StatelessWidget {
-  const _Legend();
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return Row(
-      children: [
-        _LegendItem(
-          label: 'Occupied',
-          colour: t.colorScheme.primary,
-          filled: true,
-        ),
-        const SizedBox(width: Space.md),
-        _LegendItem(label: 'Free', colour: context.tones.success, filled: false),
-      ],
-    );
-  }
-}
-
-class _LegendItem extends StatelessWidget {
-  const _LegendItem({required this.label, required this.colour, required this.filled});
-  final String label;
-  final Color colour;
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: _BedPips._pip,
-          height: _BedPips._pip,
-          decoration: BoxDecoration(
-            color: filled ? colour : context.tones.chipFill(colour),
-            borderRadius: Radii.rTiny,
-            border: filled ? null : Border.all(color: colour, width: Strokes.hairline),
-          ),
-        ),
-        const SizedBox(width: Space.xs),
-        Text(label, style: t.textTheme.bodySmall),
       ],
     );
   }

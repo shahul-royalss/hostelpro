@@ -119,16 +119,52 @@ List<ActivityItem> _activity() => [
       ),
     ];
 
+List<RecentPayment> _payments() => [
+      RecentPayment(
+        id: 'fp-1',
+        studentId: 'st-1',
+        fullName: 'Rohan Deshmukh',
+        roomNumber: '101',
+        bedNumber: 2,
+        periodMonth: _period,
+        amountDue: 6200,
+        amountPaid: 6200,
+        status: FeeStatus.paid,
+        paidOn: DateTime(2026, 8, 24),
+        mode: PaymentMode.cash,
+        recordedBy: 'u-w1',
+        recordedByName: 'Priya Nair',
+        recordedByRole: 'warden',
+        recordedAt: DateTime.utc(2026, 8, 24, 11, 30),
+      ),
+    ];
+
+/// The Payments tab's one page, delayed and counted like every other stub here.
+class _RecentPayments extends RecentPaymentsNotifier {
+  _RecentPayments(super.hostelId);
+
+  @override
+  Future<PagedResult<RecentPayment>> fetchPage(int page) {
+    _paymentsFetches += 1;
+    return Future<PagedResult<RecentPayment>>.delayed(
+      _lag,
+      () => PagedResult(items: _payments(), page: 0, pageSize: 20, hasMore: false),
+    );
+  }
+}
+
 /// Fetch counters, reset per test. A revisit that stays at the old count is the proof that the
 /// held value — not a refetch — is what rendered.
 final _statsFetches = <String, int>{};
 int _staffFetches = 0;
+int _paymentsFetches = 0;
 int _financeFetches = 0;
 int _hostelsFetches = 0;
 
 Future<void> _pumpShell(WidgetTester tester) async {
   _statsFetches.clear();
   _staffFetches = 0;
+  _paymentsFetches = 0;
   _financeFetches = 0;
   _hostelsFetches = 0;
 
@@ -157,6 +193,7 @@ Future<void> _pumpShell(WidgetTester tester) async {
           _financeFetches += 1;
           return Future<List<FinanceDay>>.delayed(_lag, _series);
         }),
+        recentPaymentsProvider.overrideWith2(_RecentPayments.new),
         ownerStaffProvider.overrideWith((ref, hostelId) {
           holdForSession(ref);
           _staffFetches += 1;
@@ -207,6 +244,7 @@ void main() {
     // Dashboard's fold, so the warmer is the only thing that fetched it at all.
     expect(_statsFetches, {_sunriseId: 1, _lakeviewId: 1});
     expect(_staffFetches, 1);
+    expect(_paymentsFetches, 1);
     expect(_financeFetches, 1);
     expect(_hostelsFetches, 1);
 
@@ -217,16 +255,22 @@ void main() {
     expect(find.text('Sunrise Residency'), findsWidgets);
     expect(find.text('Lakeview'), findsWidgets);
 
-    // The unbuilt tabs say so immediately — a placeholder is not a loading state.
+    // Students is a real screen now, and it is warmed like the rest: the roster's first page
+    // is already in hand, so the tap lands on residents rather than on a skeleton. The
+    // placeholder this used to assert is gone from the owner's shell entirely.
     await tester.tap(find.text('Students'));
     await tester.pump();
     _expectNoLoadingUi();
-    expect(find.textContaining('not built yet'), findsOneWidget);
+    expect(find.textContaining('not built yet'), findsNothing);
 
+    // Payments: "who paid" is warmed like every other tab, so the first frame after the tap
+    // already carries the resident, the figure and the name of the warden who took it.
     await tester.tap(find.text('Payments'));
     await tester.pump();
     _expectNoLoadingUi();
-    expect(find.textContaining('not built yet'), findsOneWidget);
+    expect(find.text('Rohan Deshmukh'), findsOneWidget);
+    expect(find.text('₹6,200'), findsOneWidget);
+    expect(find.text('Priya Nair (Warden)'), findsOneWidget);
 
     // More: the staff roster is already there.
     await tester.tap(find.text('More'));
@@ -246,6 +290,7 @@ void main() {
     _expectNoLoadingUi();
     expect(_statsFetches, {_sunriseId: 1, _lakeviewId: 1});
     expect(_staffFetches, 1);
+    expect(_paymentsFetches, 1);
     expect(_financeFetches, 1);
     expect(_hostelsFetches, 1);
   });

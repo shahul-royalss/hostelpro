@@ -7,6 +7,7 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/providers.dart';
 import '../../shared/glass/glass.dart';
+import '../common/refresh.dart';
 import 'data/sa_models.dart';
 import 'data/sa_providers.dart';
 import 'widgets/sa_ui.dart';
@@ -167,6 +168,11 @@ class _AlertList extends ConsumerWidget {
 
             SaEmptyVerdict.refused => const SaNotPermitted(),
 
+            // NOT SaNotPermitted, and not SaUnverified's "check again" either. The read
+            // that would have explained this emptiness died with the access token, so the
+            // only honest thing on screen is the way to get a live one.
+            SaEmptyVerdict.credentialDead => const SaSessionEnded(),
+
             SaEmptyVerdict.confirmed => SaEmpty(
                 icon: Icons.shield_outlined,
                 title: filter.openOnly ? 'Nothing outstanding' : 'No alerts on record',
@@ -192,9 +198,10 @@ class _AlertList extends ConsumerWidget {
       });
 
     return RefreshIndicator(
-      onRefresh: () async {
+      onRefresh: () {
         ref.invalidate(saAlertsProvider(filter.openOnly));
-        await ref.read(saAlertsProvider(filter.openOnly).future);
+        return settleRefresh(
+            context, () => ref.read(saAlertsProvider(filter.openOnly).future));
       },
       child: ListView.separated(
         padding: EdgeInsets.fromLTRB(
@@ -228,8 +235,17 @@ class _SaAlertCardState extends ConsumerState<SaAlertCard> {
   bool _expanded = false;
 
   Future<void> _acknowledge() async {
+    if (_busy) return;
     final userId = ref.read(sessionProvider)?.userId;
-    if (userId == null || _busy) return;
+    // A MISSING SESSION USED TO RETURN IN SILENCE. The stamp on the row is `acknowledged_by`,
+    // so there is genuinely nothing to write without a signed-in user — but a button that
+    // reports nothing at all is the bug class this release exists to remove, and this is the
+    // exact shape of it: tap, nothing, no spinner, no sentence. It happens for real when the
+    // token dies while the console is open.
+    if (userId == null) {
+      _say('Your sign-in has ended, so this cannot be recorded against you. Sign in again.');
+      return;
+    }
 
     setState(() => _busy = true);
     final failure = await ref
@@ -242,10 +258,20 @@ class _SaAlertCardState extends ConsumerState<SaAlertCard> {
       // A refusal here is not hypothetical: ack_security_alert() raises 42501 for anybody who
       // is neither the Super Admin nor the owner of the alert's hostel. Said in the failure's
       // own words rather than as "something went wrong".
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(failure.message)),
-      );
+      _say(failure.message);
     }
+  }
+
+  void _say(String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        duration: Motion.readMessage,
+      ));
   }
 
   @override

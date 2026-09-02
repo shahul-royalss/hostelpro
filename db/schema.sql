@@ -10,6 +10,25 @@ create extension if not exists "pgcrypto";
 -- Private helper schema (functions used by RLS + triggers)
 create schema if not exists app;
 grant usage on schema app to authenticated, anon, service_role;
+-- ── "TODAY" IS THE HOSTEL'S TODAY, NEVER THE SERVER'S ────────────────────────
+-- This instance runs TimeZone = UTC, so `current_date` is 5h30m behind the building. Measured
+-- 2026-09-01 02:18 IST: current_date = 2026-08-31 while the hostel's calendar said 2026-09-01,
+-- and an expense the manager had just recorded (dated from the handset clock, correctly) read
+-- expenses_today = 0 on their own home screen. Use this function wherever "today" means the day
+-- a person at the desk would name; the full argument, and the list of places deliberately left
+-- on current_date, are in db/migrations/2026-09-01-hostel-local-today.sql.
+--
+-- STABLE, not IMMUTABLE: it moves with the clock, so it is legal in a DEFAULT and in a WHERE
+-- and must never appear in an index predicate.
+create or replace function app.today() returns date
+language sql stable set search_path = public as $$
+  select (now() at time zone 'Asia/Kolkata')::date
+$$;
+grant execute on function app.today() to authenticated, service_role;
+
+-- The rest of the app.* helpers live further down, next to the RLS predicates they serve. This
+-- one is up here because public.expenses, public.revenues and public.students take a column
+-- DEFAULT on it, and a default cannot reference a function that does not exist yet.
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- ENUMS
@@ -83,6 +102,18 @@ create table if not exists public.users (
   hostel_id            uuid,                                -- null for super_admin
   status               public.user_status not null default 'active',
   must_change_password boolean not null default true,
+  -- When GoTrue accepted a confirmation LINK emailed to `email`. NULL means unproved, which is
+  -- where every account starts. NOT the same thing as auth.users.email_confirmed_at, which
+  -- every account-creation path stamps at creation so the temporary password works (the project
+  -- has "Confirm email" ON — mailer_autoconfirm=false — and GoTrue refuses a password grant to
+  -- an unconfirmed user). Only the email-verification Edge Function may write this;
+  -- app.users_update_guard refuses every other writer and clears it whenever the address
+  -- changes. See db/migrations/2026-09-01-email-link-verification.sql.
+  email_verified_at    timestamptz,
+  -- When `email` last changed. Stamped by the same guard statement that clears the line above,
+  -- and read by public.email_link_proof() as the floor under a magic-link claim — otherwise a
+  -- click that proved the OLD address could be re-read as a proof of the NEW one.
+  email_verification_reset_at timestamptz,
   created_by           uuid references public.users(id),
   created_at           timestamptz not null default now(),
   updated_at           timestamptz not null default now(),
@@ -152,7 +183,10 @@ create index if not exists rooms_floor_idx on public.rooms (floor_id);
 create table if not exists public.students (
   id                uuid primary key default gen_random_uuid(),
   hostel_id         uuid not null references public.hostels(id) on delete cascade,
-  user_id           uuid references public.users(id),
+  -- ON DELETE SET NULL, so erasing the login (auth.users → public.users) RELEASES this row
+  -- instead of being refused by it. Without it a resident's account can never be deleted, and
+  -- "erased" would leave GoTrue holding their email address. See app.erase_student().
+  user_id           uuid references public.users(id) on delete set null,
   full_name         text not null,
   phone             text not null,
   email             text,
@@ -162,12 +196,26 @@ create table if not exists public.students (
   permanent_address text,
   id_proof_type     text,
   id_proof_url      text,
-  date_of_joining   date not null default current_date,
+  date_of_joining   date not null default app.today(),
   room_id           uuid references public.rooms(id),
   bed_id            uuid,                                   -- FK added after beds
   monthly_fee       numeric(10,2) not null default 0 check (monthly_fee >= 0 and monthly_fee <= 10000000),
   status            public.student_status not null default 'active',
   vacated_at        timestamptz,
+  -- ── THE DEFERRED ERASURE (checklist §27 + DPDP §12, the owner's own words: "student data
+  -- deletion request has to sent while he is leaving hostel and that student data will be
+  -- deleted after 1 month"). Raised at check-out by wd_vacate_student(), withdrawn by
+  -- wd_cancel_student_erasure() or automatically by re-admission (app.students_erasure_guard),
+  -- carried out by app.erase_student() from the nightly retention job.
+  --
+  -- The DATE is stored rather than derived from `requested_at + 1 month`, because it is the
+  -- thing the resident is told and the thing the warden cancels; deriving it would put the
+  -- same interval in the Flutter client, the web client and here, to drift apart later.
+  erasure_requested_at timestamptz,
+  erasure_due_at       timestamptz,
+  erasure_requested_by uuid references public.users(id) on delete set null,
+  -- Non-null means this row is a TOMBSTONE: identity gone, fee ledger still hanging off the id.
+  erased_at            timestamptz,
   created_by        uuid references public.users(id),
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now(),
@@ -182,6 +230,20 @@ create unique index if not exists students_one_active_per_bed
 -- phone is the student login → must be unique among non-vacated students
 create unique index if not exists students_phone_active_key
   on public.students (phone) where status <> 'vacated';
+-- A request always has a date on it, or it is not a request.
+do $$ begin
+  alter table public.students add constraint students_erasure_pair
+    check ((erasure_requested_at is null) = (erasure_due_at is null));
+exception when duplicate_object then null; end $$;
+create index if not exists students_erasure_due_idx
+  on public.students (erasure_due_at)
+  where erasure_due_at is not null and erased_at is null;
+-- Restated for a database created before the erasure shipped: `create table if not exists`
+-- does not alter an existing one, and without SET NULL here a resident's login can never be
+-- deleted. Idempotent, so re-running this file is safe either way.
+alter table public.students drop constraint if exists students_user_id_fkey;
+alter table public.students add  constraint students_user_id_fkey
+  foreign key (user_id) references public.users(id) on delete set null;
 
 create table if not exists public.beds (
   id          uuid primary key default gen_random_uuid(),
@@ -253,7 +315,9 @@ create index if not exists complaint_events_complaint_idx on public.complaint_ev
 create table if not exists public.expenses (
   id           uuid primary key default gen_random_uuid(),
   hostel_id    uuid not null references public.hostels(id) on delete cascade,
-  date         date not null default current_date,
+  -- app.today(), not current_date: the Dart layer omits this field on purpose and lets the
+  -- column default fire (finance_repository.dart), so this default IS the money's date.
+  date         date not null default app.today(),
   category     public.expense_category not null default 'other',
   amount       numeric(12,2) not null check (amount >= 0 and amount <= 100000000),
   note         text,
@@ -268,7 +332,7 @@ create index if not exists expenses_hostel_date_idx on public.expenses (hostel_i
 create table if not exists public.revenues (
   id           uuid primary key default gen_random_uuid(),
   hostel_id    uuid not null references public.hostels(id) on delete cascade,
-  date         date not null default current_date,
+  date         date not null default app.today(),
   source       public.revenue_source not null default 'other',
   amount       numeric(12,2) not null check (amount >= 0 and amount <= 100000000),
   note         text,
@@ -395,6 +459,102 @@ create or replace function app.is_super_admin() returns boolean
 language sql stable security definer set search_path = public as $$
   select coalesce(app.user_role() = 'super_admin', false) or app.is_service_role()
 $$;
+
+-- ── EMAIL VERIFICATION ───────────────────────────────────────────────────────
+-- Who is required to prove their address is decided by the ADDRESS, not by the role.
+-- Mirrors isStudentLoginEmail() in supabase/functions/_shared/validate.ts and
+-- studentLoginDomain in nivora_app/lib/core/auth/auth_controller.dart: a resident registered
+-- without an email signs in as <digits>@student.hostelpro.local, a namespace no mail server
+-- accepts, so demanding a proof of it would be a permanent lockout rather than a policy.
+create or replace function app.email_is_reachable(p_email text) returns boolean
+language sql immutable set search_path = public as $$
+  select p_email is not null
+     and length(btrim(p_email)) > 0
+     and lower(btrim(p_email)) not like '%@student.hostelpro.local'
+$$;
+
+-- True when the account has a reachable address it has not proved. Defaults to the caller so a
+-- policy can be written `app.email_verification_owed()`. Defined for that purpose; deliberately
+-- not wired into any policy yet — today the gate is applied in the three account-creation Edge
+-- Functions, which is the one action where an unproved address becomes credentials in someone
+-- else's inbox.
+create or replace function app.email_verification_owed(p_user uuid default null) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.users u
+    where u.id = coalesce(p_user, auth.uid())
+      and u.email_verified_at is null
+      and app.email_is_reachable(u.email)
+  )
+$$;
+
+grant execute on function app.email_is_reachable(text) to authenticated, service_role;
+grant execute on function app.email_verification_owed(uuid) to authenticated, service_role;
+
+-- WHEN THE ACCOUNT HOLDER LAST OPENED A CONFIRMATION LINK WE EMAILED THEM, or NULL.
+--
+-- Since 2026-09-01 the proof is a link, not a typed code, so nothing of ours is present at the
+-- moment it is used: the user clicks in their mail app and GoTrue verifies the token. The proof
+-- is therefore READ from the facts GoTrue writes itself.
+--
+-- WHICH facts was got wrong on the first attempt, and the correction is worth stating here
+-- because the shape is not guessable. The first version read auth.mfa_amr_claims and an
+-- audit row carrying traits.provider = 'magiclink'. Measured against the owner's real click on
+-- 2026-09-02, BOTH missed and the function returned NULL for a proof that existed twice over:
+--
+--   · auth.mfa_amr_claims gains NOTHING under PKCE, which is the flow the app pins. GoTrue's
+--     /auth/v1/verify stamps an auth code and redirects; it creates no session, and an AMR
+--     claim is written only when a session is. The row is never inserted, so no string would
+--     have fixed it. Deleted.
+--   · the audit row GoTrue actually writes for a link login carries NO `traits` key at all.
+--     A password grant is the one that carries {"provider":"email"}.
+--
+-- So: auth.flow_state.auth_code_issued_at (stamped by the verify handler the instant it matched
+-- the emailed token, and naming the method outright) and auth.audit_log_entries in its real
+-- shape — a login with no provider trait, anchored to a link this project emailed within the
+-- preceding hour so that a login of some other kind is never credited.
+--
+-- The one lower bound is the last address change. Without it a user could verify their own
+-- address, repoint users.email at a stranger's, and have the old click re-read as a proof of
+-- the new address. There is deliberately NO recovery_sent_at bound: re-sending a link used to
+-- raise the floor above an already-earned proof and destroy it, so every retry erased the
+-- evidence of the last one. Full argument in
+-- db/migrations/2026-09-02-email-link-proof-pkce.sql.
+create or replace function public.email_link_proof(p_user uuid) returns timestamptz
+language sql stable security definer set search_path = '' as $$
+  with floor_at as (
+    select coalesce(pu.email_verification_reset_at, '-infinity'::timestamptz) as since
+    from public.users pu
+    where pu.id = p_user
+  )
+  select greatest(
+    (select max(f.auth_code_issued_at)
+       from auth.flow_state f
+      where f.user_id = p_user
+        and f.authentication_method in ('magiclink', 'otp', 'recovery')
+        and f.auth_code_issued_at is not null
+        and f.auth_code_issued_at >= (select since from floor_at)),
+    (select max(a.created_at)
+       from auth.audit_log_entries a
+      where a.payload ->> 'actor_id' = p_user::text
+        and a.payload ->> 'action' = 'login'
+        and coalesce(a.payload -> 'traits' ->> 'provider', 'link') in ('link', 'magiclink', 'otp')
+        and a.created_at >= (select since from floor_at)
+        and exists (
+          select 1 from auth.audit_log_entries r
+           where r.payload ->> 'actor_id' = p_user::text
+             and r.payload ->> 'action' in ('user_recovery_requested', 'user_confirmation_requested')
+             and r.created_at <= a.created_at
+             and r.created_at >= a.created_at - interval '1 hour'))
+  )
+  where exists (select 1 from floor_at);
+$$;
+
+-- The email-verification Edge Function is the only caller. An authenticated user must not be
+-- able to ask this about anybody — the answer is only meaningful next to a write they are not
+-- allowed to make.
+revoke all on function public.email_link_proof(uuid) from public, anon, authenticated;
+grant execute on function public.email_link_proof(uuid) to service_role;
 
 create or replace function app.owns_hostel(p_hostel_id uuid) returns boolean
 language sql stable security definer set search_path = public as $$
@@ -556,6 +716,32 @@ language plpgsql security definer set search_path = public as $$
 declare
   v_manages_target boolean;
 begin
+  -- ── EMAIL VERIFICATION IS NOT SELF-SERVICEABLE ─────────────────────────────
+  -- users_update admits `id = auth.uid()` and the tail of this function lets the holder edit
+  -- full_name, phone, email and must_change_password. Without these two rules,
+  -- `update users set email_verified_at = now()` through PostgREST would be a one-line bypass
+  -- of the whole feature, and changing the address afterwards would carry a proof earned for
+  -- one address onto another.
+  --
+  -- Changing the address invalidates the proof. This fires for EVERY writer including the
+  -- service role, which is what makes scripts/rotate-super-admin.mjs safe without that script
+  -- having to remember.
+  if new.email is distinct from old.email then
+    new.email_verified_at := null;
+    -- Stamped in the SAME statement, so the two can never disagree. It is the floor that stops
+    -- public.email_link_proof() reading the click that proved the OLD address as a proof of the
+    -- new one — see db/migrations/2026-09-01-email-link-verification.sql.
+    new.email_verification_reset_at := now();
+
+  -- Otherwise the stamp moves only when the verification endpoint moves it. This sits ABOVE
+  -- the super-admin early return on purpose: the service role reaches here only from
+  -- email-verification, which has just read GoTrue's own record of the link being consumed,
+  -- whereas a human editing a row through PostgREST has read nothing.
+  elsif new.email_verified_at is distinct from old.email_verified_at and not app.is_service_role() then
+    raise exception 'Email verification cannot be granted by hand — it is earned by opening the link Nivora emails to the address.'
+      using errcode = '42501';
+  end if;
+
   -- Super Admin (and the service role, used by account-management server actions)
   -- may change anything; those paths do their own authorization first.
   if app.is_super_admin() then
@@ -744,8 +930,10 @@ begin
   else
     new.status := 'partial';
   end if;
+  -- app.today(), not current_date: a payment taken at the desk at 01:00 IST was taken today,
+  -- and dating it yesterday puts it in the wrong month for anyone paying on the 1st.
   if new.amount_paid > 0 and new.paid_on is null then
-    new.paid_on := current_date;
+    new.paid_on := app.today();
   end if;
   return new;
 end $$;
@@ -786,6 +974,23 @@ returns void
 language plpgsql security definer set search_path = public as $$
 declare r record;
 begin
+  -- AUTHORIZATION. This is SECURITY DEFINER and writes notifications, subscription statuses and
+  -- hostel read-only flags, so it must not be callable by just anyone holding a JWT. The comment
+  -- above still says "callable by any authenticated user by design" — that WAS the design and it
+  -- is no longer. The guard lived only in an untracked migration file, which meant a fresh
+  -- `schema.sql` apply would have recreated this function WIDE OPEN on a new environment.
+  --
+  -- The coalesce is load-bearing: app.user_role() is NULL for a caller with no active,
+  -- non-deleted users row, and `false or NULL` = NULL, which would slip past `if not (...)`
+  -- and fail OPEN. Fail closed, as app.mfa_satisfied() does with a missing aal claim.
+  if not coalesce(
+    app.is_service_role()
+    or app.user_role() = any (array['super_admin', 'owner']::public.user_role[]),
+    false
+  ) then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+
   for r in
     select s.id, s.hostel_id, s.owner_user_id, h.name, s.end_date
     from public.subscriptions s join public.hostels h on h.id = s.hostel_id
@@ -1185,12 +1390,14 @@ begin
   return v_student_id;
 end $$;
 
--- Warden: vacate (checkout) a student → frees bed, deactivates login
+-- Warden: vacate (checkout) a student → frees bed, deactivates login, RAISES THE ERASURE
+-- REQUEST. Signature unchanged, so every existing caller keeps working.
 create or replace function public.wd_vacate_student(p_student_id uuid) returns void
 language plpgsql security definer set search_path = public as $$
-declare v_hostel uuid; v_user uuid;
+declare v_hostel uuid; v_user uuid; v_erased timestamptz; v_actor uuid := auth.uid();
 begin
-  select hostel_id, user_id into v_hostel, v_user from public.students where id = p_student_id;
+  select hostel_id, user_id, erased_at into v_hostel, v_user, v_erased
+    from public.students where id = p_student_id;
   if v_hostel is null then raise exception 'Student not found.' using errcode = 'P0001'; end if;
   if not app.has_role_in(v_hostel, 'warden', 'owner') then
     raise exception 'Not allowed.' using errcode = '42501';
@@ -1198,11 +1405,102 @@ begin
   if not app.hostel_writable(v_hostel) then
     raise exception 'Subscription expired — hostel is read-only.' using errcode = '42501';
   end if;
-  update public.students set status = 'vacated' where id = p_student_id;
+
+  -- ONE UPDATE. app.students_bed_guard fires once, and the check-out and the erasure request
+  -- cannot come apart if the connection drops between them. coalesce() stops a second
+  -- check-out resetting a clock that is already running.
+  update public.students
+     set status               = 'vacated',
+         erasure_requested_at = case when v_erased is null
+                                     then coalesce(erasure_requested_at, now())
+                                     else erasure_requested_at end,
+         erasure_due_at       = case when v_erased is null
+                                     then coalesce(erasure_due_at, now() + interval '1 month')
+                                     else erasure_due_at end,
+         erasure_requested_by = case when v_erased is null
+                                     then coalesce(erasure_requested_by, v_actor)
+                                     else erasure_requested_by end
+   where id = p_student_id;
+
   if v_user is not null then
     update public.users set status = 'inactive' where id = v_user;
   end if;
 end $$;
+
+-- Warden/owner: withdraw a pending erasure. The returning-resident path.
+--
+-- NOT gated on app.hostel_writable(). Every other write in this schema stops when a
+-- subscription lapses, and that is right for writes that CREATE an obligation — this one
+-- REMOVES one. A hostel that cannot pay its bill must still be able to stop a resident's
+-- record being destroyed; the alternative is data loss as a billing consequence.
+create or replace function public.wd_cancel_student_erasure(p_student_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_hostel uuid; v_requested timestamptz; v_erased timestamptz;
+begin
+  select hostel_id, erasure_requested_at, erased_at
+    into v_hostel, v_requested, v_erased
+    from public.students where id = p_student_id;
+  if v_hostel is null then raise exception 'Student not found.' using errcode = 'P0001'; end if;
+  if not app.has_role_in(v_hostel, 'warden', 'owner') then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+  if v_erased is not null then
+    raise exception 'This record has already been erased. It cannot be restored.' using errcode = 'P0001';
+  end if;
+  if v_requested is null then
+    raise exception 'No deletion is scheduled for this resident.' using errcode = 'P0001';
+  end if;
+
+  update public.students
+     set erasure_requested_at = null, erasure_due_at = null, erasure_requested_by = null
+   where id = p_student_id;
+
+  insert into public.audit_log (actor_user_id, actor_role, action, target_type, target_id, hostel_id, meta)
+  values (auth.uid(), app.user_role(), 'student.erasure_cancelled', 'student',
+          p_student_id::text, v_hostel, jsonb_build_object('was_requested_at', v_requested));
+end $$;
+
+-- Warden/owner: raise the request by hand — for a resident who left before this shipped, or
+-- one whose request was cancelled and who has now really gone. Same one-month deferral.
+create or replace function public.wd_request_student_erasure(p_student_id uuid) returns timestamptz
+language plpgsql security definer set search_path = public as $$
+declare v_hostel uuid; v_status public.student_status; v_erased timestamptz; v_due timestamptz;
+begin
+  select hostel_id, status, erased_at into v_hostel, v_status, v_erased
+    from public.students where id = p_student_id;
+  if v_hostel is null then raise exception 'Student not found.' using errcode = 'P0001'; end if;
+  if not app.has_role_in(v_hostel, 'warden', 'owner') then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+  if not app.hostel_writable(v_hostel) then
+    raise exception 'Subscription expired — hostel is read-only.' using errcode = '42501';
+  end if;
+  if v_erased is not null then
+    raise exception 'This record has already been erased.' using errcode = 'P0001';
+  end if;
+  if v_status <> 'vacated' then
+    raise exception 'Check this resident out first — a deletion cannot be scheduled for someone still in a bed.'
+      using errcode = 'P0001';
+  end if;
+
+  update public.students
+     set erasure_requested_at = coalesce(erasure_requested_at, now()),
+         erasure_due_at       = coalesce(erasure_due_at, now() + interval '1 month'),
+         erasure_requested_by = coalesce(erasure_requested_by, auth.uid())
+   where id = p_student_id
+  returning erasure_due_at into v_due;
+
+  insert into public.audit_log (actor_user_id, actor_role, action, target_type, target_id, hostel_id, meta)
+  values (auth.uid(), app.user_role(), 'student.erasure_requested', 'student',
+          p_student_id::text, v_hostel, jsonb_build_object('due_at', v_due));
+
+  return v_due;
+end $$;
+
+revoke execute on function public.wd_cancel_student_erasure(uuid)  from public, anon;
+revoke execute on function public.wd_request_student_erasure(uuid) from public, anon;
+grant  execute on function public.wd_cancel_student_erasure(uuid)  to authenticated, service_role;
+grant  execute on function public.wd_request_student_erasure(uuid) to authenticated, service_role;
 
 -- Warden: record / top-up a fee payment for a period (upsert)
 -- Warden records / tops up a fee payment. Hardened: no NaN (Postgres numeric NaN compares
@@ -1210,10 +1508,12 @@ end $$;
 -- checked-out students, sane upper bound, no future-dating.
 create or replace function public.wd_record_payment(
   p_student_id uuid, p_period_month text, p_amount numeric, p_mode public.payment_mode,
-  p_paid_on date default current_date, p_notes text default null
+  -- Defaulted in the body rather than here, so the fallback is the HOSTEL's today. See app.today().
+  p_paid_on date default null, p_notes text default null
 ) returns public.fee_payments
 language plpgsql security definer set search_path = public as $$
 declare v_hostel uuid; v_fee numeric; v_status public.student_status; v_row public.fee_payments;
+        v_paid_on date := coalesce(p_paid_on, app.today());
 begin
   select hostel_id, monthly_fee, status into v_hostel, v_fee, v_status
     from public.students where id = p_student_id;
@@ -1232,12 +1532,15 @@ begin
   end if;
   if p_amount <= 0 then raise exception 'Amount must be greater than zero.' using errcode = 'P0001'; end if;
   if p_amount > 10000000 then raise exception 'That amount is too large.' using errcode = 'P0001'; end if;
-  if p_paid_on > current_date + 1 then
+  -- One day of slack, against app.today(): the guard exists to refuse a mis-keyed year, not to
+  -- police a handset's clock, and a phone an hour fast must not be told its cashier is
+  -- time-travelling.
+  if v_paid_on > app.today() + 1 then
     raise exception 'Payment date cannot be in the future.' using errcode = 'P0001';
   end if;
 
   insert into public.fee_payments (hostel_id, student_id, period_month, amount_due, amount_paid, paid_on, mode, notes, recorded_by)
-  values (v_hostel, p_student_id, p_period_month, v_fee, p_amount, p_paid_on, p_mode, p_notes, auth.uid())
+  values (v_hostel, p_student_id, p_period_month, v_fee, p_amount, v_paid_on, p_mode, p_notes, auth.uid())
   on conflict (student_id, period_month) do update
     set amount_paid = public.fee_payments.amount_paid + excluded.amount_paid,
         paid_on = excluded.paid_on, mode = excluded.mode,
@@ -1246,6 +1549,162 @@ begin
   returning * into v_row;
   return v_row;
 end $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PAY AT THE WARDEN'S DESK
+--
+-- Online payment is out of v1: the razorpay-order / razorpay-webhook functions stay deployed
+-- but unconfigured, so the money path never worked. Rent is handed over at the desk and a
+-- warden records it. That makes two things the schema did not have:
+--
+--   wd_correct_payment   wd_record_payment ADDS (it is an upsert with `amount_paid + excluded`),
+--                        which is right for a top-up and useless for a typo. A warden who keys
+--                        7000 instead of 700 currently has no way back — there is no client
+--                        path that can lower a figure, and a second entry only makes it worse.
+--                        This SETS the month's received total to an exact figure.
+--
+--   rpc_recent_payments  "Who paid?" — the owner's question. fee_payments carries recorded_by
+--                        but no name, and users is not readable to every role that needs the
+--                        answer, so the join is done here under a definer and gated to the
+--                        people who may see a hostel's money.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Warden / owner: SET what a month has actually received. Not a payment — a correction.
+--
+-- WHY THIS IS NOT wd_record_payment WITH A NEGATIVE AMOUNT. A negative payment is a lie about
+-- what happened at the desk, it would have to be exempted from the `amount > 0` rule that keeps
+-- the rest of the ledger honest, and it leaves the resident's own history showing a refund that
+-- never took place. A correction says what the month's total should have been all along, and
+-- says in the audit log what it used to be.
+--
+-- A ROW MUST ALREADY EXIST. Correcting a month nobody has recorded anything for is not a
+-- correction; wd_record_payment is the way a month gets its first figure.
+--
+-- ZERO IS ALLOWED, and it is the whole point: it undoes a payment recorded against the wrong
+-- resident. paid_on and mode go with it — a month that received nothing was not paid on a day
+-- by a method.
+--
+-- A CHECKED-OUT RESIDENT CAN STILL BE CORRECTED, unlike wd_record_payment which refuses them.
+-- Refusing here would leave a wrong figure on the ledger of the one person who can no longer
+-- walk up to the desk about it.
+create or replace function public.wd_correct_payment(
+  p_student_id uuid, p_period_month text, p_amount_paid numeric,
+  p_mode public.payment_mode default null, p_paid_on date default null, p_notes text default null
+) returns public.fee_payments
+language plpgsql security definer set search_path = public as $$
+declare v_hostel uuid; v_old public.fee_payments; v_row public.fee_payments;
+begin
+  select hostel_id into v_hostel from public.students where id = p_student_id;
+  if v_hostel is null then raise exception 'Student not found.' using errcode = 'P0001'; end if;
+  if not app.has_role_in(v_hostel, 'warden', 'owner') then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+  if not app.hostel_writable(v_hostel) then
+    raise exception 'Subscription expired — hostel is read-only.' using errcode = '42501';
+  end if;
+
+  select * into v_old from public.fee_payments
+   where student_id = p_student_id and period_month = p_period_month;
+  if v_old.id is null then
+    raise exception 'There is nothing recorded for that month to correct.' using errcode = 'P0001';
+  end if;
+
+  -- Postgres numeric NaN compares EQUAL to itself, so the IEEE `x <> x` idiom never fires here.
+  if p_amount_paid is null or p_amount_paid = 'NaN'::numeric then
+    raise exception 'Enter a valid amount.' using errcode = 'P0001';
+  end if;
+  if p_amount_paid < 0 then
+    raise exception 'A corrected total cannot be negative.' using errcode = 'P0001';
+  end if;
+  if p_amount_paid > 10000000 then
+    raise exception 'That amount is too large.' using errcode = 'P0001';
+  end if;
+  if p_paid_on is not null and p_paid_on > current_date + 1 then
+    raise exception 'Payment date cannot be in the future.' using errcode = 'P0001';
+  end if;
+
+  update public.fee_payments set
+      amount_paid = p_amount_paid,
+      -- Zero received is not a payment: it has no date and no method. Above zero, an omitted
+      -- date or mode means "leave what is there" — correcting the AMOUNT should not silently
+      -- rewrite when the money came in.
+      paid_on     = case when p_amount_paid = 0 then null else coalesce(p_paid_on, v_old.paid_on) end,
+      mode        = case when p_amount_paid = 0 then null else coalesce(p_mode, v_old.mode) end,
+      notes       = coalesce(p_notes, v_old.notes),
+      recorded_by = auth.uid()
+   where id = v_old.id
+  returning * into v_row;
+
+  -- Money moving DOWN on a ledger is the one edit worth being able to reconstruct later.
+  -- audit_event swallows its own failures, so this cannot break the correction.
+  perform public.audit_event(
+    'warden.fee.corrected', 'fee_payment', v_row.id::text, v_hostel,
+    jsonb_build_object(
+      'student_id', p_student_id,
+      'period_month', p_period_month,
+      'amount_paid_before', v_old.amount_paid,
+      'amount_paid_after', v_row.amount_paid,
+      'amount_due', v_row.amount_due
+    )
+  );
+
+  return v_row;
+end $$;
+
+-- Owner / warden: who paid, most recently recorded first.
+--
+-- THE ANSWER TO "WHO PAID", AND THE ONLY PLACE THE RECORDER HAS A NAME. fee_payments.recorded_by
+-- is a uuid; public.users holds the name, and a warden cannot read the owner's users row (an
+-- owner's users.hostel_id is not the warden's hostel), so the join has to happen under a definer
+-- or half the rows would print a blank where a person belongs.
+--
+-- ONLY ROWS THAT RECEIVED SOMETHING. A fee_payments row can exist at amount_paid = 0 — a month
+-- opened and then corrected back to nothing. That is not a payment and does not belong on a
+-- list of payments.
+--
+-- NOT PAGINATED HERE, PAGINATED BY PostgREST. `.range()` is applied to the function's result
+-- set, exactly as rpc_fee_ledger is paged, so the client gets a page without the function
+-- growing a limit/offset contract of its own.
+--
+-- GATED WITH AN EXCEPTION, NOT A PREDICATE. A hostel that has genuinely taken no money yet must
+-- read as empty, and a caller who may not see the money must read as refused. A `where` clause
+-- would make those the same zero rows.
+create or replace function public.rpc_recent_payments(p_hostel_id uuid)
+returns table(
+  id uuid, student_id uuid, full_name text, room_number text, bed_number int,
+  period_month text, amount_due numeric, amount_paid numeric, status public.fee_status,
+  paid_on date, mode public.payment_mode, notes text,
+  recorded_by uuid, recorded_by_name text, recorded_by_role public.user_role,
+  recorded_at timestamptz
+)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not app.has_role_in(p_hostel_id, 'warden', 'owner') then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+
+  return query
+    select fp.id, fp.student_id, s.full_name, r.room_number, b.bed_number,
+           fp.period_month, fp.amount_due, fp.amount_paid, fp.status,
+           fp.paid_on, fp.mode, fp.notes,
+           fp.recorded_by, u.full_name, u.role,
+           fp.updated_at
+      from public.fee_payments fp
+      join public.students s on s.id = fp.student_id
+      left join public.rooms r on r.id = s.room_id
+      left join public.beds b on b.id = s.bed_id
+      left join public.users u on u.id = fp.recorded_by
+     where fp.hostel_id = p_hostel_id
+       and fp.amount_paid > 0
+     -- updated_at is when the desk last touched the row, which is what "recent" means to an
+     -- owner. paid_on is the day the money changed hands, and it can be backdated.
+     order by fp.updated_at desc, fp.id desc;
+end $$;
+
+revoke all on function public.wd_correct_payment(uuid, text, numeric, public.payment_mode, date, text) from public, anon;
+grant execute on function public.wd_correct_payment(uuid, text, numeric, public.payment_mode, date, text) to authenticated, service_role;
+revoke all on function public.rpc_recent_payments(uuid) from public, anon;
+grant execute on function public.rpc_recent_payments(uuid) to authenticated, service_role;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- STUDENT — roommates (names + phones only; Hard rule §4.8)
@@ -1291,6 +1750,49 @@ begin
   update public.hostels set rules = left(p_rules, 20000) where id = p_hostel_id;
 end $$;
 
+-- Owner: retract a notice (soft delete).
+--
+-- NOT A PLAIN UPDATE, AND IT CANNOT BE ONE. `announcements_select` is `deleted_at is null
+-- and (...)`, and PostgreSQL applies a table's SELECT policy to the NEW row of an UPDATE — a
+-- row may not be updated out of the updater's own visibility. So setting `deleted_at` through
+-- PostgREST is refused with 42501 however permissive announcements_update is; measured against
+-- a scratch table with `with check (true)` and it is still refused. `announcements_delete` is
+-- service-role only, so a hard delete is not open to the owner either, and before this function
+-- existed an owner could post a notice and never take it back. See
+-- db/migrations/2026-09-02-announcement-soft-delete.sql for the measurement.
+--
+-- Idempotent: an id that is gone, or a notice a second device already retracted, is the end
+-- state the caller asked for and returns quietly.
+create or replace function public.ow_delete_announcement(p_announcement_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  v_hostel_id  uuid;
+  v_deleted_at timestamptz;
+begin
+  select a.hostel_id, a.deleted_at
+    into v_hostel_id, v_deleted_at
+    from public.announcements a
+   where a.id = p_announcement_id;
+
+  if not found then
+    return;
+  end if;
+
+  if not app.owns_hostel(v_hostel_id) and not app.is_super_admin() then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+
+  if not app.is_super_admin() and not app.hostel_writable(v_hostel_id) then
+    raise exception 'Subscription expired — hostel is read-only.' using errcode = '42501';
+  end if;
+
+  if v_deleted_at is not null then
+    return;
+  end if;
+
+  update public.announcements set deleted_at = now() where id = p_announcement_id;
+end $$;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- READ RPCs (SECURITY INVOKER → RLS applies)
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -1328,7 +1830,7 @@ language sql stable security invoker set search_path = public as $$
 $$;
 
 -- Hostel headline stats (dashboards)
-create or replace function public.rpc_hostel_stats(p_hostel_id uuid, p_period_month text default to_char(current_date, 'YYYY-MM'))
+create or replace function public.rpc_hostel_stats(p_hostel_id uuid, p_period_month text default to_char(app.today(), 'YYYY-MM'))
 returns table (
   total_beds int, occupied_beds int, active_students int, open_complaints int,
   fees_collected numeric, fees_pending numeric, students_paid int, students_unpaid int,
@@ -1350,10 +1852,13 @@ language sql stable security invoker set search_path = public as $$
     (select count(*)::int from public.leaves where hostel_id = p_hostel_id and status = 'pending'),
     -- "today" in hostel-local time (India) — the app's day boundary is IST, not UTC
     (select count(*)::int from public.visitors where hostel_id = p_hostel_id
-       and (check_in_at at time zone 'Asia/Kolkata')::date = (now() at time zone 'Asia/Kolkata')::date),
+       and (check_in_at at time zone 'Asia/Kolkata')::date = app.today()),
     (select count(*)::int from public.tasks where hostel_id = p_hostel_id and status <> 'done' and deleted_at is null),
-    coalesce((select sum(amount) from public.revenues where hostel_id = p_hostel_id and date = current_date and deleted_at is null), 0),
-    coalesce((select sum(amount) from public.expenses where hostel_id = p_hostel_id and date = current_date and deleted_at is null), 0),
+    -- ...and so do these two. They read `date = current_date` until 2026-09-01, which is UTC,
+    -- so both tiles were empty for the first five and a half hours of every Indian day while
+    -- the day's takings sat one row away. See db/migrations/2026-09-01-hostel-local-today.sql.
+    coalesce((select sum(amount) from public.revenues where hostel_id = p_hostel_id and date = app.today() and deleted_at is null), 0),
+    coalesce((select sum(amount) from public.expenses where hostel_id = p_hostel_id and date = app.today() and deleted_at is null), 0),
     coalesce((select sum(amount) from public.revenues where hostel_id = p_hostel_id and to_char(date,'YYYY-MM') = p_period_month and deleted_at is null), 0),
     coalesce((select sum(amount) from public.expenses where hostel_id = p_hostel_id and to_char(date,'YYYY-MM') = p_period_month and deleted_at is null), 0),
     app.subscription_days_left(p_hostel_id),
@@ -1476,6 +1981,67 @@ end $$;
 revoke all on function public.rate_limit(text, int, int) from public, anon, authenticated;
 grant execute on function public.rate_limit(text, int, int) to service_role;
 
+-- THE SIGNED-OUT DOOR TO THE SAME TABLE — the forgot-password send, and nothing else.
+--
+-- public.rate_limit() above is service_role only, so a locked-out person cannot spend it, and
+-- the forgot-password form is by definition used with no session. This is the narrow
+-- replacement: two fixed windows, no argument that can become an arbitrary key, and it reads NO
+-- user table — so its refusal varies with request VOLUME and never with whether an account
+-- exists. The address is hashed here rather than on the phone, so app.rate_limits never holds
+-- one in plain text and the mobile client needs no crypto dependency.
+--
+-- The global bucket is spent BEFORE the per-identifier row is inserted, which is what bounds
+-- how many new rows an anonymous caller can create. app.apply_retention() already deletes
+-- app.rate_limits rows older than a day and needs no change for these keys.
+--
+-- It is not a security boundary and does not pretend to be one: /auth/v1/recover is public and
+-- the anon key ships inside the APK, so the mail is actually bounded by GoTrue's
+-- SMTP_MAX_FREQUENCY and GOTRUE_RATE_LIMIT_EMAIL_SENT. This constrains OUR app.
+-- See db/migrations/2026-09-02-password-reset-gate.sql.
+create or replace function public.password_reset_gate(p_identifier text)
+returns table (allowed boolean, retry_after_seconds int)
+language plpgsql security definer set search_path = app, public as $$
+declare
+  v_now  timestamptz := now();
+  v_id   text := lower(btrim(coalesce(p_identifier, '')));
+  v_row  app.rate_limits%rowtype;
+  c_id_max     constant int      := 3;
+  c_id_window  constant interval := interval '1 hour';
+  c_all_max    constant int      := 200;
+  c_all_window constant interval := interval '1 hour';
+begin
+  insert into app.rate_limits (key, window_start, count) values ('pwreset:all', v_now, 1)
+  on conflict (key) do update set
+    count = case when app.rate_limits.window_start < v_now - c_all_window
+                 then 1 else app.rate_limits.count + 1 end,
+    window_start = case when app.rate_limits.window_start < v_now - c_all_window
+                        then v_now else app.rate_limits.window_start end
+  returning * into v_row;
+  if v_row.count > c_all_max then
+    allowed := false;
+    retry_after_seconds :=
+      greatest(1, ceil(extract(epoch from (v_row.window_start + c_all_window - v_now)))::int);
+    return next; return;
+  end if;
+
+  insert into app.rate_limits (key, window_start, count)
+  values ('pwreset:id:' || encode(sha256(convert_to(v_id, 'UTF8')), 'hex'), v_now, 1)
+  on conflict (key) do update set
+    count = case when app.rate_limits.window_start < v_now - c_id_window
+                 then 1 else app.rate_limits.count + 1 end,
+    window_start = case when app.rate_limits.window_start < v_now - c_id_window
+                        then v_now else app.rate_limits.window_start end
+  returning * into v_row;
+
+  allowed := v_row.count <= c_id_max;
+  retry_after_seconds := case when allowed then 0
+    else greatest(1, ceil(extract(epoch from (v_row.window_start + c_id_window - v_now)))::int)
+  end;
+  return next;
+end $$;
+revoke all on function public.password_reset_gate(text) from public;
+grant execute on function public.password_reset_gate(text) to anon, authenticated;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- AUDIT LOG (checklist §27) — privileged/security-relevant events. Rows are written
 -- only through audit_event() (actor = auth.uid(), cannot be spoofed) or the service
@@ -1591,7 +2157,10 @@ begin
     if new.id is distinct from old.id then
       raise exception 'Not allowed.' using errcode = '42501';
     end if;
-    if new.user_id is distinct from old.user_id then
+    -- NULL is a RELEASE, anything else is a takeover. Only the first is allowed: erasing a
+    -- resident's login cascades public.users away, and the FK above then nulls this column.
+    -- Refusing that would make the account impossible to delete.
+    if new.user_id is distinct from old.user_id and new.user_id is not null then
       raise exception 'A student record cannot be re-linked to another account.' using errcode = '42501';
     end if;
     if new.hostel_id is distinct from old.hostel_id then
@@ -1613,6 +2182,39 @@ end $$;
 drop trigger if exists students_identity_guard on public.students;
 create trigger students_identity_guard before insert or update on public.students
   for each row execute function app.students_identity_guard();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- COMING BACK IS A CANCELLATION
+--
+-- The scenario the deferred erasure is built around: a resident checks out in March and is
+-- back in a bed in April. Re-admitting them moves students.status off 'vacated' — and if the
+-- pending request survived that, the retention job would erase somebody asleep in the
+-- building. So reactivation withdraws the request, without anybody having to remember.
+--
+-- The reverse is closed too: an erased row is a tombstone the fee ledger hangs on, not a
+-- resident record with the name rubbed off. It cannot be brought back into service.
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function app.students_erasure_guard() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if old.erased_at is not null and new.status <> 'vacated' then
+    raise exception 'This record was erased at the resident''s request. Register them as a new resident instead.'
+      using errcode = 'P0001';
+  end if;
+
+  if old.status = 'vacated' and new.status <> 'vacated'
+     and new.erasure_requested_at is not null and new.erased_at is null then
+    new.erasure_requested_at := null;
+    new.erasure_due_at       := null;
+    new.erasure_requested_by := null;
+  end if;
+
+  return new;
+end $$;
+
+drop trigger if exists students_erasure_guard on public.students;
+create trigger students_erasure_guard before update on public.students
+  for each row execute function app.students_erasure_guard();
 
 -- A task may only be assigned to this hostel's active manager.
 create or replace function app.tasks_assignee_guard() returns trigger
@@ -1815,13 +2417,234 @@ revoke all on function app.detect_suspicious_activity() from public, anon, authe
 -- bound. Two-stage policy: pseudonymise early, delete late. Dropping IP/UA at 90 days removes
 -- the personal data while KEEPING the security event, so the trail stays useful for far longer
 -- than the personal data is allowed to be retained.
+--
+-- THAT TWO-STAGE RULE IS THE WHOLE POLICY'S SHAPE, and everything added since follows it:
+-- keep the EVENT, drop the PERSON. It is why a departed resident is anonymised rather than
+-- deleted (their rent ledger is the hostel's record, not theirs to erase), and why an erased
+-- account's audit rows keep their action and lose their actor.
+--
+-- The owner's three requirements, in their own words:
+--   (a) "that student complaints and notices data has to deleted after 2 months"
+--   (b) "student data deletion request has to sent while he is leaving hostel and that
+--        student data will be deleted after 1 month"
+--   (c) "the fee history of student never has to be deleted"
+-- (b) is a DEFERRED, CANCELLABLE erasure — see public.students.erasure_due_at and
+-- app.students_erasure_guard. Full derivation in
+-- db/migrations/2026-09-02-retention-and-erasure.sql.
 -- ─────────────────────────────────────────────────────────────────────────────
 create extension if not exists pg_cron with schema pg_catalog;
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- FILES DO NOT DISAPPEAR WHEN A ROW DOES, AND THIS DATABASE CANNOT DELETE THEM
+--
+-- The three private buckets hold personal data, and `*_url` columns hold a KEY into them
+-- (`<hostelId>/<folder>/<uuid>.<ext>`), not a URL. Dropping the row that held the key does not
+-- touch the object; it makes it unfindable by us and still perfectly readable by anyone who
+-- can enumerate the bucket. A "deletion" that leaves the ID-proof scan behind is not one.
+--
+-- And SQL cannot fix it. Supabase installs a guard for exactly this:
+--
+--     storage.protect_delete()  BEFORE DELETE ON storage.objects  (FOR EACH STATEMENT)
+--     → "Direct deletion from storage tables is not allowed. Use the Storage API instead."
+--       HINT: "This prevents accidental data loss from orphaned objects."
+--
+-- Deleting the metadata row would leave the bytes in the S3 backend forever, so Supabase
+-- refuses, and it is right to. That leaves one honest shape: the database records the
+-- OBLIGATION, and a process holding the service role discharges it through the Storage API.
+--
+-- Hence this table — rows here have to OUTLIVE the rows they came from, which is exactly why
+-- it cannot be a column. app.apply_retention() reports the pending depth as its last step, so
+-- a queue nobody drains shows up as a number that climbs every night instead of as silence.
+--
+-- NOT DRAINED FROM HERE, DELIBERATELY. Draining needs the service role, and the only way to
+-- hold one inside Postgres is to keep the key in the database and fire pg_net at the Storage
+-- API. A permanently readable service-role credential — a key to every bucket and every row,
+-- sitting where any SECURITY DEFINER function can read it — is a worse privacy problem than
+-- the one it would solve.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists app.storage_erasures (
+  id           bigint generated always as identity primary key,
+  bucket       text        not null,
+  object_path  text        not null,
+  -- No FK. The hostel may itself be gone by the time this is drained, and ON DELETE CASCADE
+  -- here would delete the record of an obligation as a side effect of the obligation's
+  -- subject disappearing — the exact failure this table exists to prevent.
+  hostel_id    uuid,
+  reason       text        not null,
+  enqueued_at  timestamptz not null default now(),
+  purged_at    timestamptz,
+  attempts     int         not null default 0,
+  last_error   text,
+  unique (bucket, object_path)
+);
+create index if not exists storage_erasures_pending_idx
+  on app.storage_erasures (enqueued_at) where purged_at is null;
+revoke all on app.storage_erasures from public, anon, authenticated;
+
+-- Queue one object for destruction. True when a NEW obligation was recorded.
+-- Refuses anything that is not a real storage key: `*_url` columns are writable by staff
+-- through PostgREST, so their contents may be an absolute https:// URL or junk, and queueing
+-- that would burn the drain's retries on an object that does not exist. Same shape
+-- lib/storage.ts and supabase/functions/_shared/storage.ts accept.
+create or replace function app.enqueue_storage_erasure(
+  p_bucket text, p_path text, p_hostel uuid, p_reason text
+) returns boolean
+language plpgsql security definer set search_path = public as $fn$
+begin
+  if p_path is null
+     or p_path !~ '^[0-9a-f-]{36}/[a-z-]{1,32}/[0-9a-f-]{36}\.(jpg|png|webp|pdf)$' then
+    return false;
+  end if;
+  insert into app.storage_erasures (bucket, object_path, hostel_id, reason)
+  values (p_bucket, p_path, p_hostel, p_reason)
+  on conflict (bucket, object_path) do nothing;
+  return found;
+end $fn$;
+
+revoke all on function app.enqueue_storage_erasure(text, text, uuid, text)
+  from public, anon, authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ERASING ONE DEPARTED RESIDENT  (the owner's (b), carried out one month late)
+--
+-- WHY THIS ANONYMISES AND NEVER DELETES. The schema settles it:
+--
+--     fee_payments.student_id → students(id) ON DELETE CASCADE
+--
+-- so `delete from students` IS `delete from fee_payments`. There is no version of "delete the
+-- student row" that keeps the money, and (c) says the money stays. The row therefore survives
+-- as an id, a monthly_fee and a joining date — a hook the ledger hangs on — with every
+-- identifying column emptied and `erased_at` stamped so the tombstone describes itself. A
+-- money record with no name on it is still a money record; a missing one is a hole in the
+-- books and, for the PG owner, possibly a tax problem.
+--
+-- WHAT GOES: full_name, phone, email, guardian_name, guardian_phone, permanent_address,
+-- id_proof_type, id_proof_url, photo_url; the photo and ID-proof OBJECTS in student-docs and
+-- any complaint photos in complaint-photos (queued, see above); their complaints and the
+-- complaint_events under them; their leaves; their visitors; every notification addressed to
+-- them; and the login itself — auth.users, which is where the address, the password hash, the
+-- MFA factors and the session history live. Leaving GoTrue holding the email while calling the
+-- resident erased would be the same lie as leaving the file in the bucket.
+--
+-- WHAT STAYS: fee_payments in full, the tenancy's shape (hostel, bed dates, monthly_fee), and
+-- the audit trail's ROWS with their actor nulled.
+--
+-- Idempotent: erased_at short-circuits it, so a second run the same night is a no-op.
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function app.erase_student(p_student_id uuid) returns boolean
+language plpgsql security definer set search_path = public as $fn$
+declare
+  s        public.students%rowtype;
+  v_user   uuid;
+  v_note   text := null;
+begin
+  select * into s from public.students where id = p_student_id for update;
+  if not found or s.erased_at is not null then
+    return false;
+  end if;
+  -- Only a departed resident is erasable. app.students_erasure_guard withdraws the request the
+  -- moment somebody is re-admitted, so reaching here with an active resident means an
+  -- assumption broke; refuse rather than empty a living record.
+  if s.status <> 'vacated' then
+    return false;
+  end if;
+
+  v_user := s.user_id;
+
+  -- FILES FIRST, WHILE THE KEYS ARE STILL READABLE.
+  perform app.enqueue_storage_erasure('student-docs', s.photo_url,    s.hostel_id, 'erasure.student_photo');
+  perform app.enqueue_storage_erasure('student-docs', s.id_proof_url, s.hostel_id, 'erasure.student_id_proof');
+  perform app.enqueue_storage_erasure('complaint-photos', c.photo_url, c.hostel_id, 'erasure.complaint_photo')
+    from public.complaints c
+   where c.student_id = p_student_id and c.photo_url is not null;
+
+  -- THEIR PRIVATE LIFE IN THIS BUILDING. "The food in room 3 made me ill" is health data
+  -- about a named person; where they went on leave and who came to visit are no different.
+  delete from public.complaints where student_id = p_student_id;   -- complaint_events cascade
+  delete from public.leaves     where student_id = p_student_id;
+  delete from public.visitors   where student_id = p_student_id;
+
+  -- THE ROW: EMPTIED, NOT DELETED. phone is NOT NULL and unique among non-vacated residents,
+  -- so the placeholder is keyed on the row's own id and cannot collide.
+  update public.students set
+      full_name         = 'Erased resident',
+      phone             = 'erased-' || replace(p_student_id::text, '-', ''),
+      email             = null,
+      photo_url         = null,
+      guardian_name     = null,
+      guardian_phone    = null,
+      permanent_address = null,
+      id_proof_type     = null,
+      id_proof_url      = null,
+      erased_at         = now()
+    where id = p_student_id;
+
+  -- THE LOGIN.
+  if v_user is not null then
+    -- Release the NO ACTION references a resident's account can legitimately hold, so the
+    -- delete below is not refused by a row that carries no personal data anyway.
+    update public.complaint_events set actor_user_id = null where actor_user_id = v_user;
+    if to_regclass('public.payment_intents') is not null then
+      execute 'update public.payment_intents set created_by = null where created_by = $1' using v_user;
+    end if;
+
+    begin
+      -- Cascades: public.users → notifications, and students.user_id is released by that
+      -- column's ON DELETE SET NULL. GoTrue's identities / sessions / refresh_tokens /
+      -- mfa_factors all cascade off auth.users, which is why this one statement is the whole
+      -- account.
+      delete from auth.users where id = v_user;
+    exception when foreign_key_violation then
+      -- Do not fail the night's run, and do not start nulling columns blind.
+      -- app.users_update_guard refuses every UPDATE to public.users from a context with no JWT
+      -- (auth.uid() is null in pg_cron), so this job cannot anonymise the account either. The
+      -- only honest move is to say so, loudly, where a human looks. The resident's own data
+      -- above is already gone.
+      v_note := 'account retained: still referenced by another record';
+      perform app.raise_security_alert(
+        'medium', 'privacy.erasure.account_retained',
+        'A resident was erased but their login could not be deleted — it is still referenced elsewhere.',
+        s.hostel_id, null::uuid, null::text,
+        jsonb_build_object('student_id', p_student_id, 'user_id', v_user));
+    end;
+  end if;
+
+  -- THE TRAIL: KEEP THE EVENT, DROP THE PERSON. audit_log has no FK to users, so the uuid
+  -- would otherwise outlive the account it names.
+  if v_user is not null then
+    update public.audit_log set actor_user_id = null where actor_user_id = v_user;
+  end if;
+
+  insert into public.audit_log (actor_user_id, actor_role, action, target_type, target_id, hostel_id, meta)
+  values (null, null, 'student.erased', 'student', p_student_id::text, s.hostel_id,
+          jsonb_build_object(
+            'requested_at', s.erasure_requested_at,
+            'due_at',       s.erasure_due_at,
+            'requested_by', s.erasure_requested_by,
+            'note',         v_note));
+
+  return true;
+end $fn$;
+
+revoke all on function app.erase_student(uuid) from public, anon, authenticated;
+revoke all on function app.students_erasure_guard() from public, anon, authenticated;
+
+-- ╔═══════════════════════════════════════════════════════════════════════════════════════╗
+-- ║  public.fee_payments IS NOT IN THIS FUNCTION AND MUST NEVER BE.                        ║
+-- ║  "the fee history of student never has to be deleted" — the owner, 2026-09.            ║
+-- ║  It is the book the PG is assessed on. A row missing from it is not tidiness, it is an ║
+-- ║  unexplainable gap in front of a tax officer. If a future policy seems to require      ║
+-- ║  touching it, that policy is wrong; anonymise the STUDENT (app.erase_student) instead  ║
+-- ║  — the ledger keeps its id and loses its name, which is what erasure actually asks for.║
+-- ╚═══════════════════════════════════════════════════════════════════════════════════════╝
+--
+-- COMPLAINTS AGE FROM created_at, RESOLVED OR NOT. Ageing them from resolved_at would let a
+-- hostel defeat the policy by never pressing "Resolved" — and the rows a resident would most
+-- want gone are exactly the ones nobody closed.
 create or replace function app.apply_retention()
 returns table (step text, rows_affected bigint)
 language plpgsql security definer set search_path = public as $fn$
-declare n bigint;
+declare n bigint; v_student uuid;
 begin
   update public.audit_log set ip = null, user_agent = null
    where at < now() - interval '90 days' and (ip is not null or user_agent is not null);
@@ -1845,6 +2668,54 @@ begin
    where read_at is not null and created_at < now() - interval '90 days';
   get diagnostics n = row_count;
   step := 'notifications deleted (read + >90d)'; rows_affected := n; return next;
+
+  -- ── (a) COMPLAINTS AND NOTICES, 2 MONTHS ────────────────────────────────────────────────
+  -- Photos are queued BEFORE their complaints go, or the key is unrecoverable.
+  select count(*) into n from (
+    select app.enqueue_storage_erasure('complaint-photos', c.photo_url, c.hostel_id,
+                                       'retention.complaint_photo') as queued
+      from public.complaints c
+     where c.created_at < now() - interval '2 months' and c.photo_url is not null
+  ) q where q.queued;
+  step := 'complaint photos queued for erasure (>2mo)'; rows_affected := n; return next;
+
+  -- Explicit, though complaint_events would cascade, so the count is reportable rather than
+  -- invisible inside somebody else's DELETE.
+  delete from public.complaint_events e
+   using public.complaints c
+   where e.complaint_id = c.id and c.created_at < now() - interval '2 months';
+  get diagnostics n = row_count;
+  step := 'complaint_events deleted (>2mo)'; rows_affected := n; return next;
+
+  delete from public.complaints where created_at < now() - interval '2 months';
+  get diagnostics n = row_count;
+  step := 'complaints deleted (>2mo)'; rows_affected := n; return next;
+
+  -- "notices" is what the owner calls announcements. Soft-deleted ones go too: deleted_at was
+  -- a retraction from the feed, not an erasure.
+  delete from public.announcements where created_at < now() - interval '2 months';
+  get diagnostics n = row_count;
+  step := 'announcements deleted (>2mo)'; rows_affected := n; return next;
+
+  -- ── (b) DEFERRED ERASURES THAT HAVE COME DUE ────────────────────────────────────────────
+  n := 0;
+  for v_student in
+    select id from public.students
+     where erasure_due_at is not null and erasure_due_at <= now()
+       and erased_at is null and status = 'vacated'
+     order by erasure_due_at
+     limit 500
+  loop
+    if app.erase_student(v_student) then n := n + 1; end if;
+  end loop;
+  step := 'residents erased (requested + 1mo)'; rows_affected := n; return next;
+
+  -- ── THE GAUGE ───────────────────────────────────────────────────────────────────────────
+  -- Not a delete: Postgres cannot destroy a storage object (see app.storage_erasures above).
+  -- This is the depth of the queue a service-role drain has to work through, and a number
+  -- that climbs every night is the alarm that nothing is draining it.
+  select count(*) into n from app.storage_erasures where purged_at is null;
+  step := 'storage objects awaiting purge (queue depth)'; rows_affected := n; return next;
 end $fn$;
 
 revoke all on function app.apply_retention() from public, anon, authenticated;
