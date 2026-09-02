@@ -38,6 +38,22 @@
     "node_modules",
     "skills",
     "design-exports",
-    ".next"
+    ".next",
+
+    // NOT SWEPT UNDER THE RUG — THIS IS DENO SOURCE AND tsc CANNOT JUDGE IT.
+    //
+    // supabase/functions/** runs on Deno, where `import "./x.ts"` is the correct and required
+    // form and `Deno` is a real global. Compiled under these Node/Next settings it produced ~100
+    // errors that were all the same two false positives (TS5097 on the .ts extension, TS2304 on
+    // Deno) — noise that made `npm run typecheck` exit 1 permanently and therefore useless as a
+    // gate, and that broke `next build` on Vercel outright.
+    //
+    // Nothing under app/, lib/ or components/ imports this tree; the only references to it are
+    // comments. It is checked by `deno check` / the Supabase CLI on deploy, which is the only
+    // tool that knows its runtime.
+    "supabase/functions",
+
+    // The Flutter client. Has no TypeScript the web build reads, and carries a 1.1 GB tool cache.
+    "nivora_app"
   ]
 }

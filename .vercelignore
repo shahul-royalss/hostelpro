@@ -10,5 +10,21 @@ node_modules
 
 # Not needed by the build (raw design references, agent skills, QA harnesses)
 design-exports
+design-stitch
+design-figma
 skills
 scripts/_qa-*
+.probe-*.mjs
+
+# ── THE ANDROID APP IS NOT PART OF THE WEB DEPLOY ────────────────────────────
+# nivora_app/ is 1.1 GB (Flutter SDK caches, .dart_tool, build/, the AAR/APK tree) and the
+# Next.js build does not read a single byte of it. Left in, the upload reached 568 MB and the
+# deploy died — first as ECONNRESET against this machine's TLS-intercepting antivirus, then as
+# a bare "Internal Server Error" from the archive endpoint. Nine days of production drift
+# traced back to exactly this: deploys that could not finish.
+#
+# dist/ is the staged APK/AAB (127 MB) and android/ is a stale top-level Gradle tree. Same
+# reasoning: neither is an input to `next build`.
+nivora_app
+dist
+android
