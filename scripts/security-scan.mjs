@@ -35,8 +35,30 @@ console.log("\n=== 2  SECRETS ===");
 
 // Real credential shapes. The Supabase ANON key is public by design (a browser key
 // protected by RLS) so it is not a finding; the service_role key is.
+// ── WHY THIS ONE IS NOT `/"role":"service_role"/` ──────────────────────────────────────────
+//
+// It used to be, and that rule was wrong in BOTH directions at once.
+//
+// BLIND: a leaked service-role key is a JWT — three base64url segments. Its payload decodes to
+// {"iss":"supabase","ref":"…","role":"service_role",…}, so the literal `"role":"service_role"`
+// NEVER APPEARS IN THE FILE. The rule named after that key could not detect that key. Verified
+// against this project's real key: zero matches.
+//
+// NOISY: what it did match was legitimate SQL. Two migrations run
+// `set_config('request.jwt.claims', '{"role":"service_role"}', true)` to restate, inside one
+// transaction, a role the caller already holds — a session variable, not a credential. Both were
+// reported as leaked keys, `security:all` exited 1 forever, and a gate that always fails is a
+// gate nobody reads.
+//
+// So: match the ENCODED form. `"role":"service_role"` base64s differently depending on where it
+// falls in the payload, so all three byte alignments are listed; a real key hits exactly one.
+// The decoded form is still caught, but only when another JWT claim (iss/ref/exp) sits in the
+// same object — which a pasted token has and the SQL above does not.
+const SERVICE_ROLE_JWT =
+  /InJvbGUiOiJzZXJ2aWNlX3Jv|b2xlIjoic2VydmljZV9yb2xl|cm9sZSI6InNlcnZpY2Vfcm9s|\{[^{}]*"(?:iss|ref|exp)"[^{}]*"role"\s*:\s*"service_role"|"role"\s*:\s*"service_role"[^{}]*"(?:iss|ref|exp)"/;
+
 const SECRET_PATTERNS = [
-  ["Supabase service_role JWT", /"role"\s*:\s*"service_role"/],
+  ["Supabase service_role JWT", SERVICE_ROLE_JWT],
   ["Supabase secret key", /\bsb_secret_[A-Za-z0-9_-]{10,}/],
   ["AWS access key id", /\bAKIA[0-9A-Z]{16}\b/],
   ["Google API key", /\bAIza[0-9A-Za-z_-]{35}\b/],
@@ -101,6 +123,12 @@ function envSecretValues() {
 const tracked = sh("git ls-files")
   .split("\n")
   .filter(Boolean)
+  // THIS FILE IS EXCLUDED FROM ITS OWN SCAN, and only this file. It is where the credential
+  // shapes are DEFINED — the base64 fragments of a service-role payload, `sb_secret_`, `AKIA`,
+  // `sk_live_` — so a scanner that reads itself reports every pattern it knows as a leak it
+  // found. Nothing else is exempted on these grounds, and the exemption is by exact path so it
+  // cannot widen to the rest of scripts/.
+  .filter((f) => f !== "scripts/security-scan.mjs")
   .filter((f) => !/^design-exports\/|^skills\//.test(f));
 
 let treeHits = 0;
@@ -181,7 +209,11 @@ if (fs.existsSync(".next/static")) {
   const blob = files.map((f) => { try { return fs.readFileSync(f, "utf8"); } catch { return ""; } }).join("\n");
   let n = 0;
   for (const [name, re] of [
-    ["service_role credential", /"role"\s*:\s*"service_role"|sb_secret_/],
+    // SERVICE_ROLE_JWT, not the bare `"role":"service_role"` literal this used to carry — see
+    // its definition in §2. The blindness matters MORE here than there: a service-role key
+    // shipped into .next/static is handed to every browser that loads the site, and the old
+    // pattern could not see the encoded form that a real leak would take.
+    ["service_role credential", new RegExp(`${SERVICE_ROLE_JWT.source}|sb_secret_`)],
     ["SUPER_ADMIN_PASSWORD", /SUPER_ADMIN_PASSWORD/],
   ]) {
     if (re.test(blob)) { block(`${name} present in client bundle`, `${files.length} files under .next/static`); n++; }

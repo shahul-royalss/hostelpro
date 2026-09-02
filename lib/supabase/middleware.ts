@@ -214,6 +214,36 @@ export async function updateSession(request: NextRequest) {
     return res;
   };
   const redirectTo = (pathname: string, search = "") => {
+    // ── AN API CALLER GETS A REFUSAL IT CAN READ, NOT A LOGIN PAGE ──────────────────────
+    //
+    // Every redirect below is a REFUSAL: not signed in, inactive, no profile, MFA not
+    // satisfied, password change outstanding. For a page load, bouncing to the right screen is
+    // exactly right. For `fetch("/api/…")` it is a trap — fetch follows the 307 transparently,
+    // gets 200 and a page of HTML, and `await res.json()` throws a SyntaxError about an
+    // unexpected `<`. The caller then reports a parse bug instead of "your session ended",
+    // which is the opposite of what happened and sends the reader to the wrong file.
+    //
+    // Status follows the reason: the login bounce is 401 (authenticate and retry), everything
+    // else is 403 (authenticated, still not allowed yet). `redirect` carries where a browser
+    // WOULD have been sent, so a client that wants to navigate still can.
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+      const res = finish(
+        NextResponse.json(
+          {
+            ok: false,
+            error:
+              pathname === "/login"
+                ? "Your session has ended. Sign in again."
+                : "This request is not allowed until you finish signing in.",
+            redirect: `${pathname}${search}`,
+          },
+          { status: pathname === "/login" ? 401 : 403 },
+        ),
+      );
+      res.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+      return res;
+    }
+
     const url = request.nextUrl.clone();
     url.pathname = pathname;
     url.search = search;
