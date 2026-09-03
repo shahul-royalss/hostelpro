@@ -247,11 +247,23 @@ const kPrivacyPolicy = LegalDocument(
               'are typed into Razorpay\'s own checkout and never reach NIVORA at all. What comes '
               'back is a reference saying a payment of a stated amount succeeded.',
           'No location, contacts, calendar, microphone or biometrics. The Android app asks for '
-              'internet access and nothing else.',
+              'only for internet access and the ability to tell whether you are online.',
           'No advertising, no advertising identifier and no profiling. Nothing here is used to '
               'build a picture of you or to make an automated decision about you.',
-          'No analytics, telemetry, session replay or crash reporting. There is no third-party '
-              'tracking code in the app.',
+          // NOT "there is no third-party tracking code in the app". That sentence was true of the
+          // WEBSITE and was copied here while the two documents were being harmonised, which made
+          // it false of the thing a resident actually installs: this app bundles razorpay_flutter,
+          // Razorpay's native Checkout SDK, and docs/play-submission-pack.md §2.9 records that it
+          // runs its own device and session telemetry during a payment — which is why the Data
+          // Safety form declares "Device or other IDs · Fraud prevention". A policy the user must
+          // accept cannot contradict the form the same app files. On the web that SDK at least
+          // runs inside a cross-origin iframe; here it runs in-process, so the claim was weaker
+          // still. What is true, and is what this now says, is that none of it is ours and none of
+          // it reaches us.
+          'No analytics, session replay or crash reporting of our own, no advertising, and no '
+              'tracking across other apps or sites. Razorpay\'s checkout runs its own device and '
+              'session checks while a payment is open, for its own fraud prevention; NIVORA '
+              'receives none of it.',
           'No marketing cookies. The only cookies are the session cookies that keep you signed '
               'in, read by the server alone.',
           'No SMS, no marketing email and no mailing list. The only emails sent are the ones '
@@ -271,7 +283,8 @@ const kPrivacyPolicy = LegalDocument(
           'fifteen minutes for a resident photo or ID document, thirty for a receipt or a '
           'complaint photograph. Every file is filed under its own hostel and the server '
           'refuses a request for a path outside the requester\'s hostel. Uploads are checked by '
-          'their actual leading bytes rather than their file name, and capped at 8 MB.',
+          'their actual leading bytes rather than their file name, and capped at 3 MB in the '
+              'app (8 MB on the website, which uploads by a different route).',
         ),
         Para(
           'A note on Aadhaar. Aadhaar is governed by its own law and UIDAI guidance restricts '
@@ -415,6 +428,19 @@ const kPrivacyPolicy = LegalDocument(
             detail: 'The IP address and device description are erased after ninety days; the '
                 'entry itself after a year. A security alert that is still open stays until it '
                 'is closed, because an open alert is an open investigation.',
+          ),
+          (
+            // A DISCLOSED CATEGORY NEEDS A STATED PERIOD. Section 2 lists staff tasks and mess
+            // menus as personal data (a task names who it was assigned to), and the previous
+            // policy published "24 months" for them — a period app.apply_retention() never
+            // enforced. Deleting the false figure was right; leaving the category with no period
+            // at all was not, because retention is one of the disclosures Play checks for. This
+            // is what the code actually does: nothing ages them, and they go when the hostel does.
+            term: 'Staff tasks and mess menus',
+            detail: 'Kept for as long as the hostel keeps its workspace, and removed with it. '
+                'The nightly job does not age these: a task names the staff member it was '
+                'assigned to, and deleting it while they still work there would erase the '
+                'operating history of the hostel itself.',
           ),
           (
             term: 'Fee, expense and revenue records',

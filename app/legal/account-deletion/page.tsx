@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { LEGAL, LEGAL_VERSION, isConfigured } from "@/lib/legal-config";
+import { ANDROID_PACKAGE, LEGAL, LEGAL_VERSION, isConfigured } from "@/lib/legal-config";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { Callout, DataTable, DocBody, DocHeader, Section, TableOfContents } from "../layout";
@@ -39,8 +39,13 @@ const UPDATED = LEGAL_VERSION;
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
 
-/** Android applicationId — android/app/build.gradle.kts, see docs/play-store.md §1. */
-const ANDROID_PACKAGE = "app.hostelpro.twa";
+/*
+ * Imported, never re-declared. This page published "app.hostelpro.twa" — a package the project's
+ * own docs record as retired — while lib/legal-config.ts already exported the current one for
+ * exactly this purpose and nothing imported it. A local literal shadowing a shared constant is
+ * how the data-deletion URL a Play reviewer opens ends up naming a different app from the one
+ * they are reviewing, which is the one thing this page has to get right.
+ */
 
 /** Kept as named constants so this page and docs/account-deletion.md cannot drift apart. */
 const ACKNOWLEDGE_HOURS = 72;

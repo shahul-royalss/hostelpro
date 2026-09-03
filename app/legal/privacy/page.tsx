@@ -110,7 +110,9 @@ export default function PrivacyPolicyPage() {
             </li>
             <li>
               Nothing here is sold, shared with advertisers or data brokers, or used to train AI
-              models. There is no advertising, analytics or tracking code in the app at all.
+              models. There is no advertising and no analytics of ours anywhere in it — see
+              section 3 for the one exception, which is Razorpay&rsquo;s own fraud checks during a
+              payment.
             </li>
             <li>
               {/* NO SINGLE NUMBER HERE, because there is not one. SIGNED_URL_TTL in
@@ -250,12 +252,22 @@ export default function PrivacyPolicyPage() {
             </li>
             <li>
               <strong>No location data, no device contacts, no calendar, no biometrics, no
-              advertising identifier.</strong> The Android app asks for internet access and nothing
+              advertising identifier.</strong> The Android app asks only for internet access and the ability to tell whether you are online — nothing
               else.
             </li>
             <li>
-              <strong>No analytics, telemetry, session-replay or error-reporting service.</strong>{" "}
-              There is no third-party tracking code in the application.
+              {/* The Android app bundles Razorpay's native Checkout SDK, which runs its own
+                  device and session checks during a payment — that is exactly why the Data Safety
+                  form declares "Device or other IDs · Fraud prevention". Claiming no third-party
+                  tracking here would contradict the form the same app files, which is the most
+                  common privacy-related rejection there is. See legal_documents.dart, which
+                  carries the identical sentence. */}
+              <strong>
+                No analytics, session replay or crash reporting of our own, no advertising, and no
+                tracking across other apps or sites.
+              </strong>{" "}
+              Razorpay&rsquo;s checkout runs its own device and session checks while a payment is
+              open, for its own fraud prevention; {APP_NAME} receives none of it.
             </li>
             <li>
               <strong>No advertising and no profiling.</strong> Nothing here is used to build a
@@ -503,6 +515,10 @@ export default function PrivacyPolicyPage() {
                 "Deleted 365 days after the event. An alert that is still open stays until it is reviewed and closed — an open alert is an open investigation",
               ],
               ["Rate-limit counters (hashed)", "Swept after 24 hours"],
+              [
+                "Staff tasks and mess menus",
+                "Kept for as long as the hostel's workspace exists, and removed with it. The nightly job does not age these: a task names the staff member it was assigned to, and deleting it while that person still works there would erase the hostel's own operating history",
+              ],
               [
                 "Fee, expense, revenue and subscription records",
                 "Kept indefinitely. This is the one exception, and it is not the hostel's to waive: a business has a statutory duty to keep records of money received, and those duties run for years",

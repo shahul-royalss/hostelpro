@@ -81,8 +81,21 @@ export const LEGAL = {
  */
 export const LEGAL_VERSION = "2026-09-04";
 
-/** Android application id, so the deletion page can name the app Play users installed. */
-export const ANDROID_PACKAGE = "app.nivora.twa";
+/**
+ * Android application id, so the deletion page can name the app Play users installed.
+ *
+ * THIS IS THE FLUTTER APP, which is the artifact that goes to Play Console: the AAB built by
+ * nivora_app/scripts/release.sh from nivora_app/android/app/build.gradle.kts, where
+ * `applicationId = "app.nivora.mobile"`.
+ *
+ * Two other ids exist in this repository and NEITHER belongs here. `app.nivora.twa` is the
+ * Trusted Web Activity — the browser wrapper that public/.well-known/assetlinks.json still
+ * vouches for — and the product deliberately moved off it to a native client. `app.hostelpro.twa`
+ * is that wrapper's retired predecessor, and it was hardcoded into the deletion page until now,
+ * which meant the data-deletion URL a Play reviewer opens named an app that is not the one under
+ * review. Import this constant; do not re-declare it next to the text that prints it.
+ */
+export const ANDROID_PACKAGE = "app.nivora.mobile";
 
 /**
  * True only when every placeholder has been replaced. The legal pages use this to decide whether
