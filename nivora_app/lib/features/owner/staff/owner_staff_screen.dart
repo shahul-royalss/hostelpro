@@ -345,6 +345,9 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
               message: 'Nobody can do this job in ${widget.hostelName ?? 'this PG'} until you '
                   'add one.',
               compact: true,
+              // The people colour, not a warning: an unfilled post is a fact about staff, and
+              // the button under it is how it changes.
+              tone: NivoraDomain.people.tone,
             )
           else
             _StaffDetails(member: primary),
@@ -468,8 +471,13 @@ class _DetailLine extends StatelessWidget {
     final t = Theme.of(context);
     return Row(
       children: [
-        // Canonical, resolved at the paint site: the rule in tokens.dart is that a tone chosen
-        // away from the widget travels as its meaning, not as a hex.
+        // AN ICON HOLDER, NOT WAYFINDING — and the neutral is the considered choice. This
+        // block already says "staff" twice: the avatar two rows up is people-teal and the
+        // heading above it names the post. A teal plate on every detail row would state the
+        // same domain a third time inside one card, and a phone glyph on a row labelled PHONE
+        // is not telling anyone where they are. So the tone stays canonical [textMuted],
+        // resolved at the paint site to `context.tones.muted`, and the people colour stays on
+        // the avatar and the heading where it does work. See [NivoraDomain].
         ToneBadge(icon: icon, tone: NivoraColors.textMuted),
         const SizedBox(width: Space.sm),
         Expanded(

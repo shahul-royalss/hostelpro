@@ -163,6 +163,13 @@ class _Platform extends ConsumerWidget {
           ),
         ),
         const SaSectionRule(),
+        // NO DOMAIN PLATE ON THIS HEADING. Its body is the segmented health bar, whose first
+        // segment is the success green for "Active" — 8dp below a money-green card plate, the
+        // same hue would have carried two meanings in one section: "this is the billing area"
+        // above and "these hostels are fine" below. The KPI block directly above wears the
+        // caps whisper with no plate, so this section matches it. The money glyph is kept
+        // where no status colour sits beside it — the empty face in [_Health], the rows on the
+        // Subscriptions tab's detail surfaces.
         const SaHeading(
           title: 'Subscription health',
           caption: 'An expired subscription makes a hostel read-only for everyone in it.',
@@ -221,11 +228,12 @@ class _Health extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final classified = stats.activeSubs + stats.expiringSubs + stats.expiredSubs;
     if (classified == 0) {
-      return const SaEmpty(
+      return SaEmpty(
         icon: Icons.receipt_long_outlined,
         title: 'No subscriptions yet',
         message: 'Nothing on the platform has been sold a subscription, so there is no health '
             'to report. The first one is created with the hostel.',
+        tone: NivoraDomain.money.tone,
       );
     }
 
@@ -282,14 +290,22 @@ class _Onboarding extends ConsumerWidget {
       loading: () => const Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SaHeading(title: 'Hostel onboarding'),
+          SaHeading(
+            title: 'Hostel onboarding',
+            domain: NivoraDomain.rooms,
+            icon: Icons.apartment_rounded,
+          ),
           SaSkeletonCard(lines: 3, height: 132),
         ],
       ),
       error: (e) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SaHeading(title: 'Hostel onboarding'),
+          const SaHeading(
+            title: 'Hostel onboarding',
+            domain: NivoraDomain.rooms,
+            icon: Icons.apartment_rounded,
+          ),
           SaError(
             error: e,
             compact: true,
@@ -308,7 +324,11 @@ class _Onboarding extends ConsumerWidget {
           return const Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SaHeading(title: 'Hostel onboarding'),
+              SaHeading(
+                title: 'Hostel onboarding',
+                domain: NivoraDomain.rooms,
+                icon: Icons.apartment_rounded,
+              ),
               SaEmpty(
                 icon: Icons.lock_outline_rounded,
                 title: 'Onboarding history withheld',
@@ -332,6 +352,8 @@ class _Onboarding extends ConsumerWidget {
               caption: 'Added per month, last ${plural(points.length, 'month')} · '
                   '${plural(total, 'hostel')} over the period',
               accent: _momLabel(points),
+              domain: NivoraDomain.rooms,
+              icon: Icons.apartment_rounded,
             ),
             const SizedBox(height: Space.xs),
             SaBarChart(
@@ -399,7 +421,7 @@ class _Security extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SaHeading(title: 'Security alerts'),
+        const SaHeading(title: 'Security alerts', domain: NivoraDomain.security),
         saAsync<int>(
           open,
           loading: () => const SaSkeletonCard(lines: 1, height: 72),
@@ -479,8 +501,14 @@ class _CreateBanner extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.add_business_rounded,
-                  size: IconSize.md, color: t.colorScheme.primary),
+              // The building's violet, not the gold: this tile is about a hostel, and the
+              // brand colour was only ever holding the glyph up. The cream button below is
+              // still the screen's one loud object.
+              const DomainIcon(
+                domain: NivoraDomain.rooms,
+                icon: Icons.add_business_rounded,
+                size: DomainIconSize.sm,
+              ),
               const SizedBox(width: Space.xs),
               Expanded(child: Text('Onboard a hostel', style: t.textTheme.titleMedium)),
             ],

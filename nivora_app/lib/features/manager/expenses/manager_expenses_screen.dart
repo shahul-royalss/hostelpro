@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/glass/glass.dart';
 import '../../common/refresh.dart';
 import '../data/manager_providers.dart';
 import '../widgets/manager_ui.dart';
@@ -135,6 +136,12 @@ class _ExpenseList extends ConsumerWidget {
         detail: category == null
             ? 'Tap + to record the first expense. It shows on the trend the same day.'
             : 'Clear the filter to see the rest of the book.',
+        // The ledger's own green on the glyph — identity, not a verdict, the same green the
+        // wallet wears on the Expenses pill and on the two Record buttons. Only on the
+        // FIRST-RUN face: a list emptied by the category filter says "no match for that",
+        // not "this is the ledger, and it is empty", and keeps the neutral outline. See
+        // NivoraDomain.
+        tone: category == null ? NivoraDomain.money.tone : null,
       ),
       itemBuilder: (context, expense) => _ExpenseRow(expense: expense),
     );
@@ -194,10 +201,19 @@ class _ExpenseRow extends StatelessWidget {
           '${shortDate(expense.date)}',
       child: Row(
         children: [
-          // A small squared badge tinted with the row's own meaning, drawn by the one widget
-          // that owns that recipe. The 12% alpha this used to inline was a fifth number for a
-          // thing NivoraSemantics already measures.
-          ToneBadge(icon: _iconFor(expense.category), tone: NivoraColors.warning),
+          // ── DIRECTION LIVES IN THE GLYPH, NOT THE HUE ──────────────────────────────────
+          //
+          // This was amber, and its twin on the revenue row was green — "colour by direction".
+          // But amber is what an OPEN complaint and a PARTLY PAID month wear, and an expense is
+          // not a warning: money going out is the ordinary business of running a hostel. Every
+          // other coloured thing on this tab is already money-green (the pill, both empty faces,
+          // both home buttons), so a green ledger with amber rows in it was the tab disagreeing
+          // with itself. The category glyph is what says which way the money went.
+          DomainIcon(
+            domain: NivoraDomain.money,
+            icon: _iconFor(expense.category),
+            size: DomainIconSize.sm,
+          ),
           const SizedBox(width: Space.sm),
           Expanded(
             child: Column(
@@ -275,11 +291,13 @@ class _RevenueList extends ConsumerWidget {
         padding: EdgeInsets.only(bottom: Space.sm),
         child: _Direction(),
       ),
-      empty: const EmptyNote(
+      empty: EmptyNote(
         icon: Icons.savings_outlined,
         title: 'Nothing recorded here',
         detail: 'Mess income and deposits go here. Rent is collected by the warden and is '
             'counted separately.',
+        // The same money green as the expense side's first-run face — see _ExpenseList.
+        tone: NivoraDomain.money.tone,
       ),
       itemBuilder: (context, revenue) => _RevenueRow(revenue: revenue),
     );
@@ -299,7 +317,13 @@ class _RevenueRow extends StatelessWidget {
           '${shortDate(revenue.date)}',
       child: Row(
         children: [
-          ToneBadge(icon: Icons.arrow_downward_rounded, tone: NivoraColors.success),
+          // Money-green like every other mark on this tab; the arrow is what says "in".
+          // See the expense row above for why direction is not carried by the hue.
+          const DomainIcon(
+            domain: NivoraDomain.money,
+            icon: Icons.arrow_downward_rounded,
+            size: DomainIconSize.sm,
+          ),
           const SizedBox(width: Space.sm),
           Expanded(
             child: Column(

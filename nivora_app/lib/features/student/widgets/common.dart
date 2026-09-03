@@ -411,12 +411,34 @@ class AsyncSection<T> extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// A section title, optionally with one action on the right.
+///
+/// [domain] puts the domain's coloured icon before the title — the saffron plate before
+/// "Today's food", the blue megaphone before "Notices" — so a resident scrolling the home
+/// screen finds a section by its colour before reading a word. Drawn at [DomainIconSize.sm],
+/// the same 28dp plate the owner kit's `SectionHeading` and the SA kit's `SaHeading` put before
+/// their own headings: one object is one size product-wide, and a heading is a title with a
+/// mark beside it rather than a 40dp box with a title beside IT — three of those stacked down
+/// the resident's home is the furniture outranking the data. The 40dp default stays where it
+/// belongs, in a list tile's leading slot. See [NivoraDomain] for the rule.
 class SectionHeading extends StatelessWidget {
-  const SectionHeading({super.key, required this.title, this.caption, this.trailing});
+  const SectionHeading({
+    super.key,
+    required this.title,
+    this.caption,
+    this.trailing,
+    this.domain,
+    this.icon,
+  });
 
   final String title;
   final String? caption;
   final Widget? trailing;
+
+  /// Which area of the product this section belongs to. Null draws no icon.
+  final NivoraDomain? domain;
+
+  /// A glyph more specific than the domain's own. Ignored without [domain].
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -425,6 +447,10 @@ class SectionHeading extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: Space.sm),
       child: Row(
         children: [
+          if (domain != null) ...[
+            DomainIcon(domain: domain!, icon: icon, size: DomainIconSize.sm),
+            const SizedBox(width: Space.sm),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -764,19 +790,22 @@ class InitialsAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    // A COLOUR OF THEIR OWN, from the name — the way Google Contacts gives every face a hue,
+    // so three roommates in a cluster are three people and not three gold discs. Stable across
+    // screens and sessions (see [avatarToneFor]); the chip recipe, so it is measured.
+    final tone = context.tones.resolve(avatarToneFor(name));
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        // The measured chip recipe, not a plausible-looking alpha invented at the paint site.
-        color: context.tones.chipFill(t.colorScheme.primary),
+        color: context.tones.chipFill(tone),
       ),
       child: Text(
         initialsOf(name),
         style: (size >= _largeAbove ? t.textTheme.titleLarge : t.textTheme.labelSmall)
-            ?.copyWith(color: t.colorScheme.primary),
+            ?.copyWith(color: tone),
         maxLines: 1,
       ),
     );

@@ -126,6 +126,11 @@ class _Detail extends ConsumerWidget {
             children: [
               Row(
                 children: [
+                  // The same violet building that headed this hostel's row in the list, so
+                  // the tap lands on something recognisably the same object. Not a
+                  // DomainCard: this card carries two status pills, and state wins a surface.
+                  const DomainIcon(domain: NivoraDomain.rooms, icon: Icons.apartment_rounded),
+                  const SizedBox(width: Space.sm),
                   Expanded(
                     // 16/700 — the design's card title (4:1543). Nothing in the Figma file is
                     // set at 20, and a hostel's name is a card title, not a hero figure.
@@ -167,18 +172,20 @@ class _Detail extends ConsumerWidget {
         ),
         const SizedBox(height: Space.lg),
 
-        const SaHeading(title: 'Owner'),
+        const SaHeading(title: 'Owner', domain: NivoraDomain.people),
         _OwnerCard(hostel: hostel),
         const SizedBox(height: Space.lg),
 
         SaHeading(
           title: 'Subscription',
           caption: daysLeftLabel(hostel.daysLeft),
+          domain: NivoraDomain.money,
+          icon: Icons.card_membership_rounded,
         ),
         _SubscriptionCard(hostel: hostel),
         const SizedBox(height: Space.lg),
 
-        const SaHeading(title: 'Structure'),
+        const SaHeading(title: 'Structure', domain: NivoraDomain.rooms),
         _StructureCard(hostelId: hostel.hostelId, hostel: hostel),
         const SizedBox(height: Space.lg),
 

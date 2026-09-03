@@ -715,8 +715,12 @@ class InitialsAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    // No tone given: a colour of THEIR OWN, from the name, so a staff list is a list of people
+    // rather than a column of identical gold discs. Stable across screens — see [avatarToneFor].
+    // A caller that passes a tone is saying something about the person (a payment's state,
+    // say) and keeps it.
     final accent =
-        muted ? context.tones.muted : context.tones.resolve(tone ?? t.colorScheme.primary);
+        muted ? context.tones.muted : context.tones.resolve(tone ?? avatarToneFor(name));
     return Container(
       width: Space.xxxl,
       height: Space.xxxl,
@@ -921,12 +925,31 @@ class KpiTile extends StatelessWidget {
 }
 
 /// A section title, optionally with one action on the right.
+///
+/// [domain] puts the domain's coloured icon before the title, so an owner finds a section by
+/// its colour before reading a word. Drawn at [DomainIconSize.sm] — the same 28dp plate the SA
+/// kit's `SaHeading` puts before its own headings, so one object is one size product-wide and
+/// the icon marks the title rather than outgrowing it. See [NivoraDomain] for the rule that
+/// keeps it honest.
 class SectionHeading extends StatelessWidget {
-  const SectionHeading({super.key, required this.title, this.caption, this.trailing});
+  const SectionHeading({
+    super.key,
+    required this.title,
+    this.caption,
+    this.trailing,
+    this.domain,
+    this.icon,
+  });
 
   final String title;
   final String? caption;
   final Widget? trailing;
+
+  /// Which area of the product this section belongs to. Null draws no icon.
+  final NivoraDomain? domain;
+
+  /// A glyph more specific than the domain's own. Ignored without [domain].
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -936,6 +959,10 @@ class SectionHeading extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (domain != null) ...[
+            DomainIcon(domain: domain!, icon: icon, size: DomainIconSize.sm),
+            const SizedBox(width: Space.sm),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

@@ -63,6 +63,17 @@ class _WardenShellState extends ConsumerState<WardenShell> {
   /// mounting it warms only widgets, not the network.
   static const _warmOrder = [1, 3, 4, 2];
 
+  /// Which area of the product each tab IS — the colour its indicator takes when selected.
+  /// Home is the platform's own gold; the other four are the domains they open, in the same
+  /// order as the destinations below and as features/shell/role_shell.dart.
+  static NivoraDomain _domainOfTab(int index) => switch (index) {
+        1 => NivoraDomain.people,
+        2 => NivoraDomain.rooms,
+        3 => NivoraDomain.money,
+        4 => NivoraDomain.complaints,
+        _ => NivoraDomain.security,
+      };
+
   @override
   void initState() {
     super.initState();
@@ -96,6 +107,17 @@ class _WardenShellState extends ConsumerState<WardenShell> {
     // that shows it. (Before the warmer reaches a tab this is today's cold load — the warmer
     // exists to make that window a few hundred milliseconds wide instead of forever.)
     _mounted.add(index);
+
+    // THE PILL TAKES THE SELECTED TAB'S DOMAIN COLOUR — teal on Students, violet on Rooms,
+    // green on Payments, amber on Complaints, the brand gold on Home — so the bar says where
+    // you are in the same colour the screen's own icons and shortcuts do. Only the SELECTED
+    // state moves: the fill is the measured chip recipe and the ink is the theme-resolved
+    // domain colour, the exact pairing every DomainIcon draws, and the unselected icons and
+    // labels stay whatever the theme's navigationBarTheme already makes them. Nothing here
+    // reaches into theme.dart; it is that theme with one colour swapped per tab.
+    final tones = context.tones;
+    final ink = tones.resolve(_domainOfTab(index).tone);
+    final navTheme = t.navigationBarTheme;
 
     // Already fetched by the home screen for the same key, so the badges cost nothing extra.
     // Null while it loads, and null is drawn as no badge rather than as a zero.
@@ -138,39 +160,54 @@ class _WardenShellState extends ConsumerState<WardenShell> {
         ),
         child: ClipRRect(
           borderRadius: Radii.rSheetTop,
-          child: NavigationBar(
-            selectedIndex: index,
-            onDestinationSelected: (i) => ref.read(wardenTabProvider.notifier).go(i),
-            // 64dp keeps every destination above the 48dp minimum with room for the label — at
-            // 1.0x. NavigationBar honours this height literally, so at 1.4x the label was
-            // clipped against the icon; scaling it and capping the growth keeps the bar off the
-            // content.
-            height: MediaQuery.textScalerOf(context).scale(64).clamp(64.0, 88.0),
-            // Transparent: the shape above paints the fill, and a second opaque colour inside
-            // the clip would square the corners off again.
-            backgroundColor: Colors.transparent,
-            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-            destinations: [
-              const NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Home'),
-              const NavigationDestination(
-                  icon: Icon(Icons.people_alt_rounded), label: 'Students'),
-              const NavigationDestination(
-                  icon: Icon(Icons.meeting_room_rounded), label: 'Rooms'),
-              NavigationDestination(
-                icon: _Badged(
-                  count: stats?.studentsUnpaid,
-                  child: const Icon(Icons.payments_rounded),
+          child: NavigationBarTheme(
+            data: navTheme.copyWith(
+              indicatorColor: tones.chipFill(ink),
+              iconTheme: WidgetStateProperty.resolveWith((states) {
+                final base = navTheme.iconTheme?.resolve(states);
+                if (!states.contains(WidgetState.selected)) return base;
+                return (base ?? const IconThemeData()).copyWith(color: ink);
+              }),
+              labelTextStyle: WidgetStateProperty.resolveWith((states) {
+                final base = navTheme.labelTextStyle?.resolve(states);
+                if (!states.contains(WidgetState.selected)) return base;
+                return (base ?? const TextStyle()).copyWith(color: ink);
+              }),
+            ),
+            child: NavigationBar(
+              selectedIndex: index,
+              onDestinationSelected: (i) => ref.read(wardenTabProvider.notifier).go(i),
+              // 64dp keeps every destination above the 48dp minimum with room for the label —
+              // at 1.0x. NavigationBar honours this height literally, so at 1.4x the label was
+              // clipped against the icon; scaling it and capping the growth keeps the bar off
+              // the content.
+              height: MediaQuery.textScalerOf(context).scale(64).clamp(64.0, 88.0),
+              // Transparent: the shape above paints the fill, and a second opaque colour
+              // inside the clip would square the corners off again.
+              backgroundColor: Colors.transparent,
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+              destinations: [
+                const NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Home'),
+                const NavigationDestination(
+                    icon: Icon(Icons.people_alt_rounded), label: 'Students'),
+                const NavigationDestination(
+                    icon: Icon(Icons.meeting_room_rounded), label: 'Rooms'),
+                NavigationDestination(
+                  icon: _Badged(
+                    count: stats?.studentsUnpaid,
+                    child: const Icon(Icons.payments_rounded),
+                  ),
+                  label: 'Payments',
                 ),
-                label: 'Payments',
-              ),
-              NavigationDestination(
-                icon: _Badged(
-                  count: stats?.openComplaints,
-                  child: const Icon(Icons.report_problem_rounded),
+                NavigationDestination(
+                  icon: _Badged(
+                    count: stats?.openComplaints,
+                    child: const Icon(Icons.report_problem_rounded),
+                  ),
+                  label: 'Complaints',
                 ),
-                label: 'Complaints',
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

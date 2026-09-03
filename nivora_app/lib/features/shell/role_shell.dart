@@ -54,6 +54,36 @@ const _tabs = <UserRole, List<({String label, IconData icon})>>{
   ],
 };
 
+/// The area each destination leads to, in the same order as [_tabs], so the selected pill can
+/// take that area's colour — see [NivoraDomain] for the colours and the rule behind them.
+///
+/// Only the two roles this shell draws a bar for are listed; the three that own their own shell
+/// (warden, manager, super admin) never reach [_RoleShellState._navBar]. Home, Dashboard and
+/// More are the platform itself, which is the brand's gold.
+const _tabDomains = <UserRole, List<NivoraDomain>>{
+  UserRole.owner: [
+    NivoraDomain.security, // Dashboard
+    NivoraDomain.rooms, // PGs
+    NivoraDomain.people, // Students
+    NivoraDomain.money, // Payments
+    NivoraDomain.security, // More
+  ],
+  UserRole.student: [
+    NivoraDomain.security, // Home
+    NivoraDomain.money, // Fees
+    NivoraDomain.complaints, // Complaints
+    NivoraDomain.notices, // Notices
+    NivoraDomain.people, // Profile
+  ],
+};
+
+/// The domain of one tab, or the brand for a role or an index nothing has mapped.
+NivoraDomain _domainOfTab(UserRole role, int index) {
+  final domains = _tabDomains[role];
+  if (domains == null || index < 0 || index >= domains.length) return NivoraDomain.security;
+  return domains[index];
+}
+
 class RoleShell extends ConsumerStatefulWidget {
   const RoleShell({super.key, required this.role});
   final UserRole role;
@@ -126,21 +156,51 @@ class _RoleShellState extends ConsumerState<RoleShell> {
           Expanded(child: _body(t, tabs)),
         ],
       ),
-      bottomNavigationBar: tabs.isEmpty
-          ? null
-          : NavigationBar(
-              selectedIndex: _index.clamp(0, tabs.length - 1),
-              onDestinationSelected: (i) => setState(() => _index = i),
-              // 64dp keeps every destination above the 48dp minimum with room for the label.
-              height: 64,
-              backgroundColor: t.colorScheme.surface,
-              indicatorColor: t.colorScheme.primary.withValues(alpha: 0.12),
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              destinations: [
-                for (final tab in tabs)
-                  NavigationDestination(icon: Icon(tab.icon), label: tab.label),
-              ],
-            ),
+      bottomNavigationBar: tabs.isEmpty ? null : _navBar(t, tabs),
+    );
+  }
+
+  /// The bottom bar, with the selected pill in the colour of the place it leads to.
+  ///
+  /// THE INDICATOR IS THE DESTINATION'S DOMAIN, not the brand's gold on every tab — the way a
+  /// Google app's bottom bar lights the active tab in that section's own hue. Fees glows the
+  /// ledger's green, Complaints the amber of open work, Notices the noticeboard's blue; Home and
+  /// More keep the brand. The fill and the ink are the chip recipe from [NivoraSemantics], so the
+  /// label on the pill measures what every chip in the app measures. The UNSELECTED destinations
+  /// are left exactly as theme.dart draws them: only the selected state is re-coloured, and
+  /// everything else on the bar still comes from the theme it already had.
+  Widget _navBar(ThemeData t, List<({String label, IconData icon})> tabs) {
+    final tones = context.tones;
+    final selected = _index.clamp(0, tabs.length - 1);
+    final ink = tones.resolve(_domainOfTab(widget.role, selected).tone);
+    final base = t.navigationBarTheme;
+
+    return NavigationBarTheme(
+      data: base.copyWith(
+        indicatorColor: tones.chipFill(ink),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          final themed = base.iconTheme?.resolve(states);
+          if (!states.contains(WidgetState.selected)) return themed;
+          return (themed ?? const IconThemeData()).copyWith(color: ink);
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final themed = base.labelTextStyle?.resolve(states);
+          if (!states.contains(WidgetState.selected)) return themed;
+          return (themed ?? const TextStyle()).copyWith(color: ink);
+        }),
+      ),
+      child: NavigationBar(
+        selectedIndex: selected,
+        onDestinationSelected: (i) => setState(() => _index = i),
+        // 64dp keeps every destination above the 48dp minimum with room for the label.
+        height: 64,
+        backgroundColor: t.colorScheme.surface,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        destinations: [
+          for (final tab in tabs)
+            NavigationDestination(icon: Icon(tab.icon), label: tab.label),
+        ],
+      ),
     );
   }
 

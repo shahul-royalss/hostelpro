@@ -74,9 +74,12 @@ class RentCard extends StatelessWidget {
           children: [
             CardHeader(
               label: 'Rent · ${monthEyebrow(periodMonth)}',
-              trailing: const IconTile(
+              // The money wallet, in the money colour: there is no row and so no status to
+              // state, and the corner says only what KIND of card this is. See [NivoraDomain].
+              trailing: const DomainIcon(
+                domain: NivoraDomain.money,
                 icon: Icons.account_balance_wallet_rounded,
-                tone: NivoraColors.textMuted,
+                size: DomainIconSize.sm,
               ),
             ),
             const SizedBox(height: Space.sm),
@@ -125,11 +128,20 @@ class RentCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // The design's card header: eyebrow left, a tinted icon box right. The box carries
-          // the fee tone, so the card announces its state before the figure has been read.
+          // A BARE GLYPH IN THE FEE TONE, not a tinted box. An [IconTile]'s fill is a 10% tint
+          // of the tone it is given, and this card's GROUND is already a 10% tint of that same
+          // tone — the plate landed twice as far toward its own glyph and effectively vanished,
+          // announcing nothing. It is the pairing NivoraSemantics.surfaceTintAlpha rules out
+          // for a chip, one layer up, and the same stack the hero RoomBedCard and the manager's
+          // menu card both had to unwind. The ground carries the state; the mark only has to be
+          // legible on it, and the ink at full strength is (4.56:1 dark, 5.83:1 light).
           CardHeader(
             label: 'Rent · ${monthEyebrow(periodMonth)}',
-            trailing: IconTile(icon: Icons.account_balance_wallet_rounded, tone: tone),
+            trailing: Icon(
+              Icons.account_balance_wallet_rounded,
+              size: IconSize.md,
+              color: accent,
+            ),
           ),
           const SizedBox(height: Space.sm),
           // The hero figure is what is OUTSTANDING when anything is outstanding, and what was
@@ -770,10 +782,24 @@ class _Cell extends StatelessWidget {
 /// hostel's rooms, and only the beds in their OWN room. There is no cheaper single read that
 /// names a resident's room: `students` stores ids, not numbers.
 class RoomBedCard extends StatelessWidget {
-  const RoomBedCard({super.key, required this.roomNumber, required this.bedNumber, this.roommates});
+  const RoomBedCard({
+    super.key,
+    required this.roomNumber,
+    required this.bedNumber,
+    this.roommates,
+    this.hero = false,
+  });
 
   final String? roomNumber;
   final int? bedNumber;
+
+  /// Draws the assigned card as the screen's SUBJECT — the rooms [DomainCard], violet on its
+  /// ground — for Profile, where "Your room" is the section and this card is the whole of it.
+  /// Home leaves it false: there the room sits under the rent card as the design's raised
+  /// fact-beneath-the-figure, and the rent card already owns that screen's one tinted surface.
+  /// An unassigned room ignores it: "Not assigned yet" is an absence, and an absence is not
+  /// dressed in a colour.
+  final bool hero;
 
   /// Who else is in the room — as the read that answers it, not as a number.
   ///
@@ -803,7 +829,13 @@ class RoomBedCard extends StatelessWidget {
           children: [
             const CardHeader(
               label: 'Your room',
-              trailing: IconTile(icon: Icons.bed_rounded, tone: NivoraColors.textMuted),
+              // Still the rooms bed, still violet: the words say nothing is assigned; the icon
+              // says what this card is about, which does not change when it is empty.
+              trailing: DomainIcon(
+                domain: NivoraDomain.rooms,
+                icon: Icons.bed_rounded,
+                size: DomainIconSize.sm,
+              ),
             ),
             const SizedBox(height: Space.xs),
             Text('Not assigned yet', style: t.textTheme.titleMedium),
@@ -826,25 +858,46 @@ class RoomBedCard extends StatelessWidget {
     // puts on `surface raised` #171A1E and "the room card" is on that list by name, while "the
     // rent card" is on the #111417 list. The pair used to be the same fill, which flattened the
     // screen's only piece of hierarchy that is not typographic.
-    return RaisedCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const CardHeader(
-            label: 'Your room',
-            trailing: IconTile(icon: Icons.bed_rounded),
-          ),
-          const SizedBox(height: Space.xs),
-          Text(
-            bedNumber == null ? 'Room $roomNumber' : 'Room $roomNumber · Bed $bedNumber',
-            style: t.textTheme.headlineSmall,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          ?_sharing(context),
-        ],
-      ),
+
+    // The rooms domain's bed, in the rooms violet — the same mark that heads "Your room" on
+    // Profile. Identity in the corner; the figure below stays cream.
+    //
+    // ON THE HERO CARD THE PLATE COMES OFF AND THE BED STAYS. A [DomainIcon] is a 10% wash of
+    // its tone behind the glyph, and the hero card's ground is a 10% wash of that same violet:
+    // a tint on a tint is the pairing [NivoraSemantics.surfaceTintAlpha] forbids, and the plate
+    // all but vanishes into the card it is sitting on. So the mark drops to a bare glyph in the
+    // ground's own ink — the same swap [DayMenuCard.hero] makes when it trades its pill for a
+    // [StatusWord]. Drawn at [IconSize.md], the size the glyph inside [IconTile] is already
+    // painted at in this exact corner on the rent card above it.
+    final Widget mark = hero
+        ? Icon(
+            Icons.bed_rounded,
+            size: IconSize.md,
+            color: context.tones.resolve(NivoraDomain.rooms.tone),
+          )
+        : const DomainIcon(
+            domain: NivoraDomain.rooms,
+            icon: Icons.bed_rounded,
+            size: DomainIconSize.sm,
+          );
+
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CardHeader(label: 'Your room', trailing: mark),
+        const SizedBox(height: Space.xs),
+        Text(
+          bedNumber == null ? 'Room $roomNumber' : 'Room $roomNumber · Bed $bedNumber',
+          style: t.textTheme.headlineSmall,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        ?_sharing(context),
+      ],
     );
+
+    if (hero) return DomainCard(domain: NivoraDomain.rooms, child: body);
+    return RaisedCard(child: body);
   }
 
   /// The sharing line, in whichever state the roommate read is actually in.
@@ -889,8 +942,13 @@ class RoomBedCard extends StatelessWidget {
               children: [
                 AvatarCluster(
                   names: [for (final mate in people) mate.fullName],
-                  // This card is raised now, so the cut-out ring has to be the raised fill.
-                  ring: raisedSurfaceOf(context),
+                  // The cut-out ring is whatever this card's ground actually is — the raised
+                  // fill, or the rooms tint when the card is the hero. A ring in the wrong fill
+                  // is a grey halo rather than a gap.
+                  ring: hero
+                      ? context.tones
+                          .tintedSurface(NivoraDomain.rooms.tone, cardSurfaceOf(context))
+                      : raisedSurfaceOf(context),
                 ),
                 const SizedBox(width: Space.xs),
                 Expanded(child: sentence),

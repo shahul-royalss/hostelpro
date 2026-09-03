@@ -85,11 +85,10 @@ class StaffNoticeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final tones = context.tones;
-    // `all` is the quieter one on purpose: it is the ordinary case. A notice sent to this role
-    // alone is the one worth catching an eye, so it carries the accent.
-    final tone = tones.resolve(
-      _addressedToThisRoleAlone ? NivoraColors.info : t.colorScheme.outline,
-    );
+    // The "For you" chip's own colour, and the only thing left that needs one. It is always the
+    // info tone now: the chip is drawn ONLY when the notice is addressed to this role alone, so
+    // the branch the old grey served no longer exists.
+    final tone = tones.info;
 
     return GlassCard(
       child: Column(
@@ -98,13 +97,22 @@ class StaffNoticeCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(Space.xs),
-                decoration: BoxDecoration(
-                  color: tones.chipFill(tone),
-                  borderRadius: Radii.rControl,
-                ),
-                child: Icon(Icons.campaign_rounded, size: IconSize.xs, color: tone),
+              // ── THE SAME BLUE MEGAPHONE A NOTICE WEARS EVERYWHERE ELSE ────────────────
+              //
+              // This was a hand-built chip whose colour was the AUDIENCE: blue when the notice
+              // was addressed to this role alone, grey otherwise. Two things were wrong with
+              // that once the domain layer existed. The student's NoticeTile and the owner's
+              // card head every notice with the blue notices plate, so on a staff home the
+              // "All notices" link was blue while the notices above it were usually grey — and
+              // blue meant "a notice" on one screen and "for you" on the other, which is a
+              // classification wearing an identity's colour.
+              //
+              // The audience distinction did not go anywhere: it is spelled out in the audience
+              // chip below, in words, which is where a classification belongs.
+              const DomainIcon(
+                domain: NivoraDomain.notices,
+                icon: Icons.campaign_rounded,
+                size: DomainIconSize.sm,
               ),
               const SizedBox(width: Space.sm),
               Expanded(

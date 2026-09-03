@@ -1265,13 +1265,22 @@ class TapRow extends StatelessWidget {
 class Avatar extends StatelessWidget {
   const Avatar({super.key, required this.name, this.tone, this.size = Space.xxl});
   final String name;
+
+  /// A STATUS tone — the resident's own state on the roster and the ledger — canonical or
+  /// resolved, resolved here either way so the caller keeps naming the meaning.
+  ///
+  /// NULL COLOURS THE DISC BY NAME ([avatarToneFor]), the way a contacts list gives every face
+  /// its own hue: the same person is the same colour on every sheet, and a list of strangers
+  /// becomes a list of people you can tell apart. It used to fall back to the brand gold,
+  /// which made every avatar with nothing to say read as the account holder. Pass a tone only
+  /// where the colour MEANS something — the rule in [NivoraDomain].
   final Color? tone;
   final double size;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final accent = context.tones.resolve(tone ?? t.colorScheme.primary);
+    final accent = context.tones.resolve(tone ?? avatarToneFor(name));
     return Container(
       width: size,
       height: size,

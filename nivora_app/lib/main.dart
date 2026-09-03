@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart' show SystemChrome, SystemUiMode, SystemUiOverlayStyle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -15,6 +16,10 @@ import 'features/auth/email_verification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Draw under both system bars. Target SDK 36 enforces this on Android 15+ regardless; asking
+  // for it explicitly makes older devices match, and NivoraTheme.systemBars (applied at the
+  // app root below) is what keeps the bar icons legible on whichever ground is under them.
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   // The typeface is bundled (see pubspec.yaml), so nothing should ever be fetched. Turning
   // runtime fetching off makes that a guarantee rather than an intention: if a weight is ever
@@ -187,11 +192,18 @@ class _NivoraAppState extends ConsumerState<NivoraApp> {
         // Cap text scaling. Respecting the user's font size matters, but past ~1.4x a dense
         // operational screen stops being usable, so it is clamped rather than ignored.
         final mq = MediaQuery.of(context);
-        return MediaQuery(
-          data: mq.copyWith(
-            textScaler: mq.textScaler.clamp(minScaleFactor: 0.9, maxScaleFactor: 1.4),
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          // ONE region at the root, following the theme: light status-bar icons over the dark
+          // ground, dark ones over the ivory. Without this, every screen that draws its own
+          // header instead of an AppBar — which is most of them — left Android's default dark
+          // icons on a near-black ground. See NivoraTheme.systemBars.
+          value: NivoraTheme.systemBars(Theme.of(context).brightness),
+          child: MediaQuery(
+            data: mq.copyWith(
+              textScaler: mq.textScaler.clamp(minScaleFactor: 0.9, maxScaleFactor: 1.4),
+            ),
+            child: child!,
           ),
-          child: child!,
         );
       },
     );

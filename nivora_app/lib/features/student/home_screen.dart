@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/glass/glass.dart';
 import '../../shared/illustrations.dart';
 import 'complaint_detail_sheet.dart';
 import 'complaints_screen.dart';
@@ -174,37 +175,39 @@ class _QuickActions extends StatelessWidget {
   const _QuickActions({required this.me});
   final Student me;
 
-  /// BOTH OF THESE ARE OUTLINED, and the reason used to be the cream Pay button two cards
-  /// above them. That button is gone — rent is paid at the warden's desk, and the rent card now
-  /// says so in words (see PayAtDeskNote) — but the ranking it created is still right and these
-  /// stay outlined.
+  /// NEITHER OF THESE IS THE CREAM BUTTON, and neither is a hairline box any more.
   ///
   /// The cream fill is this design's one loud object — `bg-[#f5f3ee]` on `text-[#0b0d0f]`, the
-  /// only maximally-bright surface in a near-black palette. "Complaint" used to be a cream fill
-  /// a short scroll under the rent card, which was two primary actions on one screen: the eye
-  /// gets no answer to "what am I here to do". These two are shortcuts, not the point of the
-  /// screen.
+  /// only maximally-bright surface in a near-black palette — and it is spent on the rent card's
+  /// "Pay now" a short scroll above. "Complaint" used to be a second cream fill under it, which
+  /// was two primary actions on one screen: the eye gets no answer to "what am I here to do".
+  /// These two are shortcuts, not the point of the screen.
   ///
-  /// The design's secondary action is the hairline outlined box (4:1587) with its label in
-  /// ordinary cream rather than a coloured one — the outline is what says "button", so the text
-  /// stays quiet. These two are shortcuts, not the point of the screen, and now they look it.
+  /// They were the design's hairline outlined box (4:1587) for a while, which said "button" and
+  /// nothing else. A [DomainButton] says where the button GOES: a soft fill in the destination's
+  /// own colour — amber for complaints, blue for the noticeboard — with the label in that ink.
+  /// It is Material's tonal weight, quieter than the cream and louder than an outline, and it is
+  /// the same amber the open-complaint pill and the same blue the notices glyph already wear, so
+  /// a resident who taps one lands on a screen that is recognisably the one they chose.
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
-          child: OutlinedButton.icon(
+          child: DomainButton(
+            domain: NivoraDomain.complaints,
+            icon: Icons.add_comment_rounded,
+            label: 'Complaint',
             onPressed: () => raiseComplaint(context, me),
-            icon: const Icon(Icons.add_comment_rounded, size: IconSize.md),
-            label: const Text('Complaint'),
           ),
         ),
         const SizedBox(width: Space.xs),
         Expanded(
-          child: OutlinedButton.icon(
+          child: DomainButton(
+            domain: NivoraDomain.notices,
+            icon: Icons.campaign_rounded,
+            label: 'Notices',
             onPressed: () => _open(context, 'Notices', const StudentNoticesScreen()),
-            icon: const Icon(Icons.campaign_rounded, size: IconSize.md),
-            label: const Text('Notices'),
           ),
         ),
       ],
@@ -251,6 +254,9 @@ class _TodaysMenu extends ConsumerWidget {
         SectionHeading(
           title: "Today's food",
           caption: today.label,
+          // The saffron plate: the same glyph, in the same colour, that stands for the menu on
+          // every screen it appears on. See [NivoraDomain].
+          domain: NivoraDomain.food,
           trailing: SeeAllButton(
             label: 'Whole week',
             onPressed: () => _open(context, 'Meal menu', const StudentMenuScreen()),
@@ -269,9 +275,15 @@ class _TodaysMenu extends ConsumerWidget {
                 message: week.isEmpty
                     ? 'Your hostel manager writes the week here.'
                     : 'The manager has planned other days — tap Whole week to look ahead.',
+                // Not bad news, just an unwritten page — so the glyph keeps the section's own
+                // saffron rather than the neutral outline a merely-empty list gets.
+                tone: NivoraDomain.food.tone,
               );
             }
-            return DayMenuCard(day: today, week: week, isToday: true);
+            // THE ONE DOMAIN-TINTED CARD ON THIS SCREEN. The rent card above carries a status
+            // and keeps its status tone; this card carries none — it is simply the subject of
+            // its section — so it may take the food colour on its ground. See [DayMenuCard.hero].
+            return DayMenuCard(day: today, week: week, isToday: true, hero: true);
           },
         ),
       ],
@@ -316,6 +328,7 @@ class _OpenComplaints extends ConsumerWidget {
         SectionHeading(
           title: 'Your complaints',
           caption: _openCaption(complaints),
+          domain: NivoraDomain.complaints,
           trailing: SeeAllButton(
             onPressed: () => _open(context, 'Complaints', const StudentComplaintsScreen()),
           ),
@@ -370,6 +383,7 @@ class _LatestNotices extends ConsumerWidget {
         SectionHeading(
           title: 'Notices',
           caption: 'From the hostel owner.',
+          domain: NivoraDomain.notices,
           trailing: SeeAllButton(
             onPressed: () => _open(context, 'Notices', const StudentNoticesScreen()),
           ),

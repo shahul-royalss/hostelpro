@@ -57,7 +57,11 @@ class _Profile extends ConsumerWidget {
           _Identity(me: me),
 
           const SizedBox(height: Space.xl),
-          const SectionHeading(title: 'Your room'),
+          const SectionHeading(
+            title: 'Your room',
+            domain: NivoraDomain.rooms,
+            icon: Icons.bed_rounded,
+          ),
           AsyncSection<FeeLedgerRow?>(
             value: rent,
             onRetry: () => ref.invalidate(myRentThisMonthProvider),
@@ -66,9 +70,14 @@ class _Profile extends ConsumerWidget {
             // counting them. Passing the count as well would draw one read twice — a summary
             // line and a list of the same names on a good day, and on a bad one the same
             // failure said twice in a row.
+            //
+            // THE ONE DOMAIN-TINTED CARD ON THIS SCREEN. The room is what this section is
+            // about and it carries no status, so it takes the rooms colour on its ground — the
+            // rule in [NivoraDomain] allows exactly one such card per screen.
             builder: (row) => RoomBedCard(
               roomNumber: row?.roomNumber,
               bedNumber: row?.bedNumber,
+              hero: true,
             ),
           ),
 
@@ -86,6 +95,9 @@ class _Profile extends ConsumerWidget {
           const SectionHeading(
             title: 'My details',
             caption: 'Recorded by your warden. Ask at the office to change any of it.',
+            // One person, so the single figure rather than the domain's group glyph.
+            domain: NivoraDomain.people,
+            icon: Icons.person_rounded,
           ),
           OutlineCard(
             child: Column(
@@ -104,7 +116,12 @@ class _Profile extends ConsumerWidget {
           ),
 
           const SizedBox(height: Space.xl),
-          const SectionHeading(title: 'Your hostel'),
+          // A hostel is a building — the rooms domain — and the building glyph says so.
+          const SectionHeading(
+            title: 'Your hostel',
+            domain: NivoraDomain.rooms,
+            icon: Icons.apartment_rounded,
+          ),
           AsyncSection<HostelContacts?>(
             value: contacts,
             onRetry: () => ref.invalidate(hostelContactsProvider),
@@ -173,10 +190,13 @@ class _Roommates extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     if (mates.isEmpty) {
-      return const EmptyNote(
+      return EmptyNote(
         icon: Icons.person_outline_rounded,
         title: 'No roommates listed',
         message: 'Either you have the room to yourself, or you have not been placed in one yet.',
+        // Neither good nor bad news — a room to yourself is fine — so the glyph takes the
+        // people domain's teal rather than the neutral outline or a congratulating green.
+        tone: NivoraDomain.people.tone,
       );
     }
     return OutlineCard(

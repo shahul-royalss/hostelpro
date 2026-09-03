@@ -211,6 +211,10 @@ class _Roster extends StatelessWidget {
             // Artwork for the first run, the glyph for a search miss. The drawing says "there
             // is nothing here yet", which would be a lie over "no match for that".
             illustration: term.isEmpty ? EmptyArt.residents : null,
+            // The residents' own teal on the first-run state: it belongs to that area and is
+            // neither good news nor bad. A search miss stays neutral — "no match" is a fact
+            // about the search, not about the residents.
+            tone: term.isEmpty ? NivoraDomain.people.tone : null,
             title: term.isEmpty ? 'No residents yet' : 'Nobody matches “$term”',
             // Two different facts, and conflating them is how an owner concludes their PG is
             // empty when they have merely mistyped a name.

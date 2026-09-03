@@ -92,28 +92,37 @@ class _Loaded extends ConsumerWidget {
             // and puts the destructive one alone at the very bottom of the page as a coral
             // outline. That is the shape below: the two everyday actions here, check-out after
             // everything a warden should have read first.
+            //
+            // Payment is the sheet's one cream [FilledButton] — the thing a warden opens a
+            // resident to do. The bed action beside it is a shortcut into the rooms flow, so it
+            // is a [DomainButton] in that domain's violet: the same colour "Assign bed" wears on
+            // the home screen and the Rooms tab, which is how a warden learns that violet means
+            // "beds" before reading a label. A button that looks like a button is still the
+            // difference between "I can do this" and "this is a stat"; the tint says where it
+            // goes. See [NivoraDomain] for the rule that keeps the two colours on different
+            // objects.
             Row(
               children: [
                 Expanded(
-                  child: _Action(
-                    filled: true,
-                    icon: Icons.payments_rounded,
-                    label: 'Payment',
-                    onTap: () => showRecordPaymentSheet(
+                  child: FilledButton.icon(
+                    onPressed: () => showRecordPaymentSheet(
                       context,
                       studentId: student.id,
                       studentName: student.fullName,
                       monthlyFee: student.monthlyFee,
                       periodMonth: month,
                     ),
+                    icon: const Icon(Icons.payments_rounded, size: IconSize.md),
+                    label: const Text('Payment', maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),
                 ),
                 const SizedBox(width: Space.xs),
                 Expanded(
-                  child: _Action(
+                  child: DomainButton(
+                    domain: NivoraDomain.rooms,
                     icon: student.hasBed ? Icons.swap_horiz_rounded : Icons.bed_rounded,
                     label: student.hasBed ? 'Move bed' : 'Assign bed',
-                    onTap: () => showAssignBedSheet(context, ref, student: student),
+                    onPressed: () => showAssignBedSheet(context, ref, student: student),
                   ),
                 ),
               ],
@@ -277,7 +286,14 @@ class _Placement extends ConsumerWidget {
           Row(
             children: [
               const Expanded(child: CapsLabel('Current assignment')),
-              Icon(Icons.bed_outlined, size: IconSize.lg, color: t.colorScheme.primary),
+              // The rooms domain's plate rather than a bare gold glyph: this card is about
+              // where they sleep, and violet is what a bed is painted everywhere else in the
+              // app. The card itself stays neutral — it carries no status.
+              const DomainIcon(
+                domain: NivoraDomain.rooms,
+                icon: Icons.bed_outlined,
+                size: DomainIconSize.sm,
+              ),
             ],
           ),
           const SizedBox(height: Space.xxs),
@@ -367,37 +383,6 @@ class _FeeHistory extends ConsumerWidget {
         );
       },
     );
-  }
-}
-
-/// One of the two everyday things a warden does to a resident.
-///
-/// resident-profile.png puts a pair of buttons under the name: one quiet, one filled violet.
-/// This used to be a pair of 64dp tinted tiles with the icon stacked over the label, which is
-/// a shape the design uses for Quick Actions on a dashboard and nowhere else. A button that
-/// looks like a button is also the difference between "I can do this" and "this is a stat".
-class _Action extends StatelessWidget {
-  const _Action({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.filled = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  /// The one the design fills. At most one per row.
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) {
-    final glyph = Icon(icon, size: IconSize.md);
-    final text = Text(label, maxLines: 1, overflow: TextOverflow.ellipsis);
-    return filled
-        ? FilledButton.icon(onPressed: onTap, icon: glyph, label: text)
-        : OutlinedButton.icon(onPressed: onTap, icon: glyph, label: text);
   }
 }
 

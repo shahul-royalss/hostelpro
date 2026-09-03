@@ -907,3 +907,267 @@ class StateBody extends StatelessWidget {
         child: Icon(icon, size: IconSize.xl - Space.xs, color: accent),
       );
 }
+
+// ═════════════════════════════════════════════════════════════════════════════════════════
+// THE DOMAIN LAYER — colour as wayfinding.
+// ═════════════════════════════════════════════════════════════════════════════════════════
+//
+// Three widgets, one recipe, one rule. The recipe is the design's own chip — a 10% wash of the
+// tone with the glyph or label in the tone at full strength — which is the ONE tight contrast
+// case in the app and is measured for every tone in test/theme_contrast_test.dart. So nothing
+// here can paint a pairing that has not been checked.
+//
+// The rule is [NivoraDomain]'s: domain colour lives on ICONS, ACTIONS and AVATARS; status
+// colour lives on SURFACES and FIGURES. A [DomainIcon] at the head of every menu row is what
+// makes the menu recognisably the menu on every screen. A red [ToneSurface] behind an unpaid
+// rent figure is what says it is unpaid today. They never occupy the same pixel.
+
+/// How big a [DomainIcon] is. The box, and the glyph inside it, on the 4dp grid.
+enum DomainIconSize {
+  /// 28dp box, 14 glyph — the head of a row in a dense list, where [ToneBadge] used to sit.
+  sm(28, IconSize.sm),
+
+  /// 40dp box, 20 glyph — a list tile's leading slot and a section heading. The size Google's
+  /// own lists draw their coloured icon containers at, and the default.
+  md(40, IconSize.lg),
+
+  /// 56dp box, 28 glyph — a hero card, or an empty state that belongs to one domain.
+  lg(56, IconSize.xl - Space.xxs);
+
+  const DomainIconSize(this.box, this.glyph);
+  final double box;
+  final double glyph;
+}
+
+/// The coloured icon container that opens a row, a section or a card — the single most
+/// recognisable piece of furniture in a Google app, and now this one.
+///
+/// A tint of the domain's colour, the glyph in that colour at full strength, no border. The
+/// border is the difference between this and a [StateBadge]: a badge is a state and its edge
+/// says "chip", an icon container is an identity and sits quietly behind its glyph. Rounded
+/// square by default (the vocabulary [IconTile] and [ToneBadge] already use); [circular] for
+/// the one place a disc reads better, which is beside a person.
+///
+/// The glyph is a GRAPHIC, so WCAG 1.4.11's 3:1 is its bar — and the ink measures at least
+/// 4.5:1 on a chip of itself, because that is the contract every ink in [NivoraSemantics]
+/// meets. A [DomainIcon] can never be drawn too faint to see.
+class DomainIcon extends StatelessWidget {
+  const DomainIcon({
+    super.key,
+    required this.domain,
+    this.icon,
+    this.size = DomainIconSize.md,
+    this.circular = false,
+    this.semanticLabel,
+  });
+
+  final NivoraDomain domain;
+
+  /// A glyph more specific than the domain's own — a plate for breakfast on a menu row whose
+  /// domain is [NivoraDomain.food]. Null draws the domain's.
+  final IconData? icon;
+  final DomainIconSize size;
+  final bool circular;
+
+  /// Decoration by default: the row beside it already says what it is. Pass a label only when
+  /// the icon is the only thing carrying the meaning.
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final tones = context.tones;
+    final ink = tones.resolve(domain.tone);
+    final box = Container(
+      width: size.box,
+      height: size.box,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: tones.chipFill(ink),
+        borderRadius: circular ? Radii.rPill : Radii.rCard,
+      ),
+      child: Icon(icon ?? domain.icon, size: size.glyph, color: ink),
+    );
+    return semanticLabel == null
+        ? ExcludeSemantics(child: box)
+        : Semantics(label: semanticLabel, image: true, child: box);
+  }
+}
+
+/// The shortcut that says where it goes — a neutral control with a coloured mark.
+///
+/// A [FilledButton] is the design's one loud object and is reserved for the action a screen
+/// exists for. An [OutlinedButton] is the hairline box for something quieter. This is a third
+/// weight: the same quiet control, with the GLYPH AND LABEL in the destination's colour. Four
+/// of these across a dashboard are four different colours naming four different places, which
+/// a row of grey boxes could never do.
+///
+/// ── THE FILL IS NEUTRAL, AND THAT IS THE RULE BEING OBEYED RATHER THAN BENT ──────────────
+///
+/// This drew a tonal FILL in the domain's tint at first — Material's `FilledButton.tonal`,
+/// which is a perfectly good control and was the wrong one here. [NivoraDomain]'s rule is that
+/// domain colour lives on icons, actions and avatars while STATUS colour owns surfaces, and a
+/// tinted button is a tinted surface: on the warden's home four of them sat directly under four
+/// status-tinted stat tiles, so seven hues shared one screenful and two of them collided
+/// outright — an amber "Resolve complaint" immediately below an amber "3 complaints", where the
+/// same colour meant "the complaints area" on one and "there is open work" on the other.
+///
+/// Moving the colour off the ground and into the mark fixes that everywhere at once, and it is
+/// the more Google-like shape besides: a coloured icon on a neutral row is what Settings, Drive
+/// and Gmail all draw. It also leaves the tinted surface to mean exactly one thing again — the
+/// single [DomainCard] a screen is allowed.
+///
+/// The label sits in the domain ink on [ColorScheme.surfaceContainer], which is one of the four
+/// surfaces every ink in [NivoraSemantics] is measured AA against, so a 14px label here clears
+/// 4.5:1 in both themes. The hairline is the neutral card edge, not the tone — a coloured edge
+/// would put the colour back on the surface by another route.
+class DomainButton extends StatelessWidget {
+  const DomainButton({
+    super.key,
+    required this.domain,
+    required this.label,
+    required this.onPressed,
+    this.icon,
+    this.enabled = true,
+    this.expand = true,
+  });
+
+  final NivoraDomain domain;
+  final String label;
+  final VoidCallback onPressed;
+
+  /// The glyph before the label. Null draws the domain's own.
+  final IconData? icon;
+  final bool enabled;
+
+  /// Full width, like every other button in the theme. False hugs the label.
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final tones = context.tones;
+    // Disabled goes to the muted ink rather than a paler domain colour: a paler tint of the
+    // tone is a value this palette has not measured, and the muted ink is AA everywhere.
+    final ink = enabled ? tones.resolve(domain.tone) : tones.muted;
+    final fill = t.colorScheme.surfaceContainer;
+
+    return FilledButton.tonal(
+      onPressed: enabled ? onPressed : null,
+      style: FilledButton.styleFrom(
+        backgroundColor: fill,
+        disabledBackgroundColor: fill,
+        foregroundColor: ink,
+        disabledForegroundColor: ink,
+        // The neutral card edge, so the control reads as a control in the light theme — where
+        // surfaceContainer is white and an unbordered button on an ivory page is invisible.
+        side: BorderSide(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
+        // 48: Material's floor and above Apple's 44, like the theme's own buttons.
+        minimumSize: expand ? const Size.fromHeight(48) : const Size(0, 48),
+        shape: const RoundedRectangleBorder(borderRadius: Radii.rControl),
+        padding: const EdgeInsets.symmetric(horizontal: Space.md),
+        textStyle: t.textTheme.labelLarge,
+        elevation: 0,
+      ),
+      child: Row(
+        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon ?? domain.icon, size: IconSize.md, color: ink),
+          const SizedBox(width: Space.xs),
+          Flexible(
+            child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A card whose GROUND is a domain's colour — the one hero surface a screen may have.
+///
+/// [ToneSurface] with the rail off and no status word, which is exactly what it is: the same
+/// measured tint, the same tone-coloured hairline, and none of the state-carrying furniture.
+/// Body text stays AA on every tint in both themes — that is proven in the tinted-surfaces
+/// group of the contrast test — so anything a plain card can hold, this can.
+///
+/// ── AT MOST ONE PER SCREEN, AND NEVER ON A CARD THAT HAS A STATUS ───────────────────────
+///
+/// A screen where every card is tinted has said nothing. This is for the card that IS the
+/// screen's subject — "Today's food" on the resident's home, "Your room" on their profile —
+/// and not for a list. And a card that carries a status ("unpaid", "resolved") is a
+/// [ToneSurface] in that status's tone, never this: state wins the surface, and the domain
+/// shows only on the icon in the corner.
+class DomainCard extends StatelessWidget {
+  const DomainCard({
+    super.key,
+    required this.domain,
+    required this.child,
+    this.padding,
+    this.onTap,
+    this.semanticLabel,
+  });
+
+  final NivoraDomain domain;
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final VoidCallback? onTap;
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) => ToneSurface(
+        tone: domain.tone,
+        rail: false,
+        padding: padding,
+        onTap: onTap,
+        semanticLabel: semanticLabel,
+        child: child,
+      );
+}
+
+/// A stable colour for a person, from their name — the way Google Contacts gives every face a
+/// hue so a list of strangers becomes a list of people you can tell apart.
+///
+/// ── THREE HUES, AND THE THREE IT LEAVES OUT ARE THE POINT ────────────────────────────────
+///
+/// The palette is exactly the domain tones that are NOT also a status: violet, teal, saffron.
+/// `success`, `warning` and `info` are deliberately absent, and an earlier version of this
+/// function included them — which was a real bug, not a stylistic one:
+///
+///   The SAME avatar widget carries a STATUS tone on several screens. The warden's fee ledger
+///   passes the fee tone (paid green / partly amber / unpaid red), the resident roster passes
+///   `toneFor(status)` (active green / on leave amber), and the desk sheets pass amber and blue
+///   outright. On the screens that pass nothing — assign-bed, the complaint sheet, the owner's
+///   roster — the colour fell through to this hash. So a resident whose NAME happened to hash
+///   to amber wore the exact disc that means "on leave" on the list two taps away.
+///
+/// Removing those three closes it at the source: an identity colour can no longer collide with
+/// a state colour, on any screen, for any name.
+///
+/// Gold is left out too, for a different reason: it is the brand's, and a face in the brand
+/// colour would read as the account holder.
+///
+/// ── WHAT "STABLE" DOES AND DOES NOT PROMISE ──────────────────────────────────────────────
+///
+/// The same NAME always hashes to the same hue, in every session and on every screen that lets
+/// this function choose. It is not a promise that a person looks identical everywhere: a caller
+/// that passes `tone:` is stating a STATUS, and status wins the disc — that is the same rule
+/// the rest of the domain layer follows, and it is why the ledger's amber avatar is correct
+/// even though this function would have painted that resident teal.
+///
+/// Returns a CANONICAL tone — resolve it at the paint site with `context.tones.resolve`.
+Color avatarToneFor(String? name) {
+  const palette = [
+    NivoraColors.rooms,
+    NivoraColors.people,
+    NivoraColors.food,
+  ];
+  final key = (name ?? '').trim().toLowerCase();
+  if (key.isEmpty) return NivoraColors.textMuted;
+  // FNV-1a over the code units: a few lines, no dependency, and stable across platforms in a
+  // way `String.hashCode` is explicitly not guaranteed to be.
+  var h = 0x811C9DC5;
+  for (final unit in key.codeUnits) {
+    h = ((h ^ unit) * 0x01000193) & 0xFFFFFFFF;
+  }
+  return palette[h % palette.length];
+}

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
+import '../../../shared/glass/glass.dart';
 import 'common.dart';
 import 'format.dart';
 
@@ -28,11 +29,14 @@ class NoticeTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final forStudentsOnly = notice.audience == NoticeAudience.students;
-    // The mockups draw a notice as an accented card led by a round tinted glyph. The rail and
-    // the glyph are `primary` on every notice, not a colour per notice: a hue that changed row
-    // to row would be a status code nobody had defined, and which notices reach this device was
-    // already decided by the select policy. The one real distinction the row carries — who the
-    // notice is addressed to — is said in a word, by the pill.
+    // The mockups draw a notice as an accented card led by a tinted glyph. The rail is `primary`
+    // on every notice and the glyph is the NOTICES domain on every notice — one colour each,
+    // never a colour per notice: a hue that changed row to row would be a status code nobody had
+    // defined, and which notices reach this device was already decided by the select policy. The
+    // one real distinction the row carries — who the notice is addressed to — is said in a word,
+    // by the pill. The blue megaphone is the same mark that heads the Notices section on Home
+    // and lights the Notices tab, which is what makes a notice recognisably a notice wherever it
+    // turns up. See [NivoraDomain].
     return OutlineCard(
       accent: t.colorScheme.primary,
       // The rail eats into the leading edge, so the content is inset past it rather than
@@ -44,7 +48,11 @@ class NoticeTile extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const ToneBadge(icon: Icons.campaign_rounded),
+              const DomainIcon(
+                domain: NivoraDomain.notices,
+                icon: Icons.campaign_rounded,
+                size: DomainIconSize.sm,
+              ),
               const SizedBox(width: Space.sm),
               Expanded(
                 child: Padding(

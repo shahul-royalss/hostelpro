@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 
 import 'tokens.dart';
 import 'typography.dart';
@@ -146,6 +147,35 @@ abstract final class NivoraTheme {
         filledButtonForeground: _lightScheme.onPrimary,
         semantics: NivoraSemantics.light,
       );
+
+  /// The Android status and navigation bars, for a theme of this [brightness].
+  ///
+  /// ── THIS WAS NOT SET ANYWHERE, AND THE RESULT WAS INVISIBLE STATUS-BAR ICONS ─────────────
+  ///
+  /// Most screens draw their own header ([GlassHeader]) rather than an [AppBar], and an AppBar
+  /// is the only Material widget that sets the overlay style on its own. With no AppBar on the
+  /// screen, Android keeps whatever it had — its default, which is DARK icons — and dark icons
+  /// on the design's #0B0D0F ground are a clock nobody can read. The first screen a person sees
+  /// (sign-in) is one of those. This is the single most common "it looks like a Flutter app"
+  /// tell, and the fix is one region at the root that follows the theme.
+  ///
+  /// EDGE TO EDGE, WHICH TARGET SDK 36 ENFORCES ANYWAY: both bars are transparent so the ground
+  /// runs under them, and the three-button navigation bar's contrast scrim is off, because the
+  /// bar sits on the app's own opaque surface. Icon brightness is the opposite of the theme's:
+  /// light icons over the dark ground, dark icons over the ivory one.
+  static SystemUiOverlayStyle systemBars(Brightness brightness) {
+    final dark = brightness == Brightness.dark;
+    return SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+      // iOS reads this one instead; it names the BAR's brightness, not the icons'.
+      statusBarBrightness: brightness,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+      systemNavigationBarContrastEnforced: false,
+      systemNavigationBarDividerColor: Colors.transparent,
+    );
+  }
 
   static ThemeData _base({
     required ColorScheme scheme,

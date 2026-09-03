@@ -109,17 +109,9 @@ class ManagerMenuScreen extends ConsumerWidget {
                 children: [
                   _DayStrip(week: week, selected: day, today: today),
                   const SizedBox(height: Space.md),
-                  for (final meal in Meal.values) ...[
-                    _MealCard(
-                      hostelId: hostelId,
-                      day: day,
-                      meal: meal,
-                      items: week.itemsFor(day, meal),
-                    ),
-                    const SizedBox(height: Space.sm),
-                  ],
+                  _DayMenu(hostelId: hostelId, day: day, week: week),
                   if (week.lastUpdated != null) ...[
-                    const SizedBox(height: Space.xxs),
+                    const SizedBox(height: Space.md),
                     Text(
                       'Menu last changed ${shortDate(week.lastUpdated!)}',
                       style: Theme.of(context).textTheme.bodySmall,
@@ -254,11 +246,80 @@ class _DayChip extends StatelessWidget {
   }
 }
 
+/// The day being edited — the ONE domain-tinted surface this screen gets.
+///
+/// A saffron [DomainCard] around the four meals, opened by the food glyph: the manager's side
+/// of the resident's "Today's food" card, so the menu is recognisably the menu on both ends of
+/// the app. It is the card that IS the screen's subject and it carries no status — an unplanned
+/// meal is said in muted ink inside it, never as a tint of the whole — which is exactly the
+/// case [NivoraDomain] allows a domain onto a surface. Nothing else here is tinted: the day
+/// strip keeps the design's gold-selected chip, because that is selection, not identity.
+///
+/// The meal blocks inside drop their hairline. The design's own inner blocks (4:1603, 4:1606)
+/// are bare fills — a hairline inside a hairlined card reads as a table — and the card's
+/// tone-coloured edge is the only outline this group needs.
+class _DayMenu extends StatelessWidget {
+  const _DayMenu({required this.hostelId, required this.day, required this.week});
+
+  final String hostelId;
+  final MenuDay day;
+  final WeeklyMenu week;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return DomainCard(
+      domain: NivoraDomain.food,
+      padding: const EdgeInsets.all(Space.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              // A BARE GLYPH, NOT A PLATE. This card is a DomainCard(food), so its ground is
+              // already a 10% saffron tint — and a DomainIcon's fill is a 10% tint of the same
+              // tone, which lands twice as far toward its own glyph and all but disappears. It
+              // is the tint-on-tint stack NivoraSemantics.surfaceTintAlpha describes for chips,
+              // one layer up. One domain object per card: the ground says food, so the mark in
+              // the corner only has to be legible, and the ink at full strength is.
+              Icon(
+                Icons.restaurant_rounded,
+                size: IconSize.md,
+                color: context.tones.resolve(NivoraDomain.food.tone),
+              ),
+              const SizedBox(width: Space.xs),
+              Expanded(
+                child: Text(
+                  day.label,
+                  style: t.textTheme.titleSmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Space.sm),
+          for (final meal in Meal.values) ...[
+            if (meal != Meal.values.first) const SizedBox(height: Space.xs),
+            _MealCard(
+              hostelId: hostelId,
+              day: day,
+              meal: meal,
+              items: week.itemsFor(day, meal),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// One meal, in the frame's meal-card anatomy (4:1281).
 ///
 /// `bg-[#171a1e] border border-[#292e33] rounded-[10px] p-[12px] gap-[8px]`: the meal's name
 /// along the top in GOLD CAPS with the edit glyph opposite it, and the dishes underneath in
-/// body semibold cream.
+/// body semibold cream. The border is the one part not drawn any more — see [_DayMenu] for
+/// why an inner block of a tinted card goes edgeless.
 ///
 /// THE GOLD IS THE DESIGN'S, AND IT STILL MEANS SOMETHING HERE. 4:1283 and 4:1310 set every
 /// meal heading in `#c9a96e` regardless of state, because every meal on that frame is planned.
@@ -286,12 +347,14 @@ class _MealCard extends StatelessWidget {
     final planned = items != null;
     final accent = planned ? t.colorScheme.primary : context.tones.muted;
 
-    // The raised fill under a hairline at a card's radius — the frame's meal block, not a list
-    // row on the ground. FlatSurface rather than GlassSurface: nothing here is elevated above
-    // the page, and GlassSurface asserts the moment two panes stack.
+    // The raised fill at a card's radius — the frame's meal block, not a list row on the
+    // ground. FlatSurface rather than GlassSurface: nothing here is elevated above the page,
+    // and GlassSurface asserts the moment two panes stack. No hairline: this block sits inside
+    // the day's tinted card, whose own edge already outlines the group.
     return FlatSurface(
       weight: GlassWeight.regular,
       borderRadius: Radii.rCard,
+      border: false,
       padding: const EdgeInsets.all(Space.sm),
       semanticLabel: '${meal.label}: ${items ?? 'not planned yet'}. Tap to change.',
       onTap: () => showEditMealSheet(

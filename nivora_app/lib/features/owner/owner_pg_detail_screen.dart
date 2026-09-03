@@ -175,8 +175,10 @@ class _BuildingSummary extends StatelessWidget {
     final rate = capacity == 0 ? null : occupied / capacity;
 
     // The dashboard's Occupancy card, on the screen it opens onto: the same eyebrow, the same
-    // `bed` badge, the same figure size and the same meter, so the tap does not land somewhere
-    // that looks like a different app.
+    // figure size and the same meter, so the tap does not land somewhere that looks like a
+    // different app. The `bed` glyph at its head is in the rooms colour — this card IS the
+    // building, and violet is what says "rooms" everywhere. Only the icon: the meter below
+    // is a figure, and the card stays a plain card rather than a [DomainCard].
     return Padding(
       padding: const EdgeInsets.only(bottom: Space.lg),
       child: GlassCard(
@@ -184,7 +186,14 @@ class _BuildingSummary extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const CardEyebrow(label: 'Occupancy', icon: Icons.bed_rounded),
+            const CardEyebrow(
+              label: 'Occupancy',
+              trailing: DomainIcon(
+                domain: NivoraDomain.rooms,
+                icon: Icons.bed_rounded,
+                size: DomainIconSize.sm,
+              ),
+            ),
             const SizedBox(height: Space.md),
             Text('$occupied of $capacity beds filled', style: t.textTheme.headlineMedium),
             const SizedBox(height: Space.md),

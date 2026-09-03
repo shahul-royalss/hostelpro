@@ -231,6 +231,13 @@ class _Attention extends ConsumerWidget {
 }
 
 /// The four things a warden does over and over.
+///
+/// Each is a [DomainButton] in the colour of where it GOES — teal for the resident it
+/// registers, violet for the bed it assigns, green for the ledger it opens, amber for the
+/// complaint queue — so the four read as four destinations rather than four hairline boxes,
+/// and each matches the plate on the tab it lands on. The screen's cream [FilledButton] is not
+/// spent here: none of these is the action the home screen exists for; they are shortcuts to
+/// the tabs that are. See [NivoraDomain] for the rule that keeps this from becoming a rainbow.
 class _QuickActions extends ConsumerWidget {
   const _QuickActions({required this.hostelId});
   final String hostelId;
@@ -242,18 +249,20 @@ class _QuickActions extends ConsumerWidget {
         Row(
           children: [
             Expanded(
-              child: QuickAction(
+              child: DomainButton(
+                domain: NivoraDomain.people,
                 icon: Icons.person_add_alt_1_rounded,
                 label: 'Add resident',
-                onTap: () => showRegisterStudentSheet(context, hostelId: hostelId),
+                onPressed: () => showRegisterStudentSheet(context, hostelId: hostelId),
               ),
             ),
             const SizedBox(width: Space.xs),
             Expanded(
-              child: QuickAction(
+              child: DomainButton(
+                domain: NivoraDomain.rooms,
                 icon: Icons.bed_rounded,
                 label: 'Assign bed',
-                onTap: () => showPlaceResidentSheet(context, ref, hostelId: hostelId),
+                onPressed: () => showPlaceResidentSheet(context, ref, hostelId: hostelId),
               ),
             ),
           ],
@@ -262,13 +271,13 @@ class _QuickActions extends ConsumerWidget {
         Row(
           children: [
             Expanded(
-              child: QuickAction(
+              child: DomainButton(
+                domain: NivoraDomain.money,
                 icon: Icons.payments_rounded,
                 label: 'Record payment',
-                tone: NivoraColors.success,
                 // Opens the collections list filtered to the people who still owe. A payment
                 // needs a resident and a month before it needs a form, and that list is both.
-                onTap: () {
+                onPressed: () {
                   ref.read(feeFilterProvider.notifier).set(FeeStatus.unpaid);
                   ref.read(selectedMonthProvider.notifier).reset();
                   ref.read(wardenTabProvider.notifier).go(3);
@@ -277,11 +286,11 @@ class _QuickActions extends ConsumerWidget {
             ),
             const SizedBox(width: Space.xs),
             Expanded(
-              child: QuickAction(
+              child: DomainButton(
+                domain: NivoraDomain.complaints,
                 icon: Icons.task_alt_rounded,
                 label: 'Resolve complaint',
-                tone: NivoraColors.warning,
-                onTap: () {
+                onPressed: () {
                   ref.read(complaintFilterProvider.notifier).set(ComplaintFilter.needsAction);
                   ref.read(wardenTabProvider.notifier).go(4);
                 },
@@ -346,7 +355,11 @@ class _Notices extends ConsumerWidget {
               onTap: () => Navigator.of(context).push(WardenNoticesScreen.route(hostelId)),
               child: Row(
                 children: [
-                  const IconBadge(icon: Icons.campaign_rounded),
+                  // The notices domain's megaphone in its blue — the plate that heads a notice
+                  // on every screen — so the way to the noticeboard is recognisable before the
+                  // label is read. It was a gold disc, which is the colour of the account, not
+                  // of an announcement.
+                  const DomainIcon(domain: NivoraDomain.notices, icon: Icons.campaign_rounded),
                   const SizedBox(width: Space.sm),
                   Expanded(
                     child: Text(
@@ -393,44 +406,58 @@ class _Occupancy extends ConsumerWidget {
         return TapRow(
           onTap: () => ref.read(wardenTabProvider.notifier).go(2),
           padding: const EdgeInsets.all(Space.md),
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Text(
-                      beds == 0 ? 'No beds configured' : '$free free of $beds beds',
-                      style: t.textTheme.titleMedium,
+              // The building's own colour at the head of the tile — the violet that marks the
+              // Rooms tab it opens — so "The building" is found by its plate before its label,
+              // under a section heading that stays the design's caps whisper. The figures keep
+              // their STATUS tones: the state lives on the pill and the meter, the domain on
+              // this icon, and neither is drawn on the other's object.
+              const DomainIcon(domain: NivoraDomain.rooms, icon: Icons.apartment_rounded),
+              const SizedBox(width: Space.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            beds == 0 ? 'No beds configured' : '$free free of $beds beds',
+                            style: t.textTheme.titleMedium,
+                          ),
+                        ),
+                        if (ratio != null)
+                          StatusPill.text(
+                            label: '${(ratio * 100).round()}% full',
+                            tone: free == 0 ? NivoraColors.error : t.colorScheme.primary,
+                            dot: true,
+                          ),
+                      ],
                     ),
-                  ),
-                  if (ratio != null)
-                    StatusPill.text(
-                      label: '${(ratio * 100).round()}% full',
-                      tone: free == 0 ? NivoraColors.error : t.colorScheme.primary,
-                      dot: true,
-                    ),
-                ],
-              ),
-              if (ratio != null) ...[
-                const SizedBox(height: Space.sm),
-                ClipRRect(
-                  borderRadius: Radii.rPill,
-                  child: LinearProgressIndicator(
-                    value: ratio,
-                    // The design's meter, verbatim: `w-full bg-surface-bright h-1.5
-                    // rounded-full` with `bg-primary h-full rounded-full` inside it. The height
-                    // is the theme's 6, which is that `h-1.5`; the track used to be a green
-                    // tint, which made a full building read as an alarm.
-                    backgroundColor: t.colorScheme.surfaceBright,
-                    valueColor: AlwaysStoppedAnimation(t.colorScheme.primary),
-                  ),
+                    if (ratio != null) ...[
+                      const SizedBox(height: Space.sm),
+                      ClipRRect(
+                        borderRadius: Radii.rPill,
+                        child: LinearProgressIndicator(
+                          value: ratio,
+                          // The design's meter, verbatim: `w-full bg-surface-bright h-1.5
+                          // rounded-full` with `bg-primary h-full rounded-full` inside it. The
+                          // height is the theme's 6, which is that `h-1.5`; the track used to
+                          // be a green tint, which made a full building read as an alarm.
+                          backgroundColor: t.colorScheme.surfaceBright,
+                          valueColor: AlwaysStoppedAnimation(t.colorScheme.primary),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: Space.xs),
+                    Text('${list.length} rooms · tap for the floor plan',
+                        style: t.textTheme.bodySmall),
+                  ],
                 ),
-              ],
-              const SizedBox(height: Space.xs),
-              Text('${list.length} rooms · tap for the floor plan',
-                  style: t.textTheme.bodySmall),
+              ),
             ],
           ),
         );

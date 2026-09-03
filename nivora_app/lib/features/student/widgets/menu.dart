@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
+import '../../../shared/glass/glass.dart';
 import 'common.dart';
 
 /// The mess menu, as a resident reads it.
@@ -85,22 +86,76 @@ class MealLine extends StatelessWidget {
 /// [today] draws the leading accent rail and the pill. The design gives that rail to the row
 /// that matters most on a screen, and on a week of identical cards the only thing that
 /// distinguishes one is which one is now.
+///
+/// [hero] draws it as the screen's SUBJECT instead: the food [DomainCard], saffron on its
+/// ground, for the home screen where today's meals are the one card about food and carry no
+/// status of their own. The week view never sets it — seven tinted cards would say nothing.
 class DayMenuCard extends StatelessWidget {
   const DayMenuCard({
     super.key,
     required this.day,
     required this.week,
     this.isToday = false,
+    this.hero = false,
   });
 
   final MenuDay day;
   final WeeklyMenu week;
   final bool isToday;
 
+  /// The domain-tinted hero form. At most one card per screen may take it — see [DomainCard].
+  final bool hero;
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final planned = week.plannedOn(day);
+
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // A Wrap, not a Row: "Wednesday" and the pill both grow with the text scale, and two
+        // of them competing for one line is the layout that breaks at 1.6x on a 320dp phone.
+        Wrap(
+          spacing: Space.xs,
+          runSpacing: Space.xxs,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(day.label, style: t.textTheme.titleMedium),
+            if (isToday)
+              hero
+                  // On the tinted ground the chip comes off and the word stays, in the ground's
+                  // own ink: a chip's fill is a tint of its tone, and a tint on a tint is the
+                  // pairing [NivoraSemantics.surfaceTintAlpha] forbids. Same construction as
+                  // the rent card's status word.
+                  ? StatusWord(
+                      label: 'Today',
+                      tone: NivoraDomain.food.tone,
+                      icon: Icons.today_rounded,
+                    )
+                  : StatusPill(
+                      label: 'Today',
+                      tone: t.colorScheme.primary,
+                      icon: Icons.today_rounded,
+                    ),
+          ],
+        ),
+        const SizedBox(height: Space.sm),
+        if (planned == 0)
+          // THE WHOLE POINT OF THIS FILE. One sentence, not four empty rows.
+          Text(
+            'No menu set for ${day.label} yet.',
+            style: t.textTheme.bodyMedium?.copyWith(color: context.tones.muted),
+          )
+        else
+          for (final meal in Meal.values) ...[
+            MealLine(meal: meal, items: week.itemsFor(day, meal)),
+            if (meal != Meal.values.last) const SizedBox(height: Space.sm),
+          ],
+      ],
+    );
+
+    if (hero) return DomainCard(domain: NivoraDomain.food, child: body);
 
     return OutlineCard(
       accent: isToday ? t.colorScheme.primary : null,
@@ -109,39 +164,7 @@ class DayMenuCard extends StatelessWidget {
       padding: isToday
           ? const EdgeInsets.fromLTRB(Space.md + Space.xs, Space.md, Space.md, Space.md)
           : const EdgeInsets.all(Space.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // A Wrap, not a Row: "Wednesday" and the pill both grow with the text scale, and two
-          // of them competing for one line is the layout that breaks at 1.6x on a 320dp phone.
-          Wrap(
-            spacing: Space.xs,
-            runSpacing: Space.xxs,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(day.label, style: t.textTheme.titleMedium),
-              if (isToday)
-                StatusPill(
-                  label: 'Today',
-                  tone: t.colorScheme.primary,
-                  icon: Icons.today_rounded,
-                ),
-            ],
-          ),
-          const SizedBox(height: Space.sm),
-          if (planned == 0)
-            // THE WHOLE POINT OF THIS FILE. One sentence, not four empty rows.
-            Text(
-              'No menu set for ${day.label} yet.',
-              style: t.textTheme.bodyMedium?.copyWith(color: context.tones.muted),
-            )
-          else
-            for (final meal in Meal.values) ...[
-              MealLine(meal: meal, items: week.itemsFor(day, meal)),
-              if (meal != Meal.values.last) const SizedBox(height: Space.sm),
-            ],
-        ],
-      ),
+      child: body,
     );
   }
 }

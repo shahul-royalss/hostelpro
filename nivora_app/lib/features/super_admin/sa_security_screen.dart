@@ -175,6 +175,7 @@ class _AlertList extends ConsumerWidget {
 
             SaEmptyVerdict.confirmed => SaEmpty(
                 icon: Icons.shield_outlined,
+                tone: NivoraDomain.security.tone,
                 title: filter.openOnly ? 'Nothing outstanding' : 'No alerts on record',
                 message: filter.openOnly
                     ? 'Every alert the detector has raised has been acknowledged. Switch to All '
@@ -287,6 +288,14 @@ class _SaAlertCardState extends ConsumerState<SaAlertCard> {
         children: [
           Row(
             children: [
+              // NO SHIELD PLATE HERE. Every row on this console is a security alert, on the
+              // tab whose own destination is a gold shield — so a gold shield at the head of
+              // each of them identified nothing the tab and the row had not already said, and
+              // it sat 8dp from a severity-toned pill, which is the one mark on this row that
+              // actually varies. The identifying glyph that EARNS its colour is the pill's:
+              // gpp_maybe for an urgent alert, an info circle for the rest, in the severity's
+              // own tone. Domain colour still opens this screen — on the tab, and on the
+              // section heading over on the Overview.
               SaPill(
                 label: alert.severity.label,
                 tone: tone,

@@ -397,6 +397,12 @@ class SaPage extends StatelessWidget {
 /// [accent] is the design's right-hand figure, set in the gold (4:180). It is the one place on
 /// a section header where a number may appear, so it is typed as a String the caller has already
 /// computed from real rows rather than as free-form widgets.
+///
+/// [domain] puts the domain's coloured icon before the caps label — the violet building before
+/// "HOSTEL ONBOARDING", the gold shield before "SECURITY ALERTS" — so a section is found by its
+/// colour before its label is read, the same way the other kits' `SectionHeading` does it.
+/// Drawn at [DomainIconSize.sm]: a 12px caps label beside a 40dp box would be the furniture
+/// outranking the data again. See [NivoraDomain] for the rule that keeps this from a rainbow.
 class SaHeading extends StatelessWidget {
   const SaHeading({
     super.key,
@@ -404,6 +410,8 @@ class SaHeading extends StatelessWidget {
     this.caption,
     this.trailing,
     this.accent,
+    this.domain,
+    this.icon,
   });
 
   final String title;
@@ -413,14 +421,28 @@ class SaHeading extends StatelessWidget {
   /// A short figure in the accent, right-aligned. Ignored when [trailing] is given.
   final String? accent;
 
+  /// Which area of the product this section belongs to. Null draws no icon.
+  final NivoraDomain? domain;
+
+  /// A glyph more specific than the domain's own. Ignored without [domain].
+  final IconData? icon;
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: Space.xs),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        // With an icon the 28dp box is the tallest thing in the row, so the label and the
+        // right-hand figure centre on it; without one the row keeps the design's own
+        // top-aligned line.
+        crossAxisAlignment:
+            domain == null ? CrossAxisAlignment.start : CrossAxisAlignment.center,
         children: [
+          if (domain != null) ...[
+            DomainIcon(domain: domain!, icon: icon, size: DomainIconSize.sm),
+            const SizedBox(width: Space.xs),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -862,6 +884,7 @@ class SaEmpty extends StatelessWidget {
     this.message,
     this.action,
     this.compact = false,
+    this.tone,
   });
 
   final IconData icon;
@@ -870,9 +893,17 @@ class SaEmpty extends StatelessWidget {
   final Widget? action;
   final bool compact;
 
+  /// The glyph's colour. A DOMAIN tone (`NivoraDomain.money.tone`) for an emptiness that is
+  /// neutral-to-good news about one area — "Nothing has lapsed" on the money tab, "Nothing
+  /// outstanding" on the security console. Canonical or resolved; it is resolved for the
+  /// theme here. Null is the outline ink, which is what a read that did not land keeps: a
+  /// withheld series or a missing figures row is not something to paint in an area's colour.
+  final Color? tone;
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final ink = tone == null ? t.colorScheme.outline : context.tones.resolve(tone!);
     return Padding(
       padding: EdgeInsets.symmetric(vertical: compact ? Space.sm : Space.xl),
       child: Column(
@@ -880,7 +911,7 @@ class SaEmpty extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, size: IconSize.md, color: t.colorScheme.outline),
+              Icon(icon, size: IconSize.md, color: ink),
               const SizedBox(width: Space.xs),
               Expanded(child: Text(title, style: t.textTheme.titleMedium)),
             ],

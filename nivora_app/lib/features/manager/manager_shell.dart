@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/perf/tab_warmer.dart';
+import '../../core/theme/tokens.dart';
 import '../../data/providers.dart';
 import 'data/manager_models.dart';
 import 'data/manager_providers.dart';
@@ -51,6 +52,18 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
     ManagerTasksScreen(),
     ManagerMenuScreen(),
   ];
+
+  /// The area each tab belongs to — the colour its pill takes while it is the selected one.
+  ///
+  /// Mirrors [_screens], index for index. Home is the platform's own gold, the ledger is
+  /// money, the jobs are open work, and the menu is food. See [NivoraDomain] for the rule that
+  /// keeps a domain on the indicator and off the surfaces behind it.
+  static NivoraDomain _domainOfTab(int index) => switch (index) {
+        1 => NivoraDomain.money,
+        2 => NivoraDomain.complaints,
+        3 => NivoraDomain.food,
+        _ => NivoraDomain.security,
+      };
 
   /// Tabs that have been shown at least once, and are kept built (state, scroll, filters)
   /// from then on. Home is born visited.
@@ -115,6 +128,18 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
     // work sit past its date for a week.
     final load = hostelId == null ? null : ref.watch(taskLoadProvider(hostelId));
 
+    // THE PILL IS THE SELECTED TAB'S OWN COLOUR. The bar itself stays the theme's — the raised
+    // fill, the 64dp height, the always-on labels and the unselected ink all come from
+    // NavigationBarThemeData in theme.dart and are copied through untouched. What changes per
+    // tab is the one thing that identifies it: the indicator, its glyph and its label take the
+    // domain the destination belongs to (see [_domainOfTab]), the way Google's own bars light
+    // up in the colour of the app you are in. The fill is `chipFill`, the design's own 10%
+    // recipe measured once in NivoraSemantics — no alpha is typed here, which is the mistake
+    // the previous overrides on this bar made.
+    final tones = context.tones;
+    final navTheme = Theme.of(context).navigationBarTheme;
+    final ink = tones.resolve(_domainOfTab(index).tone);
+
     return Scaffold(
       body: IndexedStack(
         index: index,
@@ -123,25 +148,35 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
             _visited.contains(i) ? _screens[i] : const SizedBox.shrink(),
         ],
       ),
-      // THE BAR IS THE THEME'S, NOT THIS FILE'S. NavigationBarThemeData in theme.dart already
-      // sets the raised fill, the 64dp height, the always-on labels and — the one that matters
-      // — the gold indicator at the design's own 10% chip alpha, measured once in
-      // NivoraSemantics. The three overrides that used to be here restated two of those and
-      // got the third wrong: a hand-typed `withValues(alpha: 0.12)` is exactly the kind of
-      // plausible-looking number tokens.dart exists to stop.
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: (i) => ref.read(managerTabProvider.notifier).go(i),
-        destinations: [
-          const NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Home'),
-          const NavigationDestination(
-              icon: Icon(Icons.trending_down_rounded), label: 'Expenses'),
-          NavigationDestination(
-            icon: _Badged(load: load, child: const Icon(Icons.checklist_rounded)),
-            label: 'Tasks',
-          ),
-          const NavigationDestination(icon: Icon(Icons.restaurant_rounded), label: 'Menu'),
-        ],
+      bottomNavigationBar: NavigationBarTheme(
+        data: navTheme.copyWith(
+          indicatorColor: tones.chipFill(ink),
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            final base = navTheme.iconTheme?.resolve(states);
+            if (!states.contains(WidgetState.selected)) return base;
+            return (base ?? const IconThemeData()).copyWith(color: ink);
+          }),
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            final base = navTheme.labelTextStyle?.resolve(states);
+            if (!states.contains(WidgetState.selected)) return base;
+            return (base ?? Theme.of(context).textTheme.labelMedium ?? const TextStyle())
+                .copyWith(color: ink);
+          }),
+        ),
+        child: NavigationBar(
+          selectedIndex: index,
+          onDestinationSelected: (i) => ref.read(managerTabProvider.notifier).go(i),
+          destinations: [
+            const NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Home'),
+            const NavigationDestination(
+                icon: Icon(Icons.trending_down_rounded), label: 'Expenses'),
+            NavigationDestination(
+              icon: _Badged(load: load, child: const Icon(Icons.checklist_rounded)),
+              label: 'Tasks',
+            ),
+            const NavigationDestination(icon: Icon(Icons.restaurant_rounded), label: 'Menu'),
+          ],
+        ),
       ),
     );
   }

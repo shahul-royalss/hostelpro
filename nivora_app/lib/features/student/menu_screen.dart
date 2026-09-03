@@ -76,11 +76,14 @@ class _Menu extends ConsumerWidget {
               // NOTHING AT ALL IS ITS OWN STATE. Seven cards each saying "no menu set" is a
               // wall of the same sentence; one card says it once and names who fills it in.
               if (week.isEmpty) {
-                return const EmptyNote(
+                return EmptyNote(
                   icon: Icons.restaurant_menu_rounded,
                   title: 'No menu put up yet',
                   message: 'Your hostel manager writes the week here. Nothing has been '
                       'entered for any day so far.',
+                  // An unwritten week is not bad news, so the plate keeps the food domain's
+                  // saffron — the same mark as the "Today's food" heading on Home.
+                  tone: NivoraDomain.food.tone,
                 );
               }
 

@@ -505,7 +505,14 @@ class _AssignedProperty extends StatelessWidget {
       padding: const EdgeInsets.all(Space.sm),
       child: Row(
         children: [
-          const ToneBadge(icon: Icons.apartment_rounded),
+          // The building's glyph in the rooms colour: a hostel as an object belongs to that
+          // area, on this sheet as on the PGs tab. The gold that sat here was the badge's
+          // default for "nothing in particular".
+          const DomainIcon(
+            domain: NivoraDomain.rooms,
+            icon: Icons.apartment_rounded,
+            size: DomainIconSize.sm,
+          ),
           const SizedBox(width: Space.sm),
           Expanded(
             child: Column(

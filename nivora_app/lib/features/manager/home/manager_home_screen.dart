@@ -8,6 +8,7 @@ import '../../../core/auth/session.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/glass/glass.dart';
 import '../../common/refresh.dart';
 import '../../common/staff_notices.dart';
 import '../notices/manager_notices_screen.dart';
@@ -328,12 +329,20 @@ class _NoticesSection extends ConsumerWidget {
         onRetry: () => ref.invalidate(noticesProvider(hostelId)),
         builder: (result) {
           if (result.isEmpty) {
-            // No tone. An empty noticeboard is neither good news nor bad, so it gets the
-            // untinted glyph rather than a reassuring green tick over "nothing here".
-            return const EmptyNote(
+            // The noticeboard's own blue on the glyph — identity, not a verdict. An empty
+            // noticeboard is neither good news nor bad, which is why this is the DOMAIN tone
+            // and not the reassuring green a cleared task list earns: the megaphone is blue on
+            // every screen it appears on, and here it says "this is the noticeboard, and it is
+            // empty" rather than congratulating anybody. See NivoraDomain.
+            return EmptyNote(
               icon: Icons.campaign_outlined,
               title: 'No notices yet',
               detail: 'Anything the owner posts to this hostel appears here.',
+              // NO TONE: an empty noticeboard is neither good news nor bad, which is the reason
+              // the warden's, the owner's and both of the resident's identical empties give.
+              // This card was the only one of the five that coloured it, so it was the outlier
+              // rather than the example — and EmptyNote's own contract is "pass a tone only
+              // where empty genuinely means something".
             );
           }
           return Column(
@@ -442,8 +451,12 @@ class _MoneySection extends ConsumerWidget {
 /// The four things this role does most.
 ///
 /// NOT IN THE DESIGN — `screen-manager-dashboard` is a reading screen with no action grid on
-/// it at all. These are kept because they are real features (two write sheets and two tabs) and
-/// dressed in the frame's own tile box; see [QuickAction].
+/// it at all. These are kept because they are real features (two write sheets and two tabs),
+/// and each is drawn as a [DomainButton] IN THE COLOUR OF WHERE IT GOES: the two ledger
+/// entries in money's green, the menu in food's saffron, the jobs in the amber of open work.
+/// Four shortcuts in four tints say four destinations before a word is read, which a row of
+/// identical hairline boxes never could; see [NivoraDomain] for the rule. The screen's one
+/// cream [FilledButton] is not here — none of these is the action the dashboard exists for.
 ///
 /// The Stitch mockup's version of this was four expense CATEGORIES — Utilities, Consumables,
 /// Repairs, Other — as one-tap shortcuts. Those were never built and still are not: an expense
@@ -462,20 +475,20 @@ class _QuickActions extends ConsumerWidget {
           Row(
             children: [
               Expanded(
-                child: QuickAction(
+                child: DomainButton(
+                  domain: NivoraDomain.money,
                   icon: Icons.remove_circle_outline_rounded,
                   label: 'Record expense',
-                  tone: NivoraColors.warning,
-                  onTap: () => showRecordExpenseSheet(context, hostelId: hostelId),
+                  onPressed: () => showRecordExpenseSheet(context, hostelId: hostelId),
                 ),
               ),
               const SizedBox(width: Space.xs),
               Expanded(
-                child: QuickAction(
+                child: DomainButton(
+                  domain: NivoraDomain.money,
                   icon: Icons.add_circle_outline_rounded,
                   label: 'Record money in',
-                  tone: NivoraColors.success,
-                  onTap: () => showRecordRevenueSheet(context, hostelId: hostelId),
+                  onPressed: () => showRecordRevenueSheet(context, hostelId: hostelId),
                 ),
               ),
             ],
@@ -484,10 +497,10 @@ class _QuickActions extends ConsumerWidget {
           Row(
             children: [
               Expanded(
-                child: QuickAction(
-                  icon: Icons.restaurant_rounded,
+                child: DomainButton(
+                  domain: NivoraDomain.food,
                   label: "Today's menu",
-                  onTap: () {
+                  onPressed: () {
                     ref.read(menuDayProvider.notifier).set(MenuDay.of(DateTime.now()));
                     ref.read(managerTabProvider.notifier).go(3);
                   },
@@ -495,10 +508,13 @@ class _QuickActions extends ConsumerWidget {
               ),
               const SizedBox(width: Space.xs),
               Expanded(
-                child: QuickAction(
+                child: DomainButton(
+                  domain: NivoraDomain.complaints,
+                  // The role's own jobs glyph — the same one on the Tasks tab — rather than the
+                  // domain's warning triangle, which is what a COMPLAINT wears.
                   icon: Icons.checklist_rounded,
                   label: 'Work through jobs',
-                  onTap: () {
+                  onPressed: () {
                     ref.read(taskFilterProvider.notifier).set(TaskFilter.needsAction);
                     ref.read(managerTabProvider.notifier).go(2);
                   },

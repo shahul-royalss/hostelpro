@@ -88,12 +88,29 @@ class _SaShellState extends ConsumerState<SaShell> {
     SaSecurityScreen(),
   ];
 
+  /// The area each tab belongs to, which is the colour its selected pill takes: the violet of
+  /// the building on Hostels, the ledger green on Subscriptions, and the brand gold on the two
+  /// that are the platform's own. A tab is a domain and never a state — see [NivoraDomain].
+  static NivoraDomain _domainOf(int index) => switch (index) {
+        SaTabs.hostels => NivoraDomain.rooms,
+        SaTabs.subscriptions => NivoraDomain.money,
+        _ => NivoraDomain.security,
+      };
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final tones = context.tones;
     final index = ref.watch(saTabProvider).clamp(0, SaTabs.count - 1);
     final openAlerts = ref.watch(saOpenAlertCountProvider);
     _visited.add(index);
+
+    // The selected destination wears its own domain's colour: the pill is the design's 10%
+    // tint of it — the same recipe as every status badge in the file — and the glyph and
+    // label are the ink, which is AA on that tint by the contract in NivoraSemantics. The
+    // unselected three keep exactly what theme.dart gives them.
+    final ink = tones.resolve(_domainOf(index).tone);
+    final navTheme = t.navigationBarTheme;
 
     return Scaffold(
       body: IndexedStack(
@@ -103,28 +120,40 @@ class _SaShellState extends ConsumerState<SaShell> {
             if (_visited.contains(i)) _tabs[i] else const SizedBox.shrink(),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: (i) => ref.read(saTabProvider.notifier).go(i),
-        // 64dp keeps every destination above the 48dp minimum with room for the label.
-        height: 64,
-        backgroundColor: t.colorScheme.surface,
-        // The design's own tint recipe rather than an alpha picked by eye — the same 10% that
-        // sits behind every status badge in the file.
-        indicatorColor: context.tones.chipFill(t.colorScheme.primary),
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: [
-          const NavigationDestination(
-              icon: Icon(Icons.grid_view_rounded), label: 'Overview'),
-          const NavigationDestination(
-              icon: Icon(Icons.apartment_rounded), label: 'Hostels'),
-          const NavigationDestination(
-              icon: Icon(Icons.card_membership_rounded), label: 'Subscriptions'),
-          NavigationDestination(
-            icon: _Badged(alerts: openAlerts, child: const Icon(Icons.shield_rounded)),
-            label: 'Security',
-          ),
-        ],
+      bottomNavigationBar: NavigationBarTheme(
+        data: navTheme.copyWith(
+          indicatorColor: tones.chipFill(ink),
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            final base = navTheme.iconTheme?.resolve(states);
+            if (!states.contains(WidgetState.selected)) return base;
+            return (base ?? const IconThemeData()).copyWith(color: ink);
+          }),
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            final base = navTheme.labelTextStyle?.resolve(states);
+            if (!states.contains(WidgetState.selected)) return base;
+            return base?.copyWith(color: ink) ?? TextStyle(color: ink);
+          }),
+        ),
+        child: NavigationBar(
+          selectedIndex: index,
+          onDestinationSelected: (i) => ref.read(saTabProvider.notifier).go(i),
+          // 64dp keeps every destination above the 48dp minimum with room for the label.
+          height: 64,
+          backgroundColor: t.colorScheme.surface,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: [
+            const NavigationDestination(
+                icon: Icon(Icons.grid_view_rounded), label: 'Overview'),
+            const NavigationDestination(
+                icon: Icon(Icons.apartment_rounded), label: 'Hostels'),
+            const NavigationDestination(
+                icon: Icon(Icons.card_membership_rounded), label: 'Subscriptions'),
+            NavigationDestination(
+              icon: _Badged(alerts: openAlerts, child: const Icon(Icons.shield_rounded)),
+              label: 'Security',
+            ),
+          ],
+        ),
       ),
     );
   }

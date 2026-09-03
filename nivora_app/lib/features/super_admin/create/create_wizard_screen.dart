@@ -370,10 +370,11 @@ class _OwnerPickerState extends ConsumerState<_OwnerPicker> {
           error: (e) => SaError(error: e, onRetry: () => ref.invalidate(saOwnersProvider)),
           data: (all) {
             if (all.isEmpty) {
-              return const SaEmpty(
+              return SaEmpty(
                 icon: Icons.person_off_rounded,
                 title: 'No owner accounts yet',
                 message: 'Switch to New owner to create the first one.',
+                tone: NivoraDomain.people.tone,
               );
             }
             final matching = all.where((o) => o.matches(_query)).toList(growable: false);
@@ -552,7 +553,14 @@ class _HostelStep extends ConsumerWidget {
         // A plain raised surface, not a gold wash. The design tints a panel only when it is
         // saying something is WRONG — the state badges and the read-only band. This one is
         // describing what the server is about to do, which is neither good news nor bad, so it
-        // gets the raised fill and lets the gold glyph do the pointing.
+        // gets the raised fill.
+        //
+        // AND A BARE GLYPH, NOT A DOMAIN PLATE. This carried a violet [DomainIcon] holding an
+        // "i". An info circle is a state-ish mark, the rooms domain is otherwise apartment /
+        // bed / meeting_room, and the plate said nothing the sentence beside it does not — so
+        // the colour was identifying nothing. The quiet outline ink is what the same note
+        // wears on the Subscriptions tab (_ReadOnlyExplainer), which is the shape a note has
+        // in this app.
         FlatSurface(
           weight: GlassWeight.regular,
           borderRadius: Radii.rControl,
@@ -561,7 +569,7 @@ class _HostelStep extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(Icons.info_outline_rounded,
-                  size: IconSize.sm, color: t.colorScheme.primary),
+                  size: IconSize.md, color: t.colorScheme.outline),
               const SizedBox(width: Space.xs),
               Expanded(
                 // Exactly what public.scaffold_hostel() will do, in the order it does it. An
@@ -703,6 +711,7 @@ class _ReviewStep extends ConsumerWidget {
       children: [
         _ReviewSection(
           title: 'Owner',
+          domain: NivoraDomain.people,
           onEdit: () => controller.jumpTo(WizardStep.owner.index),
           rows: newOwner
               ? [
@@ -725,6 +734,7 @@ class _ReviewStep extends ConsumerWidget {
         ),
         _ReviewSection(
           title: 'Hostel',
+          domain: NivoraDomain.rooms,
           onEdit: () => controller.jumpTo(WizardStep.hostel.index),
           rows: [
             ('Name', draft.hostelName),
@@ -739,6 +749,7 @@ class _ReviewStep extends ConsumerWidget {
         ),
         _ReviewSection(
           title: 'Subscription',
+          domain: NivoraDomain.money,
           onEdit: () => controller.jumpTo(WizardStep.subscription.index),
           rows: [
             ('Period', '${dateLabel(draft.startDate)} → ${dateLabel(draft.endDate)}'),
@@ -783,12 +794,24 @@ class _ReviewStep extends ConsumerWidget {
   }
 }
 
+/// One block of the review, headed by the same domain plate the hostel detail screen puts on
+/// its Owner / Subscription / Structure headings — so what the admin is about to create looks
+/// like what they will be looking at a minute later. The plate is identity only; nothing in a
+/// review block carries a state.
 class _ReviewSection extends StatelessWidget {
-  const _ReviewSection({required this.title, required this.rows, required this.onEdit});
+  const _ReviewSection({
+    required this.title,
+    required this.rows,
+    required this.onEdit,
+    this.domain,
+  });
 
   final String title;
   final List<(String, String)> rows;
   final VoidCallback onEdit;
+
+  /// Which area of the product this block belongs to. Null draws no plate.
+  final NivoraDomain? domain;
 
   @override
   Widget build(BuildContext context) {
@@ -800,6 +823,10 @@ class _ReviewSection extends StatelessWidget {
         children: [
           Row(
             children: [
+              if (domain != null) ...[
+                DomainIcon(domain: domain!, size: DomainIconSize.sm),
+                const SizedBox(width: Space.xs),
+              ],
               Expanded(child: Text(title, style: t.textTheme.titleMedium)),
               TextButton.icon(
                 onPressed: onEdit,

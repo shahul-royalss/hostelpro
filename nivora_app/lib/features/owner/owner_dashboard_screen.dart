@@ -530,7 +530,16 @@ class _AttentionRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ToneBadge(icon: _icon(item.kind), tone: _tone(item.kind), circular: true),
+        // The row's head says WHAT KIND of thing is waiting — the money glyph on an unpaid
+        // bill, the people glyph on a leave request — in that area's own colour, so the same
+        // glyph means the same thing on every screen it appears on. How urgent it is stays in
+        // the words. See [NivoraDomain] for the rule that keeps identity and state apart.
+        DomainIcon(
+          domain: _domain(item.kind),
+          icon: _icon(item.kind),
+          size: DomainIconSize.sm,
+          circular: true,
+        ),
         const SizedBox(width: Space.sm),
         Expanded(
           child: Column(
@@ -556,14 +565,32 @@ class _AttentionRow extends StatelessWidget {
     AttentionKind.unhousedResidents => Icons.bed_rounded,
   };
 
-  // Colour carries meaning here and only here: money owed and unresolved complaints are the
-  // two that cost an owner something, so they are the two that are amber.
-  Color _tone(AttentionKind kind) => switch (kind) {
-    AttentionKind.unpaidFees => NivoraColors.warning,
-    AttentionKind.openComplaints => NivoraColors.warning,
-    AttentionKind.openTasks => NivoraColors.info,
-    AttentionKind.pendingLeaves => NivoraColors.info,
-    AttentionKind.unhousedResidents => NivoraColors.info,
+  /// Which area of the product each item belongs to. Tasks are filed with complaints: both
+  /// are open work, and the amber that heads them is the amber an open complaint's own pill
+  /// already wears, so a row and its icon agree rather than argue.
+  ///
+  /// ── THE TWO KINDS THAT ARE NOT MAPPED, AND WHY THAT IS A GUARD RATHER THAN A GAP ────────
+  ///
+  /// [AttentionKind.unpaidFees] and [AttentionKind.openComplaints] are promoted to their own
+  /// KPI card by [_NeedsYou._onTheGrid] and are filtered out before a row is ever built, so
+  /// neither can reach this function today. They used to be mapped anyway, and the unpaid
+  /// mapping was a trap lying in wait: [NivoraDomain.money] is GREEN — a ledger's canonical
+  /// colour is the PAID one — so the moment anyone stopped filtering, a row that says money is
+  /// owed would have been headed by the exact green that means it has been settled. Debt in
+  /// the colour of settlement is the one thing a wayfinding hue must never say.
+  ///
+  /// So they are left unmapped and throw instead. Whoever un-filters them trips this on the
+  /// first frame and has to choose the paint deliberately — the row's head is an ICON, so per
+  /// [NivoraDomain] it may only carry an identity, and how urgent the thing is belongs in the
+  /// words beside it or in a status surface, never in this glyph.
+  NivoraDomain _domain(AttentionKind kind) => switch (kind) {
+    AttentionKind.openTasks => NivoraDomain.complaints,
+    AttentionKind.pendingLeaves => NivoraDomain.people,
+    AttentionKind.unhousedResidents => NivoraDomain.rooms,
+    AttentionKind.unpaidFees || AttentionKind.openComplaints => throw UnsupportedError(
+      '$kind is carried by its own KPI card and must not be drawn as an attention row. '
+      'Pick a paint deliberately before un-filtering it — see the doc on _domain.',
+    ),
   };
 }
 
@@ -760,6 +787,12 @@ class _Figure extends StatelessWidget {
 /// under two different headings. What this section adds that the feed cannot is the ACTION —
 /// and the single most recent notice, which is the one an owner checks before posting again so
 /// they do not say the same thing twice.
+///
+/// THE ONE SECTION HEADED BY A [SectionHeading] rather than the caps [SectionLabel] the rest of
+/// the page uses. It is the one section that is a DESTINATION — it opens the noticeboard and
+/// it posts to it — and the heading carries the notices glyph in the notices colour, which is
+/// the same blue plate that heads a notice on every other screen. The figures and the chart
+/// keep their whisper: they are read here, not gone to.
 class _NoticesSection extends ConsumerWidget {
   const _NoticesSection({required this.hostelId});
   final String hostelId;
@@ -772,8 +805,9 @@ class _NoticesSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SectionLabel(
-          label: 'Notices',
+        SectionHeading(
+          title: 'Notices',
+          domain: NivoraDomain.notices,
           trailing: TextButton(
             onPressed: () => Navigator.of(context).push(OwnerNoticesScreen.route(hostelId)),
             child: const Text('See all'),

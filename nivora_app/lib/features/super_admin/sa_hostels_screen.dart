@@ -326,6 +326,7 @@ class _HostelList extends ConsumerWidget {
                     icon: Icons.apartment_rounded,
                     title: 'No hostels yet',
                     message: 'The first one appears here the moment it is created.',
+                    tone: NivoraDomain.rooms.tone,
                     action: FilledButton.icon(
                       onPressed: () => Navigator.of(context).push(CreateWizardScreen.route()),
                       icon: const Icon(Icons.add_rounded, size: IconSize.sm),
@@ -395,6 +396,13 @@ class SaHostelCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // NO VIOLET BUILDING HERE. This card is only ever built on the Hostels tab, whose
+              // own destination is `Icons.apartment_rounded` lit in the same rooms violet, and
+              // every row of the list is a hostel — so a plate identical on all of them named
+              // nothing the tab and the row had not already named, and twenty of them down a
+              // scroll made the violet mean "a row" rather than "the building". The colour
+              // stays where it distinguishes: the tab, and the detail header this row opens,
+              // where a hostel sits among an owner, a subscription and a structure.
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

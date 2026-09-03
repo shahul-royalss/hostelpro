@@ -92,15 +92,17 @@ class _CredentialsDialogState extends State<CredentialsDialog> {
               children: [
                 Row(
                   children: [
-                    Container(
-                      height: 40,
-                      width: 40,
-                      decoration: BoxDecoration(
-                        color: context.tones.chipFill(t.colorScheme.primary),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.key_rounded,
-                          size: IconSize.md, color: t.colorScheme.primary),
+                    // The account's own plate — the brand gold, the same one the security
+                    // console and the Security tab wear — rather than a disc hand-built from
+                    // the chip recipe. A login being minted is a security object, and this is
+                    // the widget that says so on every screen.
+                    //
+                    // THE ROUNDED SQUARE, NOT A DISC. A circle is reserved for a face; this
+                    // plate holds a key. The warden's equivalent dialog draws the same key on
+                    // the square default, and one object may not be two shapes.
+                    const DomainIcon(
+                      domain: NivoraDomain.security,
+                      icon: Icons.key_rounded,
                     ),
                     const SizedBox(width: Space.sm),
                     Expanded(

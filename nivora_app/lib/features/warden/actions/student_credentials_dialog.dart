@@ -100,7 +100,9 @@ class _StudentCredentialsDialogState extends State<StudentCredentialsDialog> {
               children: [
                 Row(
                   children: [
-                    const IconBadge(icon: Icons.key_rounded),
+                    // Sign-in is the security domain, which is the brand's own gold — the
+                    // same plate the Home tab and the header's shield wear.
+                    const DomainIcon(domain: NivoraDomain.security, icon: Icons.key_rounded),
                     const SizedBox(width: Space.sm),
                     Expanded(
                       child: Column(

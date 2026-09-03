@@ -238,7 +238,9 @@ class _LoadMoreState extends ConsumerState<_LoadMore> {
 /// only when it is residents-only, because a resident is looking at their own two audiences and
 /// the distinction that matters to them is "is this just for us". The owner is looking at four,
 /// and WHO THEY SENT IT TO is the first thing they need to check — so the audience is always
-/// named here, and it is the row's colour as well as its word.
+/// named here, and it is the chip's colour as well as its word. The row's HEAD is the notices
+/// glyph in the notices colour — identity, the same on every screen — and the audience chip
+/// beneath it is the classification; see [NivoraDomain] for why the two never share an object.
 ///
 /// PUBLIC because owner_notices_test.dart drives the retraction through it.
 class OwnerNoticeCard extends ConsumerStatefulWidget {
@@ -332,7 +334,12 @@ class _OwnerNoticeCardState extends ConsumerState<OwnerNoticeCard> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ToneBadge(icon: Icons.campaign_rounded, tone: _tone, tinted: true),
+              // Small, so the title's optical centre stays where the 28dp badge put it.
+              const DomainIcon(
+                domain: NivoraDomain.notices,
+                icon: Icons.campaign_rounded,
+                size: DomainIconSize.sm,
+              ),
               const SizedBox(width: Space.sm),
               Expanded(
                 child: Padding(

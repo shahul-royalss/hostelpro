@@ -470,8 +470,12 @@ class EmptyNote extends StatelessWidget {
   /// stays required either way, because it is what the artwork falls back to.
   final String? illustration;
 
-  /// Green only where empty is genuinely GOOD news. Null keeps the design's neutral outline:
-  /// a reassuring tick over "no data yet" is the interface congratulating itself.
+  /// A STATUS tone only where empty is genuinely GOOD news — the cleared task list's green
+  /// tick — or a DOMAIN tone where the empty list belongs to one area and the glyph is that
+  /// area's: the noticeboard's blue megaphone, the ledger's green receipt. See NivoraDomain
+  /// for the line between the two. Null keeps the design's neutral outline, which is right
+  /// for a filter that matched nothing and for every "no hostel on this account": a
+  /// reassuring tick over "no data yet" is the interface congratulating itself.
   final Color? tone;
 
   @override
@@ -1129,11 +1133,15 @@ class TaskLine extends StatelessWidget {
 /// One of the things a manager does most, as a target you can hit without looking.
 ///
 /// The design has no quick-action grid — `screen-manager-dashboard` is a reading screen and its
-/// only controls are the rows themselves. These four shortcuts are real features of this role
-/// (they open the two write sheets and the two other tabs), so they are kept and dressed in the
-/// frame's own KPI-tile box: the raised fill under a hairline at [Radii.control], a 16dp glyph
+/// only controls are the rows themselves. This is the frame's own KPI-tile box pressed into
+/// service as a shortcut: the raised fill under a hairline at [Radii.control], a 16dp glyph
 /// in the tone, and the label in body semibold. Nothing here is circular — there is not one
 /// circle in the nineteen Figma frames.
+///
+/// THE DASHBOARD NO LONGER DRAWS THESE. Its "Do it now" row is four [DomainButton]s, each in
+/// the colour of the destination it opens — the tonal weight this design left undrawn, and the
+/// one that lets four shortcuts say four different places. This tile survives as the neutral
+/// shortcut for a screen that has no domain to point at.
 class QuickAction extends StatelessWidget {
   const QuickAction({
     super.key,

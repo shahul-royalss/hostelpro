@@ -429,6 +429,58 @@ abstract final class NivoraColors {
   /// Muted text, light. The design's `#6F747A` darkened until it clears the same chip case.
   /// 6.71:1 on the card, 5.20:1 on the field, 4.57:1 on a chip of itself.
   static const mutedInk = Color(0xFF595C61);
+
+  // ═══ DOMAIN — colour as wayfinding, the way Google's own apps use it ══════════
+  //
+  // The four semantic tones above say what STATE a thing is in. These three say what KIND of
+  // thing it is: food, rooms, people. That is the other job colour does in a well-made app —
+  // Gmail is red, Calendar is blue, Keep is yellow — and it is not decoration, because it is
+  // consistent: the saffron icon at the head of a row means "this is the menu" on every screen
+  // it appears on. See [NivoraDomain] for the mapping and the rule that keeps the two layers
+  // apart.
+  //
+  // DERIVED BY THE SAME METHOD AS THE FOUR ABOVE, NOT PICKED. Each canonical is a hue of the
+  // app's own muted register taken to the lightness that maximises its worst 3:1 case across
+  // all eight surfaces of both themes (worst 3.50–3.52, the same figures success/warning/error
+  // land on). Each ink is that canonical moved in lightness by the MINIMUM that clears 4.5:1
+  // plain on every surface of its theme AND on a 10% chip of itself — the exact contract the
+  // `...Dark` / `...Ink` sets above meet. The method was checked by re-deriving the shipped
+  // inks from their Figma seeds: it lands on #708CBA for info (shipped #718EBB), #CB7171 for
+  // error (shipped #CC7272) and #5FAE82 for success (exact). Every figure below is measured in
+  // test/theme_contrast_test.dart.
+  //
+  // Money, complaints and notices did NOT get new tones. Money is `success` (a rent ledger's
+  // natural colour is the paid one), complaints are `warning` (open work, which is also what
+  // `complaintTone(open)` already paints), and notices are `info`. Three new hues, not seven,
+  // because a palette a person can hold in their head is the whole point of wayfinding.
+
+  /// FOOD — the weekly menu. Saffron, at hue 28°. Worst 3:1 case 3.52:1.
+  static const food = Color(0xFFAB6528);
+
+  /// ROOMS — floors, rooms, beds. Violet, at hue 262°. Worst 3:1 case 3.52:1.
+  static const rooms = Color(0xFF8566BA);
+
+  /// PEOPLE — residents, staff, roommates. Teal, at hue 178°. Worst 3:1 case 3.50:1.
+  static const people = Color(0xFF35817E);
+
+  /// [food] lifted for the dark theme. 4.70:1 plain, 4.55:1 on a chip of itself.
+  static const foodDark = Color(0xFFC9772F);
+
+  /// [rooms] lifted for the dark theme. 4.73:1 plain, 4.53:1 on a chip.
+  static const roomsDark = Color(0xFF997FC5);
+
+  /// [people] lifted for the dark theme. 4.73:1 plain, 4.53:1 on a chip.
+  static const peopleDark = Color(0xFF3F9995);
+
+  /// [food] darkened for the light theme. 5.16:1 plain, 4.51:1 on a chip.
+  static const foodInk = Color(0xFF864F1F);
+
+  /// [rooms] darkened for the light theme. 5.14:1 plain, 4.50:1 on a chip — at the bar, and
+  /// the bar is the contract. The chip alpha is at its ceiling for every tone in this file.
+  static const roomsInk = Color(0xFF6C4AA5);
+
+  /// [people] darkened for the light theme. 5.19:1 plain, 4.56:1 on a chip.
+  static const peopleInk = Color(0xFF296562);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -453,6 +505,9 @@ class NivoraSemantics extends ThemeExtension<NivoraSemantics> {
     required this.error,
     required this.info,
     required this.muted,
+    required this.food,
+    required this.rooms,
+    required this.people,
     required this.chipFillAlpha,
     required this.chipBorderAlpha,
   });
@@ -464,6 +519,9 @@ class NivoraSemantics extends ThemeExtension<NivoraSemantics> {
     error: NivoraColors.errorInk,
     info: NivoraColors.infoInk,
     muted: NivoraColors.mutedInk,
+    food: NivoraColors.foodInk,
+    rooms: NivoraColors.roomsInk,
+    people: NivoraColors.peopleInk,
     chipFillAlpha: _chipFill,
     chipBorderAlpha: _chipBorder,
   );
@@ -475,6 +533,9 @@ class NivoraSemantics extends ThemeExtension<NivoraSemantics> {
     error: NivoraColors.errorDark,
     info: NivoraColors.infoDark,
     muted: NivoraColors.darkMuted,
+    food: NivoraColors.foodDark,
+    rooms: NivoraColors.roomsDark,
+    people: NivoraColors.peopleDark,
     chipFillAlpha: _chipFill,
     chipBorderAlpha: _chipBorder,
   );
@@ -499,6 +560,13 @@ class NivoraSemantics extends ThemeExtension<NivoraSemantics> {
   final Color error;
   final Color info;
   final Color muted;
+
+  /// The three DOMAIN inks — what kind of thing, not what state it is in. Same contract as the
+  /// four above; see the domain block in [NivoraColors].
+  final Color food;
+  final Color rooms;
+  final Color people;
+
   final double chipFillAlpha;
   final double chipBorderAlpha;
 
@@ -514,6 +582,9 @@ class NivoraSemantics extends ThemeExtension<NivoraSemantics> {
     if (tone == NivoraColors.error) return error;
     if (tone == NivoraColors.info) return info;
     if (tone == NivoraColors.textMuted) return muted;
+    if (tone == NivoraColors.food) return food;
+    if (tone == NivoraColors.rooms) return rooms;
+    if (tone == NivoraColors.people) return people;
     return tone;
   }
 
@@ -593,6 +664,9 @@ class NivoraSemantics extends ThemeExtension<NivoraSemantics> {
     Color? error,
     Color? info,
     Color? muted,
+    Color? food,
+    Color? rooms,
+    Color? people,
     double? chipFillAlpha,
     double? chipBorderAlpha,
   }) {
@@ -602,6 +676,9 @@ class NivoraSemantics extends ThemeExtension<NivoraSemantics> {
       error: error ?? this.error,
       info: info ?? this.info,
       muted: muted ?? this.muted,
+      food: food ?? this.food,
+      rooms: rooms ?? this.rooms,
+      people: people ?? this.people,
       chipFillAlpha: chipFillAlpha ?? this.chipFillAlpha,
       chipBorderAlpha: chipBorderAlpha ?? this.chipBorderAlpha,
     );
@@ -616,6 +693,9 @@ class NivoraSemantics extends ThemeExtension<NivoraSemantics> {
       error: Color.lerp(error, other.error, t)!,
       info: Color.lerp(info, other.info, t)!,
       muted: Color.lerp(muted, other.muted, t)!,
+      food: Color.lerp(food, other.food, t)!,
+      rooms: Color.lerp(rooms, other.rooms, t)!,
+      people: Color.lerp(people, other.people, t)!,
       chipFillAlpha: lerpDouble(chipFillAlpha, other.chipFillAlpha, t),
       chipBorderAlpha: lerpDouble(chipBorderAlpha, other.chipBorderAlpha, t),
     );
@@ -632,6 +712,67 @@ class NivoraSemantics extends ThemeExtension<NivoraSemantics> {
 extension NivoraTonesX on BuildContext {
   NivoraSemantics get tones =>
       Theme.of(this).extension<NivoraSemantics>() ?? NivoraSemantics.dark;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOMAIN — what kind of thing this is.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The areas of the product, each with the one colour that identifies it everywhere.
+///
+/// ── THE RULE THAT KEEPS THIS FROM BECOMING A RAINBOW ─────────────────────────────────────
+///
+/// **Domain colour lives on icons, actions and avatars. Status colour lives on surfaces and
+/// figures.** They occupy different objects, so they never compete on the same pixel:
+///
+///   * the saffron [DomainIcon] at the head of a menu row says WHAT this is, on every screen,
+///     always; the amber [StatusPill] beside a complaint says what STATE it is in, today;
+///   * a rent card that is unpaid is a red [ToneSurface], and every coloured thing on it —
+///     including the wallet glyph in its corner — takes that same red. STATUS WINS THE WHOLE
+///     CARD. The money-domain wallet appears on that card only in the one state that has no
+///     status to state: the "No rent record yet" face;
+///   * a screen where everything is tinted has said nothing, so a domain tint on a SURFACE
+///     ([DomainCard]) is allowed at most once per screen, and never on a card that carries a
+///     status. A control is not an exception dressed up: [DomainButton] puts its colour in the
+///     glyph and the label and leaves its ground neutral, for exactly this reason.
+///
+/// This is how Google's own apps use colour — Gmail is red, Calendar is blue, and neither means
+/// "error" or "info" — and it is compatible with this design's older rule that colour must
+/// mean something. It means "this is the menu".
+///
+/// Every colour here is a CANONICAL tone from [NivoraColors]; resolve it at the paint site with
+/// `context.tones.resolve(domain.tone)` like any other, or let [DomainIcon] and friends do it.
+enum NivoraDomain {
+  /// Rent, fees, payments, expenses, subscriptions. The ledger's natural colour is the paid one.
+  money(NivoraColors.success, Icons.account_balance_wallet_rounded),
+
+  /// Floors, rooms, beds, the building. Also a hostel as an object.
+  rooms(NivoraColors.rooms, Icons.meeting_room_rounded),
+
+  /// Residents, staff, roommates, guardians, visitors, leaves.
+  people(NivoraColors.people, Icons.people_alt_rounded),
+
+  /// Complaints and tasks — open work. Amber, which is also what an OPEN complaint's own
+  /// status pill paints, so an open row and its icon agree rather than argue.
+  complaints(NivoraColors.warning, Icons.report_problem_rounded),
+
+  /// Notices and announcements — "here is something you should know".
+  notices(NivoraColors.info, Icons.campaign_rounded),
+
+  /// The weekly menu.
+  food(NivoraColors.food, Icons.restaurant_rounded),
+
+  /// Security, the account, the platform itself. The brand's own gold — passed through
+  /// [NivoraSemantics.resolve] unchanged, because it is a scheme colour and not a semantic one.
+  security(NivoraColors.primary, Icons.shield_rounded);
+
+  const NivoraDomain(this.tone, this.icon);
+
+  /// The canonical colour. Resolve it for the theme before painting text with it.
+  final Color tone;
+
+  /// The glyph that stands for the whole domain, for a caller with nothing more specific.
+  final IconData icon;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

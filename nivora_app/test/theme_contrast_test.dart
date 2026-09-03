@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile/core/theme/theme.dart';
@@ -315,6 +316,10 @@ void main() {
       _againstAll(_lightSurfaces, NivoraColors.warningInk, 4.5, 'warningInk');
       _againstAll(_lightSurfaces, NivoraColors.errorInk, 4.5, 'errorInk');
       _againstAll(_lightSurfaces, NivoraColors.infoInk, 4.5, 'infoInk');
+      // The three domain inks are held to exactly the same bar as the four semantic ones.
+      _againstAll(_lightSurfaces, NivoraColors.foodInk, 4.5, 'foodInk');
+      _againstAll(_lightSurfaces, NivoraColors.roomsInk, 4.5, 'roomsInk');
+      _againstAll(_lightSurfaces, NivoraColors.peopleInk, 4.5, 'peopleInk');
     });
 
     test('dark neutral ramp', () {
@@ -329,6 +334,9 @@ void main() {
       _againstAll(_darkSurfaces, NivoraColors.warningDark, 4.5, 'warningDark');
       _againstAll(_darkSurfaces, NivoraColors.errorDark, 4.5, 'errorDark');
       _againstAll(_darkSurfaces, NivoraColors.infoDark, 4.5, 'infoDark');
+      _againstAll(_darkSurfaces, NivoraColors.foodDark, 4.5, 'foodDark');
+      _againstAll(_darkSurfaces, NivoraColors.roomsDark, 4.5, 'roomsDark');
+      _againstAll(_darkSurfaces, NivoraColors.peopleDark, 4.5, 'peopleDark');
     });
 
     test('THE THREE FIGMA VALUES THAT HAD TO MOVE, AND BY HOW LITTLE', () {
@@ -413,6 +421,9 @@ void main() {
         'error': NivoraColors.error,
         'info': NivoraColors.info,
         'textMuted': NivoraColors.textMuted,
+        'food': NivoraColors.food,
+        'rooms': NivoraColors.rooms,
+        'people': NivoraColors.people,
       };
       canonical.forEach((name, c) {
         _againstAll(_lightSurfaces, c, 3.0, 'canonical $name');
@@ -441,6 +452,9 @@ void main() {
         NivoraColors.error,
         NivoraColors.info,
         NivoraColors.textMuted,
+        NivoraColors.food,
+        NivoraColors.rooms,
+        NivoraColors.people,
       ]) {
         expect(_luminance(c), inInclusiveRange(needAbove, needBelow), reason: _hex(c));
       }
@@ -540,6 +554,9 @@ void main() {
         'error': tones.error,
         'info': tones.info,
         'muted': tones.muted,
+        'food': tones.food,
+        'rooms': tones.rooms,
+        'people': tones.people,
       };
       inks.forEach((name, ink) {
         grounds.forEach((where, bg) {
@@ -565,7 +582,10 @@ void main() {
         'dark': (NivoraSemantics.dark, _darkGrounds),
       }.entries) {
         final (tones, grounds) = e.value;
-        final inks = [tones.success, tones.warning, tones.error, tones.info, tones.muted];
+        final inks = [
+          tones.success, tones.warning, tones.error, tones.info, tones.muted,
+          tones.food, tones.rooms, tones.people,
+        ];
         double worstAt(double alpha) => inks
             .expand((ink) => grounds.values
                 .map((bg) => _ratio(ink, _over(ink.withValues(alpha: alpha), bg))))
@@ -603,6 +623,9 @@ void main() {
       expect(NivoraSemantics.dark.resolve(NivoraColors.error), NivoraColors.errorDark);
       expect(NivoraSemantics.dark.resolve(NivoraColors.success), NivoraColors.tertiary);
       expect(NivoraSemantics.light.resolve(NivoraColors.textMuted), NivoraColors.mutedInk);
+      expect(NivoraSemantics.dark.resolve(NivoraColors.food), NivoraColors.foodDark);
+      expect(NivoraSemantics.light.resolve(NivoraColors.rooms), NivoraColors.roomsInk);
+      expect(NivoraSemantics.dark.resolve(NivoraColors.people), NivoraColors.peopleDark);
       // Not a canonical value: untouched.
       expect(NivoraSemantics.light.resolve(NivoraColors.indigo), NivoraColors.indigo);
     });
@@ -617,6 +640,132 @@ void main() {
         }),
       ));
       expect(seen, NivoraSemantics.dark);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // THE DOMAIN TONES — three new hues, derived by the same method and held to the same bar.
+  //
+  // Everything above already covers them: the canonical set is in the luminance window, the
+  // inks are AA plain and on a chip, the tints keep body text legible. What is pinned HERE is
+  // the derivation itself — that each ink is its canonical moved along its own hue by the
+  // minimum that passes, and not a colour somebody liked. "Minimum" is asserted the only way it
+  // can be: one step back towards the canonical, and the contract fails.
+  group('the domain tones — derived, not picked', () {
+    const domains = <String, (Color, Color, Color)>{
+      //          canonical             dark ink                 light ink
+      'food': (NivoraColors.food, NivoraColors.foodDark, NivoraColors.foodInk),
+      'rooms': (NivoraColors.rooms, NivoraColors.roomsDark, NivoraColors.roomsInk),
+      'people': (NivoraColors.people, NivoraColors.peopleDark, NivoraColors.peopleInk),
+    };
+
+    /// The ink's own contract, in one place: AA plain on every surface of its theme AND AA on a
+    /// 10% chip of itself over every ground a chip sits on.
+    bool passes(Color ink, Map<String, Color> surfaces, Map<String, Color> grounds) {
+      final plain = surfaces.values.every((bg) => _ratio(ink, bg) >= 4.5);
+      final chip = grounds.values.every((bg) =>
+          _ratio(ink, _over(ink.withValues(alpha: NivoraSemantics.surfaceTintAlpha), bg)) >=
+          4.5);
+      return plain && chip;
+    }
+
+    Color shifted(Color c, double dl) {
+      final hsl = HSLColor.fromColor(c);
+      return hsl.withLightness((hsl.lightness + dl).clamp(0.0, 1.0)).toColor();
+    }
+
+    test('each ink keeps its canonical\'s hue and saturation — moved in lightness only', () {
+      domains.forEach((name, v) {
+        final (canonical, dark, light) = v;
+        final c = HSLColor.fromColor(canonical);
+        for (final e in {'dark': dark, 'light': light}.entries) {
+          final ink = HSLColor.fromColor(e.value);
+          // A few degrees of hue and a few points of saturation are 8-bit rounding, not a
+          // redesign; a hue that has moved 30° is a different colour wearing the name.
+          expect((ink.hue - c.hue).abs(), lessThan(6),
+              reason: '$name ${e.key} ink changed hue: ${c.hue.round()}° → ${ink.hue.round()}°');
+          expect((ink.saturation - c.saturation).abs(), lessThan(0.08),
+              reason: '$name ${e.key} ink changed saturation');
+        }
+        // And in the direction the theme needs: lighter for dark, darker for light.
+        expect(HSLColor.fromColor(dark).lightness, greaterThan(c.lightness), reason: name);
+        expect(HSLColor.fromColor(light).lightness, lessThan(c.lightness), reason: name);
+      });
+    });
+
+    test('each ink is the MINIMUM lift — one step back towards the canonical, and it fails', () {
+      domains.forEach((name, v) {
+        final (_, dark, light) = v;
+        expect(passes(dark, _darkSurfaces, _darkGrounds), isTrue, reason: '$name dark ink');
+        expect(passes(shifted(dark, -0.01), _darkSurfaces, _darkGrounds), isFalse,
+            reason: '$name dark ink has slack — it was lifted further than it needed to be, '
+                'which is redesigning by eye');
+        expect(passes(light, _lightSurfaces, _lightGrounds), isTrue, reason: '$name light ink');
+        expect(passes(shifted(light, 0.01), _lightSurfaces, _lightGrounds), isFalse,
+            reason: '$name light ink has slack');
+      });
+    });
+
+    test('an identity avatar can never wear a STATUS colour', () {
+      // THE REGRESSION THIS PINS WAS REAL AND SHIPPED IN AN EARLIER DRAFT. avatarToneFor hashed
+      // a name into six tones, three of which were success/warning/info — and the same Avatar
+      // widget carries a status tone on several screens (the warden's fee ledger passes the fee
+      // tone, the roster passes active/on-leave, the desk sheets pass amber and blue outright).
+      // On the screens that pass nothing the hash chose, so a resident whose NAME hashed to
+      // amber wore the disc that means "on leave" on the list two taps away.
+      // A plain list, not a const Set: Color overrides == and Dart refuses it in a const set.
+      const statusTones = <Color>[
+        NivoraColors.success,
+        NivoraColors.warning,
+        NivoraColors.error,
+        NivoraColors.info,
+      ];
+      // Enough names that every slot of any small palette is hit many times over.
+      final seen = <Color>{};
+      for (var i = 0; i < 4000; i++) {
+        seen.add(avatarToneFor('Resident Number $i'));
+      }
+      for (final tone in seen) {
+        expect(statusTones.contains(tone), isFalse,
+            reason: 'avatarToneFor produced ${_hex(tone)}, which is a STATUS tone — an identity '
+                'disc in that colour is indistinguishable from a state on the same widget');
+      }
+      // …and it is still doing its job: more than one colour, all of them resolvable.
+      expect(seen.length, greaterThan(1), reason: 'every face would be the same colour');
+      for (final tone in seen) {
+        for (final tones in [NivoraSemantics.dark, NivoraSemantics.light]) {
+          expect(tones.resolve(tone), isNot(tone),
+              reason: '${_hex(tone)} has no theme ink, so the initials on it are unmeasured');
+        }
+      }
+    });
+
+    test('the same name always gets the same colour, and an empty name is neutral', () {
+      expect(avatarToneFor('Aarav Sharma'), avatarToneFor('Aarav Sharma'));
+      // Case and surrounding space are not identity.
+      expect(avatarToneFor('  aarav sharma  '), avatarToneFor('Aarav Sharma'));
+      // Nothing to hash: the muted grey, not an arbitrary slot.
+      expect(avatarToneFor(null), NivoraColors.textMuted);
+      expect(avatarToneFor('   '), NivoraColors.textMuted);
+    });
+
+    test('every domain names a tone this palette can resolve, and gold passes through', () {
+      for (final d in NivoraDomain.values) {
+        for (final tones in [NivoraSemantics.dark, NivoraSemantics.light]) {
+          final ink = tones.resolve(d.tone);
+          // A domain that resolved to its own canonical would be one the paint site cannot
+          // make legible — except security, which is the scheme's primary and is meant to.
+          if (d == NivoraDomain.security) {
+            expect(ink, NivoraColors.primary, reason: 'security is the brand gold, unresolved');
+          } else {
+            expect(ink, isNot(d.tone), reason: '${d.name} did not resolve to a theme ink');
+          }
+        }
+      }
+      // Seven domains, six distinct tones plus the brand: no two areas share a colour except
+      // by the documented decision that complaints and open work are both amber.
+      final tones = NivoraDomain.values.map((d) => d.tone).toSet();
+      expect(tones.length, NivoraDomain.values.length);
     });
   });
 
@@ -734,6 +883,10 @@ void main() {
           'error': tones.error,
           'info': tones.info,
           'muted': tones.muted,
+          // A [DomainCard] is a ToneSurface in a domain tone, so the domain inks are tints too.
+          'food': tones.food,
+          'rooms': tones.rooms,
+          'people': tones.people,
         };
 
     /// Every (tone, base) tint a ToneSurface can actually paint, in one theme.
@@ -1058,6 +1211,30 @@ void main() {
     test('NivoraSemantics is registered on both themes', () {
       expect(NivoraTheme.dark().extension<NivoraSemantics>(), NivoraSemantics.dark);
       expect(NivoraTheme.light().extension<NivoraSemantics>(), NivoraSemantics.light);
+    });
+
+    test('the system bars follow the theme, and their icons are the OPPOSITE of its ground', () {
+      // Nothing set this before, and most screens draw a GlassHeader rather than an AppBar —
+      // the one widget that sets it on its own — so Android's default dark icons sat on the
+      // #0B0D0F ground and the clock was unreadable on the sign-in screen. Pinned here so a
+      // theme edit cannot quietly put it back.
+      final dark = NivoraTheme.systemBars(Brightness.dark);
+      expect(dark.statusBarIconBrightness, Brightness.light,
+          reason: 'light icons over the dark ground');
+      expect(dark.systemNavigationBarIconBrightness, Brightness.light);
+
+      final light = NivoraTheme.systemBars(Brightness.light);
+      expect(light.statusBarIconBrightness, Brightness.dark,
+          reason: 'dark icons over the ivory ground');
+      expect(light.systemNavigationBarIconBrightness, Brightness.dark);
+
+      for (final s in <SystemUiOverlayStyle>[dark, light]) {
+        // Edge to edge: the app's own ground runs under both bars, so both are transparent and
+        // the three-button bar's grey scrim is off — the bar is already on an opaque surface.
+        expect(s.statusBarColor, Colors.transparent);
+        expect(s.systemNavigationBarColor, Colors.transparent);
+        expect(s.systemNavigationBarContrastEnforced, isFalse);
+      }
     });
 
     test('the AppBar is stripped rather than half-styled', () {

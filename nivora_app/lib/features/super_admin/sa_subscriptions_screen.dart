@@ -260,6 +260,7 @@ class _SubscriptionList extends ConsumerWidget {
                 icon: filter == SubscriptionState.expired
                     ? Icons.check_circle_outline_rounded
                     : Icons.card_membership_rounded,
+                tone: NivoraDomain.money.tone,
                 title: switch (filter) {
                   SubscriptionState.expired => 'Nothing has lapsed',
                   SubscriptionState.expiring => 'Nothing is close to lapsing',
@@ -361,6 +362,13 @@ class _SubscriptionCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // NO GREEN CARD PLATE HERE. It was literally the glyph the tab wears, in the
+              // tab's own hue, repeated on every row of a list where every row is a
+              // subscription — agreement so complete that it carried no information. Worse
+              // than idle: the pill at the other end of this same row is the success green
+              // when the subscription is ACTIVE, so a green plate and a green pill sat on one
+              // line meaning two different things. The money green keeps the tab and the
+              // detail screen's own subscription heading, where it still distinguishes.
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
