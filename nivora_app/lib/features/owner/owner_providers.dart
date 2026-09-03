@@ -154,3 +154,49 @@ void refreshOwnerDashboard(WidgetRef ref, {required String hostelId, required St
   final window = ref.read(ownerFinanceWindowProvider);
   if (window != null) ref.invalidate(dailyFinanceProvider(window));
 }
+
+/// Everything that counts a room or a bed, after THE BUILDING ITSELF has changed.
+///
+/// Separate from [refreshOwnerDashboard] because they answer different questions.
+/// That one re-reads what a DAY changes — money, complaints, notices. This one re-reads what a
+/// FLOOR PLAN changes, and a floor plan changes things no dashboard refresh touches: rooms that
+/// did not exist a minute ago, beds created under them, and the two denormalised columns on
+/// `hostels` that the PG list prints when a PG has no address on file.
+///
+/// The families are invalidated WHOLE where the key is not a hostel id. [bedsInRoomProvider] is
+/// keyed by ROOM, and the rooms this write deleted are precisely the ones whose keys are no
+/// longer worth knowing — the same reasoning the room grid already uses when a capacity edit
+/// adds or removes bed rows.
+/// IT TAKES A CONTAINER, NOT A WidgetRef, AND THAT IS THE WHOLE POINT.
+///
+/// This is called after an `await` on a write, and by then the screen that started the write may
+/// be gone — an owner who taps Save and immediately backs out is the ordinary case, not a
+/// contrived one. `WidgetRef.invalidate` on an unmounted element does not no-op: Riverpod's
+/// `ConsumerStatefulElement.invalidate` calls `_assertNotDisposed()`, which THROWS a StateError,
+/// and not behind an `assert` — it throws in release too.
+///
+/// So the WidgetRef version of this function threw on its FIRST line, none of the six providers
+/// refreshed, and the caller's `catch` swallowed it in silence. The write had landed. Every one
+/// of these providers is `holdForSession`-pinned, so the stale building then survived the rest of
+/// the session — and because the editor SEEDS ITS PLAN from that grid, the next visit could
+/// under-report a deletion by exactly the drift: the dialog says "3 → 2, removing 1 room" while
+/// the server, which has four, removes two.
+///
+/// A [ProviderContainer] outlives any one widget, so it is captured before the await
+/// (`ProviderScope.containerOf(context, listen: false)`) and invalidation happens through it.
+/// Do not "simplify" this back to a WidgetRef: the path that needs the refresh most is exactly
+/// the path on which the WidgetRef is already dead.
+void refreshOwnerBuilding(
+  ProviderContainer container, {
+  required String hostelId,
+  required String period,
+}) {
+  container.invalidate(roomOccupancyProvider(hostelId));
+  container.invalidate(floorsProvider(hostelId));
+  container.invalidate(bedsInRoomProvider);
+  // total_beds / occupied_beds on every staff dashboard for this PG.
+  container.invalidate(hostelStatsProvider(StatsQuery(hostelId: hostelId, periodMonth: period)));
+  // hostels.total_floors / total_rooms, which the PG list draws under a PG with no address.
+  container.invalidate(hostelProvider(hostelId));
+  container.invalidate(myHostelsProvider);
+}

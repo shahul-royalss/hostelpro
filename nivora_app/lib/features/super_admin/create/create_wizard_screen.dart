@@ -529,7 +529,12 @@ class _HostelStep extends ConsumerWidget {
           value: draft.rooms,
           min: 1,
           max: 5000,
-          step: 5,
+          // ONE AT A TIME, like every other stepper here. This stepped by 5 as a shortcut to the
+          // large counts a real PG has, and the cost was that 2, 3 and 4 rooms could not be
+          // reached by tapping at all — the field went 1, 6, 11. A control that cannot produce a
+          // legal value is broken however convenient the jump is, and the shortcut was never
+          // needed: the number is TYPEABLE (see _Stepper2), so an admin setting 120 rooms types
+          // 120 instead of tapping twenty-four times.
           error: state.errorFor('hostel.rooms'),
           onChanged: controller.setRooms,
         ),
@@ -1075,7 +1080,6 @@ class _Stepper2 extends StatefulWidget {
     required this.min,
     required this.max,
     required this.onChanged,
-    this.step = 1,
     this.error,
   });
 
@@ -1083,7 +1087,6 @@ class _Stepper2 extends StatefulWidget {
   final int value;
   final int min;
   final int max;
-  final int step;
   final String? error;
   final ValueChanged<int> onChanged;
 
@@ -1132,7 +1135,7 @@ class _Stepper2State extends State<_Stepper2> {
         Row(
           children: [
             IconButton.outlined(
-              onPressed: widget.value > widget.min ? () => _bump(-widget.step) : null,
+              onPressed: widget.value > widget.min ? () => _bump(-1) : null,
               icon: const Icon(Icons.remove_rounded, size: IconSize.md),
               tooltip: 'Decrease ${widget.label}',
             ),
@@ -1155,7 +1158,7 @@ class _Stepper2State extends State<_Stepper2> {
             ),
             const SizedBox(width: Space.xs),
             IconButton.outlined(
-              onPressed: widget.value < widget.max ? () => _bump(widget.step) : null,
+              onPressed: widget.value < widget.max ? () => _bump(1) : null,
               icon: const Icon(Icons.add_rounded, size: IconSize.md),
               tooltip: 'Increase ${widget.label}',
             ),

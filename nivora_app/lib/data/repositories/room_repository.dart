@@ -3,11 +3,29 @@ library;
 import '../models/models.dart';
 import 'repository.dart';
 
+/// THE ONE WRITE THAT RESHAPES A BUILDING, behind an interface.
+///
+/// Same shape and same reasoning as `OwnerStaffWrites`. The reads in this file are tested by
+/// overriding the provider that holds the answer; this one cannot be, because its interesting
+/// states are all things only the SERVER knows — a floor that still has somebody on it, a
+/// hostel gone read-only, a plan whose floors have a hole in them. Those are the states worth
+/// holding down in `flutter test`, and a test needs a stand-in for them that has no network and
+/// no Supabase client in it.
+///
+/// [RoomRepository] implements this; `roomLayoutWritesProvider` hands it out by the interface.
+abstract interface class RoomLayoutWrites {
+  /// See [RoomRepository.setFloorPlan].
+  Future<FloorPlanResult> setFloorPlan({
+    required String hostelId,
+    required List<FloorPlanEntry> plan,
+  });
+}
+
 /// Rooms, beds and who is in them.
 ///
 /// TABLES: public.rooms, public.beds.
-/// RPCs:   public.rpc_room_occupancy().
-final class RoomRepository extends Repository {
+/// RPCs:   public.rpc_room_occupancy(), public.ow_set_floor_plan().
+final class RoomRepository extends Repository implements RoomLayoutWrites {
   const RoomRepository(super.db);
 
   /// The whole building, one row per room, with a live occupied count.
@@ -105,4 +123,47 @@ final class RoomRepository extends Repository {
         return Room.fromJson(row);
       }, unresolved: 'Reload the room before changing it again — a capacity change adds or '
           'removes bed rows, so the room may already look different.');
+
+  /// THE OWNER MAPS THE BUILDING: how many floors, how many rooms on each, and how many beds
+  /// the rooms this call CREATES are given. public.ow_set_floor_plan.
+  ///
+  /// [plan] is one entry per floor, numbered 1..N with none missing — the RPC refuses a gap,
+  /// a duplicate, and anybody who is not this hostel's owner.
+  ///
+  /// ═══ WHAT THIS DOES NOT DO, SAID HERE SO NO CALLER HAS TO GUESS ═══
+  /// [FloorPlanEntry.bedsPerNewRoom] reaches rooms that did not exist a moment ago and nothing
+  /// else: an existing room keeps its capacity, and the way to change THAT is
+  /// `showEditRoomSheet` one room at a time. Removing takes the highest-numbered EMPTY rooms on
+  /// a floor, and any room with a resident in it is refused by name — "Room 102 still has
+  /// residents in it. Move them to another bed first." Floors above N go the same way and are
+  /// refused on the same terms.
+  ///
+  /// ═══ THE REFUSAL IS THE PRODUCT, SO IT TRAVELS INTACT ═══
+  /// Every one of those refusals is a `P0001` carrying a sentence written for a person, and
+  /// [AppFailure.from] passes a P0001 through unchanged into [InvalidInputFailure.message] (see
+  /// models/failure.dart). Nothing is re-worded here, because the server's sentence NAMES THE
+  /// ROOM and a tidier generic one would send an owner to walk the whole floor.
+  ///
+  /// ═══ [guardWrite], NOT [guard] ═══
+  /// Applying the same plan twice is a no-op, so this is idempotent in the narrow sense. It is
+  /// still a write whose timeout must not be reported as "nothing happened": the call that ran
+  /// out of time may have been the one that deleted six rooms, and the honest thing to say is
+  /// that nobody knows yet. [unresolved] therefore points at the screen that can answer it,
+  /// which re-seeds itself from the building as it now stands.
+  @override
+  Future<FloorPlanResult> setFloorPlan({
+    required String hostelId,
+    required List<FloorPlanEntry> plan,
+  }) =>
+      guardWrite(() async {
+        final data = await db.rpc('ow_set_floor_plan', params: {
+          'p_hostel_id': hostelId,
+          'p_plan': plan.map((entry) => entry.toJson()).toList(growable: false),
+        });
+        // `returns jsonb`, so PostgREST sends the object itself. rpcObject also accepts the
+        // one-element array shape, which is what has kept the composite-returning RPCs in this
+        // app working across PostgREST upgrades — the same tolerance costs nothing here.
+        return FloorPlanResult.fromJson(rpcObject(data, 'ow_set_floor_plan'));
+      }, unresolved: 'Open the layout again before changing it — it reads the building as it '
+          'now stands, so it will show you whether the rooms were created or removed.');
 }

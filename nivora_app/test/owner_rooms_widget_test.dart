@@ -225,6 +225,22 @@ void main() {
       expect(find.text('No rooms set up yet'), findsOneWidget);
     });
 
+    testWidgets('the way into the building own shape is on the card that states it',
+        (tester) async {
+      // The room tiles answer for one room each, and nothing else on this screen answers for
+      // the storey — so the layout editor is reached from the card that prints
+      // "3 rooms in total", which is the sentence whose next question it is.
+      await _pump(tester, const OwnerPgDetailScreen(hostelId: _hostelId));
+      expect(find.widgetWithText(TextButton, 'Edit layout'), findsOneWidget);
+    });
+
+    testWidgets('a PG with no rooms is still offered the layout editor', (tester) async {
+      // The one place an owner has no room tile to tap at all, and therefore the one place the
+      // way in has to be part of the empty state itself.
+      await _pump(tester, const OwnerPgDetailScreen(hostelId: _hostelId), rooms: const []);
+      expect(find.widgetWithText(OutlinedButton, 'Edit layout'), findsOneWidget);
+    });
+
     testWidgets('tapping a room names who is in each bed', (tester) async {
       await _pump(tester, const OwnerPgDetailScreen(hostelId: _hostelId));
 

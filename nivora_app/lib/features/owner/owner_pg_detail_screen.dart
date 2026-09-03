@@ -8,6 +8,7 @@ import '../../shared/glass/glass.dart';
 import '../../shared/rooms/edit_room_sheet.dart';
 import 'owner_format.dart';
 import 'owner_providers.dart';
+import 'rooms/floor_plan_screen.dart';
 import 'widgets/meter.dart';
 import 'widgets/states.dart';
 
@@ -101,7 +102,7 @@ class OwnerPgDetailScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-                data: (list) => _Floors(rooms: list),
+                data: (list) => _Floors(hostelId: hostelId, rooms: list),
               ),
             ),
           ),
@@ -112,8 +113,9 @@ class OwnerPgDetailScreen extends ConsumerWidget {
 }
 
 class _Floors extends StatelessWidget {
-  const _Floors({required this.rooms});
+  const _Floors({required this.hostelId, required this.rooms});
 
+  final String hostelId;
   final List<RoomOccupancy> rooms;
 
   @override
@@ -122,12 +124,18 @@ class _Floors extends StatelessWidget {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(Space.md),
-        children: const [
+        children: [
           EmptyNote(
             icon: Icons.meeting_room_outlined,
             title: 'No rooms set up yet',
             message: 'Nivora scaffolds the floors, rooms and beds when a PG is created. '
-                'Contact your account manager if this PG should already have them.',
+                'You can also map the building yourself.',
+            action: OutlinedButton.icon(
+              onPressed: () =>
+                  Navigator.of(context).push(OwnerFloorPlanScreen.route(hostelId)),
+              icon: const Icon(Icons.dashboard_customize_outlined, size: IconSize.sm),
+              label: const Text('Edit layout'),
+            ),
           ),
         ],
       );
@@ -147,7 +155,7 @@ class _Floors extends StatelessWidget {
       // One extra leading item: the building-wide summary.
       itemCount: floors.length + 1,
       itemBuilder: (context, index) {
-        if (index == 0) return _BuildingSummary(rooms: rooms);
+        if (index == 0) return _BuildingSummary(hostelId: hostelId, rooms: rooms);
         final floor = floors[index - 1];
         return _FloorBlock(floorNumber: floor, rooms: byFloor[floor]!);
       },
@@ -158,7 +166,8 @@ class _Floors extends StatelessWidget {
 /// The totals for the whole building, added up from the very rows drawn below — so the header
 /// and the grid can never tell two different stories.
 class _BuildingSummary extends StatelessWidget {
-  const _BuildingSummary({required this.rooms});
+  const _BuildingSummary({required this.hostelId, required this.rooms});
+  final String hostelId;
   final List<RoomOccupancy> rooms;
 
   @override
@@ -206,6 +215,20 @@ class _BuildingSummary extends StatelessWidget {
                       '${countLabel(roomsWithSpace, 'room')} with space · '
                       '${countLabel(rooms.length, 'room')} in total',
               style: t.textTheme.bodySmall,
+            ),
+            // THE WAY INTO THE BUILDING'S SHAPE, on the card that states it. "3 rooms in
+            // total" is the sentence whose next question is "and I want a fourth" — the room
+            // tiles below answer for one room each, and nothing else on this screen answers
+            // for the storey. Quiet on purpose: it edits the building, and the tiles are what
+            // an owner came here to read.
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () =>
+                    Navigator.of(context).push(OwnerFloorPlanScreen.route(hostelId)),
+                icon: const Icon(Icons.dashboard_customize_outlined, size: IconSize.sm),
+                label: const Text('Edit layout'),
+              ),
             ),
           ],
         ),

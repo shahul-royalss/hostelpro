@@ -236,22 +236,21 @@ class RentCard extends StatelessWidget {
           ],
           if (owes) ...[
             const SizedBox(height: Space.md),
-            // ═══ WHERE THE CREAM "PAY ₹8,500" BUTTON USED TO BE ═══
+            // ═══ THE CREAM "PAY" BUTTON, AND WHY IT IS ON THIS CARD ═══
             //
-            // Rent is handed over at the warden's desk. There is no checkout in this build: the
-            // razorpay-order / razorpay-webhook Edge Functions are deployed but not configured,
-            // so the button opened a flow that could not take money, and the honest version of
-            // that flow is a sentence.
-            //
-            // IT IS NOT DRAWN AS AN ERROR, and that is the whole design of it. Nothing has gone
-            // wrong for this resident — the hostel takes rent at the desk, which is how nearly
-            // every PG in the country already works. So: no red, no warning glyph, no "unable
-            // to". A quiet well inside the card, the figure repeated as the amount to hand
-            // over, and the person to hand it to when the app knows who that is.
+            // This card is drawn on the resident's HOME as well as on their Fees tab, so paying
+            // is one tap from opening the app — which is the reason the app gets opened at all.
+            // The comment that used to sit here said there was no checkout in this build. There
+            // is one now (features/payments/pay_rent.dart): Razorpay's own native sheet, taking
+            // UPI, cards, netbanking and wallets.
             //
             // The cream fill does not move somewhere else on this screen. It is the app's only
             // one and it means "the action" — and paying rent IS the action on this card, so it
             // is spent here, on the button, and not on the paragraph below it.
+            //
+            // ONLY WHEN SOMETHING IS OWED: the whole block sits inside `if (owes)`. A settled
+            // month shows no button, because an app that offers to take money it is not owed is
+            // one a resident stops trusting.
             PayRentButton(amount: rent.balance),
             const SizedBox(height: Space.sm),
             PayAtDeskNote(amount: rent.balance),

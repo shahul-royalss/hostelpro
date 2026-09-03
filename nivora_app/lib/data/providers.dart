@@ -64,6 +64,13 @@ final roomRepositoryProvider = Provider<RoomRepository>(
   (ref) => RoomRepository(ref.watch(supabaseClientProvider)),
 );
 
+/// The layout write, TYPED BY THE INTERFACE rather than by the class, so a test can stand in
+/// for it without a network or a Supabase client. See [RoomLayoutWrites] — same shape and same
+/// reasoning as `ownerStaffWritesProvider`.
+final roomLayoutWritesProvider = Provider<RoomLayoutWrites>(
+  (ref) => ref.watch(roomRepositoryProvider),
+);
+
 final studentRepositoryProvider = Provider<StudentRepository>(
   (ref) => StudentRepository(ref.watch(supabaseClientProvider)),
 );

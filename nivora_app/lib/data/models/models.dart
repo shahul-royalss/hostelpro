@@ -10,6 +10,7 @@ export 'enums.dart';
 export 'failure.dart';
 export 'fee.dart';
 export 'finance.dart';
+export 'floor_plan.dart';
 export 'hostel.dart';
 export 'menu.dart';
 export 'notice.dart';
