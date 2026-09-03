@@ -114,7 +114,6 @@ void _againstAll(Map<String, Color> surfaces, Color fg, double need, String name
 /// resolves a bundled asset by parsing `Inter-<Variant>.ttf`, so `Inter-ExtraBold.ttf` IS w800.
 const _interFaces = <String, int>{
   'Inter-Regular.ttf': 400,
-  'Inter-Medium.ttf': 500,
   'Inter-SemiBold.ttf': 600,
   'Inter-Bold.ttf': 700,
   'Inter-ExtraBold.ttf': 800,
@@ -1298,7 +1297,6 @@ void main() {
 
       final bundled = <FontWeight>{
         FontWeight.w400,
-        FontWeight.w500,
         FontWeight.w600,
         FontWeight.w700,
         FontWeight.w800,

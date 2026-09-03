@@ -201,12 +201,18 @@ placeholders in the `.invalid` sense any more — `isConfigured` reports true an
 publish" banner is gone — which makes them *more* dangerous, not less: the page now looks finished
 while possibly naming a mailbox nobody reads.
 
+The two contact values were changed on **2026-09-04** from a personal name and a street-level
+address to a role title and a locality. That was the owner's instruction and it is also the safer
+reading of both rules: Play requires a *working* contact and DPDP requires a *grievance officer's*
+contact, and neither is better served by publishing an individual's home address to the open web.
+**Do not put a personal name or a street address back into these fields.**
+
 | Value | Currently | What must be confirmed |
 |---|---|---|
 | `operatorName` | `NIVORA` | **This is a product name, not a legal entity.** DPDP requires a Data Fiduciary to identify itself. If a company or proprietorship is registered, use its registered name; if the operator is an individual, use their name |
 | `grievanceEmail` / `legalEmail` | `support@nivora.dhrishtaerf.org` | **Send a test message and confirm somebody receives it.** A privacy policy's contact address is where erasure requests arrive; one that bounces is worse than none, because the request is lost silently |
-| `postalAddress` | `RVS Nagar, Chittoor, Andhra Pradesh, India` | DPDP expects a full postal address. This has no building, street or PIN code |
-| `grievanceOfficer` | `Shaik.Shahul` | Confirm this person accepts the role and will answer within 30 days. Consider writing the name in the form they use publicly |
+| `postalAddress` | `Chittoor, Andhra Pradesh, India` | **Deliberately a locality, not a doorstep** (changed 2026-09-04). The published pages are read by anyone on the open web, and the monitored mailbox above is the channel that actually answers a request. If counsel says a fuller address is required, use a business or registered-office address — not a home one |
+| `grievanceOfficer` | `The Grievance Officer` | **Deliberately a role, not a person** (changed 2026-09-04). DPDP requires the grievance officer's *contact*, and a role title plus a monitored role mailbox gives one that does not go stale the day somebody else takes the job. Confirm that whoever holds the role answers within 30 days |
 | `jurisdiction` / `governingLaw` | Chittoor, Andhra Pradesh / laws of India | Confirm with counsel that this is where the operator wants disputes heard |
 
 No company registration number, GST number or CIN appears anywhere, because none was supplied.
@@ -216,14 +222,16 @@ No company registration number, GST number or CIN appears anywhere, because none
 
 ## 7. Open items and cross-agent dependencies
 
-1. **The retention periods in the policy are commitments the daily job does not yet enforce.**
-   `app/legal/privacy/page.tsx` §7 now publishes **1 month after departure** for resident records
-   and **2 months** for complaints and notices, with fee history kept indefinitely. As of writing,
-   `app.apply_retention()` still only covers the audit trail, security alerts, rate limits and read
-   notifications. The section is honestly framed — those rows sit under *"Applied by the hostel
-   operator"*, with a sentence saying the job is being extended — but **the retention work must land
-   with periods that match this page, or one of the two has to change.** A published policy that
-   overstates what is deleted is the violation §7.1 of the submission pack warns about.
+1. **The retention periods in the policy now match the job — RESOLVED 2026-09-04.**
+   `app.apply_retention()` (db/schema.sql, run nightly at 03:15 UTC by the `hostelpro-retention`
+   pg_cron job) covers the audit trail, security alerts, rate limits, read notifications,
+   complaints and notices at 2 months, and the deferred erasure of a departed resident 1 month
+   after check-out. The rewritten §7 of the privacy policy publishes exactly those periods and
+   nothing else: the 12-month visitor-log and leave-request periods and the 24-month staff-task
+   period, which no code enforced, were **removed** rather than restated more softly — visitor
+   entries and leave requests are now described as going with the resident record they belong to,
+   which is what `app.erase_student()` actually does. Anything added to the job later must be
+   added to the page in the same change, and vice versa.
 
 2. **`firebase_core` and `firebase_messaging` are dependencies of the Flutter app but are never
    initialised** — no `Firebase.initializeApp`, no `FirebaseMessaging`, no `google-services` plugin,

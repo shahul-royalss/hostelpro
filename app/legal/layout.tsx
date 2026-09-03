@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 const NAV = [
   { href: "/legal", label: "Overview" },
   { href: "/legal/privacy", label: "Privacy Policy" },
-  { href: "/legal/terms", label: "Terms of Service" },
+  { href: "/legal/terms", label: "Terms of Use" },
   { href: "/legal/account-deletion", label: "Delete your data" },
 ] as const;
 

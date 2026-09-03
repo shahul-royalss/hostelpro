@@ -31,7 +31,8 @@
 /// DEPLOYMENT ORDER IS NOT OPTIONAL: the migration that publishes a version row must land
 /// BEFORE an app build carrying that version string reaches anybody. `accept_legal_terms()`
 /// refuses a version it has never heard of, and at the gate the only thing a user may do is
-/// accept — so the wrong order locks every account out of the product. See
+/// accept — so the wrong order locks every account out of the product. The row for the version
+/// below is db/migrations/2026-09-04-legal-version-bump.sql; the rule it has to satisfy is
 /// db/migrations/2026-09-02-legal-consent.sql §4.
 ///
 /// test/legal_consent_test.dart asserts (1) and (2) against each other, so the pair cannot
@@ -42,10 +43,10 @@ library;
 ///
 /// One string covers BOTH documents: they are presented together and agreed to together, so
 /// there is no state in which a person is half-agreed.
-const kLegalVersion = '2026-09-02';
+const kLegalVersion = '2026-09-04';
 
 /// Human-readable form of [kLegalVersion], for the "last updated" line.
-const kLegalVersionLabel = '2 September 2026';
+const kLegalVersionLabel = '4 September 2026';
 
 const kTermsUrl = 'https://hostelpro-three.vercel.app/legal/terms';
 const kPrivacyUrl = 'https://hostelpro-three.vercel.app/legal/privacy';
@@ -55,18 +56,18 @@ const kDeletionUrl = 'https://hostelpro-three.vercel.app/legal/account-deletion'
 ///
 /// These MIRROR `lib/legal-config.ts` at the repository root and must be changed in both places
 /// at once. They are real-world facts about the business that cannot be derived from the
-/// codebase, and every one of them is still awaiting confirmation from the owner — see
-/// docs/legal-consent.md §6, which lists exactly what must be verified before the privacy-policy
-/// URL is pasted into Play Console.
+/// codebase.
 ///
-/// Nothing here was invented for the sake of filling a field. Where a value is not yet
-/// confirmed it stays as the operator last set it rather than being replaced by something
-/// plausible, because a plausible wrong address in a privacy policy is worse than an obviously
-/// unfinished one: it silently swallows the requests it was published to receive.
+/// THE CONTACT IS A ROLE, NOT A PERSON, AND THAT IS THE POINT. Google Play requires the privacy
+/// policy to give a contact that works, and the DPDP Act 2023 requires a Data Fiduciary to
+/// publish the contact of a grievance officer. A role title plus a monitored role mailbox
+/// satisfies both without publishing somebody's name and street address to the open web, where
+/// they would outlive the person holding the job. Do not put a personal name or a residential
+/// address back into these constants.
 const kOperatorName = 'NIVORA';
-const kGrievanceOfficer = 'Shaik.Shahul';
+const kGrievanceOfficer = 'The Grievance Officer';
 const kGrievanceEmail = 'support@nivora.dhrishtaerf.org';
-const kPostalAddress = 'RVS Nagar, Chittoor, Andhra Pradesh, India';
+const kPostalAddress = 'Chittoor, Andhra Pradesh, India';
 const kGoverningLaw = 'the laws of India';
 const kJurisdiction = 'the courts at Chittoor, Andhra Pradesh';
 
@@ -129,15 +130,21 @@ final class LegalDocument {
 const kLegalDocuments = <LegalDocument>[kPrivacyPolicy, kTermsOfUse];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PRIVACY POLICY
+// PRIVACY POLICY — 10 sections
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // EVERY FACTUAL CLAIM BELOW WAS READ OUT OF THE CODEBASE, not assumed. The field lists come
-// from db/schema.sql, the buckets from lib/storage.ts, the region from docs/server-health.md
-// (`ap-southeast-1`), the sub-processors from what the project actually calls, and the
-// retention periods from app.apply_retention() plus the schedule in
-// docs/data-retention-and-privacy.md §5.2. If any of those change, this changes with them and
-// the version bumps.
+// from db/schema.sql, the buckets and link lifetimes from lib/storage.ts, the region from
+// docs/server-health.md (`ap-southeast-1`), the sub-processors from what the project actually
+// calls, and the retention periods from app.apply_retention() and app.erase_student() in
+// db/schema.sql, which the pg_cron job 'hostelpro-retention' runs nightly at 03:15 UTC. If any
+// of those change, this changes with them and the version bumps.
+//
+// SHORTER IS NOT VAGUER. This document was cut from eighteen sections to ten by merging and by
+// deleting repetition — not by softening a claim. Where a period or a promise could not be
+// traced to code it was removed rather than reworded, which is why the twelve-month visitor-log
+// and leave-request periods that nothing enforced are gone, and why nothing here points at an
+// in-app "delete my account" button the app does not have.
 
 const kPrivacyPolicy = LegalDocument(
   id: 'privacy',
@@ -146,35 +153,28 @@ const kPrivacyPolicy = LegalDocument(
   url: kPrivacyUrl,
   sections: [
     LegalSection(
-      heading: 'Who is responsible for your data',
+      heading: 'Who this policy is from, and how accounts work',
       blocks: [
         Para(
           'NIVORA is software used by a hostel or PG operator to run their building. The '
-          'operator — the hostel you live in or work for — decides what to collect about you '
-          'and why. In the language of the Digital Personal Data Protection Act 2023 they are '
-          'the Data Fiduciary and NIVORA is the Data Processor acting on their instructions.',
+          'operator decides what to collect about you and why; NIVORA stores and processes it '
+          'on their instructions. In the language of the Digital Personal Data Protection Act '
+          '2023 your hostel is the Data Fiduciary and NIVORA is the Data Processor. So a '
+          'request to see, correct or erase your data is answered by your hostel first. For '
+          'platform staff accounts and the security log, NIVORA is the Data Fiduciary itself.',
         ),
         Para(
-          'What this means in practice: a request to see, correct or erase your data is '
-          'answered by your hostel. NIVORA\'s job is to make sure they can answer it. If you '
-          'cannot get a response from them, the contact at the end of this policy will reach '
-          'NIVORA directly.',
-        ),
-      ],
-    ),
-    LegalSection(
-      heading: 'Nobody signs themselves up',
-      blocks: [
-        Para(
-          'There is no public registration in this app. Every account is created by somebody '
-          'above it: the platform creates hostel owners, an owner creates their manager and '
-          'warden, and a warden registers residents. You were given a temporary password and '
-          'asked to change it on first sign-in.',
+          'Nobody signs themselves up. The platform creates hostel owners, an owner creates '
+          'their manager and warden, and a warden registers residents. Residents sign in with '
+          'the phone number their hostel registered, which is why changing it is something '
+          'staff do rather than a profile edit. Everyone is given a temporary password and must '
+          'set their own at first sign-in; passwords are hashed by the sign-in service and are '
+          'never seen by NIVORA, by your hostel or by us.',
         ),
         Para(
           'That is why this policy matters more than it would for an app you chose to install: '
-          'most of the information here was typed in by a member of hostel staff, from '
-          'documents you handed them at the desk.',
+          'most of what is here was typed in by hostel staff, from documents you handed them at '
+          'the desk.',
         ),
       ],
     ),
@@ -200,14 +200,13 @@ const kPrivacyPolicy = LegalDocument(
           (
             term: 'Money',
             detail: 'Rent due, rent paid, the date and method of each payment, and free-text '
-                'notes a warden adds to a receipt. Where rent is paid online, the payment '
-                'reference issued by the payment gateway.',
+                'notes a warden adds to a receipt. Where rent is paid online, the reference the '
+                'payment gateway issues.',
           ),
           (
             term: 'Things you raise',
-            detail: 'Complaints — the title, description and any photograph you attach — and '
-                'the history of who changed their status. Leave requests, including the reason '
-                'you give.',
+            detail: 'Complaints — title, description and any photograph you attach — with the '
+                'history of who changed their status. Leave requests, including your reason.',
           ),
           (
             term: 'Visitors',
@@ -215,32 +214,50 @@ const kPrivacyPolicy = LegalDocument(
                 'you and their check-in and check-out times.',
           ),
           (
-            term: 'Security records',
-            detail: 'A log of significant actions — sign-ins, account changes, money recorded — '
-                'with the IP address and browser or device description of the request.',
+            term: 'Hostel operations',
+            detail: 'Notices, staff tasks, mess menus, and expense and revenue records with '
+                'their receipt images — which can name whoever appears on them.',
+          ),
+          (
+            term: 'Security log',
+            detail: 'A record of significant actions — sign-ins, account changes, money '
+                'recorded — with the IP address and browser or device description of the '
+                'request. Login rate limits are kept as irreversible hashes, never as a '
+                'readable phone number.',
           ),
           (
             term: 'Your agreement to this policy',
-            detail: 'When you accepted these documents, which version you accepted, and whether '
-                'you were using the app or the website. This record exists because consent that '
-                'cannot be evidenced is not consent.',
+            detail: 'Which version you accepted, when, and whether you were using the app or '
+                'the website. No IP address and no device details are stored with it. This '
+                'record exists because consent that cannot be evidenced is not consent.',
           ),
         ]),
+        Para(
+          'Free-text boxes — a complaint, a leave reason, a note on a receipt — hold whatever '
+          'the person writing them chose to write, including things about other people.',
+        ),
       ],
     ),
     LegalSection(
       heading: 'What is never collected',
       blocks: [
         Bullets([
-          'No advertising identifiers, and no advertising of any kind.',
-          'No analytics, no behavioural profiling and no tracking across other apps or sites.',
-          'No location data. The app never asks for your location and could not use it.',
-          'No contacts, no calendar, no microphone.',
+          'No date of birth and no age. The system has no such field.',
           'No card number, UPI ID, CVV or bank account. Where rent is paid online those details '
-              'are typed into the payment gateway\'s own screen and never reach NIVORA at all. '
-              'What comes back is a reference saying a payment of a certain amount succeeded.',
-          'No password. Your password is stored only as a one-way hash by the authentication '
-              'service and cannot be read by NIVORA, by your hostel, or by us.',
+              'are typed into Razorpay\'s own checkout and never reach NIVORA at all. What comes '
+              'back is a reference saying a payment of a stated amount succeeded.',
+          'No location, contacts, calendar, microphone or biometrics. The Android app asks for '
+              'internet access and nothing else.',
+          'No advertising, no advertising identifier and no profiling. Nothing here is used to '
+              'build a picture of you or to make an automated decision about you.',
+          'No analytics, telemetry, session replay or crash reporting. There is no third-party '
+              'tracking code in the app.',
+          'No marketing cookies. The only cookies are the session cookies that keep you signed '
+              'in, read by the server alone.',
+          'No SMS, no marketing email and no mailing list. The only emails sent are the ones '
+              'that keep the account working — a confirmation link, a password reset.',
+          'No push notifications. Notices appear inside the app when you open it; the app '
+              'registers no device token anywhere.',
         ]),
       ],
     ),
@@ -248,109 +265,146 @@ const kPrivacyPolicy = LegalDocument(
       heading: 'Photographs and identity documents',
       blocks: [
         Para(
-          'Your photo and ID scan are held in private storage. They are never public, never '
-          'linked from a shareable address, and are reachable only through a short-lived link '
-          'generated for a specific member of your hostel\'s staff at the moment they open it — '
-          'fifteen minutes for identity documents.',
+          'Your photo and your identity document are held in private storage. They are never '
+          'public, never linked from a shareable address, and are reachable only through a '
+          'link created for a member of your hostel\'s staff at the moment they open it — '
+          'fifteen minutes for a resident photo or ID document, thirty for a receipt or a '
+          'complaint photograph. Every file is filed under its own hostel and the server '
+          'refuses a request for a path outside the requester\'s hostel. Uploads are checked by '
+          'their actual leading bytes rather than their file name, and capped at 8 MB.',
         ),
         Para(
-          'A note on Aadhaar specifically. Aadhaar is governed by its own law and UIDAI '
-          'guidance restricts holding copies of the Aadhaar letter. If your hostel asks for an '
-          'ID, you may offer a different one, or a masked Aadhaar where that is accepted. '
-          'NIVORA does not require Aadhaar and does not treat it differently from any other '
-          'document you present.',
+          'A note on Aadhaar. Aadhaar is governed by its own law and UIDAI guidance restricts '
+          'holding copies of the Aadhaar letter. NIVORA does not require Aadhaar and does not '
+          'treat it differently from any other document; if your hostel asks for an ID you may '
+          'offer a different one, or a masked Aadhaar where that is accepted. A hostel can also '
+          'record the document type and skip the scan entirely — the system works with no image '
+          'stored at all, and that is the safest option.',
         ),
       ],
     ),
     LegalSection(
       heading: 'Why it is held',
       blocks: [
+        Para(
+          'The DPDP Act allows processing on consent or on one of the legitimate uses it lists. '
+          'For each group of people:',
+        ),
         Bullets([
-          'To run the residency: allocate a bed, record the rent, answer a complaint, approve '
-              'leave, and know who is in the building.',
-          'To meet the hostel\'s own legal duties, particularly keeping accounting records of '
-              'money received.',
-          'To keep the account secure — the security log exists so that a compromised account '
-              'can be investigated, and for no other purpose.',
+          'Residents and guardians — on the consent your hostel takes at registration, to run '
+              'the residency: allocate a bed, keep the rent ledger, answer a complaint, approve '
+              'leave, and reach your guardian in an emergency.',
+          'Visitors — the safety and security of the building and the people in it. A hostel '
+              'must display a visible notice at the desk, because a visitor has no account here '
+              'and gets no notice from the app.',
+          'Staff and owners — their employment or commercial relationship with the hostel, and '
+              'administration of the subscription.',
+          'The security log — NIVORA\'s own interest in keeping the system secure and being '
+              'able to investigate a compromised account. It exists for that and nothing else.',
         ]),
         Para(
-          'None of it is used to profile you, to advertise to you, or to make an automated '
-          'decision about you. There is no automated decision-making in NIVORA.',
+          'Where consent is the basis it can be withdrawn, though withdrawing it may mean the '
+          'hostel can no longer accommodate you, because it can no longer keep the record it '
+          'needs to. There is no profiling and no automated decision-making in NIVORA.',
         ),
       ],
     ),
     LegalSection(
-      heading: 'Who can see it',
+      heading: 'Who can see it, where it is stored, and how it is protected',
       blocks: [
         Para(
-          'Only the staff of the hostel you belong to. This is enforced by the database itself '
-          'through row-level security, evaluated against your signed-in identity on every '
-          'single request — it is not a filter the app applies and could forget. One hostel '
-          'cannot read another hostel\'s residents even if its own software asked.',
+          'Inside your hostel, access is enforced by the database itself through row-level '
+          'security, evaluated against your signed-in identity on every request — not by a '
+          'filter the app applies and could forget. One hostel cannot read another hostel\'s '
+          'data even if its own software asked.',
         ),
         Bullets([
-          'You can see your own record, your own fees, your own complaints and your own notices.',
-          'Your warden and manager can see the residents of their hostel.',
-          'The owner can see their hostels.',
-          'A platform super administrator can reach tenant records for support and billing. '
-              'This is logged.',
-          'Other residents cannot see anything about you. There is no directory and no resident '
-              'list in the resident app.',
+          'You see your own record, fees, complaints, leave and notices. Of your roommates you '
+              'see a name and phone number — no photographs and no documents.',
+          'Your warden sees the residents of their hostel; the owner sees their hostels.',
+          'A manager sees rooms, money and operations, and is cut off from resident personal '
+              'data at the database layer.',
+          'A platform administrator can reach tenant records for support and billing. Every '
+              'such action is written to the security log.',
+          'Other residents cannot see anything else about you. There is no resident directory.',
         ]),
-      ],
-    ),
-    LegalSection(
-      heading: 'Where it is stored, and who else touches it',
-      blocks: [
         Para(
-          'The database and file storage are hosted by Supabase in the ap-southeast-1 region — '
-          'Singapore. Data is encrypted in transit and at rest.',
+          'Outside your hostel, five companies process some part of it. That is the complete '
+          'list: no analytics vendor, no advertising network, no crash reporter, no messaging '
+          'tool and no AI provider.',
         ),
-        Para('The complete list of companies that process any part of it:'),
         Rows([
           (
             term: 'Supabase',
-            detail: 'The database, file storage and sign-in service. Holds everything above.',
+            detail: 'The database, sign-in service and private file storage, in the '
+                'ap-southeast-1 region — Singapore. Holds everything listed above, including '
+                'the password hashes.',
           ),
           (
             term: 'Vercel',
-            detail: 'Serves the web application. Sees requests in transit and keeps short-lived '
-                'operational logs.',
+            detail: 'Serves the web application. Keeps request logs, which contain IP addresses '
+                'and browser descriptions.',
+          ),
+          (
+            term: 'GitHub',
+            detail: 'Holds the source code and the nightly encrypted database backup archive, '
+                'for 90 days.',
           ),
           (
             term: 'Razorpay',
-            detail: 'Only where rent is paid online. Receives your name, email, phone and the '
-                'amount so it can take the payment, and holds its own record of the '
-                'transaction under its own policy. It never sends card or UPI details back.',
+            detail: 'Only where you choose to pay rent in the app. Receives your name, email, '
+                'phone and the amount; the card, UPI or netbanking details are entered in '
+                'Razorpay\'s own checkout and never reach us. We get back the amount, the '
+                'identifiers and the method. Razorpay keeps its own record under its own policy.',
           ),
           (
-            term: 'Google (Gmail)',
-            detail: 'Delivers the small number of emails the system sends — a verification '
-                'link, a password reset. Sees your email address and the message.',
+            term: 'Google',
+            detail: 'Delivers the few account emails — a confirmation link, a password reset. '
+                'Sees your email address and the message.',
           ),
         ]),
         Para(
-          'That is the whole list. There is no analytics vendor, no advertising network, no '
-          'crash-reporting service and no customer-messaging tool in the picture.',
+          'Data is encrypted in transit and at rest. The DPDP Act permits personal data to be '
+          'sent outside India except to countries the Central Government has restricted. '
+          'Nothing is sold, given to an advertiser or a data broker, or used to train an AI '
+          'model. It is disclosed to anyone else only where a law or a court requires it, and '
+          'your hostel is told unless the law forbids telling them.',
+        ),
+        Para(
+          'What protects it: row-level security on every table; a manager role deliberately '
+          'blocked from resident personal data; two-factor authentication available to every '
+          'role and required for the roles that carry the most access; a forced password change '
+          'at first sign-in; the security log; TLS with strict transport security on every '
+          'response; private storage with short-lived links; password hashes that never reach '
+          'the application; login rate limiting keyed on an irreversible hash; and a strict '
+          'content security policy. No system is perfectly secure and this policy does not '
+          'claim otherwise — it claims these measures are in the product today.',
+        ),
+        Para(
+          'If personal data is exposed, NIVORA tells the affected hostel without delay and '
+          'helps them notify the Data Protection Board of India and the people affected, as the '
+          'Act requires of them.',
         ),
       ],
     ),
     LegalSection(
-      heading: 'How long it is kept',
+      heading: 'How long it is kept, and what deletion reaches',
       blocks: [
+        Para(
+          'A job inside the database runs every night and applies these without anybody having '
+          'to remember:',
+        ),
         Rows([
           (
-            term: 'While you live there',
-            detail: 'Your record is kept for as long as you are a resident.',
-          ),
-          (
-            term: 'After you leave',
-            detail: 'Your resident record, and your photograph and ID document with it, are '
-                'erased one month after your departure is recorded.',
+            term: 'A departed resident',
+            detail: 'The record, and the photograph and identity document with it, are erased '
+                'one month after check-out. Their complaints, leave requests and visitor '
+                'entries go at the same time, and so does the login.',
           ),
           (
             term: 'Complaints and notices',
-            detail: 'Two months, after which they are deleted along with their history.',
+            detail: 'Deleted two months after they are raised or posted, resolved or not, '
+                'along with their history and any photograph attached.',
           ),
           (
             term: 'Notifications you have read',
@@ -358,14 +412,17 @@ const kPrivacyPolicy = LegalDocument(
           ),
           (
             term: 'Security log',
-            detail: 'The IP address and device description are erased after ninety days, and '
-                'the entry itself after a year.',
+            detail: 'The IP address and device description are erased after ninety days; the '
+                'entry itself after a year. A security alert that is still open stays until it '
+                'is closed, because an open alert is an open investigation.',
           ),
           (
-            term: 'Payment history',
-            detail: 'Kept permanently. This is the one exception and it is not ours to waive: '
-                'a hostel has a statutory duty to keep records of money received, and those '
-                'duties run for years. What is kept is the transaction, not your ID document.',
+            term: 'Fee, expense and revenue records',
+            detail: 'Kept indefinitely. This is the one exception and it is not ours to waive: '
+                'a business has a statutory duty to keep records of money received. Where that '
+                'collides with erasure the person is removed rather than the record — name, '
+                'phone, email, photograph, guardian details, address and ID proof are stripped '
+                'out and the figures are left attached to nobody.',
           ),
           (
             term: 'Your acceptance of this policy',
@@ -376,52 +433,45 @@ const kPrivacyPolicy = LegalDocument(
         Para(
           'Deletion is not instant everywhere. Encrypted backups are taken nightly and kept for '
           'ninety days, so something erased today disappears from the last backup up to ninety '
-          'days later. Backups are never browsed; they exist to restore the system after a '
-          'failure. Most policies leave this out — it is stated here because it is true.',
+          'days later. Backups are never browsed and are never restored except to recover from '
+          'a failure; if one ever is restored the erasure is applied again straight away. Logs '
+          'held by our hosting providers age out on their own schedules. Most policies leave '
+          'this out — it is stated here because it is true.',
         ),
       ],
     ),
     LegalSection(
-      heading: 'Your rights',
+      heading: 'Your rights, and how to use them',
       blocks: [
         Para(
-          'Under the DPDP Act 2023 you may ask for a summary of the data held about you, ask '
-          'for it to be corrected, completed or erased, nominate someone to exercise these '
-          'rights if you are unable to, and complain. Where the GDPR or UK GDPR applies to you, '
-          'you additionally have rights of access, portability, restriction and objection, and '
-          'the right to complain to your supervisory authority.',
+          'Under the DPDP Act 2023 you may ask for a summary of the data held about you and who '
+          'it has been shared with, ask for it to be corrected, completed or erased, nominate '
+          'someone to exercise these rights if you cannot, and complain.',
         ),
         Para(
-          'Ask your hostel first — they hold the relationship and they can act immediately. If '
-          'that does not work, write to the Grievance Officer below. A request will be answered '
-          'within thirty days.',
+          'Ask your hostel first — they hold the relationship and can act immediately. A wrong '
+          'phone number or a misspelled name is a change your warden can make while you stand '
+          'there. To be erased, ask them too: checking a resident out schedules the erasure a '
+          'month later, and it can be raised sooner on request.',
         ),
         Para(
-          'Correcting something is usually faster than you expect: a wrong phone number or a '
-          'misspelled name is a change your warden can make while you stand there.',
-        ),
-      ],
-    ),
-    LegalSection(
-      heading: 'Erasing your account',
-      blocks: [
-        Para(
-          'Nobody can delete their own account from inside the app, and that is deliberate '
-          'rather than an omission. Your record is tied to a bed you may still be occupying and '
-          'to a fee ledger the hostel is required to keep, and a deletion accepted on the spot '
-          'in someone else\'s name would be a way to attack them.',
-        ),
-        Para(
-          'So a deletion is a request, confirmed with you, and then carried out. Residents can '
-          'file one from More, then My details. Anyone can file one from the public page at:',
+          'Nothing erases your record on the spot, and that is deliberate rather than an '
+          'omission: it is tied to a bed you may still be in and to a ledger the hostel must '
+          'keep, and an erasure accepted instantly in someone else\'s name would be a way to '
+          'attack them. So a deletion is a request, confirmed with you, and then carried out. '
+          'A resident signed in on the website can file one from Profile, then Delete my '
+          'account and data. Anyone can file one from the public page at:',
         ),
         Para(kDeletionUrl),
         Para(
-          'What is erased: your name, phone, email, address, guardian details, photograph and '
-          'ID document, complaints, leave records and login. What survives, with your name '
-          'removed from it where possible: the fee ledger, for the statutory period described '
-          'above. A policy that promises total erasure and then quietly keeps the accounts is '
-          'worse than one that tells you where the line is.',
+          'If your hostel does not answer, or the request is about the security log or a '
+          'platform account, write to the Grievance Officer below.',
+        ),
+        Para(
+          'Requests are free. We acknowledge one within 72 hours and aim to finish within 30 '
+          'days, and we check who you are first — not to obstruct you, but because acting on an '
+          'erasure request without checking is itself a way to harm somebody. If you are not '
+          'satisfied you may complain to the Data Protection Board of India.',
         ),
       ],
     ),
@@ -429,44 +479,31 @@ const kPrivacyPolicy = LegalDocument(
       heading: 'Children',
       blocks: [
         Para(
-          'Hostel and PG residents in India are sometimes under eighteen. NIVORA does not record '
-          'anyone\'s date of birth and therefore cannot tell. The Act requires a parent or '
-          'guardian to consent for a child, and because the software cannot identify who that '
-          'applies to, your hostel must obtain that consent in their own registration paperwork.',
+          'Hostel and PG residents in India are sometimes under eighteen. The Act requires a '
+          'parent or guardian to consent for a child, and prohibits tracking, behavioural '
+          'monitoring and advertising directed at children. NIVORA does none of those things '
+          'for anybody of any age, so those prohibitions are met by the way the product is '
+          'built rather than by a promise.',
         ),
         Para(
-          'What the absence of an age field does guarantee is that the Act\'s prohibitions are '
-          'satisfied outright: there is no tracking, no behavioural monitoring and no '
-          'advertising directed at anybody, of any age.',
+          'The system records no date of birth and therefore cannot tell who is a minor. Your '
+          'hostel must obtain a guardian\'s consent in its own registration paperwork before '
+          'registering one.',
         ),
       ],
     ),
     LegalSection(
-      heading: 'If something goes wrong',
-      blocks: [
-        Para(
-          'If personal data is exposed, NIVORA notifies the affected hostel operator without '
-          'delay and assists them in notifying the Data Protection Board and the people '
-          'affected, as the Act requires of them.',
-        ),
-      ],
-    ),
-    LegalSection(
-      heading: 'Changes to this policy',
+      heading: 'Changes to this policy, and the Grievance Officer',
       blocks: [
         Para(
           'When this policy changes materially, its version changes, and you are asked to read '
           'and accept it again the next time you open the app. You will not be quietly moved '
-          'onto a new policy you never saw.',
+          'onto a policy you never saw.',
         ),
         Para('This version: $kLegalVersion, effective $kLegalVersionLabel.'),
-      ],
-    ),
-    LegalSection(
-      heading: 'Contact',
-      blocks: [
         Rows([
           (term: 'Grievance Officer', detail: kGrievanceOfficer),
+          (term: 'Operator', detail: kOperatorName),
           (term: 'Email', detail: kGrievanceEmail),
           (term: 'Post', detail: kPostalAddress),
         ]),
@@ -478,7 +515,7 @@ const kPrivacyPolicy = LegalDocument(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TERMS OF USE
+// TERMS OF USE — 8 sections
 // ─────────────────────────────────────────────────────────────────────────────
 
 const kTermsOfUse = LegalDocument(
@@ -491,9 +528,9 @@ const kTermsOfUse = LegalDocument(
       heading: 'Who these terms bind',
       blocks: [
         Para(
-          'These terms are between $kOperatorName, which provides NIVORA, and you — whether you '
-          'are a hostel owner who subscribes to it, a manager or warden given an account by an '
-          'owner, or a resident given an account by a warden.',
+          'These terms are between $kOperatorName, which provides this service, and you — '
+          'whether you are a hostel owner who subscribes to it, a manager or warden given an '
+          'account by an owner, or a resident given an account by a warden.',
         ),
         Para(
           'Using the app means accepting them. If you do not accept them you cannot use the '
@@ -506,29 +543,32 @@ const kTermsOfUse = LegalDocument(
       blocks: [
         Para(
           'NIVORA records and organises the running of a hostel or PG: rooms and beds, '
-          'residents, rent due and rent received, complaints, leave, visitors, notices, meals '
-          'and staff tasks. It is a record-keeping tool.',
+          'residents, rent due and rent received, complaints, leave, visitors, notices, meals, '
+          'staff tasks and expenses. It is delivered as a website and an Android app, and needs '
+          'an internet connection.',
         ),
         Para(
-          'It is not an accounting package, not a legal or tax adviser, and not a substitute '
-          'for the agreement between you and your hostel. The rent, the deposit, the notice '
-          'period and the house rules are matters between the resident and the operator; NIVORA '
-          'only records what they tell it.',
+          'It is a record-keeping tool. It is not an accounting package, not a legal or tax '
+          'adviser, and not a substitute for the agreement between you and your hostel. The '
+          'rent, the deposit, the notice period and the house rules are matters between the '
+          'resident and the operator; NIVORA only records what they tell it.',
         ),
       ],
     ),
     LegalSection(
-      heading: 'Accounts are issued, not registered',
+      heading: 'Your account',
       blocks: [
         Para(
           'There is no self sign-up. Your account was created for you and comes with a '
-          'temporary password you are required to change when you first sign in.',
+          'temporary password you must change when you first sign in. An account belongs to the '
+          'hostel\'s workspace rather than to you personally, and is deactivated when you check '
+          'out or when your employment ends.',
         ),
         Bullets([
           'Keep your password to yourself. Anything done with your account is treated as done '
-              'by you.',
-          'Owners, managers and platform administrators must set up two-factor authentication. '
-              'This is not optional for those roles.',
+              'by you, because that is how the security log records it.',
+          'Turn on two-factor authentication where it is offered. Where it is required for your '
+              'role you will be asked to set it up before you can continue.',
           'Tell your hostel immediately if you think someone else has your password.',
           'Do not use somebody else\'s account, and do not ask a member of staff to act as you.',
         ]),
@@ -539,137 +579,117 @@ const kTermsOfUse = LegalDocument(
       blocks: [
         Para('You agree not to:'),
         Bullets([
-          'Enter information you know to be false — a fabricated payment, an invented complaint '
-              'against another resident, or someone else\'s identity document.',
+          'Enter information you know to be false — a payment that did not happen, an invented '
+              'complaint against another resident, or someone else\'s identity document.',
           'Try to reach data belonging to another hostel or another person, or probe the '
-              'service for ways to do so.',
+              'service for a way to do so. Deliberately tripping the rate limits or the '
+              'security alerts is itself a breach of these terms.',
           'Upload anything unlawful, or a photograph of a person taken without their knowledge.',
-          'Use the service to harass anybody.',
-          'Copy, resell or reverse-engineer the software, or use automated means to extract '
-              'data from it in bulk.',
+          'Use the visitor log, complaints or any other feature to harass anybody.',
+          'Copy, resell, sublicense or reverse-engineer the software, or extract data from it '
+              'in bulk by automated means, except where the law says you may despite this.',
         ]),
         Para(
-          'Complaints and notices are read by staff and, in the case of notices, by every '
-          'resident in the audience. Write them accordingly.',
+          'Complaints are read by staff, and notices by every resident they are posted to. '
+          'Write them accordingly. The software, its design and its documentation stay ours; '
+          'you get the right to use the service for the term of the subscription, for running '
+          'the hostel it was issued for.',
         ),
       ],
     ),
     LegalSection(
-      heading: 'The operator\'s responsibilities',
+      heading: 'Resident data, and what the hostel is responsible for',
       blocks: [
         Para(
-          'If you run a hostel, you decide what personal data is collected about your '
-          'residents, and you are the Data Fiduciary for it. You are responsible for:',
+          'If you run a hostel, you decide what personal data is collected about your residents '
+          'and you are the Data Fiduciary for it. You are responsible for:',
         ),
         Bullets([
           'Giving residents notice and obtaining their consent before entering their details, '
-              'including a parent or guardian\'s consent where a resident is a minor.',
+              'including a parent or guardian\'s consent where a resident is a minor — the '
+              'system holds no date of birth and cannot tell.',
           'Displaying a visible notice at the visitor desk, since a visitor whose name and '
               'phone number you log has no account and gets no notice from the app.',
-          'Only collecting what you actually need, and preferring a non-Aadhaar identity '
-              'document.',
-          'Answering residents\' requests to see, correct or erase their data, and passing on '
-              'anything you need help with.',
+          'Collecting only what you need, and preferring a non-Aadhaar identity document.',
+          'Answering residents\' requests to see, correct or erase their data.',
           'Removing accounts for staff who leave.',
         ]),
-      ],
-    ),
-    LegalSection(
-      heading: 'Content you put in',
-      blocks: [
         Para(
           'What you enter stays yours. You grant NIVORA only the permission needed to store it, '
-          'display it to the people entitled to see it, and back it up. It is never sold, never '
-          'shared with an advertiser, and never used to train anything.',
+          'show it to the people entitled to see it, and back it up. It is never sold, never '
+          'shared with an advertiser and never used to train anything. NIVORA processes '
+          'resident data only on the hostel\'s instructions — so a hostel that records data it '
+          'had no lawful basis to hold, and is challenged over it, answers for that itself.',
         ),
       ],
     ),
     LegalSection(
-      heading: 'Subscription, and what happens when it lapses',
+      heading: 'Subscription and payments',
       blocks: [
         Para(
-          'A hostel\'s access depends on an active subscription. When one expires the hostel '
-          'becomes read-only: everything can still be read, and nothing further can be '
-          'recorded, until it is renewed. Data is not deleted when a subscription lapses.',
+          'A hostel\'s access depends on an active subscription, and the end date is enforced '
+          'by the database rather than by the interface, so it behaves the same way everywhere. '
+          'In the last fifteen days the workspace shows a renewal warning. Once it expires — or '
+          'if the hostel is deactivated — the workspace becomes read-only: everyone can still '
+          'sign in and read everything, and any attempt to record something is refused with an '
+          'explanation. Nothing is deleted, and renewing makes it writable again immediately.',
+        ),
+        Para(
+          'Rent is either recorded at the desk by a warden, or paid online through Razorpay on '
+          'Razorpay\'s own checkout under Razorpay\'s terms. NIVORA never takes, holds, '
+          'transfers or refunds money, and never sees a card number, UPI ID, CVV or bank '
+          'account.',
+        ),
+        Para(
+          'A receipt records what the hostel entered or what the gateway confirmed; it is not '
+          'independent proof that money changed hands. If a receipt is wrong, the hostel '
+          'corrects it. Refunds, deposits and disputes are between you and the hostel.',
         ),
       ],
     ),
     LegalSection(
-      heading: 'Payments',
+      heading: 'Availability, suspension and liability',
       blocks: [
         Para(
-          'Rent can be recorded at the desk by a warden, or paid online through the payment '
-          'gateway. Where it is paid online, the gateway takes the money — NIVORA never holds '
-          'your funds and never sees your card, UPI or bank details.',
+          'The service is provided as it is, without a guaranteed uptime figure or recovery '
+          'time. It may be unavailable during maintenance or because something a third party '
+          'runs has failed. Encrypted backups are taken nightly and kept for ninety days; they '
+          'exist to recover the platform from a failure, not to replace records you are '
+          'required to keep. To the fullest extent the law permits we exclude implied '
+          'warranties, and we do not warrant that the records in the system are accurate — they '
+          'are entered by the hostel\'s staff. Keep your own copy of anything you cannot afford '
+          'to lose; a receipt can be shared from the app the moment it is issued.',
         ),
         Para(
-          'A receipt in NIVORA records what the hostel entered or what the gateway confirmed. '
-          'If a receipt is wrong, it is the hostel that corrects it. Refunds, deposits and '
-          'disputes are between you and the hostel.',
-        ),
-      ],
-    ),
-    LegalSection(
-      heading: 'Availability and support',
-      blocks: [
-        Para(
-          'The service is provided as it is, without a guaranteed uptime figure. It may be '
-          'unavailable during maintenance or because something a third party runs has failed. '
-          'Encrypted backups are taken nightly and kept for ninety days.',
-        ),
-        Para(
-          'Keep your own copy of anything you cannot afford to lose. A receipt can be shared '
-          'from the app the moment it is issued.',
-        ),
-      ],
-    ),
-    LegalSection(
-      heading: 'Suspension',
-      blocks: [
-        Para(
-          'An account may be suspended for a breach of these terms, for non-payment of a '
-          'subscription, or where leaving it open would put other people\'s data at risk. A '
+          'An account or a whole workspace may be suspended for a breach of these terms, for '
+          'non-payment of a subscription, after a security incident, or where leaving it open '
+          'would put other people\'s data at risk. Where it is practicable and lawful the '
+          'hostel is told first, and access is restored once the reason is resolved. A '
           'resident\'s account is normally closed by their hostel when they leave.',
         ),
-      ],
-    ),
-    LegalSection(
-      heading: 'Liability',
-      blocks: [
         Para(
-          'NIVORA is not liable for indirect or consequential loss, for lost profits, or for '
-          'loss arising from information that a user entered incorrectly. Nothing in these '
-          'terms limits liability for anything that cannot lawfully be limited, including fraud '
-          'and death or personal injury caused by negligence.',
-        ),
-        Para(
-          'Because NIVORA processes resident data on a hostel\'s instructions, a hostel that '
-          'collects data without notice or consent, and is challenged over it, answers for that '
-          'itself.',
+          'Neither side is liable for indirect or consequential loss, for lost profits, or for '
+          'loss arising from information a user entered incorrectly. Our total liability is '
+          'limited to the subscription fees paid for the twelve months before the claim, or a '
+          'nominal amount where none were paid. Nothing here limits liability that cannot '
+          'lawfully be limited, including fraud and death or personal injury caused by '
+          'negligence.',
         ),
       ],
     ),
     LegalSection(
-      heading: 'Changes to these terms',
+      heading: 'Changes, governing law and contact',
       blocks: [
         Para(
           'Material changes bump the version and you are asked to accept again on your next '
-          'visit. Continuing to use the app after accepting is what makes the new version '
-          'binding — silence is not taken as agreement.',
+          'visit; silence is not taken as agreement. This version: $kLegalVersion, effective '
+          '$kLegalVersionLabel. If any part of these terms turns out to be unenforceable, the '
+          'rest still stands.',
         ),
-        Para('This version: $kLegalVersion, effective $kLegalVersionLabel.'),
-      ],
-    ),
-    LegalSection(
-      heading: 'Governing law',
-      blocks: [
-        Para('These terms are governed by $kGoverningLaw, and the courts with jurisdiction are '
-            '$kJurisdiction.'),
-      ],
-    ),
-    LegalSection(
-      heading: 'Contact',
-      blocks: [
+        Para(
+          'These terms are governed by $kGoverningLaw, and the courts with jurisdiction are '
+          '$kJurisdiction.',
+        ),
         Rows([
           (term: 'Email', detail: kGrievanceEmail),
           (term: 'Post', detail: kPostalAddress),

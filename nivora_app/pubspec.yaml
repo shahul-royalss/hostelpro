@@ -109,17 +109,18 @@ flutter:
   # bundle instead, and GoogleFonts.config.allowRuntimeFetching = false in main.dart turns any
   # missed weight into a loud failure in debug rather than a silent download in production.
   #
-  # FIVE STATIC FILES, FIVE WEIGHTS. google_fonts matches a bundled asset by FILENAME —
-  # `Inter-<Variant>.ttf` — so the directory carries Regular 400, Medium 500, SemiBold 600,
+  # FOUR STATIC FILES, FOUR WEIGHTS. google_fonts matches a bundled asset by FILENAME —
+  # `Inter-<Variant>.ttf` — so the directory carries Regular 400, SemiBold 600,
   # Bold 700 and ExtraBold 800, which is exactly the set lib/core/theme/typography.dart asks
-  # for. Adding a sixth weight to a TextStyle without adding its file reintroduces the download
-  # for that one weight.
+  # for. Adding a fifth weight to a TextStyle without adding its file reintroduces the download
+  # for that one weight. (Medium 500 was shipped and then removed: nothing could reach it — see
+  # the note in lib/core/theme/typography.dart.)
   #
   # EVERY FILE IS A DISTINCT FACE, AND THAT WAS CHECKED RATHER THAN ASSUMED. This project has
   # twice shipped byte-identical files under different weight names, which registers N copies of
   # the same 400 face and makes every heading render regular while the pubspec looks correct.
-  # The five files here have five different md5s, five different `glyf` tables and five
-  # different OS/2 usWeightClass values (400/500/600/700/800).
+  # The four files here have four different md5s, four different `glyf` tables and four
+  # different OS/2 usWeightClass values (400/600/700/800).
   #
   # PLUS JAKARTA SANS IS GONE. Figma uses Inter only; the variable Jakarta file and its `fonts:`
   # declaration were removed with this change. Do not re-add a second family without a mockup

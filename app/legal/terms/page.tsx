@@ -4,13 +4,15 @@ import Link from "next/link";
 import { Callout, DataTable, DocBody, DocHeader, Section, TableOfContents } from "../layout";
 
 /* ────────────────────────────────────────────────────────────────────────────
- * PLACEHOLDERS — the hostel operator fills these in once, here, before these
- * terms are published or relied upon.
+ * The operator's real-world facts live in lib/legal-config.ts and are mirrored
+ * in nivora_app/lib/features/legal/legal_documents.dart — change both, in the
+ * same commit. While any value there is still an unresolvable `.invalid`
+ * placeholder this page renders a visible notice at the top, which disappears
+ * on its own once real values are set.
  *
- * Every value below is deliberately a non-resolvable placeholder (the .invalid
- * top-level domain can never be registered). Nothing else in this file needs
- * editing. While a placeholder is still in place the page renders a visible
- * notice at the top; that notice disappears on its own once real values are set.
+ * THE CONTACT IS A ROLE, NOT A PERSON. The mailbox is monitored and the address
+ * is a locality; neither names an individual, and neither should. See the note
+ * on `grievanceOfficer` in lib/legal-config.ts.
  * ──────────────────────────────────────────────────────────────────────────── */
 const OPERATOR = {
   legalName: LEGAL.operatorName,
@@ -31,7 +33,7 @@ const UPDATED = LEGAL_VERSION;
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
 
 export const metadata: Metadata = {
-  title: "Terms of Service",
+  title: "Terms of Use",
   description:
     "The terms on which NIVORA is provided to hostel and PG operators and to the staff and residents whose accounts they issue — including acceptable use, what happens when a subscription lapses, and limitation of liability.",
 };
@@ -41,32 +43,28 @@ export const metadata: Metadata = {
  *  no cookies and no data, so it remains statically renderable. */
 export const dynamic = "force-dynamic";
 
+/**
+ * EIGHT SECTIONS, and they are the same eight the Android app shows — see
+ * nivora_app/lib/features/legal/legal_documents.dart, which carries this text so the consent
+ * gate can draw it without a network call. An earlier version of this page ran to eighteen
+ * sections; the cut was made by merging and by deleting repetition, never by softening a claim.
+ */
 const SECTIONS = [
   { id: "parties", title: "Who these terms bind" },
   { id: "service", title: "What the service does" },
-  { id: "accounts", title: "Accounts are issued, not registered" },
-  { id: "credentials", title: "Looking after your credentials" },
+  { id: "accounts", title: "Your account" },
   { id: "acceptable-use", title: "Acceptable use" },
-  { id: "resident-data", title: "Resident data and the operator's duties" },
-  { id: "content", title: "Content you put into the service" },
-  { id: "subscription", title: "Subscription, and read-only mode" },
-  { id: "payments", title: "Payments" },
-  { id: "availability", title: "Availability, backups and support" },
-  { id: "suspension", title: "Suspension and termination" },
-  { id: "ip", title: "Intellectual property" },
-  { id: "warranty", title: "Disclaimer of warranties" },
-  { id: "liability", title: "Limitation of liability" },
-  { id: "indemnity", title: "Indemnity" },
-  { id: "changes", title: "Changes to these terms" },
-  { id: "law", title: "Governing law and jurisdiction" },
-  { id: "contact", title: "Contact" },
+  { id: "resident-data", title: "Resident data, and what the hostel is responsible for" },
+  { id: "payments", title: "Subscription and payments" },
+  { id: "availability", title: "Availability, suspension and liability" },
+  { id: "contact", title: "Changes, governing law and contact" },
 ] as const;
 
-export default function TermsOfServicePage() {
+export default function TermsOfUsePage() {
   return (
     <>
       <DocHeader
-        title="Terms of Service"
+        title="Terms of Use"
         summary={
           "The terms on which " +
           APP_NAME +
@@ -103,8 +101,8 @@ export default function TermsOfServicePage() {
               is deleted.
             </li>
             <li>
-              {APP_NAME} records payments that happened elsewhere. It never takes, holds or moves
-              money.
+              {APP_NAME} records payments. It never takes, holds or moves money, and never sees a
+              card number, UPI ID or bank account.
             </li>
             <li>
               How personal data is handled is set out separately in the{" "}
@@ -115,385 +113,226 @@ export default function TermsOfServicePage() {
 
         <Section id="parties" title="1. Who these terms bind">
           <p>
-            These terms are an agreement between <strong>{OPERATOR.legalName}</strong> (
-            &ldquo;we&rdquo;, &ldquo;us&rdquo;, the provider of {APP_NAME}) and:
+            These terms are an agreement between <strong>{OPERATOR.legalName}</strong> (&ldquo;we&rdquo;,
+            &ldquo;us&rdquo;), which provides this service, and you — whether you are the{" "}
+            <strong>hostel or PG operator</strong> that subscribes to {APP_NAME}, or an owner,
+            manager, warden or resident given an account by that operator.
           </p>
-          <ul>
-            <li>
-              the <strong>hostel or PG operator</strong> that subscribes to {APP_NAME} for its
-              property — referred to here as the <strong>Operator</strong>; and
-            </li>
-            <li>
-              every <strong>individual user</strong> who signs in with an account the Operator
-              issued — an owner, manager, warden or resident.
-            </li>
-          </ul>
           <p>
-            By signing in you accept these terms. If you do not accept them, do not sign in, and
-            speak to your hostel. Where a term applies only to the Operator it says so.
+            Using the app means accepting them. If you do not accept them you cannot use the app,
+            and you can sign out from the same screen that asks. Where a term applies only to the
+            operator it says so.
           </p>
         </Section>
 
         <Section id="service" title="2. What the service does">
           <p>
-            {APP_NAME} is multi-tenant software for running a hostel or paying-guest property. Each
-            Operator gets an isolated workspace containing:
+            {APP_NAME} records and organises the running of a hostel or PG: floors, rooms and beds
+            and which are occupied; resident records, admission and check-out; a monthly fee ledger;
+            complaints with their status history; leave requests; a visitor log; notices, staff
+            tasks and mess menus; and expense and revenue records. It is delivered as a website and
+            an Android app, and needs an internet connection.
           </p>
-          <ul>
-            <li>floors, rooms and beds, and which of them are occupied;</li>
-            <li>resident records, admission and check-out;</li>
-            <li>a monthly fee ledger recording payments the Operator has already received;</li>
-            <li>complaints, with a status history;</li>
-            <li>leave requests and approvals;</li>
-            <li>a visitor log;</li>
-            <li>announcements, staff tasks and mess menus;</li>
-            <li>expense and revenue records with receipt attachments; and</li>
-            <li>dashboards summarising the above.</li>
-          </ul>
           <p>
-            The service is delivered over the web and through an Android application that is a
-            wrapper around the same website. There is no separate offline product; an internet
-            connection is required.
+            It is a record-keeping tool. It is <strong>not</strong> an accounting package, not a
+            legal or tax adviser, and not a substitute for the agreement between a resident and
+            their hostel. The rent, the deposit, the notice period and the house rules are matters
+            between those two; {APP_NAME} only records what they tell it.
           </p>
         </Section>
 
-        <Section id="accounts" title="3. Accounts are issued, not registered">
+        <Section id="accounts" title="3. Your account">
           <p>
-            {APP_NAME} has <strong>no public sign-up</strong>. Accounts are created in a chain:
-          </p>
-          <ol>
-            <li>the platform administrator creates the Owner account for a hostel;</li>
-            <li>the Owner creates Manager and Warden accounts for that hostel;</li>
-            <li>the Warden registers residents.</li>
-          </ol>
-          <p>
-            Residents sign in with the <strong>phone number</strong> the hostel registered. Everyone
-            is required to set a new password the first time they sign in.
+            There is <strong>no public sign-up</strong>. The platform administrator creates the
+            Owner account for a hostel, the Owner creates Manager and Warden accounts, and a Warden
+            registers residents — who sign in with the phone number the hostel registered. Every
+            account comes with a temporary password that must be changed at first sign-in.
           </p>
           <p>
-            Because accounts are issued rather than self-created, the Operator is responsible for
-            issuing them only to people entitled to them, for choosing the right role for each
-            person, and for deactivating accounts promptly when someone leaves. An account belongs
-            to the hostel workspace, not to the individual; it is deactivated on check-out or when
-            employment ends.
+            An account belongs to the hostel&rsquo;s workspace rather than to you personally, and is
+            deactivated on check-out or when employment ends. The operator is responsible for
+            issuing accounts only to people entitled to them and for deactivating them promptly.
           </p>
-        </Section>
-
-        <Section id="credentials" title="4. Looking after your credentials">
           <ul>
             <li>
-              Keep your password to yourself. Do not share an account, and do not let someone else
-              use yours — every action is logged against the account that performed it, and it will
-              be attributed to you.
+              Keep your password to yourself. Anything done with your account is treated as done by
+              you, because that is how the security log records it.
             </li>
             <li>
-              Where two-factor authentication is offered, turn it on. Where the Operator has made it
-              mandatory for your role, you will be required to enrol before you can continue.
+              Turn on two-factor authentication where it is offered. Where it is required for your
+              role you will be asked to set it up before you can continue.
             </li>
+            <li>Tell your hostel immediately if you think someone else has your password.</li>
             <li>
-              Tell your hostel immediately if you think someone else has access to your account.
+              Do not use somebody else&rsquo;s account, and do not ask a member of staff to act as
+              you.
             </li>
           </ul>
         </Section>
 
-        <Section id="acceptable-use" title="5. Acceptable use">
+        <Section id="acceptable-use" title="4. Acceptable use">
           <p>You must not:</p>
           <ul>
             <li>
-              attempt to reach data belonging to another hostel, another resident or another role,
-              whether by manipulating a request, a link, an identifier or in any other way;
+              enter information you know to be false — a payment that did not happen, an invented
+              complaint against another resident, or someone else&rsquo;s identity document;
             </li>
             <li>
-              probe, scan or test the security of the service, or interfere with its normal
-              operation, without our prior written permission;
+              try to reach data belonging to another hostel or another person, or probe the service
+              for a way to do so. Authentication attempts are rate-limited and unusual activity
+              raises an alert; deliberately tripping either is itself a breach of these terms;
             </li>
             <li>
-              scrape, bulk-export or systematically copy data from the service other than through
-              the export features provided;
+              upload malicious code, anything unlawful, or a photograph of a person taken without
+              their knowledge;
             </li>
             <li>
-              upload malicious code, or content that is unlawful, defamatory, obscene or infringes
-              someone else&rsquo;s rights;
+              use the visitor log, complaints or any other feature to harass a resident, a member of
+              staff or a visitor;
             </li>
             <li>
-              upload an identity document belonging to a person who has not consented to it being
-              stored;
-            </li>
-            <li>
-              use the visitor log, complaint records or any other feature to monitor or harass a
-              resident, a member of staff or a visitor beyond the legitimate safety and
-              administrative purposes those features exist for;
-            </li>
-            <li>
-              resell, sublicense or provide the service to a third party as though it were your own;
-              or
-            </li>
-            <li>
-              use the service in breach of any law that applies to you, including data protection
-              law.
+              copy, resell, sublicense or reverse-engineer the software, or extract data from it in
+              bulk by automated means rather than through the export features — except where the law
+              says you may despite this clause.
             </li>
           </ul>
           <p>
-            Automated protections rate-limit authentication attempts and raise security alerts on
-            unusual activity. Deliberately triggering them is itself a breach of these terms.
+            Complaints are read by staff, and notices by every resident they are posted to. Write
+            them accordingly. The software, its design and its documentation remain ours; you get a
+            non-exclusive, non-transferable right to use the service for the term of the
+            subscription, for running the hostel it was issued for.
           </p>
         </Section>
 
-        <Section id="resident-data" title="6. Resident data and the Operator's duties">
+        <Section id="resident-data" title="5. Resident data, and what the hostel is responsible for">
           <p>
-            The Operator decides what personal data to collect about its residents and why. Under
+            The operator decides what personal data to collect about its residents and why. Under
             India&rsquo;s Digital Personal Data Protection Act, 2023 that makes the{" "}
-            <strong>Operator the Data Fiduciary</strong> and{" "}
-            <strong>{APP_NAME} the Data Processor</strong>. The Operator therefore undertakes to:
+            <strong>operator the Data Fiduciary</strong> and{" "}
+            <strong>{APP_NAME} the Data Processor</strong>. The operator is responsible for:
           </p>
           <ul>
             <li>
-              give residents a privacy notice and obtain their consent before entering their details
-              — including <strong>verifiable parental consent</strong> where a resident is under 18,
-              which the system cannot determine on its own because it holds no date of birth;
+              giving residents notice and obtaining their consent before entering their details,
+              including a <strong>parent or guardian&rsquo;s consent</strong> where a resident is
+              under 18 — the system holds no date of birth and cannot tell;
             </li>
             <li>
-              display a visible notice at the point where the visitor log is kept, telling visitors
-              what is recorded and for how long;
+              displaying a visible notice at the visitor desk, since a visitor whose name and phone
+              number is logged has no account and gets no notice from the app;
             </li>
             <li>
-              keep the data accurate, and correct it through the app when a resident asks;
+              collecting only what it needs, and preferring a non-Aadhaar identity document;
             </li>
             <li>
-              respond to residents&rsquo; access, correction and erasure requests, and apply the
-              retention periods set out in the <Link href="/legal/privacy">Privacy Policy</Link>;
-              and
+              answering residents&rsquo; requests to see, correct or erase their data, and applying
+              the periods in the <Link href="/legal/privacy">Privacy Policy</Link>;
             </li>
-            <li>enter only data it is lawfully entitled to hold.</li>
+            <li>removing accounts for staff who leave.</li>
           </ul>
           <p>
-            {APP_NAME} processes resident data only on the Operator&rsquo;s instructions and for the
-            purpose of providing the service. It is never used for advertising, sold, or used to
-            train AI models.
+            What you enter stays yours. You grant us only the permission needed to store it, show it
+            to the people entitled to see it, and back it up. It is never sold, never shared with an
+            advertiser and never used to train AI models. {APP_NAME} processes resident data only on
+            the operator&rsquo;s instructions — so an operator that records data it had no lawful
+            basis to hold, or fails to give the notices above, answers for that itself and
+            indemnifies us against claims arising from it.
           </p>
         </Section>
 
-        <Section id="content" title="7. Content you put into the service">
+        <Section id="payments" title="6. Subscription and payments">
           <p>
-            You keep ownership of everything you enter or upload. You grant us the licence we need
-            to host, store, back up, transmit and display it in order to run the service, and for no
-            other purpose.
-          </p>
-          <p>
-            You are responsible for the accuracy and lawfulness of what you enter. Free-text
-            fields — complaint descriptions, leave reasons, payment notes — are visible to the staff
-            roles entitled to the record, so do not write anything there you would not want those
-            people to read.
-          </p>
-        </Section>
-
-        <Section id="subscription" title="8. Subscription, and read-only mode">
-          <p>
-            Each hostel workspace runs on a subscription with an end date. This is enforced by the
-            database itself rather than by the interface, so it behaves the same way everywhere in
-            the product:
+            Each hostel workspace runs on a subscription with an end date, enforced by the database
+            itself rather than by the interface, so it behaves the same way everywhere in the
+            product:
           </p>
           <DataTable
             head={["State", "What happens"]}
             rows={[
-              [
-                "Active",
-                "Everything works normally.",
-              ],
+              ["Active", "Everything works normally."],
               [
                 "Expiring (15 days or fewer remaining)",
                 "Everything still works. The workspace shows a renewal warning so the lapse is not a surprise.",
               ],
               [
-                "Expired (end date passed, or no subscription recorded)",
-                "The workspace becomes read-only. Everyone can still sign in and read everything. Any attempt to create or change a record is refused by the database with an explanatory message.",
-              ],
-              [
-                "Hostel deactivated by the platform administrator",
-                "The same read-only behaviour applies.",
+                "Expired, or the hostel deactivated by the platform administrator",
+                "The workspace becomes read-only. Everyone can still sign in and read everything. Any attempt to create or change a record is refused by the database with an explanatory message. Nothing is deleted, and renewing restores writing immediately.",
               ],
             ]}
           />
-          <Callout tone="teal" title="What read-only does not mean">
-            <ul>
-              <li>
-                <strong>Nothing is deleted.</strong> Every resident record, fee entry, complaint and
-                document stays exactly where it was.
-              </li>
-              <li>
-                <strong>Nobody is locked out.</strong> Owners, managers, wardens and residents can
-                all still sign in and read their data, including for the period after a lapse.
-              </li>
-              <li>
-                <strong>Renewing restores writing immediately.</strong> There is no re-import and no
-                migration; the moment a current subscription end date is recorded, the workspace is
-                writable again.
-              </li>
-            </ul>
-          </Callout>
           <p>
-            Platform administrators retain the ability to act on an expired workspace, so that
-            service can be restored and so that a lapse never prevents an Operator from getting its
-            own data back. Fees, billing cycle and renewal terms are agreed separately with the
-            Operator and are not set by this page.
-          </p>
-        </Section>
-
-        <Section id="payments" title="9. Payments">
-          <p>
-            Rent reaches the hostel one of two ways, and {APP_NAME} is not the one holding it in
-            either.
-          </p>
-          <ul>
-            <li>
-              <strong>At the desk.</strong> A warden records a payment already made in cash, by UPI
-              or by bank transfer, with the amount, the date and a label saying which it was. The
-              ledger entry reflects what a member of staff recorded; it is not independent
-              confirmation that money changed hands.
-            </li>
-            <li>
-              <strong>Online, if the resident chooses.</strong> The payment is taken by{" "}
-              <strong>Razorpay</strong> on Razorpay&rsquo;s own page, under Razorpay&rsquo;s terms.
-              {" "}{APP_NAME} passes it the payer&rsquo;s name, email, phone and the amount, and
-              receives back only a confirmation and the transaction identifiers.
-            </li>
-          </ul>
-          <p>
-            In neither case does {APP_NAME}{" "}
+            Rent reaches the hostel one of two ways, and {APP_NAME} is not holding it in either. A
+            warden records a payment already made in cash, by UPI or by bank transfer; or, if the
+            resident chooses, the payment is taken by <strong>Razorpay</strong> in
+            Razorpay&rsquo;s own checkout under Razorpay&rsquo;s terms. {APP_NAME} passes it the
+            payer&rsquo;s name, email, phone and the amount, and receives back only a confirmation
+            and the transaction identifiers. In neither case does {APP_NAME}{" "}
             <strong>take, hold, transfer or refund money</strong>, and in neither case does it store
-            a card number, a bank account number, a UPI ID or a CVV — those are entered on
-            Razorpay&rsquo;s page and never reach us.
+            a card number, a bank account number, a UPI ID or a CVV.
           </p>
           <p>
-            Rent, deposits, refunds and any dispute about them are entirely between the resident and
-            the hostel. A receipt generated by {APP_NAME} reflects what a member of the
-            hostel&rsquo;s staff recorded; it is not independent confirmation that money changed
-            hands.
+            A receipt reflects what a member of staff recorded or what the gateway confirmed; it is
+            not independent confirmation that money changed hands. If a receipt is wrong, the hostel
+            corrects it. Rent, deposits, refunds and any dispute about them are between the resident
+            and the hostel. Subscription fees and renewal terms are agreed separately with the
+            operator and are not set by this page.
           </p>
         </Section>
 
-        <Section id="availability" title="10. Availability, backups and support">
+        <Section id="availability" title="7. Availability, suspension and liability">
           <p>
-            We work to keep the service available and take an encrypted backup of the database
-            nightly, retained for 90 days. We do not, on these terms, offer a guaranteed uptime
-            level or a guaranteed recovery time, and the service may be unavailable during
-            maintenance, during a failure at a hosting provider, or for reasons outside our control.
+            The service is provided <strong>as it is</strong>, without a guaranteed uptime figure or
+            recovery time. It may be unavailable during maintenance, during a failure at a hosting
+            provider, or for reasons outside our control. An encrypted backup of the database is
+            taken nightly and kept for 90 days; backups exist to recover the platform from a
+            failure, not to replace records the operator is required to keep. To the fullest extent
+            permitted by law we exclude implied warranties, including of merchantability, fitness
+            for a particular purpose and non-infringement, and we do not warrant that the records
+            the system holds are accurate — they are entered by the operator&rsquo;s staff. Keep
+            your own copy of anything you cannot afford to lose.
           </p>
-          <p>
-            Backups exist to recover from a failure of the platform. They are not a substitute for
-            the Operator keeping its own records of anything it is legally required to retain.
-          </p>
-        </Section>
-
-        <Section id="suspension" title="11. Suspension and termination">
           <p>
             We may suspend or restrict access — to an individual account or to a whole workspace —
-            where we reasonably believe it is necessary to protect the service or other users, for
-            example on a serious breach of section 5, on a security incident, or where required by
-            law. Where it is practicable and lawful, we tell the Operator first, and we restore
-            access as soon as the reason for the suspension is resolved.
+            for a breach of section 4, for non-payment of a subscription, after a security incident,
+            or where leaving it open would put other people&rsquo;s data at risk. Where it is
+            practicable and lawful we tell the operator first, and we restore access as soon as the
+            reason is resolved. An operator may stop using the service at any time and may request
+            an export of its workspace data first. A resident&rsquo;s account is normally closed by
+            their hostel when they leave.
           </p>
-          <p>
-            An Operator may stop using the service at any time and may request an export of its
-            workspace data before doing so. After termination, data is retained and then deleted in
-            line with the periods in the <Link href="/legal/privacy">Privacy Policy</Link>. An
-            individual user&rsquo;s access ends when the Operator deactivates their account, which
-            is what happens on check-out or when employment ends.
-          </p>
-        </Section>
-
-        <Section id="ip" title="12. Intellectual property">
-          <p>
-            {APP_NAME}, its software, design and documentation remain ours. Nothing in these terms
-            transfers ownership of them. You get a non-exclusive, non-transferable right to use the
-            service for the term of the subscription, for the purpose of running the hostel it was
-            issued for.
-          </p>
-          <p>
-            You must not copy, decompile or reverse-engineer the software except to the extent that
-            applicable law says you may do so despite this clause, and you must not remove or
-            obscure any notice of ownership.
-          </p>
-        </Section>
-
-        <Section id="warranty" title="13. Disclaimer of warranties">
-          <p>
-            The service is provided <strong>&ldquo;as is&rdquo;</strong>. To the fullest extent
-            permitted by law we exclude all implied warranties, including of merchantability,
-            fitness for a particular purpose and non-infringement. We do not warrant that the
-            service will be uninterrupted or error-free, or that the records it holds are accurate —
-            those records are entered by the Operator&rsquo;s staff, and their accuracy is the
-            Operator&rsquo;s responsibility.
-          </p>
-          <p>
-            {APP_NAME} does not provide legal, tax or accounting advice. Retention periods,
-            statutory record-keeping duties and consent requirements referred to in these documents
-            are the Operator&rsquo;s own responsibility to verify with its advisers.
-          </p>
-        </Section>
-
-        <Section id="liability" title="14. Limitation of liability">
           <p>
             To the fullest extent permitted by law, neither party is liable to the other for
-            indirect, incidental, special, punitive or consequential loss, or for loss of profit,
-            revenue, goodwill, business or anticipated savings, however caused.
-          </p>
-          <p>
-            Our total aggregate liability arising out of or in connection with these terms — whether
-            in contract, tort (including negligence), breach of statutory duty or otherwise — is
-            limited to the <strong>subscription fees paid by the Operator for the twelve months
-            immediately before the event giving rise to the claim</strong>. Where no fees have been
-            paid, our aggregate liability is limited to a nominal amount.
-          </p>
-          <p>
-            Nothing in these terms excludes or limits liability that cannot lawfully be excluded or
-            limited, including liability for death or personal injury caused by negligence, for
-            fraud or fraudulent misrepresentation, or under applicable data protection law.
+            indirect, incidental, special or consequential loss, for lost profits, revenue or
+            goodwill, or for loss arising from information a user entered incorrectly. Our total
+            aggregate liability is limited to the{" "}
+            <strong>
+              subscription fees paid by the operator for the twelve months before the event giving
+              rise to the claim
+            </strong>
+            , or a nominal amount where no fees have been paid. Nothing here excludes liability that
+            cannot lawfully be excluded, including for fraud, for death or personal injury caused by
+            negligence, or under applicable data protection law.
           </p>
         </Section>
 
-        <Section id="indemnity" title="15. Indemnity">
+        <Section id="contact" title="8. Changes, governing law and contact">
           <p>
-            The Operator indemnifies us against claims, losses and reasonable costs arising from its
-            own breach of section 5 or section 6 — in particular, from entering personal data it had
-            no lawful basis to collect, or from failing to give residents, guardians and visitors
-            the notices those sections require.
-          </p>
-        </Section>
-
-        <Section id="changes" title="16. Changes to these terms">
-          <p>
-            We may change these terms. The date at the top of this page changes when we do. Material
-            changes are notified to the Operator before they take effect, and continued use of the
-            service after that date is acceptance of the revised terms. If the Operator does not
-            accept a material change, it may terminate before the change takes effect.
-          </p>
-          <p>
-            <strong>Individual account holders are asked directly.</strong> These terms and the{" "}
+            We may change these terms; the date at the top of this page changes when we do. Both
+            documents carry a version, currently <strong>{UPDATED}</strong>, and{" "}
+            <strong>individual account holders are asked directly</strong>: these terms and the{" "}
             <Link href="/legal/privacy">Privacy Policy</Link> are presented together in the app
             before it can be used, and the fact that you accepted them — which version, and when —
-            is recorded. Both documents carry a version, currently{" "}
-            <strong>{UPDATED}</strong>. When either changes materially the version changes with it
-            and you are asked to read and accept again on your next visit, so nobody is silently
-            moved onto terms they have not seen. Declining is a real option: the app cannot be used
-            without accepting, and the same screen offers to sign you out.
-          </p>
-        </Section>
-
-        <Section id="law" title="17. Governing law and jurisdiction">
-          <p>
-            These terms are governed by <strong>{OPERATOR.governingLaw}</strong>, without regard to
-            its conflict-of-laws rules. The parties submit to the exclusive jurisdiction of{" "}
-            <strong>{OPERATOR.jurisdiction}</strong>, except that either party may seek injunctive
-            relief in any court of competent jurisdiction.
+            is recorded. When either changes materially the version changes with it and you are
+            asked to read and accept again on your next visit, so nobody is silently moved onto
+            terms they have not seen. Declining is a real option: the app cannot be used without
+            accepting, and the same screen offers to sign you out. If any provision is held
+            unenforceable, the rest continues in force.
           </p>
           <p>
-            If any provision of these terms is held unenforceable, the rest continues in force. A
-            failure to enforce a provision is not a waiver of it.
+            These terms are governed by <strong>{OPERATOR.governingLaw}</strong>, and the parties
+            submit to the exclusive jurisdiction of <strong>{OPERATOR.jurisdiction}</strong>, except
+            that either party may seek injunctive relief in any court of competent jurisdiction.
           </p>
-        </Section>
-
-        <Section id="contact" title="18. Contact">
           <div className="rounded-card border border-line bg-white/60 p-5 text-sm leading-7">
             <p className="text-navy">
               <strong>{OPERATOR.legalName}</strong>

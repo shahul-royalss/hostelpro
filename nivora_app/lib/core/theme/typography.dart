@@ -10,13 +10,22 @@ import 'package:google_fonts/google_fonts.dart';
 /// above `label-caps`, is gone: its file was deleted and its `fonts:` block removed from
 /// pubspec.yaml. Do not re-add a second family without a mockup that shows one.
 ///
-/// Inter is bundled as five STATIC files under `assets: google_fonts/`, which the
+/// Inter is bundled as four STATIC files under `assets: google_fonts/`, which the
 /// `google_fonts` package resolves from the bundle by filename — `Inter-<Variant>.ttf` maps to
 /// a weight by name, so `Inter-ExtraBold.ttf` is w800. `main.dart` sets
 /// `GoogleFonts.config.allowRuntimeFetching = false`, so a weight used without shipping its
-/// file throws in debug instead of quietly downloading in production. The five shipped are
-/// Regular 400, Medium 500, SemiBold 600, Bold 700 and **ExtraBold 800**; this file uses
-/// exactly those. Adding a sixth reintroduces the download for that one weight.
+/// file throws in debug instead of quietly downloading in production. The four shipped are
+/// Regular 400, SemiBold 600, Bold 700 and **ExtraBold 800**; this file uses exactly those.
+/// Adding a fifth reintroduces the download for that one weight.
+///
+/// MEDIUM 500 WAS DROPPED, and the reasoning is worth keeping because it is easy to re-add by
+/// reflex. No slot below asks for it, and [NivoraType.weight] — the one API that could request
+/// an arbitrary weight at runtime — has no callers. The only `FontWeight.w500` in the app is in
+/// features/payments/receipt_paper.dart, and that style sets `fontFamily: 'monospace'`, a
+/// PLATFORM font: the weight applies to Android's own mono face, never to Inter. So the file was
+/// 408 KB that nothing could reach. If a slot ever does want 500, ship the file again — with
+/// `allowRuntimeFetching` false a missing weight silently lands on the nearest bundled one
+/// rather than downloading, so it fails quietly rather than loudly.
 ///
 /// ── THE HERO IS REALLY 800 ───────────────────────────────────────────────────────────────
 ///

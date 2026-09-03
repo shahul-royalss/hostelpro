@@ -92,10 +92,13 @@ say "Building"
 # that lose the race and retrying is the honest response — unlike relocating the output, which
 # merely hides the problem behind a stale artifact.
 build_with_retry() {
-  local what="$1" attempt out
+  # $1 is the flutter target (apk | appbundle); anything after it is passed through, which is
+  # how the per-ABI build asks for --split-per-abi without a second copy of this function.
+  local what="$1"; shift
+  local extra=("$@") attempt out
   for attempt in 1 2 3; do
     rm -rf build/app/intermediates 2>/dev/null || true
-    out="$(flutter build "$what" --release 2>&1)" && { printf '%s
+    out="$(flutter build "$what" --release "${extra[@]}" 2>&1)" && { printf '%s
 ' "$out" | tail -2; return 0; }
 
     # DIAGNOSE BEFORE RETRYING. The first version of this loop assumed every failure was a
@@ -115,6 +118,10 @@ build_with_retry() {
       printf '    keytool -importcert -alias norton-root -file <norton-root.pem> -cacerts -storepass changeit
 '
       local task; task=$([ "$what" = apk ] && echo assembleRelease || echo bundleRelease)
+      # `--split-per-abi` is a Flutter flag, not a Gradle task: it works by setting this
+      # property. A direct gradlew call has to set it too, or the offline fallback silently
+      # produces a universal APK and the split artifact the caller asked for never appears.
+      local props=(); case " ${extra[*]} " in *" --split-per-abi "*) props=(-Psplit-per-abi=true);; esac
       # TWO lessons encoded here, both paid for:
       #  - JAVA_HOME must be Android Studio's JBR (JDK 21). `flutter build` selects it
       #    automatically, but a direct gradlew call inherits the system JDK — 26 on this
@@ -125,7 +132,7 @@ build_with_retry() {
       #    discarded the one line that named the real problem.
       local jbr="C:\Program Files\Android\Android Studio\jbr"
       local gout
-      gout="$(cd android && JAVA_HOME="$jbr" ./gradlew "$task" --offline 2>&1)"         && { printf '%s
+      gout="$(cd android && JAVA_HOME="$jbr" ./gradlew "$task" "${props[@]}" --offline 2>&1)"         && { printf '%s
 ' "$gout" | tail -3; return 0; }
       printf '%s
 ' "$gout" | grep -B4 -A12 "What went wrong" | head -20
@@ -150,10 +157,27 @@ build_with_retry() {
 build_with_retry apk
 build_with_retry appbundle
 
+# ── AND ONE APK PER CPU, WHICH IS THE ONE A PERSON SHOULD ACTUALLY INSTALL ──────────────────
+#
+# The universal APK above carries the native libraries for THREE architectures, and native
+# libraries are 61 of its 64 MB: arm64-v8a 20.6, armeabi-v7a 18.4, x86_64 22.0. Every phone runs
+# exactly one of those, so two thirds of the download is dead weight on any given handset — and
+# x86_64 is an EMULATOR target that no phone on sale has ever used.
+#
+# Splitting produces one APK per architecture; the arm64 one is ~23 MB. Play never sees these —
+# it takes the AAB and does the same split itself, which is why the store download was always
+# going to be small. This is for the copy handed round as a file, which until now was the fat one.
+#
+# The universal APK is still built and still staged: an armeabi-v7a handset, or anyone who cannot
+# tell which they have, needs a build that installs anywhere.
+build_with_retry apk --split-per-abi
+
 APK="build/app/outputs/flutter-apk/app-release.apk"
 AAB="build/app/outputs/bundle/release/app-release.aab"
+APK_ARM64="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
 [ -f "$APK" ] || die "no APK at $APK"
 [ -f "$AAB" ] || die "no AAB at $AAB"
+[ -f "$APK_ARM64" ] || die "no arm64 APK at $APK_ARM64 — the split build did not produce one"
 
 say "Freshness"
 for f in "$APK" "$AAB"; do
@@ -178,44 +202,58 @@ say "Verifying the things that have been wrong before"
 #
 # So every check below captures its producer's output FIRST and searches the string after. No
 # pipes into short-circuiting readers, and no false alarms.
-badging="$("$BT/aapt2.exe" dump badging "$APK" 2>/dev/null || true)"
-certs="$("$BT/apksigner.bat" verify --print-certs "$APK" 2>/dev/null || true)"
-entries="$(unzip -l "$APK" 2>/dev/null || true)"
-
-# 1. Signed with the real upload key, not Flutter's debug fallback. A debug-signed artifact is
-#    rejected by Play, and the template silently falls back when signing is misconfigured.
-case "$certs" in
-  *"CN=HostelPro"*) ;;
-  *) die "APK is not signed with the upload key (debug fallback?)" ;;
-esac
-
-# 2. Named Nivora. It shipped once as "mobile" — the Flutter PROJECT name, straight to the
-#    launcher, because android:label was never changed.
-case "$badging" in
-  *"application-label:'Nivora'"*) ;;
-  *) die "launcher label is not Nivora" ;;
-esac
-
-# 3. Real phones are ARM. A build missing arm64-v8a installs on nothing anyone owns.
-case "$badging" in
-  *"arm64-v8a"*) ;;
-  *) die "arm64-v8a is missing" ;;
-esac
-
-# 4. The typeface must ship. google_fonts fetches at runtime by default, and an app that
-#    downloads its own font renders as the system font on a first launch with no network.
-case "$entries" in
-  *"google_fonts/Inter-Regular.ttf"*) ;;
-  *) die "Inter is not bundled — the app would download its font on first launch" ;;
-esac
-
-# 5. NO SECRETS ON THE DEVICE. An APK is a zip anyone can unpack. The service-role key bypasses
-#    every RLS policy; the Razorpay secret authorises money movement. Neither may be in here.
+# EVERY ARTIFACT THAT LEAVES THIS SCRIPT IS CHECKED, not just the first one built. The per-ABI
+# APK is now the one handed to people, and an unverified artifact going out under a trusted name
+# is the exact failure the rest of this section exists to prevent. Same gates, run over each.
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-unzip -o -q "$APK" -d "$TMP" 'assets/flutter_assets/*' 2>/dev/null || true
-if grep -rqE 'service_role|rzp_(live|test)_[A-Za-z0-9]{10,}:' "$TMP" 2>/dev/null; then
-  die "a secret may be embedded in the bundle — inspect before shipping"
-fi
+
+verify_apk() {
+  local apk="$1" label="$2" badging certs entries unpack
+  badging="$("$BT/aapt2.exe" dump badging "$apk" 2>/dev/null || true)"
+  certs="$("$BT/apksigner.bat" verify --print-certs "$apk" 2>/dev/null || true)"
+  entries="$(unzip -l "$apk" 2>/dev/null || true)"
+
+  # 1. Signed with the real upload key, not Flutter's debug fallback. A debug-signed artifact is
+  #    rejected by Play, and the template silently falls back when signing is misconfigured.
+  case "$certs" in
+    *"CN=HostelPro"*) ;;
+    *) die "$label is not signed with the upload key (debug fallback?)" ;;
+  esac
+
+  # 2. Named Nivora. It shipped once as "mobile" — the Flutter PROJECT name, straight to the
+  #    launcher, because android:label was never changed.
+  case "$badging" in
+    *"application-label:'Nivora'"*) ;;
+    *) die "$label: launcher label is not Nivora" ;;
+  esac
+
+  # 3. Real phones are ARM. A build missing arm64-v8a installs on nothing anyone owns — and for
+  #    the split build this is also the check that it really is the arm64 one.
+  case "$badging" in
+    *"arm64-v8a"*) ;;
+    *) die "$label: arm64-v8a is missing" ;;
+  esac
+
+  # 4. The typeface must ship. google_fonts fetches at runtime by default, and an app that
+  #    downloads its own font renders as the system font on a first launch with no network.
+  case "$entries" in
+    *"google_fonts/Inter-Regular.ttf"*) ;;
+    *) die "$label: Inter is not bundled — the app would download its font on first launch" ;;
+  esac
+
+  # 5. NO SECRETS ON THE DEVICE. An APK is a zip anyone can unpack. The service-role key bypasses
+  #    every RLS policy; the Razorpay secret authorises money movement. Neither may be in here.
+  #    Unpacked to its own directory so one APK's assets cannot be mistaken for another's.
+  unpack="$TMP/$label"; mkdir -p "$unpack"
+  unzip -o -q "$apk" -d "$unpack" 'assets/flutter_assets/*' 2>/dev/null || true
+  if grep -rqE 'service_role|rzp_(live|test)_[A-Za-z0-9]{10,}:' "$unpack" 2>/dev/null; then
+    die "$label: a secret may be embedded in the bundle — inspect before shipping"
+  fi
+  printf '  %s: signature, label, arm64, bundled font, no secrets — pass\n' "$label"
+}
+
+verify_apk "$APK"       "universal-apk"
+verify_apk "$APK_ARM64" "arm64-apk"
 if grep -rq "RAZORPAY_KEY_SECRET" lib/ 2>/dev/null; then
   die "Razorpay secret referenced in client source"
 fi
@@ -225,13 +263,23 @@ if grep -rnE "^[^/]*(launchUrl|launchUrlString|WebViewController|InAppWebView)
   die "a browser/WebView escape is present in client code"
 fi
 
-printf '  signature, label, ABIs, bundled font, no secrets, no browser escape — all pass
-'
+printf '  source: no secret reference, no browser escape — pass\n'
 
 say "Staging"
 mkdir -p "$DIST"
-cp "$APK" "$DIST/NIVORA-$VERSION.apk"
-cp "$AAB" "$DIST/NIVORA-$VERSION.aab"
+# THE arm64 BUILD IS THE ONE TO HAND ROUND. It is the architecture of every phone sold in the
+# last decade, and it is a third of the size. The universal build is kept beside it under a name
+# that says what it is for, so "which file do I send someone" has an obvious answer and the
+# fallback still exists for an old 32-bit handset.
+cp "$APK_ARM64" "$DIST/NIVORA-$VERSION.apk"
+cp "$APK"       "$DIST/NIVORA-$VERSION-universal.apk"
+cp "$AAB"       "$DIST/NIVORA-$VERSION.aab"
+
+# Play splits the AAB per device itself, so the store download matches the arm64 figure rather
+# than the universal one. Printed because the difference is the whole point of the split.
+printf '  installable APK (arm64):  %s\n' "$(du -h "$DIST/NIVORA-$VERSION.apk" | cut -f1)"
+printf '  universal APK (any CPU):  %s\n' "$(du -h "$DIST/NIVORA-$VERSION-universal.apk" | cut -f1)"
+printf '  AAB for Play Console:     %s\n' "$(du -h "$DIST/NIVORA-$VERSION.aab" | cut -f1)"
 ls -la "$DIST"
 
 printf '\n\033[32mRelease artifacts verified and staged in %s\033[0m\n' "$DIST"

@@ -15,7 +15,7 @@ const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
 export const metadata: Metadata = {
   title: "Legal",
   description:
-    "Privacy Policy, Terms of Service and data deletion request for NIVORA — hostel and PG management software.",
+    "Privacy Policy, Terms of Use and data deletion request for NIVORA — hostel and PG management software.",
 };
 
 /** Rendered per-request so middleware's CSP nonce reaches the script tags — see
@@ -29,12 +29,12 @@ const DOCUMENTS = [
     icon: ShieldCheck,
     title: "Privacy Policy",
     blurb:
-      "Exactly what personal data is held about residents, guardians, visitors and staff; why; for how long; who else can reach it; and your rights under the DPDP Act 2023 and the GDPR.",
+      "Exactly what personal data is held about residents, guardians, visitors and staff; why; for how long; who else can reach it; and your rights under the DPDP Act 2023.",
   },
   {
     href: "/legal/terms",
     icon: FileText,
-    title: "Terms of Service",
+    title: "Terms of Use",
     blurb:
       "The terms the service is provided on: accounts issued by your hostel, acceptable use, what read-only mode means when a subscription lapses, and limitation of liability.",
   },

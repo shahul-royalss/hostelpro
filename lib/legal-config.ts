@@ -28,11 +28,21 @@ export const LEGAL = {
   /** Monitored mailbox for legal/terms correspondence. May be the same as above. */
   legalEmail: "support@nivora.dhrishtaerf.org",
 
-  /** Full postal address of the operator. Required by the DPDP Act for a Data Fiduciary. */
-  postalAddress: "RVS Nagar, Chittoor, Andhra Pradesh, India",
+  /**
+   * Postal address published on the legal pages. A locality, not a doorstep: the DPDP Act wants
+   * a Data Fiduciary to be reachable, and the monitored mailbox above is the channel that
+   * actually answers. A street-level home address on a public page is not reachability, it is
+   * exposure — do not put one back.
+   */
+  postalAddress: "Chittoor, Andhra Pradesh, India",
 
-  /** Named Grievance Officer, as the DPDP Act 2023 requires a Data Fiduciary to publish. */
-  grievanceOfficer: "Shaik.Shahul",
+  /**
+   * The Grievance Officer the DPDP Act 2023 requires a Data Fiduciary to publish — named by
+   * ROLE, not by person. Play needs a working contact and the Act needs a grievance contact; a
+   * role title plus the monitored mailbox above satisfies both, and it does not go stale the
+   * day somebody else takes the job. Do not replace this with an individual's name.
+   */
+  grievanceOfficer: "The Grievance Officer",
 
   /** e.g. "the laws of India". */
   governingLaw: "the laws of India",
@@ -41,7 +51,7 @@ export const LEGAL = {
   jurisdiction: "the courts at Chittoor, Andhra Pradesh",
 
   /** Shown as "last updated" on the published documents. Bump when you change them. */
-  lastUpdated: "2 September 2026",
+  lastUpdated: "4 September 2026",
 } as const;
 
 /**
@@ -69,7 +79,7 @@ export const LEGAL = {
  * refuses a version it has never heard of and at the gate the only thing a user may do is
  * agree.
  */
-export const LEGAL_VERSION = "2026-09-02";
+export const LEGAL_VERSION = "2026-09-04";
 
 /** Android application id, so the deletion page can name the app Play users installed. */
 export const ANDROID_PACKAGE = "app.nivora.twa";
