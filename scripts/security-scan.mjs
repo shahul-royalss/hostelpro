@@ -171,7 +171,19 @@ if (envTracked.length) block(".env file is tracked by git", envTracked.join("\n"
 else ok(".env files are not tracked");
 
 if (SCAN_HISTORY) {
-  const hist = sh("git log --all -p --no-color");
+  // THIS FILE IS EXCLUDED FROM ITS OWN HISTORY SCAN, exactly as it is from the working-tree scan
+  // above and for exactly the same reason: it is where the credential SHAPES are defined, so a
+  // scanner reading its own diff reports every pattern it knows as a leak it found. Excluding it
+  // in one place and not the other is how a gate goes permanently red the moment the patterns
+  // themselves are committed — which is what happened.
+  //
+  // `git log -p` marks each file's hunk with a `diff --git` line, so the diff is split on those
+  // and the scanner's own sections dropped before any pattern runs. Only this path is dropped.
+  const SELF = "scripts/security-scan.mjs";
+  const hist = sh("git log --all -p --no-color")
+    .split(/(?=^diff --git )/m)
+    .filter((section) => !section.startsWith(`diff --git a/${SELF}`))
+    .join("");
   let histHits = 0;
   for (const [name, re] of SECRET_PATTERNS) {
     const bad = hist.split("\n").filter((l) => l.startsWith("+") && re.test(l) && !ALLOW.test(l));
