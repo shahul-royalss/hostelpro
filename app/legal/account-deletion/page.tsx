@@ -108,8 +108,9 @@ export default async function AccountDeletionPage() {
         <Callout title="The short version">
           <ul>
             <li>
-              Signed in? <strong>Profile → Delete my account and data.</strong> One tap files the
-              request.
+              Signed in <strong>on the website</strong>? Profile →{" "}
+              <strong>Delete my account and data.</strong> One tap files the request. In the
+              Android app, use the email route below.
             </li>
             <li>
               Cannot sign in? Email <strong>{CONTACT.email}</strong>. Never email photographs of
@@ -177,12 +178,17 @@ export default async function AccountDeletionPage() {
           </p>
         </Section>
 
-        <Section id="in-app" title="3. Requesting deletion inside the app">
-          <p>If you can still sign in, this is the fastest route:</p>
+        <Section id="in-app" title="3. Requesting deletion when you can sign in">
+          <p>
+            There is a one-tap control for this, and it is on the <strong>website</strong>. The
+            Android app does not carry it yet. If you are in the app, use the email route in
+            section 4 or ask your warden — both file the same request against the same record,
+            and neither is slower to act on.
+          </p>
           <ol>
             <li>
-              Open {APP_NAME} and sign in — residents with their phone number, staff with their
-              email address.
+              Open {APP_NAME} in a browser and sign in — residents with their phone number, staff
+              with their email address.
             </li>
             <li>
               Residents: open the <strong>Profile</strong> tab. That is your
@@ -199,8 +205,8 @@ export default async function AccountDeletionPage() {
             can check it was received.
           </p>
           <p>
-            Staff accounts (manager, warden, owner) do not yet have this control on their own
-            profile screen — use the email route in section 4 instead.
+            Staff accounts (manager, warden, owner) do not have this control on their own profile
+            screen even on the website — use the email route in section 4 instead.
           </p>
         </Section>
 

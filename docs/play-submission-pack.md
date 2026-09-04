@@ -85,7 +85,7 @@ rendered in a lot of surfaces at a lot of font sizes and a plain hyphen never su
 
 ### Full description — limit 4000
 
-**3,957 / 4,000 characters.** 43 characters of headroom. Re-count before pasting if anything is
+**3,917 / 4,000 characters.** 83 characters of headroom. Re-count before pasting if anything is
 edited:
 
 ```sh
@@ -151,7 +151,7 @@ NIVORA has no public sign-up, and this is deliberate. You cannot create an accou
 If your hostel does not use NIVORA yet, there is nothing for you to sign in to. Ask your hostel owner or warden first.
 
 REQUIREMENTS
-An internet connection, and an account created for you by your hostel. NIVORA is an installable web app, so you are always on the current version.
+An internet connection, and an account created for you by your hostel. Updates arrive through Google Play.
 
 Want NIVORA at your property? Get in touch through the website.
 ```

@@ -55,17 +55,24 @@ import {
 const REUSE_WINDOW_MS = 15 * 60 * 1000;
 
 /**
- * The current month as 'YYYY-MM', in UTC.
+ * The current month as 'YYYY-MM', on the hostel's clock (Asia/Kolkata).
  *
- * UTC on purpose: rz_open_intent uses Postgres's `to_char(current_date, 'YYYY-MM')` and a
- * Supabase database runs in UTC, so this is the value that agrees with the one the database
- * will compute. (If the two ever did disagree — a database whose timezone was changed, a run
- * during the few hours where UTC and IST are in different months — the database's answer wins
- * and rz_open_intent refuses the intent. A refusal is the correct failure: nobody is charged.)
+ * IST, not UTC, because that is the month the rest of the product names. rz_open_intent derives
+ * the same month from `app.today()`, the app screen derives it from a handset that is in India,
+ * and wd_record_payment already dated manual receipts this way. This function used to use UTC to
+ * agree with an rz_open_intent that used `current_date`, and the old comment argued a mismatch
+ * was harmless because the database would refuse the intent. It was not harmless: between 00:00
+ * and 05:30 IST on the 1st, the screen showed one month, the server charged the other, and the
+ * confirmation poll watched a month the payment had not been credited to — so a payment that
+ * succeeded was reported to the resident as unconfirmed. See
+ * db/migrations/2026-09-04-razorpay-ist-day-boundary.sql.
+ *
+ * en-CA gives ISO order (YYYY-MM-DD) from a formatter, which is the one locale that lets this be
+ * a slice instead of three getters.
  */
 function currentPeriodMonth(): string {
-  const now = new Date();
-  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  const ist = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  return ist.slice(0, 7);
 }
 
 interface StudentRow {

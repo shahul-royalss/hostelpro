@@ -121,7 +121,11 @@ build_with_retry() {
       # `--split-per-abi` is a Flutter flag, not a Gradle task: it works by setting this
       # property. A direct gradlew call has to set it too, or the offline fallback silently
       # produces a universal APK and the split artifact the caller asked for never appears.
-      local props=(); case " ${extra[*]} " in *" --split-per-abi "*) props=(-Psplit-per-abi=true);; esac
+      local props=()
+      case " ${extra[*]} " in
+        *" --split-per-abi "*)              props=(-Psplit-per-abi=true) ;;
+        *" --target-platform android-arm64 "*) props=(-Ptarget-platform=android-arm64) ;;
+      esac
       # TWO lessons encoded here, both paid for:
       #  - JAVA_HOME must be Android Studio's JBR (JDK 21). `flutter build` selects it
       #    automatically, but a direct gradlew call inherits the system JDK — 26 on this
@@ -155,6 +159,9 @@ build_with_retry() {
 }
 
 build_with_retry apk
+# The per-CPU build further down writes to this SAME filename, so the universal artifact is put
+# somewhere it cannot be overwritten before that runs.
+cp build/app/outputs/flutter-apk/app-release.apk    build/app/outputs/flutter-apk/app-universal-release.apk
 build_with_retry appbundle
 
 # ── AND ONE APK PER CPU, WHICH IS THE ONE A PERSON SHOULD ACTUALLY INSTALL ──────────────────
@@ -164,20 +171,31 @@ build_with_retry appbundle
 # exactly one of those, so two thirds of the download is dead weight on any given handset — and
 # x86_64 is an EMULATOR target that no phone on sale has ever used.
 #
-# Splitting produces one APK per architecture; the arm64 one is ~23 MB. Play never sees these —
-# it takes the AAB and does the same split itself, which is why the store download was always
-# going to be small. This is for the copy handed round as a file, which until now was the fat one.
+# Building for one architecture produces a ~23 MB APK. Play never sees this file — it takes the
+# AAB and does the same split itself, which is why the store download was always going to be
+# small. This is for the copy handed round as a file, which until now was the fat one.
+#
+# ── WHY --target-platform AND NOT --split-per-abi ────────────────────────────────────────────
+#
+# --split-per-abi makes Flutter add 1000 x (ABI index) to the versionCode, so the arm64 APK came
+# out as 2001 while the AAB — the artifact Play actually serves — stays at 1 (pubspec 1.0.0+1).
+# Android refuses to install a lower versionCode over a higher one, so anyone who installed the
+# 2001 file from the download link could never afterwards take an update from Play: not 1, and
+# not the 2 that 1.0.1 would carry. The offset exists for uploading several APKs to Play as a
+# set, which is not how this ships. --target-platform builds the same single-architecture APK
+# and leaves the versionCode alone, so the file handed round and the store build agree.
 #
 # The universal APK is still built and still staged: an armeabi-v7a handset, or anyone who cannot
 # tell which they have, needs a build that installs anywhere.
-build_with_retry apk --split-per-abi
+build_with_retry apk --target-platform android-arm64
+mv build/app/outputs/flutter-apk/app-release.apk    build/app/outputs/flutter-apk/app-arm64-release.apk
 
-APK="build/app/outputs/flutter-apk/app-release.apk"
+APK="build/app/outputs/flutter-apk/app-universal-release.apk"
 AAB="build/app/outputs/bundle/release/app-release.aab"
-APK_ARM64="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
-[ -f "$APK" ] || die "no APK at $APK"
+APK_ARM64="build/app/outputs/flutter-apk/app-arm64-release.apk"
+[ -f "$APK" ] || die "no universal APK at $APK"
 [ -f "$AAB" ] || die "no AAB at $AAB"
-[ -f "$APK_ARM64" ] || die "no arm64 APK at $APK_ARM64 — the split build did not produce one"
+[ -f "$APK_ARM64" ] || die "no arm64 APK at $APK_ARM64 — the per-CPU build did not produce one"
 
 say "Freshness"
 for f in "$APK" "$AAB"; do
@@ -206,6 +224,41 @@ say "Verifying the things that have been wrong before"
 # APK is now the one handed to people, and an unverified artifact going out under a trusted name
 # is the exact failure the rest of this section exists to prevent. Same gates, run over each.
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+
+# Search an unpacked directory for anything that must never leave a build machine, in both of the
+# encodings a Dart snapshot uses. Exits the script on a hit; silent on a clean pass.
+scan_for_secrets() {
+  local dir="$1" what="$2"
+  python3 - "$dir" "$what" <<'PYSCAN' || die "$what: a secret may be embedded — inspect before shipping"
+import os, re, sys
+
+root, what = sys.argv[1], sys.argv[2]
+
+# service_role     — the Supabase key that bypasses every RLS policy
+# rzp_live/test_.. — a Razorpay key id followed by ':', i.e. an id:secret pair
+PATTERN = re.compile(rb"service_role|rzp_(?:live|test)_[A-Za-z0-9]{10,}:")
+
+hits = []
+for dirpath, _dirs, names in os.walk(root):
+    for name in names:
+        path = os.path.join(dirpath, name)
+        try:
+            blob = open(path, "rb").read()
+        except OSError:
+            continue
+        if PATTERN.search(blob):
+            hits.append(path + "  (utf-8)")
+        # A Dart string holding any non-ASCII character is a TwoByteString: UTF-16 in the
+        # snapshot. Decoding the whole blob that way is crude but it is what makes such a
+        # string visible to the same pattern at all.
+        if PATTERN.search(blob.decode("utf-16-le", "ignore").encode("utf-8", "ignore")):
+            hits.append(path + "  (utf-16)")
+
+for h in hits:
+    print("    " + h, file=sys.stderr)
+sys.exit(1 if hits else 0)
+PYSCAN
+}
 
 verify_apk() {
   local apk="$1" label="$2" badging certs entries unpack
@@ -244,16 +297,47 @@ verify_apk() {
   # 5. NO SECRETS ON THE DEVICE. An APK is a zip anyone can unpack. The service-role key bypasses
   #    every RLS policy; the Razorpay secret authorises money movement. Neither may be in here.
   #    Unpacked to its own directory so one APK's assets cannot be mistaken for another's.
+  #
+  #    THIS USED TO SCAN A DIRECTORY THAT CANNOT CONTAIN A DART STRING. It extracted only
+  #    assets/flutter_assets and grepped that. In a release AOT build every Dart string constant
+  #    lives in lib/<abi>/libapp.so, which was never extracted — so a service-role key or Razorpay
+  #    secret typed into Dart source would have walked straight through this gate reporting
+  #    "no secrets — pass". The snapshot is now scanned too.
+  #
+  #    And it is scanned in BOTH encodings. Dart stores a string containing any non-ASCII
+  #    character — an em dash is enough — as UTF-16, so a plain byte grep silently misses it.
   unpack="$TMP/$label"; mkdir -p "$unpack"
-  unzip -o -q "$apk" -d "$unpack" 'assets/flutter_assets/*' 2>/dev/null || true
-  if grep -rqE 'service_role|rzp_(live|test)_[A-Za-z0-9]{10,}:' "$unpack" 2>/dev/null; then
-    die "$label: a secret may be embedded in the bundle — inspect before shipping"
-  fi
+  unzip -o -q "$apk" -d "$unpack" 'assets/flutter_assets/*' 'lib/*/libapp.so' 2>/dev/null || true
+  scan_for_secrets "$unpack" "$label"
   printf '  %s: signature, label, arm64, bundled font, no secrets — pass\n' "$label"
 }
 
 verify_apk "$APK"       "universal-apk"
 verify_apk "$APK_ARM64" "arm64-apk"
+
+# The AAB is the artifact Play actually receives, and nothing used to look inside it at all. It
+# carries base/lib/<abi>/libapp.so for every ABI, so a secret absent from the arm64 APK could still
+# reach Play through one of the other two.
+# 7. EVERY ARTIFACT MUST CARRY THE SAME versionCode. The file handed round and the build Play
+#    serves have to agree, or whoever installs the download link is stranded: Android will not
+#    install a lower versionCode over a higher one, so a sideloaded 2001 refuses every future
+#    Play update. This is the gate that would have caught that; see the note above the per-CPU
+#    build for how it happened.
+want_code="$(grep -m1 '^version:' pubspec.yaml | sed 's/.*+//')"
+[ -n "$want_code" ] || die "could not read the build number out of pubspec.yaml"
+for pair in "universal-apk:$APK" "arm64-apk:$APK_ARM64"; do
+  lbl="${pair%%:*}"; file="${pair#*:}"
+  got="$("$BT/aapt2.exe" dump badging "$file" 2>/dev/null | head -1 | grep -o " versionCode='[0-9]*'" | head -1 | tr -dc '0-9')"
+  [ "$got" = "$want_code" ] || die "$lbl: versionCode is $got but pubspec says $want_code — a phone that installs this could never take a Play update"
+done
+printf '  versionCode: %s on both APKs, matching pubspec — pass
+' "$want_code"
+
+aab_unpack="$TMP/aab"; mkdir -p "$aab_unpack"
+unzip -o -q "$AAB" -d "$aab_unpack" 'base/assets/flutter_assets/*' 'base/lib/*/libapp.so' 2>/dev/null || true
+scan_for_secrets "$aab_unpack" "aab"
+printf '  aab: no secrets in any ABI — pass
+'
 if grep -rq "RAZORPAY_KEY_SECRET" lib/ 2>/dev/null; then
   die "Razorpay secret referenced in client source"
 fi

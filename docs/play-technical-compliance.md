@@ -2,7 +2,7 @@
 
 **Artifact:** `dist/NIVORA-1.0.0.apk` and `dist/NIVORA-1.0.0.aab`
 **Package:** `app.nivora.mobile` · versionCode 1 · versionName 1.0.0
-**Verified:** 25 August 2026, on the build workstation.
+**Verified:** 4 September 2026, on the build workstation, against the artifacts then in `dist/`.
 **Method:** every claim below was read out of the artifact itself with `aapt2`, `apksigner`,
 `unzip` and a direct ELF header parse. Nothing was taken on trust from the build guide.
 
@@ -19,12 +19,12 @@
 | # | Requirement | Status |
 |---|---|---|
 | 1 | Target API level (API 36 required for new submissions from 31 Aug 2026) | **PASS** — `targetSdkVersion 36` |
-| 2 | Permissions minimal and justified | **PASS** — 8 entries, every one traced to a source; see §2 |
+| 2 | Permissions minimal and justified | **PASS** — 5 entries, every one traced to a source; see §2 |
 | 3 | Signing key strength | **PASS** — RSA 2048, `CN=HostelPro, O=HostelPro, C=IN` |
 | 4 | Signature schemes | **PASS** — AAB is JAR-signed (`META-INF/HOSTELPR.RSA`), which is what Play requires; APK is v2 |
-| 5 | **16 KB page-size compatibility** (required from 1 Nov 2025) | **PASS** — 5 native libraries, all aligned ≥ 16 KB; see §3 |
-| 6 | ABI coverage | **PASS** — `arm64-v8a`, `armeabi-v7a`, `x86_64` |
-| 7 | Artifact size | **PASS** — APK 66 MB, AAB 64 MB, far under the 200 MB base limit |
+| 5 | **16 KB page-size compatibility** (required from 1 Nov 2025) | **PASS** — 4 native libraries, all aligned ≥ 16 KB; see §3 |
+| 6 | ABI coverage | **PASS** — the AAB carries `arm64-v8a`, `armeabi-v7a` and `x86_64`, and Play splits it per device. The APK handed round directly is arm64-only by design; `NIVORA-<v>-universal.apk` is the one that installs anywhere |
+| 7 | Artifact size | **PASS** — arm64 APK 23.6 MB, universal APK 63.9 MB, AAB 61.4 MB, all far under the 200 MB base limit. What a phone downloads from Play is the per-device split of the AAB, not the whole bundle |
 | 8 | Typeface available offline | **PASS** — Inter bundled; the app does not fetch fonts at runtime |
 | 9 | No secrets in the shipped bundle | **PASS** — see §5 |
 
@@ -97,12 +97,13 @@ Measured by parsing the ELF program headers of every `arm64-v8a` library and tak
 | Library | min LOAD alignment | |
 |---|---|---|
 | `libapp.so` | 65536 (64 KB) | PASS |
-| `libflutter.so` | 65536 (64 KB) | PASS |
 | `libdartjni.so` | 16384 (16 KB) | PASS |
 | `libdatastore_shared_counter.so` | 16384 (16 KB) | PASS |
-| `libsqlite3.so` | 16384 (16 KB) | PASS |
+| `libflutter.so` | 65536 (64 KB) | PASS |
 
-All five clear the 16 KB threshold. **Re-run this after any Flutter or plugin upgrade** — a single
+All four clear the 16 KB threshold. (`libsqlite3.so` appeared in the 25 August measurement and is
+no longer in the build; a dependency stopped bundling it. Re-listing rather than re-stating the
+old table is the point of this section.) **Re-run this after any Flutter or plugin upgrade** — a single
 dependency built with a 4 KB-aligned toolchain fails the whole upload, and nothing else in the
 build reports it.
 
@@ -155,11 +156,13 @@ Verified on the staged artifact:
 
 Neither is inside the artifact.
 
-**6.1 — The Edge Functions are not deployed.** `sa-create-owner`, `owner-create-staff`,
-`warden-register-student`, `razorpay-order` and `razorpay-webhook` exist in `supabase/functions/`
-and are invoked by the app, but deploying them needs a Supabase access token. Until
-[`edge-functions.md`](./edge-functions.md) is followed, creating an owner and paying rent fail at
-runtime regardless of how finished the screens look.
+**6.1 — CLEARED. The Edge Functions are deployed.** All ten are ACTIVE on project
+`nimxvgzscbanhtvgnjll`: `sa-create-owner`, `owner-create-staff`, `warden-register-student`,
+`razorpay-order`, `razorpay-webhook`, `mobile-auth`, `email-verification`, `complaint-photo`,
+`warden-student-credentials` and `storage-erasure`. `razorpay-webhook` is the only one with
+`verify_jwt: false`, which is correct — Razorpay cannot present a Supabase JWT, so that function
+authenticates the caller by HMAC over the raw body instead. Rent has since been paid end to end
+with live keys.
 
 **6.2 — Privacy policy URL must be reachable without signing in.** Play fetches it anonymously.
 
