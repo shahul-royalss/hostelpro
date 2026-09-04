@@ -1,12 +1,20 @@
 # Security sign-off — NIVORA mobile release (nivora_app)
 
-**Date:** 2026-08-29
-**Scope:** the Flutter mobile app (`nivora_app/`) and the five Supabase Edge Functions it calls
-(`supabase/functions/{owner-create-staff, razorpay-order, razorpay-webhook, sa-create-owner,
-warden-register-student}` plus `_shared/`), at commit `7df8bca` on `main`.
-**Method:** automated scanner run + manual client-side sweep + manual source review of the edge
-functions. **No live/deployed system was exercised in this pass** — see §5, which is as much a
-part of this sign-off as the verdict.
+**Date:** 2026-09-04 (round 2). The 2026-08-29 pass is kept below from §2 onward; this header
+and §1 supersede it.
+**Scope:** the Flutter mobile app (`nivora_app/`), all ten deployed Supabase Edge Functions, the
+database on project `nimxvgzscbanhtvgnjll`, and the staged artifacts in `dist/`, at commit
+`af71ea6` on `main`.
+**Method:** automated scanner run, manual source review, **and the live system this time** —
+Supabase security advisors, the deployed function inventory, direct SQL against production, and
+`aapt2`/`apksigner`/ELF parsing of the artifacts themselves. Plus a six-dimension adversarial
+audit (one skeptic per finding; 16 raised, 9 survived refutation), whose money finding is fixed
+in the same commit as this update.
+
+**Why a second pass was owed:** since 2026-08-29 Razorpay went live and has taken real money, the
+Edge Functions were deployed and their secrets rotated after a mismatch incident, and the legal
+documents were rewritten. The August sign-off attested to source at `7df8bca` and explicitly to
+no deployed system, so it could not carry any of that.
 **Prior art:** `SECURITY.md` (audit rounds 1–3, 2026-08-17/20) covers the Next.js web app and the
 live RLS attack suites. This document does not restate or re-verify those results.
 
@@ -21,13 +29,46 @@ live RLS attack suites. This document does not restate or re-verify those result
 - **"Do not deploy while any High vulnerability has no documented mitigation and owner."**
   → **No High vulnerability is open.** The two finding groups in §3 are Low/Informational and
   each carries a documented mitigation and a named owner anyway.
-- **Deployment precondition that is NOT met yet:** the five edge functions are **not deployed**
-  and their runtime secrets are not confirmed set (§5.1). Nothing in this sign-off attests to
-  the live backend's behavior. Deploying the app before the functions (with the flags in §4.4)
-  is a functional and security gap — the webhook that settles rent would not exist.
+- **The August precondition is CLEARED.** All ten Edge Functions are ACTIVE on
+  `nimxvgzscbanhtvgnjll` and their secrets are set. `razorpay-webhook` is the only one with
+  `verify_jwt: false`, which is correct: Razorpay cannot present a Supabase JWT, so it
+  authenticates by HMAC over the raw body instead. Rent has been paid end to end with live keys.
 
-Sign-off holds **for the source at `7df8bca`**, conditional on the §5 items being closed by
-their owners before or at release.
+**Live checks run for this pass, with results:**
+
+- Supabase security advisors: **no ERROR-level findings, and no table with RLS disabled or an
+  effectively-`true` policy.** The `SECURITY DEFINER` warnings are this product's deliberate
+  pattern — the RPC is the authorisation boundary and each gates on role internally — not
+  findings against it.
+- `npm run security:all`: exit 0, including 53 webhook-signature cases.
+- Artifacts: both APKs verify (v2; `minSdk 24`, so the absent v1 JAR signature is correct rather
+  than missing), package `app.nivora.mobile`, versionCode 1 on both APKs and on the bundle, four
+  arm64 native libraries all aligned ≥ 16 KB, and no secrets in either APK or in any of the
+  AAB's three ABIs.
+
+**One control was found not to work, and repairing it is why this round exists.** The release
+script's secret gate scanned only `assets/flutter_assets` — a directory that cannot contain a
+Dart string. Every Dart constant lives in `lib/<abi>/libapp.so`, which it never extracted, so a
+service-role key or Razorpay secret written in Dart source would have passed it silently. The
+August sign-off's "no secrets in the shipped bundle — PASS" rested on that gate. It now scans the
+snapshot and the bundle, in UTF-8 and UTF-16 (Dart stores any string containing a non-ASCII
+character as UTF-16, invisible to a byte grep), and was proved against planted secrets in both
+encodings. The August conclusion still holds when re-run with the working gate — the artifacts
+are clean — but until today it held by luck rather than by test.
+
+**Open, with owner. Nothing Critical or High:**
+
+- *Leaked-password protection is disabled* (Supabase advisor, WARN). Dashboard-only toggle; owner:
+  the project owner. Not a code defect and not a release blocker, but it should be on before real
+  residents choose passwords.
+- *Production web is stale.* `hostelpro-three.vercel.app` still serves `2559b6b`: three pushes
+  have produced zero deployments, so the corrected legal pages — including the account-deletion
+  URL a Play reviewer opens — are not live. **This blocks submission**, not as a vulnerability
+  but because that URL would describe the wrong app. Owner: the project owner (`vercel --prod`,
+  then reconnect the Git integration so pushes deploy again).
+
+Sign-off holds **for the source at `af71ea6` and the artifacts staged from it**, conditional on
+the two open items above.
 
 ---
 
