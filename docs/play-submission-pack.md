@@ -734,11 +734,55 @@ Provide, in Console:
    app:
    - The demo accounts must have `must_change_password = false`, or the reviewer hits the forced
      password-change screen and stops.
-   - The demo roles must **not** be in `MFA_REQUIRED_ROLES`, or the reviewer hits a TOTP prompt they
-     cannot satisfy.
-4. **A demo tenant with realistic data.** An empty hostel looks like a broken app. Seed one with
-   rooms, residents, a few paid and unpaid months, an open complaint and a pending leave —
-   `db/seed.ts` already builds a dataset of exactly this shape.
+   - **Owner is different, and cannot be exempted without a new build.** `mfaRequiredRoles` at
+     `nivora_app/lib/core/auth/auth_controller.dart:122` is a compile-time `const {superAdmin,
+     owner}` with no runtime source, so changing `MFA_REQUIRED_ROLES` on Vercel or
+     `app.mfa_required_roles()` in Postgres does **not** let an owner in. What works instead: leave
+     the demo owner with **no enrolled factor**. `mfaGate` then returns `enrolmentOwed`, the router
+     sends the session to `/mfa-setup`, and the reviewer enrols their own authenticator there and
+     continues — a one-time step they control, rather than a code only we could produce. Say so in
+     the instructions. Do not hand anyone a TOTP seed.
+4. **A demo tenant with realistic data.** An empty hostel looks like a broken app.
+
+### 6.1 The demo tenant that now exists
+
+Built 2026-09-04 in the live project, deliberately as a **separate hostel** so a reviewer never sees
+a real resident's name, phone, guardian details or ID proof:
+
+| Role | Signs in with | Notes |
+|---|---|---|
+| Owner | `demo.owner@nivora.app` | No MFA factor — first sign-in lands on `/mfa-setup`, reviewer enrols their own authenticator |
+| Warden | `demo.warden@nivora.app` | Straight into the warden shell; no MFA for this role |
+| Resident | phone `9000000001` | **A phone number, not an email** — the app maps it to a synthetic address internally |
+
+Hostel **"Demo PG (Play review)"**: 2 floors, 6 rooms, 18 beds, 1 resident in room 101, last month
+paid and this month outstanding, one open complaint and one resolved, and a notice. All three
+accounts have `must_change_password = false` and were verified to sign in successfully.
+
+**The passwords are not in this file, and must not be** — see the rule below. They were handed over
+separately and belong in the Console form and the team's private ops record.
+
+### 6.2 The instructions to paste into the App access form
+
+```
+NIVORA has no public sign-up: hostels create accounts for their staff and residents.
+Three demo accounts are provided below, all in a demo hostel that contains no real
+personal data.
+
+RESIDENT - sign in with a PHONE NUMBER, not an email address.
+  Phone: 9000000001
+  Password: (see the password field)
+
+WARDEN - sign in with an email address.
+  Email: demo.warden@nivora.app
+
+OWNER - sign in with an email address.
+  Email: demo.owner@nivora.app
+  The owner role requires two-factor authentication. On first sign-in the app shows a
+  setup screen with a QR code. Scan it with any authenticator app (Google Authenticator,
+  Authy) and enter the 6-digit code. This is a one-time step and then the owner
+  dashboard opens normally.
+```
 
 **Do not put these credentials in this file, in the repository, or in any screenshot.** They go into
 the Play Console App access form and into whatever private ops record the team keeps. Rotate them
