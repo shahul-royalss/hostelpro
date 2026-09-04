@@ -477,8 +477,8 @@ const kPrivacyPolicy = LegalDocument(
         Para(
           'Ask your hostel first — they hold the relationship and can act immediately. A wrong '
           'phone number or a misspelled name is a change your warden can make while you stand '
-          'there. To be erased, ask them too: checking a resident out schedules the erasure a '
-          'month later, and it can be raised sooner on request.',
+          'there. To be erased, ask them too: checking a resident out schedules the erasure, and '
+          'it runs a month later. That month is fixed; it is not shortened on request.',
         ),
         Para(
           'Nothing erases your record on the spot, and that is deliberate rather than an '

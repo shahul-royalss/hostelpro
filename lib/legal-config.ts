@@ -50,8 +50,6 @@ export const LEGAL = {
   /** e.g. "the courts at Bengaluru, Karnataka". */
   jurisdiction: "the courts at Chittoor, Andhra Pradesh",
 
-  /** Shown as "last updated" on the published documents. Bump when you change them. */
-  lastUpdated: "4 September 2026",
 } as const;
 
 /**

@@ -536,8 +536,7 @@ export default function PrivacyPolicyPage() {
             phone, email, photograph, guardian details, address and ID proof are stripped out and
             the financial figures are left behind attached to nobody. &ldquo;Kept
             indefinitely&rdquo; above therefore describes an amount and a date, not a person. A
-            hostel&rsquo;s own legal duties can extend a period, never shorten it, and you may ask
-            your hostel at any time to erase something sooner.
+            hostel&rsquo;s own legal duties can extend a period, never shorten it.
           </p>
           <p>
             <strong>Deletion is not instant everywhere.</strong> An encrypted backup of the database
@@ -580,8 +579,8 @@ export default function PrivacyPolicyPage() {
             <strong>Ask your hostel first.</strong> They are the Data Fiduciary for your record and
             hold the fastest route to it: a Warden or Owner can correct your details in the app
             immediately, and corrections made that way are validated and logged. To be erased, ask
-            them too — checking a resident out schedules the erasure a month later, and it can be
-            raised sooner on request.{" "}
+            them too — checking a resident out schedules the erasure, and it runs a month later.
+            That month is fixed; it is not shortened on request.{" "}
             <Link href="/legal/account-deletion">Delete your account and data</Link> sets out what
             gets deleted, what has to be kept, and how long it takes. If the hostel does not
             respond, or your request is about the security log or a platform account, write to the
