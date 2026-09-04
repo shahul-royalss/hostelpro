@@ -58,27 +58,22 @@ the target level without anyone editing this project**. Re-check this table afte
 $ aapt2 dump badging dist/NIVORA-1.0.0.apk | grep uses-permission
 android.permission.INTERNET
 android.permission.ACCESS_NETWORK_STATE
-android.permission.WAKE_LOCK
-android.permission.POST_NOTIFICATIONS
 android.permission.NFC
-com.google.android.c2dm.permission.RECEIVE
 app.nivora.mobile.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 android.permission.READ_BASIC_PHONE_STATE
 ```
 
-Eight entries. **Only two are declared by this project; the rest arrive through the manifest
-merger from dependencies.** Each was traced to its origin in
-`build/app/outputs/logs/manifest-merger-release-report.txt` rather than guessed at:
+Five entries. **Only two are declared by this project; the rest arrive through the manifest
+merger from dependencies.** Each was traced to its origin in the merge-blame report
+(`build/app/intermediates/manifest_merge_blame_file/release/processReleaseMainManifest/manifest-merger-blame-release-report.txt`)
+rather than guessed at:
 
 | Permission | Protection | Origin | Justified? |
 |---|---|---|---|
-| `INTERNET` | normal | **ours**, plus firebase_messaging, razorpay, firebase-installations | **Yes.** Every screen reads from Supabase. Worth knowing: the merger contributes this anyway, which is why the release build had network *before* it was added to our manifest — see the note in §7. |
+| `INTERNET` | normal | **ours**, plus `razorpay:standard-core` | **Yes.** Every screen reads from Supabase. Worth knowing: the merger contributes this anyway, which is why the release build had network *before* it was added to our manifest — see the note in §7. |
 | `ACCESS_NETWORK_STATE` | normal | **ours** | **Yes.** Lets the app distinguish "you are offline" from "the server is down" — two different messages to a warden standing in a corridor. |
-| `WAKE_LOCK` | normal | firebase_messaging | **Yes.** Holds the CPU briefly while an FCM message is processed. |
-| `POST_NOTIFICATIONS` | **runtime** (API 33+) | firebase_messaging | **Yes.** Rent reminders and complaint updates. This is the only entry that prompts the user, and the prompt is declinable without breaking the app. |
 | `NFC` | normal | `com.razorpay:standard-core:1.7.18` | **Yes, and not ours to remove.** Razorpay Checkout supports contactless card reads. No runtime prompt. |
 | `READ_BASIC_PHONE_STATE` | normal | `com.razorpay:core:1.0.18` | **Yes.** The API-33+ *reduced-scope* replacement for `READ_PHONE_STATE`; Razorpay uses it for carrier detection during UPI and OTP flows. It exposes no device identifier, so it needs **no** Play Console declaration — unlike `READ_PHONE_STATE`, which would. |
-| `com.google.android.c2dm.permission.RECEIVE` | signature | firebase_messaging | **Yes.** Standard FCM delivery. |
 | `app.nivora.mobile.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `signature` | androidx.core | **Yes.** Auto-generated when a non-exported runtime receiver is registered on API 33+. Namespaced to this app, signature-level, grants access to nothing. Not shown to users. |
 
 **Specifically absent**, and each absence is load-bearing for the Data safety answers:
@@ -179,8 +174,9 @@ added later.
 
 The `INTERNET` permission was once believed to be missing from the release build, and adding it to
 the main manifest was believed to have fixed an app that would not open. **Both beliefs were
-wrong.** The manifest merger already contributed `INTERNET` from `firebase_messaging`,
-`razorpay:standard-core` and `firebase-installations`, so the release build always had network.
+wrong.** The manifest merger already contributed `INTERNET` from `razorpay:standard-core`,
+so the release build always had network. (It came from the Firebase packages too, until those
+were removed — see the note in `nivora_app/pubspec.yaml`; Razorpay alone supplies it now.)
 The real cause was a routing bug that held the app on its splash screen forever — see the commit
 "Fix the real reason the app would not open".
 

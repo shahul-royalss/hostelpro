@@ -246,8 +246,11 @@ const kPrivacyPolicy = LegalDocument(
           'No card number, UPI ID, CVV or bank account. Where rent is paid online those details '
               'are typed into Razorpay\'s own checkout and never reach NIVORA at all. What comes '
               'back is a reference saying a payment of a stated amount succeeded.',
-          'No location, contacts, calendar, microphone or biometrics. The Android app asks for '
-              'only for internet access and the ability to tell whether you are online.',
+          'No location, contacts, calendar, microphone or biometrics. NIVORA asks for internet '
+              'access and the ability to tell whether you are online. The Razorpay checkout adds '
+              'two more that its own SDK declares: NFC, so a payment card can be tapped, and a '
+              'basic phone-state permission. Those four are the whole list, and NIVORA reads '
+              'neither of the two Razorpay adds.',
           'No advertising, no advertising identifier and no profiling. Nothing here is used to '
               'build a picture of you or to make an automated decision about you.',
           // NOT "there is no third-party tracking code in the app". That sentence was true of the

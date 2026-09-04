@@ -252,8 +252,11 @@ export default function PrivacyPolicyPage() {
             </li>
             <li>
               <strong>No location data, no device contacts, no calendar, no biometrics, no
-              advertising identifier.</strong> The Android app asks only for internet access and the ability to tell whether you are online — nothing
-              else.
+              advertising identifier.</strong> NIVORA asks for internet access and the ability to
+              tell whether you are online. Razorpay&rsquo;s checkout SDK adds two more permissions
+              to the Android app: NFC, so a payment card can be tapped, and a basic phone-state
+              permission. Those four are the entire list, and NIVORA reads neither of Razorpay&rsquo;s
+              two.
             </li>
             <li>
               {/* The Android app bundles Razorpay's native Checkout SDK, which runs its own
