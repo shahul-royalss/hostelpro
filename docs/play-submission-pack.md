@@ -67,25 +67,25 @@ strongest differentiator against every other PG-management listing, and it is th
 visitor actually reads.
 
 ```
-Rooms, beds, fees, complaints, leaves, visitors - and rent paid from the app.
+Rooms, beds, fees, complaints, mess menu - and rent paid from the app.
 ```
 
-**77 / 80 characters.**
+**70 / 80 characters.**
 
 Alternative, if the emphasis should be on the operator rather than the feature list:
 
 ```
-Run your PG: beds, fees, complaints, leaves, visitors - and rent paid online.
+Run your PG: beds, fees, complaints, mess menus - and rent paid online.
 ```
 
-**77 / 80 characters.**
+**71 / 80 characters.**
 
 Note the ASCII hyphen rather than an en dash. Play accepts Unicode, but the short description is
 rendered in a lot of surfaces at a lot of font sizes and a plain hyphen never surprises anyone.
 
 ### Full description — limit 4000
 
-**3,917 / 4,000 characters.** 83 characters of headroom. Re-count before pasting if anything is
+**3,837 / 4,000 characters.** 163 characters of headroom. Re-count before pasting if anything is
 edited:
 
 ```sh
@@ -117,12 +117,11 @@ COMPLAINTS
 - Track each one from open to in progress to resolved, with a resolution note
 
 LEAVE REQUESTS
-- Residents request leave with dates and a reason
-- The warden approves or rejects with a note, and the resident is notified in the app
+- Pending leave requests wait on the warden's desk and are approved or rejected with one tap
+- The resident is notified of the outcome
 
 VISITOR REGISTER
-- Log a visitor's name, phone and relationship at check-in, close it at check-out
-- A searchable record of who came to the building, and who they came to see
+- The warden sees at a glance who is still in the building, and signs them out
 
 MESS MENU
 - Publish a weekly menu for breakfast, lunch, snacks and dinner, on every resident's home screen
