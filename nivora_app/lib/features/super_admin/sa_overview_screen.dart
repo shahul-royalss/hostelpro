@@ -180,7 +180,6 @@ class _Platform extends ConsumerWidget {
         // Subscriptions tab's detail surfaces.
         const SaHeading(
           title: 'Subscription health',
-          caption: 'An expired subscription makes a hostel read-only for everyone in it.',
         ),
         _Health(stats: stats),
       ],

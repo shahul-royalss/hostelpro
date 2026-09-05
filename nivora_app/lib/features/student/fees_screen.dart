@@ -110,8 +110,6 @@ class _Fees extends ConsumerWidget {
             title: 'Payment history',
             // Not a promise this screen invented: no retention step touches fee_payments, so a
             // month recorded here stays here.
-            caption: 'Every month the hostel has recorded against your name. '
-                'Months are kept — nothing drops off as it ages.',
             // The money domain's green on the receipt glyph — the ledger's own colour, and the
             // one the Fees tab lights up in. The rows below keep their STATUS tones.
             domain: NivoraDomain.money,

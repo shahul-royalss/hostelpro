@@ -191,7 +191,6 @@ class _Detail extends ConsumerWidget {
 
         SaHeading(
           title: 'This month',
-          caption: 'Counted by the same function the hostel’s own staff see.',
         ),
         _OperatingCard(hostelId: hostel.hostelId, openComplaints: hostel.openComplaints),
       ],

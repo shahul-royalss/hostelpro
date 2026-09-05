@@ -95,7 +95,6 @@ class _Profile extends ConsumerWidget {
           const SizedBox(height: Space.xl),
           const SectionHeading(
             title: 'My details',
-            caption: 'Recorded by your warden. Ask at the office to change any of it.',
             // One person, so the single figure rather than the domain's group glyph.
             domain: NivoraDomain.people,
             icon: Icons.person_rounded,
@@ -125,7 +124,6 @@ class _Profile extends ConsumerWidget {
           // deleting the section removed a duplicate, not a capability.
           const SectionHeading(
             title: 'Account',
-            caption: 'Your sign-in, on this phone.',
             domain: NivoraDomain.security,
             icon: Icons.lock_rounded,
           ),
