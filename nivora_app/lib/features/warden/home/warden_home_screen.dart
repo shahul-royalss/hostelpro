@@ -8,6 +8,7 @@ import '../../../core/auth/session.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/dashboard.dart';
 import '../../../shared/glass/glass.dart';
 import '../../common/refresh.dart';
 import '../../common/staff_notices.dart';
@@ -138,12 +139,14 @@ class _Body extends ConsumerWidget {
           ),
 
           const SectionLabel(label: 'Quick actions'),
+          const DashboardBand(label: 'Tools'),
           _QuickActions(hostelId: hostelId),
 
           const SectionLabel(label: 'Notices'),
           _Notices(hostelId: hostelId),
 
           const SectionLabel(label: 'The building'),
+          const DashboardBand(label: 'Occupancy'),
           _Occupancy(hostelId: hostelId),
         ],
       ),

@@ -7,6 +7,7 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/dashboard.dart';
 import '../../shared/glass/glass.dart';
 import '../auth/verify_email_screen.dart';
 import '../common/refresh.dart';
@@ -94,6 +95,11 @@ class SaOverviewScreen extends ConsumerWidget {
             onCreate: () => Navigator.of(context).push(CreateWizardScreen.route()),
           ),
           const SaSectionRule(),
+          // The same band labels the other four dashboards carry. This screen keeps its own
+          // SaSectionRule dividers — they are part of the super admin's denser, more clerical
+          // look and there is no reason to flatten that — but a reader moving between roles
+          // now finds the groups named the same way everywhere.
+          const DashboardBand(label: 'Platform'),
           saAsync<SaStats?>(
             stats,
             loading: () => const _PlatformSkeleton(),
@@ -104,8 +110,10 @@ class SaOverviewScreen extends ConsumerWidget {
                 value == null ? const SaNotPermitted() : _Platform(stats: value),
           ),
           const SaSectionRule(),
+          const DashboardBand(label: 'Onboarding'),
           const _Onboarding(),
           const SaSectionRule(),
+          const DashboardBand(label: 'Security'),
           const _Security(),
         ],
       ),

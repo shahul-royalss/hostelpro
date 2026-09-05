@@ -8,6 +8,7 @@ import '../../../core/auth/session.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/dashboard.dart';
 import '../../../shared/glass/glass.dart';
 import '../../common/refresh.dart';
 import '../../common/staff_notices.dart';
@@ -112,14 +113,20 @@ class ManagerHomeScreen extends ConsumerWidget {
           children: [
             const VerifyEmailBanner(),
             _HostelStatus(hostelId: hostelId, hostel: hostel),
+            // Banded like every other role's home — see shared/dashboard.dart. The tiles below
+            // were already tinted, one figure each, so this names the groups rather than
+            // rebuilding them.
+            const DashboardBand(label: 'Essentials'),
             _KpiGrid(hostelId: hostelId, load: load, finance: finance),
             const SizedBox(height: Space.md),
+            const DashboardBand(label: 'Today'),
             _TodaysTasks(hostelId: hostelId),
             const SizedBox(height: Space.md),
             _NoticesSection(hostelId: hostelId),
             const SizedBox(height: Space.md),
             _MoneySection(hostelId: hostelId, finance: finance),
             const SizedBox(height: Space.md),
+            const DashboardBand(label: 'Tools'),
             _QuickActions(hostelId: hostelId),
           ],
         ),

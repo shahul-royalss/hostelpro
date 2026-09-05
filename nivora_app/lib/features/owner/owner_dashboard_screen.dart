@@ -5,6 +5,7 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/dashboard.dart';
 import '../../shared/glass/glass.dart';
 import '../../shared/motion/entrance.dart';
 import '../auth/verify_email_screen.dart';
@@ -313,8 +314,14 @@ class _Figures extends StatelessWidget {
           _SubscriptionBanner(notice: notice),
           const SizedBox(height: Space.md),
         ],
+        // The same two bands the resident's home uses, so an owner who also has the app open
+        // as a resident is not looking at two different products. The tiles underneath were
+        // already the right shape — tinted, one figure each — so this labels the groups rather
+        // than rebuilding them; see shared/dashboard.dart.
+        const DashboardBand(label: 'Essentials'),
         _KpiGrid(stats: stats, hostelId: hostelId, period: period),
         const SizedBox(height: Space.lg),
+        const DashboardBand(label: 'Needs you'),
         _NeedsYou(stats: stats),
       ],
     );
