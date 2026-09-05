@@ -19,7 +19,6 @@ import '../data/manager_providers.dart';
 import '../expenses/record_money_sheet.dart';
 import '../tasks/task_sheet.dart';
 import '../widgets/in_out_bars.dart';
-import '../../settings/security_screen.dart';
 import '../widgets/manager_ui.dart';
 
 /// What needs attention today. Figma `4:1159`, `screen-manager-dashboard`.
@@ -64,7 +63,7 @@ class ManagerHomeScreen extends ConsumerWidget {
     if (hostelId == null) {
       return const ManagerScreen(
         title: 'Today',
-        actions: [_SecurityButton(), _SignOutButton()],
+        masthead: true,
         child: SingleChildScrollView(
           padding: EdgeInsets.all(Space.md),
           child: EmptyNote(
@@ -87,7 +86,7 @@ class ManagerHomeScreen extends ConsumerWidget {
     return ManagerScreen(
       title: firstName.isEmpty ? 'Today' : 'Hello, $firstName',
       subtitle: hostel.value?.name,
-      actions: const [_SecurityButton(), _SignOutButton()],
+      masthead: true,
       child: RefreshIndicator(
         // The hostel row is refreshed here too. Before, pull-to-refresh could not clear a
         // failed status read, so the one retry gesture on the screen could not reach the one
@@ -621,26 +620,4 @@ class _HostelStatus extends ConsumerWidget {
   }
 }
 
-/// Two-factor enrolment. Every role's header carries one — see
-/// features/settings/security_screen.dart.
-class _SecurityButton extends StatelessWidget {
-  const _SecurityButton();
 
-  @override
-  Widget build(BuildContext context) => IconButton(
-        tooltip: 'Security',
-        icon: const Icon(Icons.shield_outlined, size: IconSize.md),
-        onPressed: () => openSecurity(context),
-      );
-}
-
-class _SignOutButton extends ConsumerWidget {
-  const _SignOutButton();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => IconButton(
-        tooltip: 'Sign out',
-        icon: const Icon(Icons.logout_rounded, size: IconSize.md),
-        onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
-      );
-}

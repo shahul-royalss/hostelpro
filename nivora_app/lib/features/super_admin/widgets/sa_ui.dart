@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../shared/glass/glass.dart';
+import '../../shell/staff_profile_sheet.dart';
+import '../../../shared/wordmark.dart';
 import '../../../shared/sign_in_again.dart';
 import '../data/sa_models.dart';
 
@@ -214,6 +216,7 @@ class SaScreen extends StatelessWidget {
     this.actions = const [],
     this.onRefresh,
     this.scrollable = true,
+    this.masthead = false,
   });
 
   final String title;
@@ -226,6 +229,12 @@ class SaScreen extends StatelessWidget {
   /// False when the child manages its own scrolling — a paginated list must own its viewport
   /// or it cannot know when it has been scrolled to the end.
   final bool scrollable;
+
+  /// The dashboard treatment: signature centred, account avatar leading, nothing trailing. Set
+  /// only by the overview — Hostels, Subscriptions and Security keep their titles, because the
+  /// console's four tabs look alike enough that removing the one word naming them would be a
+  /// real loss.
+  final bool masthead;
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +259,9 @@ class SaScreen extends StatelessWidget {
     return Column(
       children: [
         GlassHeader(
-          child: Row(
+          child: masthead
+              ? _masthead(context)
+              : Row(
             children: [
               const SaBrandDot(),
               const SizedBox(width: Space.xs),
@@ -279,6 +290,38 @@ class SaScreen extends StatelessWidget {
           ),
         ),
         Expanded(child: body),
+      ],
+    );
+  }
+
+  /// Avatar, signature, and an empty box the width of the avatar so the mark is centred on the
+  /// SCREEN. The SaBrandDot is not drawn here — it exists to put the brand in front of a text
+  /// title, and the brand IS the title now.
+  Widget _masthead(BuildContext context) {
+    final t = Theme.of(context);
+    return Row(
+      children: [
+        Tooltip(
+          message: 'Your account',
+          child: InkWell(
+            onTap: () => showStaffProfile(context),
+            customBorder: const CircleBorder(),
+            child: Padding(
+              padding: const EdgeInsets.all(Space.xxs),
+              child: AccountAvatar(name: subtitle ?? 'Nivora', size: IconSize.xl),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Center(
+            child: SizedBox(
+              width: 116,
+              height: 116 / 3.4,
+              child: NivoraWordmark(progress: 1, color: t.colorScheme.onSurface),
+            ),
+          ),
+        ),
+        const SizedBox(width: IconSize.xl + Space.xxs * 2),
       ],
     );
   }

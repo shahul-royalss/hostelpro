@@ -7,6 +7,8 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../shared/glass/glass.dart';
+import '../../shell/staff_profile_sheet.dart';
+import '../../../shared/wordmark.dart';
 import '../../../shared/sign_in_again.dart';
 
 /// The pieces every manager screen is built from.
@@ -219,6 +221,7 @@ class ManagerScreen extends StatelessWidget {
     required this.child,
     this.subtitle,
     this.actions = const [],
+    this.masthead = false,
   });
 
   final String title;
@@ -226,13 +229,20 @@ class ManagerScreen extends StatelessWidget {
   final List<Widget> actions;
   final Widget child;
 
+  /// The dashboard treatment: signature centred, account avatar leading, nothing trailing. Set
+  /// only by the manager's home — the other tabs keep their titles, because a masthead over
+  /// "Expenses" removes the one word saying which tab you are in.
+  final bool masthead;
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return Column(
       children: [
         GlassHeader(
-          child: Row(
+          child: masthead
+              ? _masthead(context)
+              : Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
@@ -262,6 +272,38 @@ class ManagerScreen extends StatelessWidget {
           ),
         ),
         Expanded(child: child),
+      ],
+    );
+  }
+
+  /// Avatar, signature, and an empty box the same width as the avatar so the mark is centred on
+  /// the SCREEN rather than on the space beside it.
+  Widget _masthead(BuildContext context) {
+    final t = Theme.of(context);
+    final name = title.replaceFirst('Hello, ', '').trim();
+    return Row(
+      children: [
+        Tooltip(
+          message: 'Your account',
+          child: InkWell(
+            onTap: () => showStaffProfile(context),
+            customBorder: const CircleBorder(),
+            child: Padding(
+              padding: const EdgeInsets.all(Space.xxs),
+              child: AccountAvatar(name: name.isEmpty ? 'Nivora' : name, size: IconSize.xl),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Center(
+            child: SizedBox(
+              width: 116,
+              height: 116 / 3.4,
+              child: NivoraWordmark(progress: 1, color: t.colorScheme.onSurface),
+            ),
+          ),
+        ),
+        const SizedBox(width: IconSize.xl + Space.xxs * 2),
       ],
     );
   }

@@ -59,6 +59,7 @@ class SaOverviewScreen extends ConsumerWidget {
 
     return SaScreen(
       title: 'Platform overview',
+      masthead: true,
       subtitle: _greeting(ref.watch(sessionProvider)?.fullName),
       actions: [
         // Two-factor enrolment. Every role's header carries one — see
