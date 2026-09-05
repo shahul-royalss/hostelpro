@@ -6,6 +6,8 @@ import '../../core/auth/session.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/version/update_banner.dart';
 import '../../shared/glass/glass.dart';
+import '../../shared/wordmark.dart';
+import 'staff_profile_sheet.dart';
 import '../manager/manager_shell.dart';
 import '../super_admin/sa_shell.dart';
 import '../warden/warden_shell.dart';
@@ -122,37 +124,7 @@ class _RoleShellState extends ConsumerState<RoleShell> {
     return Scaffold(
       body: Column(
         children: [
-          GlassHeader(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(widget.role.label.toUpperCase(), style: t.textTheme.labelSmall),
-                      Text(
-                        session?.fullName.isNotEmpty == true ? session!.fullName : 'Nivora',
-                        style: t.textTheme.titleLarge,
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                // Two-factor enrolment, reachable from every role's header rather than buried
-                // in one role's settings — see features/settings/security_screen.dart.
-                IconButton(
-                  tooltip: 'Security',
-                  onPressed: () => openSecurity(context),
-                  icon: const Icon(Icons.shield_outlined),
-                ),
-                IconButton(
-                  tooltip: 'Sign out',
-                  onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
-                  icon: const Icon(Icons.logout_rounded),
-                ),
-              ],
-            ),
-          ),
+          GlassHeader(child: _header(t, session)),
           Expanded(child: _body(t, tabs)),
         ],
       ),
@@ -210,6 +182,87 @@ class _RoleShellState extends ConsumerState<RoleShell> {
   /// this is where those are plugged in. Anything a feature has not built yet returns null and
   /// falls through to the placeholder below, which says so rather than rendering an empty page
   /// that looks finished.
+  /// ── TWO HEADERS, AND WHY ──────────────────────────────────────────────────────────────
+  ///
+  /// A RESIDENT keeps the header they had: their role and name on the left, the shield and the
+  /// door on the right. They also have a Profile TAB, and the Account card on it already names
+  /// both of those actions and says what each one costs. Moving the icons out of their header
+  /// would take away a shortcut they may already have learned and give nothing back.
+  ///
+  /// EVERY OTHER ROLE gets the arrangement the product owner asked for: the signature centred,
+  /// their avatar at the top left, and nothing at the top right. The two icons that used to
+  /// live there are inside the sheet the avatar opens — see staff_profile_sheet.dart for why a
+  /// sheet and not a fifth tab.
+  ///
+  /// The mark is drawn at progress: 1, not animated. It is a masthead here; the drawing is the
+  /// splash's job and doing it again on every screen would be a logo that fidgets.
+  Widget _header(ThemeData t, NivoraSession? session) {
+    if (widget.role == UserRole.student) return _residentHeader(t, session);
+
+    final name = session?.fullName.trim() ?? '';
+    return Row(
+      children: [
+        // Leading and trailing are the same width so the mark between them is centred on the
+        // SCREEN rather than on the space left over — an avatar on one side and nothing on the
+        // other would push it off-centre by exactly one avatar.
+        Tooltip(
+          message: 'Your account',
+          child: InkWell(
+            onTap: () => showStaffProfile(context),
+            customBorder: const CircleBorder(),
+            child: Padding(
+              padding: const EdgeInsets.all(Space.xxs),
+              child: AccountAvatar(
+                name: name.isEmpty ? 'Nivora' : name,
+                size: IconSize.xl,
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Center(
+            child: SizedBox(
+              width: 116,
+              height: 116 / 3.4,
+              child: NivoraWordmark(progress: 1, color: t.colorScheme.onSurface),
+            ),
+          ),
+        ),
+        // The empty twin of the avatar. Sized from the same constants so the two cannot drift.
+        const SizedBox(width: IconSize.xl + Space.xxs * 2),
+      ],
+    );
+  }
+
+  Widget _residentHeader(ThemeData t, NivoraSession? session) => Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.role.label.toUpperCase(), style: t.textTheme.labelSmall),
+                Text(
+                  session?.fullName.isNotEmpty == true ? session!.fullName : 'Nivora',
+                  style: t.textTheme.titleLarge,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Security',
+            onPressed: () => openSecurity(context),
+            icon: const Icon(Icons.shield_outlined),
+          ),
+          IconButton(
+            tooltip: 'Sign out',
+            onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
+            icon: const Icon(Icons.logout_rounded),
+          ),
+        ],
+      );
+
   Widget _body(ThemeData t, List<({String label, IconData icon})> tabs) {
     // The owner's section owns its bodies the way the student's does — an IndexedStack over
     // the tabs actually visited — and additionally warms the unvisited tabs' data in the

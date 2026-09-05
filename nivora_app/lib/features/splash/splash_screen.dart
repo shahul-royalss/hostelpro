@@ -83,10 +83,16 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   /// that forgets.
   late final CurvedAnimation _reveal;
   late final CurvedAnimation _cue;
+  late final CurvedAnimation _welcome;
 
   /// The signature's drawn width. Wide enough to read the letterforms on the narrowest phone
   /// this ships to and short of the screen edge on it.
-  static const double _markWidth = 240;
+  ///
+  /// 200, down from 240: the product owner asked for the mark to be "medium, not too big than
+  /// present one". It now shares the screen with the welcome line beneath it, and a signature
+  /// that filled the width left that line looking like a caption to a poster rather than the
+  /// second half of one sentence.
+  static const double _markWidth = 200;
 
   @override
   void initState() {
@@ -96,6 +102,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     _cue = CurvedAnimation(
       parent: _controller,
       curve: const Interval(_cueStart, 1, curve: Motion.enter),
+    );
+    // The welcome line arrives while the signature is finishing rather than after it: two
+    // things that happen in sequence read as a queue, two that overlap read as one gesture.
+    // 0.55 is where the last stroke of the mark is being drawn.
+    _welcome = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.55, 1, curve: Motion.enter),
     );
   }
 
@@ -117,6 +130,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     // CurvedAnimation holds a listener on its parent; all three go before the controller.
     _reveal.dispose();
     _cue.dispose();
+    _welcome.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -158,6 +172,22 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     color: NivoraColors.onSurface,
                   ),
                 ),
+              ),
+            ),
+            const SizedBox(height: Space.md),
+            // "NIVORA WELCOMES YOU", asked for by name. Caps and tracked rather than set in the
+            // signature face: the mark above is the handwriting, and repeating that texture in
+            // a second line would compete with it instead of finishing it.
+            FadeTransition(
+              opacity: _welcome,
+              child: Text(
+                'NIVORA WELCOMES YOU',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      letterSpacing: 2.4,
+                      fontWeight: FontWeight.w600,
+                      color: NivoraColors.onSurfaceVariant,
+                    ),
               ),
             ),
             const SizedBox(height: Space.lg),

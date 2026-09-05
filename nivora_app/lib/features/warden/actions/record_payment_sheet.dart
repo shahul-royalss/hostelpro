@@ -214,6 +214,13 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
         _paidOn = row.paidOn ?? _paidOn;
       } else {
         _amount.text = row.balance > 0 ? row.balance.toStringAsFixed(0) : '';
+        // BACK TO CASH ON THE WAY OUT. Turning correction ON loads the row's own method, which
+        // for an online payment is UPI. Turning it OFF used to leave that behind, so the next
+        // "Record payment" — a warden taking notes at the desk — would have been written to the
+        // ledger as UPI. That was survivable while a picker showed the method; with the method
+        // now stated rather than chosen it would have been silent, which is worse. A new entry
+        // is always cash.
+        _mode = PaymentMode.cash;
       }
       _form.currentState?.validate();
     });
@@ -317,14 +324,46 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
             const SizedBox(height: Space.md),
             const CapsLabel('Paid by'),
             const SizedBox(height: Space.xs),
-            SegmentedButton<PaymentMode>(
-              segments: [
-                for (final mode in PaymentMode.values)
-                  ButtonSegment(value: mode, label: Text(mode.label)),
+            // ── A WARDEN RECORDS CASH, AND ONLY CASH ────────────────────────────────────────
+            //
+            // This was a three-way picker: cash, UPI, bank. The product owner removed the other
+            // two, and the reason is sound rather than cosmetic — a warden ticking "UPI" is
+            // ASSERTING that money arrived in an account they cannot see. Nothing backs that
+            // assertion up. A real UPI payment reaches this ledger through the Razorpay
+            // webhook, which has an HMAC over the raw body and a payment id behind it, and a
+            // resident who wants to pay that way does it from their own dashboard.
+            //
+            // WHAT THIS IS CAREFUL ABOUT. A correction opens on the row the ledger already
+            // holds, and that row may well be an online payment — _toggleCorrecting does
+            // `_mode = row.mode ?? _mode`. Dropping the other two values from a SegmentedButton
+            // whose `selected` could still be one of them would have asserted at build time;
+            // silently forcing it to cash would have been worse, quietly rewriting a verified
+            // Razorpay payment as money over the desk. So the method is now stated rather than
+            // chosen: a new entry is cash, and a correction keeps and shows whatever the row
+            // actually was.
+            Row(
+              children: [
+                Icon(
+                  _mode == PaymentMode.cash
+                      ? Icons.payments_rounded
+                      : Icons.smartphone_rounded,
+                  size: IconSize.sm,
+                  color: t.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: Space.xs),
+                Text(_mode.label, style: t.textTheme.bodyLarge),
+                if (_correcting && _mode != PaymentMode.cash) ...[
+                  const SizedBox(width: Space.xs),
+                  Expanded(
+                    child: Text(
+                      '— recorded online, kept as it is',
+                      style: t.textTheme.labelSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ],
-              selected: {_mode},
-              onSelectionChanged: _busy ? null : (s) => setState(() => _mode = s.first),
-              showSelectedIcon: false,
             ),
             const SizedBox(height: Space.md),
             InkWell(

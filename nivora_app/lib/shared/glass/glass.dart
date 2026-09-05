@@ -1171,3 +1171,50 @@ Color avatarToneFor(String? name) {
   }
   return palette[h % palette.length];
 }
+
+/// A tinted disc with one or two initials in it — the "my account" affordance.
+///
+/// ── WHY A THIRD ONE ───────────────────────────────────────────────────────────────────────
+///
+/// There are already two widgets called InitialsAvatar, in features/student/widgets/common.dart
+/// and features/owner/widgets/states.dart, and neither was reusable here. They are not
+/// duplicates of each other: the resident's takes a `size` and derives its hue from the name,
+/// the owner's takes an explicit `tone` and a `muted` flag for a revoked account. Merging them
+/// is a real refactor with real call sites behind it, and doing it in passing while wiring a
+/// header would have been the wrong moment.
+///
+/// What the shell needs is the small half of both: a disc, a size, initials, the shared
+/// [avatarToneFor] hue. That lives here in shared/ because the shell must not import a feature
+/// — the dependency runs the other way round.
+class AccountAvatar extends StatelessWidget {
+  const AccountAvatar({super.key, required this.name, this.size = 32});
+
+  final String? name;
+  final double size;
+
+  /// Up to two initials. Falls back to a single glyph rather than an empty circle, because a
+  /// blank disc reads as a failed image load.
+  static String initialsFor(String? name) {
+    final words = (name ?? '').trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty) return '?';
+    if (words.length == 1) return words.first.characters.first.toUpperCase();
+    return (words.first.characters.first + words.last.characters.first).toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final tone = context.tones.resolve(avatarToneFor(name));
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: context.tones.chipFill(tone)),
+      child: Text(
+        initialsFor(name),
+        style: t.textTheme.labelMedium?.copyWith(color: tone, fontWeight: FontWeight.w700),
+        maxLines: 1,
+      ),
+    );
+  }
+}
