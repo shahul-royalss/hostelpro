@@ -371,18 +371,29 @@ void main() {
 
     // Hard rule §4.8: a resident may see three fields about another resident. The roommate
     // rows must not have grown a rent figure, a guardian or a tap into a fuller profile.
-    expect(find.text('₹6,000 a month'), findsOneWidget); // the resident's OWN rent, once
+    expect(find.text('₹6,000 per month'), findsOneWidget); // the resident's OWN rent, once
     expect(find.text('Sunil Deshmukh'), findsOneWidget); // the resident's OWN guardian, once
     expect(find.textContaining('Ishaan').evaluate().length, 1);
   });
 
-  testWidgets('profile carries the contact card students cannot get from a join',
-      (tester) async {
+  testWidgets('profile no longer carries the hostel contact card, and offers the account '
+      'actions instead', (tester) async {
     await showScreen(tester, const StudentProfileScreen(), rent: partialRow);
 
-    expect(find.text('Priya Nair · 9876500003'), findsOneWidget);
-    expect(find.text('Rahul Mehta · 9876500002'), findsOneWidget);
-    expect(find.text('Ananya Rao'), findsOneWidget);
+    // THE CARD MOVED OFF THIS SCREEN, it was not withdrawn. st_hostel_contacts() and the
+    // resident's right to read those three staff fields are unchanged — the home screen still
+    // shows them, and hostelContactsProvider still backs the payment receipt. What changed is
+    // that a resident's own profile is about the resident: "students don't need that section
+    // in profile". This asserts the removal so it cannot drift back in unnoticed.
+    expect(find.text('Priya Nair · 9876500003'), findsNothing);
+    expect(find.text('Rahul Mehta · 9876500002'), findsNothing);
+    expect(find.text('Your hostel'), findsNothing);
+
+    // And the slot it left is doing something a resident actually needs. Sign-out was only
+    // ever the header icon and the password change was only reachable by being forced into it.
+    expect(find.text('Account'), findsOneWidget);
+    expect(find.text('Change password'), findsOneWidget);
+    expect(find.text('Sign out'), findsOneWidget);
   });
 
   testWidgets('the noticeboard renders the notices RLS returned', (tester) async {

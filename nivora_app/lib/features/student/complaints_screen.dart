@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
+import '../../shared/smiley.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../common/refresh.dart';
-import '../../shared/illustrations.dart';
 import 'complaint_detail_sheet.dart';
 import 'raise_complaint_sheet.dart';
 import 'widgets/common.dart';
@@ -54,13 +54,11 @@ class _Complaints extends ConsumerWidget {
         return settleRefresh(context, () => ref.read(provider.future));
       },
       onLoadMore: () => ref.read(provider.notifier).loadMore(),
-      empty: const EmptyNote(
-        illustration: EmptyArt.complaints,
-        icon: Icons.check_circle_outline_rounded,
-        title: 'You have not raised anything',
-        message: 'If something in the hostel is not working — food, cleaning, Wi-Fi, a repair — '
-            'tell your warden here and you can follow what happens to it.',
-      ),
+      // The list has no filter, so empty always means "this resident has raised nothing" and
+      // never "no match" — which is why it can say so plainly. The face and the single line
+      // replace an illustration and a paragraph that explained the feature to somebody already
+      // standing in it. Centring is done by the list, not here.
+      empty: const SmileyEmpty(title: 'No complaints yet raised'),
       itemBuilder: (context, complaint) => ComplaintTile(
         complaint: complaint,
         onTap: () => showComplaintDetailSheet(context, complaint: complaint),

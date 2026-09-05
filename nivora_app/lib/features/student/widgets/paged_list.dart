@@ -1,5 +1,7 @@
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -85,10 +87,31 @@ class StudentPagedList<T> extends StatelessWidget {
         ),
         data: (page) {
           if (page.isEmpty) {
-            return ListView(
-              padding: _padding,
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [?header, empty],
+            // EMPTY IS CENTRED IN THE VIEWPORT, not stacked at the top. A single small card
+            // pinned under the app bar with two thirds of a phone screen blank beneath it is
+            // what the product owner was reporting as "poor"; the state is the whole content
+            // of the screen, so it sits in the middle of it.
+            //
+            // It stays inside the always-scrollable ListView rather than becoming a Center
+            // widget, because that is what keeps pull-to-refresh alive on a screen with
+            // nothing to scroll — the reason the note above this build method exists. The
+            // minimum height is the viewport less the padding, floored at zero so a very
+            // short viewport (a split-screen phone, a large text scale) cannot ask for a
+            // negative constraint and throw.
+            return LayoutBuilder(
+              builder: (context, box) => ListView(
+                padding: _padding,
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  ?header,
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: math.max(0, box.maxHeight - _padding.vertical),
+                    ),
+                    child: Center(child: empty),
+                  ),
+                ],
+              ),
             );
           }
           return _Rows<T>(

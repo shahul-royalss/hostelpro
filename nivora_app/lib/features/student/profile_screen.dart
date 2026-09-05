@@ -3,6 +3,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/auth/auth_controller.dart';
+import '../../core/router/router.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
@@ -43,7 +45,6 @@ class _Profile extends ConsumerWidget {
     final t = Theme.of(context);
     final rent = ref.watch(myRentThisMonthProvider);
     final roommates = ref.watch(roommatesProvider);
-    final contacts = ref.watch(hostelContactsProvider);
 
     return RefreshIndicator(
       onRefresh: () {
@@ -106,7 +107,7 @@ class _Profile extends ConsumerWidget {
                 DetailRow(label: 'Phone', value: me.phone),
                 DetailRow(label: 'Email', value: me.email),
                 DetailRow(label: 'Joined', value: dayLabel(me.dateOfJoining)),
-                DetailRow(label: 'Agreed rent', value: '${rupees(me.monthlyFee)} a month'),
+                DetailRow(label: 'Agreed rent', value: '${rupees(me.monthlyFee)} per month'),
                 DetailRow(label: 'Guardian', value: me.guardianName),
                 DetailRow(label: 'Guardian phone', value: me.guardianPhone),
                 DetailRow(label: 'Address', value: me.permanentAddress),
@@ -116,22 +117,37 @@ class _Profile extends ConsumerWidget {
           ),
 
           const SizedBox(height: Space.xl),
-          // A hostel is a building — the rooms domain — and the building glyph says so.
+          // ── WHY "Your hostel" IS NOT HERE ────────────────────────────────────────────────
+          // It was: name, address, warden, manager, owner and the house rules. The product
+          // owner removed it — "students don't need that section in profile" — and they are
+          // right that it is not part of a person's own record. The read itself is NOT dead:
+          // hostelContactsProvider still backs the home screen and the payment receipt, so
+          // deleting the section removed a duplicate, not a capability.
           const SectionHeading(
-            title: 'Your hostel',
-            domain: NivoraDomain.rooms,
-            icon: Icons.apartment_rounded,
+            title: 'Account',
+            caption: 'Your sign-in, on this phone.',
+            domain: NivoraDomain.security,
+            icon: Icons.lock_rounded,
           ),
-          AsyncSection<HostelContacts?>(
-            value: contacts,
-            onRetry: () => ref.invalidate(hostelContactsProvider),
-            builder: (card) => card == null
-                ? const EmptyNote(
-                    icon: Icons.apartment_outlined,
-                    title: 'Hostel details unavailable',
-                    message: 'Pull down to try again.',
-                  )
-                : _HostelCard(contacts: card),
+          OutlineCard(
+            child: Column(
+              children: [
+                _AccountAction(
+                  icon: Icons.password_rounded,
+                  label: 'Change password',
+                  caption: 'Confirm it is you, then choose a new one.',
+                  onTap: () => Navigator.of(context).pushNamed(changePasswordRoute),
+                ),
+                Divider(color: t.colorScheme.outlineVariant, height: Space.lg),
+                _AccountAction(
+                  icon: Icons.logout_rounded,
+                  label: 'Sign out',
+                  caption: 'You will need your password to get back in.',
+                  danger: true,
+                  onTap: () => ref.read(authControllerProvider.notifier).signOut(),
+                ),
+              ],
+            ),
           ),
 
           const SizedBox(height: Space.xl),
@@ -250,75 +266,60 @@ class _RoommateRow extends StatelessWidget {
   }
 }
 
-class _HostelCard extends StatelessWidget {
-  const _HostelCard({required this.contacts});
-  final HostelContacts contacts;
+/// One row of the Account card: an icon, a label, a line of consequence, and a tap target that
+/// covers the whole width.
+///
+/// The two actions it carries were both reachable before — sign-out from the header icon on
+/// every screen, the password change only by being FORCED there at sign-in when
+/// `must_change_password` is set. Neither was discoverable from the one screen a resident
+/// thinks of as theirs, which is what the product owner was reporting. This does not replace
+/// the header icon; a resident who has learned it keeps it.
+class _AccountAction extends StatelessWidget {
+  const _AccountAction({
+    required this.icon,
+    required this.label,
+    required this.caption,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String caption;
+  final VoidCallback onTap;
+
+  /// Sign-out ends the session; it is tinted with the same red the rest of the app uses for an
+  /// action with a consequence, rather than being given a different one of its own.
+  final bool danger;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final rules = contacts.rules?.trim();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        OutlineCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(contacts.hostelName, style: t.textTheme.titleMedium),
-              if (contacts.address != null) ...[
-                const SizedBox(height: Space.xxs),
-                SelectionArea(
-                  child: Text(contacts.address!, style: t.textTheme.bodyMedium),
-                ),
-              ],
-              const SizedBox(height: Space.sm),
-              Divider(color: t.colorScheme.outlineVariant),
-              const SizedBox(height: Space.xs),
-              // Names and numbers come from st_hostel_contacts(), a SECURITY DEFINER function,
-              // because a resident cannot read public.users at all (§4.8). A join would have
-              // been refused; this hands back exactly the fields they are allowed to have.
-              DetailRow(
-                label: 'Warden',
-                value: _person(contacts.wardenName, contacts.wardenPhone),
-                missing: 'No warden listed',
-              ),
-              DetailRow(
-                label: 'Manager',
-                value: _person(contacts.managerName, contacts.managerPhone),
-                missing: 'No manager listed',
-              ),
-              DetailRow(
-                label: 'Owner',
-                value: contacts.ownerName,
-                missing: 'Not listed',
-              ),
-            ],
-          ),
-        ),
-        if (rules != null && rules.isNotEmpty) ...[
-          const SizedBox(height: Space.md),
-          OutlineCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const CapsLabel('Hostel rules'),
-                const SizedBox(height: Space.xs),
-                SelectionArea(child: Text(rules, style: t.textTheme.bodyMedium)),
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
+    final tone = danger ? t.colorScheme.error : t.colorScheme.onSurface;
 
-  /// "Priya Nair · 9876500003", or just whichever half exists. A post can be vacant, and a
-  /// staff member can be on record without a number.
-  String? _person(String? name, String? phone) {
-    if (name == null && phone == null) return null;
-    if (phone == null) return name;
-    if (name == null) return phone;
-    return '$name · $phone';
+    return InkWell(
+      onTap: onTap,
+      borderRadius: Radii.rCard,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: Space.xs),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: tone),
+            const SizedBox(width: Space.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: t.textTheme.bodyLarge?.copyWith(color: tone)),
+                  const SizedBox(height: Space.xxs),
+                  Text(caption, style: t.textTheme.bodySmall),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 20, color: t.colorScheme.outline),
+          ],
+        ),
+      ),
+    );
   }
 }

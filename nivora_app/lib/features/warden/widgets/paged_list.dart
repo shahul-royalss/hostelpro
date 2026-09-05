@@ -1,5 +1,7 @@
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -67,10 +69,24 @@ class PagedList<T> extends StatelessWidget {
         ),
         builder: (page) {
           if (page.isEmpty) {
-            return ListView(
-              padding: padding,
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [?header, empty],
+            // Centred in the viewport rather than stacked at the top — see the same change
+            // in the student list. It stays inside the always-scrollable ListView so
+            // pull-to-refresh survives on a screen with nothing to scroll, and the minimum
+            // height is floored at zero so a short viewport cannot ask for a negative one.
+            return LayoutBuilder(
+              builder: (context, box) => ListView(
+                padding: padding,
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  ?header,
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: math.max(0, box.maxHeight - padding.vertical),
+                    ),
+                    child: Center(child: empty),
+                  ),
+                ],
+              ),
             );
           }
           return _PagedRows<T>(

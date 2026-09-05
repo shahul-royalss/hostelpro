@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
+import '../../../shared/smiley.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
 import '../../common/refresh.dart';
@@ -80,20 +81,21 @@ class WardenComplaintsScreen extends ConsumerWidget {
             ],
           ),
         ),
-        empty: EmptyState(
-          icon: filter == ComplaintFilter.needsAction
-              ? Icons.check_circle_outline_rounded
-              : Icons.inbox_outlined,
-          title: filter == ComplaintFilter.needsAction
-              ? 'Nothing outstanding'
-              : 'No ${filter.label.toLowerCase()} complaints',
-          detail: filter == ComplaintFilter.needsAction
-              ? 'Every complaint in this hostel has been resolved.'
-              : 'Try another filter.',
-          // An empty queue is the good outcome here, and the halo says so in mint rather than
-          // in the neutral grey a missing list gets.
-          tone: filter == ComplaintFilter.needsAction ? NivoraColors.success : null,
-        ),
+        // THIS LIST IS FILTERED, and that changes what empty is allowed to say. On the
+        // needs-action filter an empty queue means every complaint in the hostel has been
+        // dealt with — good news, and it gets the smile in mint. On any other filter it only
+        // means this filter matched nothing, and "No complaints yet" there would be a lie
+        // while open complaints sit one tab away. That arm keeps its filter-aware wording.
+        empty: filter == ComplaintFilter.needsAction
+            ? const SmileyEmpty(
+                title: 'No complaints yet',
+                tone: NivoraColors.success,
+              )
+            : EmptyState(
+                icon: Icons.inbox_outlined,
+                title: 'No ${filter.label.toLowerCase()} complaints',
+                detail: 'Try another filter.',
+              ),
         itemBuilder: (context, complaint) => _ComplaintRow(complaint: complaint),
       ),
     );

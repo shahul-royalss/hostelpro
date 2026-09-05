@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
+import '../../shared/smiley.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../../shared/glass/glass.dart';
-import '../../shared/illustrations.dart';
 import 'owner_format.dart';
 import 'owner_providers.dart';
 import 'owner_students_screen.dart';
@@ -84,14 +84,10 @@ class _Body extends ConsumerWidget {
         ),
         data: (page) => page.items.isEmpty
             ? const _Page(
-                child: EmptyNote(
-                  icon: Icons.check_circle_outline_rounded,
-                  // Unfiltered: this list has no search and no status filter, so empty here
-                  // always means "nobody has raised one", never "no match".
-                  illustration: EmptyArt.complaints,
-                  title: 'Nothing outstanding',
-                  message: 'Complaints your residents raise appear here, newest first.',
-                ),
+                // Unfiltered: this list has no search and no status filter, so empty here
+                // always means "nobody has raised one", never "no match" — so it is safe to
+                // say exactly that.
+                child: SmileyEmpty(title: 'No complaints yet'),
               )
             : ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
