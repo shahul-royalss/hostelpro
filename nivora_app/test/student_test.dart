@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:mobile/core/auth/session.dart';
 import 'package:mobile/core/theme/theme.dart';
 import 'package:mobile/core/theme/tokens.dart';
 import 'package:mobile/data/models/models.dart';
@@ -704,6 +705,40 @@ void main() {
       await show(tester, NoticeTile(notice: notice(NoticeAudience.all)));
       expect(find.text('FOR RESIDENTS'), findsNothing);
       expect(find.text('Water supply maintenance on Sunday'), findsOneWidget);
+    });
+
+    testWidgets('a notice says who posted it, and what they are', (tester) async {
+      await show(
+        tester,
+        NoticeTile(
+          notice: notice(NoticeAudience.all),
+          author: NoticeAuthor(
+            userId: 'u',
+            fullName: 'Priya Nair',
+            role: UserRole.warden,
+          ),
+        ),
+      );
+
+      expect(find.text('Priya Nair'), findsOneWidget);
+      expect(find.text(UserRole.warden.label), findsOneWidget);
+      // The title is still the title — the byline sits above it, it does not replace it.
+      expect(find.text('Water supply maintenance on Sunday'), findsOneWidget);
+    });
+
+    testWidgets('a notice whose author cannot be resolved still renders, without a byline',
+        (tester) async {
+      // public.notice_authors returns nothing for an author whose account has been removed,
+      // and the map is briefly absent while it is in flight. Neither may cost a resident the
+      // notice itself, which is the part that matters.
+      await show(tester, NoticeTile(notice: notice(NoticeAudience.all)));
+
+      expect(find.text('Priya Nair'), findsNothing);
+      expect(find.text('Water supply maintenance on Sunday'), findsOneWidget);
+      expect(
+        find.text('The overhead tank will be cleaned this Sunday between 10 am and 1 pm.'),
+        findsOneWidget,
+      );
     });
   });
 

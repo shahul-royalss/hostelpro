@@ -685,6 +685,19 @@ final roommatesProvider = FutureProvider.autoDispose<List<Roommate>>((ref) {
   return ref.watch(studentRepositoryProvider).roommates();
 });
 
+/// Who wrote each notice. public.notice_authors.
+///
+/// Keyed by hostel so a manager moving between properties does not read one hostel's names
+/// against another's notices. Held for the session like its neighbours: the names change about
+/// as often as the staff do, and re-fetching them on every scroll would be three round trips a
+/// page for text that has not moved.
+final noticeAuthorsProvider =
+    FutureProvider.autoDispose.family<Map<String, NoticeAuthor>, String>((ref, hostelId) async {
+  holdForSession(ref);
+  final list = await ref.watch(noticeRepositoryProvider).authors(hostelId);
+  return {for (final a in list) a.userId: a};
+});
+
 /// Who to call about what. public.st_hostel_contacts.
 final hostelContactsProvider = FutureProvider.autoDispose<HostelContacts?>((ref) {
   holdForSession(ref);

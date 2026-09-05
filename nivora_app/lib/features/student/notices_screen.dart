@@ -37,6 +37,10 @@ class _Notices extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final provider = noticesProvider(hostelId);
+    // The names arrive separately from the rows and are allowed to be late: `.value` rather
+    // than a watch that could hold the list behind a second request. A notice renders without
+    // a byline for the moment before the map lands, and gains one when it does.
+    final authors = ref.watch(noticeAuthorsProvider(hostelId)).value;
     return StudentPagedList<Notice>(
       value: ref.watch(provider),
       // BOUNDED. The bare `await ref.read(provider.future)` had no deadline, and riverpod 3
@@ -56,7 +60,11 @@ class _Notices extends ConsumerWidget {
         title: 'No notices yet',
         message: 'Announcements from the hostel owner appear here.',
       ),
-      itemBuilder: (_, notice) => NoticeTile(notice: notice, expanded: true),
+      itemBuilder: (_, notice) => NoticeTile(
+        notice: notice,
+        author: authors?[notice.authorUserId],
+        expanded: true,
+      ),
     );
   }
 }

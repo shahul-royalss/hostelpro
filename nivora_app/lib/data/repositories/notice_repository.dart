@@ -77,6 +77,18 @@ final class NoticeRepository extends Repository implements NoticeWrites {
   ///
   /// `author_user_id` must equal auth.uid() — the insert policy checks it, so a notice cannot
   /// be published under another name even by a caller who edits the request. Posting also fans
+  /// Display name and role for everyone who has posted a live notice at this hostel.
+  ///
+  /// One call per screen rather than a join per row: the set of authors at a hostel is a handful
+  /// of staff, the notice list is paged, and joining would mean re-reading the same three names
+  /// on every page. The screen maps author_user_id onto this and falls back to nothing when an
+  /// id is missing — a notice whose author has since been deleted still renders, without a name.
+  Future<List<NoticeAuthor>> authors(String hostelId) => guard(() async {
+        final data = await db.rpc('notice_authors', params: {'p_hostel_id': hostelId});
+        final rows = (data as List).cast<Map<String, dynamic>>();
+        return rows.map(NoticeAuthor.fromJson).toList(growable: false);
+      });
+
   /// out a notification to every user in the audience, via app.announcements_after_insert.
   @override
   Future<Notice> create({

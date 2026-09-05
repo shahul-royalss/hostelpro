@@ -403,7 +403,11 @@ class _LatestNotices extends ConsumerWidget {
             return Column(
               children: [
                 for (final notice in page.items.take(_shown)) ...[
-                  NoticeTile(notice: notice),
+                  NoticeTile(
+                    notice: notice,
+                    author: ref.watch(noticeAuthorsProvider(hostelId)).value?[
+                        notice.authorUserId],
+                  ),
                   const SizedBox(height: Space.xs),
                 ],
               ],
