@@ -54,6 +54,13 @@ comment on function public.notice_authors(uuid) is
   'residents cannot read public.users directly (§4.8) and this is not a way around that.';
 
 revoke all on function public.notice_authors(uuid) from public;
+-- AND FROM anon SPECIFICALLY. Supabase grants EXECUTE on a newly created public function to the
+-- anon role by default, and `revoke ... from public` does not touch a grant held by a named role
+-- — so the line above leaves anon holding it, which the database linter flags and which
+-- st_hostel_contacts (the same shape of read) does not do. The gate inside already returns zero
+-- rows to a caller with no auth.uid(), verified against production, so this is closing the door
+-- rather than plugging a leak.
+revoke execute on function public.notice_authors(uuid) from anon;
 grant execute on function public.notice_authors(uuid) to authenticated;
 
 -- ═══ AFTER APPLYING ═══
