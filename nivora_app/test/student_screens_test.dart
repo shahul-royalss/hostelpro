@@ -224,8 +224,7 @@ void main() {
             'rpc_hostel_stats test, and in StudentHomeScreen.');
   });
 
-  testWidgets('home leads with what is owed, then the room, then what is outstanding',
-      (tester) async {
+  testWidgets('home leads with what is owed, then the essentials band', (tester) async {
     await showScreen(
       tester,
       const StudentHomeScreen(),
@@ -234,30 +233,34 @@ void main() {
       notices: [_notice],
     );
 
-    expect(find.text('Good morning, Rohan').evaluate().length +
-        find.text('Good afternoon, Rohan').evaluate().length +
-        find.text('Good evening, Rohan').evaluate().length, 1);
+    // The greeting is now "Hi Rohan," with the time of day and the date beneath it, which is
+    // the reference's shape. The hostel name moved to the trailing slot of the same card.
+    expect(find.text('Hi Rohan,'), findsOneWidget);
     expect(find.text('Sunrise Residency'), findsOneWidget);
 
-    // Rent, first and loudest.
+    // Rent, first and loudest, still full width and still carrying the one cream button.
     expect(find.text('RENT · AUGUST'), findsOneWidget);
     expect(find.text('still to pay'), findsOneWidget);
 
-    // Room and bed, from the same ledger row.
+    // Then the band. Each tile is a count and a destination; the lists they replaced live on
+    // the screens the tiles open.
+    expect(find.text('ESSENTIALS'), findsOneWidget);
+    expect(find.text('Your room'), findsOneWidget);
     expect(find.text('Room 101 · Bed 3'), findsOneWidget);
-    expect(find.text('Sharing with 2 other residents'), findsOneWidget);
+    expect(find.text('Complaints'), findsOneWidget);
+    expect(find.text('Notices'), findsOneWidget);
 
-    // What is open, and what was announced.
-    expect(find.text('1 complaint still open'), findsOneWidget);
-    expect(find.text('Bathroom tap leaking on 1st floor'), findsOneWidget);
-    expect(find.text('Water supply maintenance on Sunday'), findsOneWidget);
+    // And the band really is BELOW the rent, which is the one ordering constraint the owner
+    // set on this screen: nothing may push "still to pay" off the first view.
+    final rent = tester.getTopLeft(find.text('RENT · AUGUST')).dy;
+    final band = tester.getTopLeft(find.text('ESSENTIALS')).dy;
+    expect(rent, lessThan(band), reason: 'rent must stay first on the screen');
   });
 
-  testWidgets("today's food sits under the rent card, never above it", (tester) async {
-    // THE OWNER'S ONE CONSTRAINT ON WHERE THIS WENT: money first, food second. Rent is why
-    // this app gets opened; the menu is what gets read most often after it. Anything that
-    // pushes "still to pay" off the first screen is a regression, and it is a regression a
-    // screenshot review would not catch on a tall test window.
+  testWidgets("today's food is a tile under the rent, showing the next meal", (tester) async {
+    // THE OWNER'S ONE CONSTRAINT ON WHERE THIS WENT SURVIVES THE REWORK: money first, food
+    // second. Rent is why the app gets opened; anything that pushes "still to pay" off the
+    // first screen is a regression a screenshot review would not catch on a tall test window.
     final today = MenuDay.of(DateTime.now());
     await showScreen(
       tester,
@@ -272,18 +275,15 @@ void main() {
 
     final rent = tester.getTopLeft(find.text('RENT · AUGUST')).dy;
     final food = tester.getTopLeft(find.text("Today's food")).dy;
-    final complaints = tester.getTopLeft(find.text('Your complaints')).dy;
     expect(rent, lessThan(food), reason: 'rent must stay first on the screen');
-    expect(food, lessThan(complaints), reason: 'food is asked about more often than a ticket');
 
-    // Today's two written meals, and the two nobody has written — said as unwritten, not as
-    // an empty plate.
-    expect(find.text('Idli, sambar, coconut chutney'), findsOneWidget);
-    expect(find.text('Chapati, dal fry'), findsOneWidget);
-    expect(find.text('Not planned yet'), findsNWidgets(2));
-
-    // And the rest of the week is one tap away rather than twenty-eight lines down the page.
-    expect(find.text('WHOLE WEEK'), findsOneWidget);
+    // ONE MEAL, NOT FOUR. A quarter tile cannot hold a day, so it holds the meal the clock
+    // says is next — and it must be one of the two that were actually written, never the
+    // "Not set yet" that stands in for the two nobody filled.
+    final shown = find.text('Idli, sambar, coconut chutney').evaluate().length +
+        find.text('Chapati, dal fry').evaluate().length +
+        find.text('Not set yet').evaluate().length;
+    expect(shown, 1, reason: 'the tile shows exactly one meal');
   });
 
   testWidgets('a hostel that has planned nothing is not an error on the home screen',
@@ -292,17 +292,21 @@ void main() {
     // who fills the menu in, not a failed read — the two must never look the same.
     await showScreen(tester, const StudentHomeScreen(), rent: partialRow);
 
-    expect(find.text('No menu put up yet'), findsOneWidget);
+    expect(find.text("Today's food"), findsOneWidget);
+    expect(find.text('Not set yet'), findsOneWidget);
     expect(find.byType(ErrorNote), findsNothing);
   });
 
-  testWidgets('home with nothing outstanding says so rather than showing an empty list',
+  testWidgets('a resident with nothing outstanding gets zeroes, not empty lists',
       (tester) async {
     await showScreen(tester, const StudentHomeScreen(), rent: partialRow);
 
-    expect(find.text('Nothing open'), findsOneWidget);
-    expect(find.text('Nothing outstanding'), findsOneWidget);
-    expect(find.text('No notices yet'), findsOneWidget);
+    // The old home drew three empty-state cards here, one under another, for the three things
+    // that happened to be empty. The band says the same thing in three figures.
+    expect(find.text('Complaints'), findsOneWidget);
+    expect(find.text('Notices'), findsOneWidget);
+    expect(find.text('0'), findsNWidgets(2));
+    expect(find.byType(ErrorNote), findsNothing);
   });
 
   testWidgets('no student screen reads rpc_hostel_stats', (tester) async {
@@ -486,31 +490,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a failed roommate read does not silently delete the sharing line',
-      (tester) async {
-    // `roommates.value?.length` swallowed this: the line just disappeared, which reads as a
-    // room with nobody else in it.
-    await showScreen(
-      tester,
-      const StudentHomeScreen(),
-      rent: partialRow,
-      roommatesFailure: const OfflineFailure('no route to host'),
-    );
-
-    // The room and bed came from the ledger and are unaffected.
-    expect(find.text('Room 101 · Bed 3'), findsOneWidget);
-    expect(
-      find.text('Could not check who else is in this room. Pull down to try again.'),
-      findsOneWidget,
-    );
-    expect(find.text('You have the room to yourself'), findsNothing);
-    // One failed secondary read is not a reason to put a panel over the rent card.
-    expect(find.byType(ErrorNote), findsNothing);
-  });
-
   testWidgets('a failed complaints read leaves no count standing over it', (tester) async {
-    // The heading counts what is open. A count is a claim, and there is nothing to back it up
-    // when the read that produced it failed.
+    // A count is a claim, and there is nothing to back it up when the read that produced it
+    // failed. The tile keeps its title and its destination and carries no figure — the same
+    // guarantee the old section gave by refusing to print a heading count.
     await showScreen(
       tester,
       const StudentHomeScreen(),
@@ -518,26 +501,28 @@ void main() {
       complaintsFailure: const ServerFailure('502'),
     );
 
-    expect(find.text('Your complaints'), findsOneWidget);
-    expect(find.byType(ErrorNote), findsOneWidget);
-    expect(find.textContaining('still open'), findsNothing);
-    // "Nothing open" is the answer for a SUCCESSFUL read that came back empty.
-    expect(find.text('Nothing open'), findsNothing);
-    expect(find.text('Nothing outstanding'), findsNothing);
+    expect(find.text('Complaints'), findsOneWidget);
+    // "Still open" is the label that only appears ABOVE a figure, so its absence is the
+    // absence of the figure. Asserting no '0' anywhere would be wrong: the notices tile on
+    // the same screen legitimately shows 0, because THAT read succeeded and was empty.
+    expect(find.text('Still open'), findsNothing);
   });
 
   testWidgets('a refusal is not dressed up as a retry', (tester) async {
-    // 42501 from `st_my_roommates()`. Retrying cannot change an RLS decision, so the copy must
-    // not send a resident back to a gesture that will refuse them again.
+    // 42501 from `st_my_roommates()`. Retrying cannot change an RLS decision, so the screen
+    // must not send a resident back to a gesture that will refuse them again. This lives on
+    // Profile now: the room card that used to carry this copy on Home went when the home
+    // screen became a band of tiles, and Profile is where the roommate read is drawn.
     await showScreen(
       tester,
-      const StudentHomeScreen(),
+      const StudentProfileScreen(),
       rent: partialRow,
       roommatesFailure: const AccessDeniedFailure('insufficient_privilege'),
     );
 
-    expect(find.text('Who else is in this room is not available to you.'), findsOneWidget);
+    expect(find.byType(ErrorNote), findsOneWidget);
     expect(find.textContaining('Pull down'), findsNothing);
+    expect(find.text('Try again'), findsNothing);
   });
 
   testWidgets('profile states one roommate failure, in one place', (tester) async {

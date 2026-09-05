@@ -6,19 +6,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
-import '../../shared/glass/glass.dart';
-import '../../shared/illustrations.dart';
-import 'complaint_detail_sheet.dart';
+import '../../shared/dashboard.dart';
 import 'complaints_screen.dart';
+import 'fees_screen.dart';
 import 'menu_screen.dart';
 import 'notices_screen.dart';
+import 'profile_screen.dart';
 import '../auth/verify_email_screen.dart';
 import 'student_providers.dart';
 import 'widgets/common.dart';
-import 'widgets/complaint.dart';
 import 'widgets/format.dart';
 import 'widgets/menu.dart';
-import 'widgets/notice.dart';
 import 'widgets/rent.dart';
 
 /// Home answers one question: what do I need to know or do today?
@@ -56,7 +54,6 @@ class _Home extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final month = ref.watch(currentPeriodMonthProvider);
     final rent = ref.watch(myRentThisMonthProvider);
-    final roommates = ref.watch(roommatesProvider);
     final contacts = ref.watch(hostelContactsProvider);
 
     return RefreshIndicator(
@@ -72,7 +69,26 @@ class _Home extends ConsumerWidget {
           // no address on those accounts to prove. It appears only for a resident whose warden
           // collected a real email, which is then that resident's login id.
           const VerifyEmailBanner(),
-          _Greeting(name: me.fullName, hostelName: contacts.value?.hostelName),
+          GreetingHeader(
+            name: firstName(me.fullName),
+            // "Good evening · 5 Sep 2026". The reference puts the weather beside this; NIVORA
+            // has none, and asking for a location permission to decorate a greeting would be a
+            // poor trade. The hostel's name goes in the trailing slot instead — it is the one
+            // fact that situates the reader, and it is what the old masthead showed.
+            subtitle: '${greetingFor(DateTime.now())} · ${dayLabel(DateTime.now())}',
+            trailing: contacts.value?.hostelName == null
+                ? null
+                : ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 120),
+                    child: Text(
+                      contacts.value!.hostelName,
+                      textAlign: TextAlign.end,
+                      style: Theme.of(context).textTheme.labelMedium,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+          ),
           const SizedBox(height: Space.md),
 
           // The rent card first, always. It is the reason this app gets opened.
@@ -84,136 +100,48 @@ class _Home extends ConsumerWidget {
           AsyncSection<FeeLedgerRow?>(
             value: rent,
             onRetry: () => ref.invalidate(myRentThisMonthProvider),
-            loading: const Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SkeletonCard(lines: 4),
-                SizedBox(height: Space.sm),
-                SkeletonCard(lines: 1),
-              ],
-            ),
-            builder: (row) => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                RentCard(periodMonth: month, row: row),
-                const SizedBox(height: Space.sm),
-                RoomBedCard(
-                  roomNumber: row?.roomNumber,
-                  bedNumber: row?.bedNumber,
-                  // The roommate count is a SEPARATE read and keeps its own states. The whole
-                  // AsyncValue goes across, not `roommates.value?.length`, which collapsed
-                  // "still loading" and "st_my_roommates() failed" into the same silence and so
-                  // deleted the line outright when the read failed.
-                  roommates: roommates,
-                ),
-              ],
-            ),
+            loading: const SkeletonCard(lines: 4),
+            // The room moved into the essentials band, so this block is the rent alone and no
+            // longer needs a Column. The roommate count went with it — the band's Room tile
+            // carries the room and bed, and the roommate list lives on Profile, which is the
+            // screen that can show who they are rather than just how many.
+            builder: (row) => RentCard(periodMonth: month, row: row),
           ),
 
-          const SizedBox(height: Space.md),
-          _QuickActions(me: me),
-
-          // MONEY FIRST, FOOD SECOND. The menu sits BELOW the rent card and the two shortcuts
-          // and above everything else: rent is why this app gets opened and must never be
-          // pushed off the first screen, but "what is for dinner" is asked far more often than
-          // "has my complaint moved", and it was worth the place ahead of those.
+          // ── THE ESSENTIALS BAND REPLACED FOUR STACKED SECTIONS ──────────────────────────
           //
-          // TODAY ONLY, WITH THE WEEK ONE TAP AWAY. Seven days times four meals is twenty-eight
-          // lines, which on a phone would bury the complaints and the noticeboard under a
-          // fortnight of scrolling. See [StudentMenuScreen] for the full week.
+          // This screen used to run: rent card, two shortcut buttons, today's menu, your open
+          // complaints, latest notices — five full-width blocks, each with its own heading,
+          // its own loading skeleton and its own error panel, all competing at the same
+          // visual weight. That is the "messy" the product owner was pointing at, and the
+          // reference they sent answers it the same way every good dashboard does: put the
+          // NUMBERS in a compact coloured band and let a tap open the screen that has the
+          // detail.
+          //
+          // Nothing was lost. Each tile is the entrance to the screen whose section used to
+          // sit here, and every one of those screens already existed as a tab or a push page.
+          // What went is the duplication of showing a resident their three most recent
+          // notices on Home and then again, in full, on Notices.
+          //
+          // THE RENT CARD STAYS FULL WIDTH, above the band. It is not an essential among
+          // others: it is the reason the app gets opened, it carries the one cream button on
+          // the screen, and shrinking it into a quarter tile would bury the action this
+          // product exists to make easy.
           const SizedBox(height: Space.xl),
-          _TodaysMenu(hostelId: me.hostelId),
+          const DashboardBand(label: 'Essentials'),
+          _Essentials(me: me, rent: rent),
 
           const SizedBox(height: Space.xl),
-          _OpenComplaints(me: me),
+          const DashboardBand(label: 'Tools'),
+          _Tools(me: me),
 
-          const SizedBox(height: Space.xl),
-          _LatestNotices(hostelId: me.hostelId),
         ],
       ),
     );
   }
 }
 
-class _Greeting extends StatelessWidget {
-  const _Greeting({required this.name, required this.hostelName});
-  final String name;
 
-  /// The hostel's name, or nothing.
-  ///
-  /// Null covers three things and renders identically in all of them: the contact card is still
-  /// loading, the read failed, and the resident has no readable hostel record. That is a
-  /// deliberate exception to the rule the rest of this screen follows, and it is safe for one
-  /// reason only — a withheld subtitle states nothing, so there is no wrong action to take on
-  /// it. Profile draws the same card with a real failure panel, which is where the question
-  /// "why can I not see my hostel" gets answered. What this must never do is print a name it
-  /// does not have.
-  final String? hostelName;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    // The mockups' masthead is a quiet line over a loud one — "Welcome back," then the name at
-    // headline-lg-mobile. Ours is the same shape with real data in both halves: the small line
-    // names the hostel this account belongs to instead of a fixed pleasantry, and the big line
-    // is the greeting the clock decides.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (hostelName != null) ...[
-          Text(hostelName!, style: t.textTheme.bodyMedium),
-          const SizedBox(height: Space.xxs),
-        ],
-        Text('${greetingFor(DateTime.now())}, ${firstName(name)}',
-            style: t.textTheme.displaySmall),
-      ],
-    );
-  }
-}
-
-class _QuickActions extends StatelessWidget {
-  const _QuickActions({required this.me});
-  final Student me;
-
-  /// NEITHER OF THESE IS THE CREAM BUTTON, and neither is a hairline box any more.
-  ///
-  /// The cream fill is this design's one loud object — `bg-[#f5f3ee]` on `text-[#0b0d0f]`, the
-  /// only maximally-bright surface in a near-black palette — and it is spent on the rent card's
-  /// "Pay now" a short scroll above. "Complaint" used to be a second cream fill under it, which
-  /// was two primary actions on one screen: the eye gets no answer to "what am I here to do".
-  /// These two are shortcuts, not the point of the screen.
-  ///
-  /// They were the design's hairline outlined box (4:1587) for a while, which said "button" and
-  /// nothing else. A [DomainButton] says where the button GOES: a soft fill in the destination's
-  /// own colour — amber for complaints, blue for the noticeboard — with the label in that ink.
-  /// It is Material's tonal weight, quieter than the cream and louder than an outline, and it is
-  /// the same amber the open-complaint pill and the same blue the notices glyph already wear, so
-  /// a resident who taps one lands on a screen that is recognisably the one they chose.
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: DomainButton(
-            domain: NivoraDomain.complaints,
-            icon: Icons.add_comment_rounded,
-            label: 'Complaint',
-            onPressed: () => raiseComplaint(context, me),
-          ),
-        ),
-        const SizedBox(width: Space.xs),
-        Expanded(
-          child: DomainButton(
-            domain: NivoraDomain.notices,
-            icon: Icons.campaign_rounded,
-            label: 'Notices',
-            onPressed: () => _open(context, 'Notices', const StudentNoticesScreen()),
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 /// Opens a tab body as a pushed page. See [StudentPushPage] for why "see all" pushes rather
 /// than switching tabs.
@@ -238,183 +166,130 @@ void _open(BuildContext context, String title, Widget child) {
 /// meals is blank. The first two are said in words below and the third is [MealLine]'s job. A
 /// single "no menu" for all three would tell a resident whose hostel has planned every other
 /// day that their hostel does not do menus.
-class _TodaysMenu extends ConsumerWidget {
-  const _TodaysMenu({required this.hostelId});
-  final String hostelId;
+
+/// The four tiles a resident opens the app for, after the rent.
+///
+/// Each carries at most one number and is the entrance to the screen that used to occupy a
+/// full-width section here. The reads are the same providers those sections used, so nothing
+/// new is fetched — the difference is that a count is drawn instead of a list.
+///
+/// A TILE NEVER INVENTS A NUMBER IT DOES NOT HAVE. Every value below is null while its read is
+/// in flight and null if the read failed, and a null value renders the compact tile: the icon
+/// and the destination, without a figure. That is deliberate and it is the rule the old
+/// sections followed too — a dash or a zero standing in for "we do not know yet" is the kind of
+/// small lie a resident makes a decision on.
+class _Essentials extends ConsumerWidget {
+  const _Essentials({required this.me, required this.rent});
+
+  final Student me;
+  final AsyncValue<FeeLedgerRow?> rent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final provider = weeklyMenuProvider(hostelId);
-    final menu = ref.watch(provider);
+    final row = rent.value;
+    final openQuery = ComplaintQuery(hostelId: me.hostelId, openOnly: true);
+    final open = ref.watch(complaintsProvider(openQuery)).value;
+    final notices = ref.watch(noticesProvider(me.hostelId)).value;
+    final menu = ref.watch(weeklyMenuProvider(me.hostelId)).value;
     final today = MenuDay.of(DateTime.now());
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeading(
-          title: "Today's food",
-          caption: today.label,
-          // The saffron plate: the same glyph, in the same colour, that stands for the menu on
-          // every screen it appears on. See [NivoraDomain].
-          domain: NivoraDomain.food,
-          trailing: SeeAllButton(
-            label: 'Whole week',
-            onPressed: () => _open(context, 'Meal menu', const StudentMenuScreen()),
-          ),
+    final room = row?.roomNumber;
+    final bed = row?.bedNumber;
+
+    return EssentialsGrid(
+      tiles: [
+        EssentialTile(
+          domain: NivoraDomain.rooms,
+          icon: Icons.bed_rounded,
+          title: 'Your room',
+          label: room == null ? null : 'Allotted',
+          value: room == null ? null : 'Room $room${bed == null ? '' : ' · Bed $bed'}',
+          onTap: () => _open(context, 'Profile', const StudentProfileScreen()),
         ),
-        AsyncSection<WeeklyMenu>(
-          value: menu,
-          onRetry: () => ref.invalidate(provider),
-          builder: (week) {
-            if (week.plannedOn(today) == 0) {
-              return EmptyNote(
-                icon: Icons.restaurant_menu_rounded,
-                title: week.isEmpty ? 'No menu put up yet' : 'Nothing set for today yet',
-                // Both sentences are about who fills it in, because that is the only thing a
-                // resident can act on: the menu is written by the manager and read-only here.
-                message: week.isEmpty
-                    ? 'Your hostel manager writes the week here.'
-                    : 'The manager has planned other days — tap Whole week to look ahead.',
-                // Not bad news, just an unwritten page — so the glyph keeps the section's own
-                // saffron rather than the neutral outline a merely-empty list gets.
-                tone: NivoraDomain.food.tone,
-              );
-            }
-            // THE ONE DOMAIN-TINTED CARD ON THIS SCREEN. The rent card above carries a status
-            // and keeps its status tone; this card carries none — it is simply the subject of
-            // its section — so it may take the food colour on its ground. See [DayMenuCard.hero].
-            return DayMenuCard(day: today, week: week, isToday: true, hero: true);
-          },
+        EssentialTile(
+          domain: NivoraDomain.complaints,
+          icon: Icons.report_problem_rounded,
+          title: 'Complaints',
+          label: open == null ? null : 'Still open',
+          value: open == null ? null : '${open.items.length}${open.hasMore ? '+' : ''}',
+          // The dot is the one on the reference's fee tile: something here is waiting on
+          // somebody. An open complaint is waiting on the warden, so it earns one.
+          flagged: (open?.items.isNotEmpty ?? false),
+          onTap: () => _open(context, 'Complaints', const StudentComplaintsScreen()),
+        ),
+        EssentialTile(
+          domain: NivoraDomain.notices,
+          icon: Icons.campaign_rounded,
+          title: 'Notices',
+          label: notices == null ? null : 'Posted',
+          value: notices == null
+              ? null
+              : '${notices.items.length}${notices.hasMore ? '+' : ''}',
+          onTap: () => _open(context, 'Notices', const StudentNoticesScreen()),
+        ),
+        EssentialTile(
+          domain: NivoraDomain.food,
+          icon: Icons.restaurant_rounded,
+          title: "Today's food",
+          label: menu == null ? null : _nextMeal(DateTime.now()).label,
+          // ONE MEAL, NOT FOUR. A day is breakfast, lunch, snacks and dinner, and none of that
+          // fits in a quarter tile — so the tile shows the meal the clock says is next, which
+          // is the one a resident checking at 6pm actually wants. The full week is one tap
+          // away on the menu screen, exactly as it was before.
+          value: menu == null
+              ? null
+              : (menu.entryFor(today, _nextMeal(DateTime.now()))?.items.trim().isNotEmpty ??
+                      false)
+                  ? menu.entryFor(today, _nextMeal(DateTime.now()))!.items.trim()
+                  : 'Not set yet',
+          onTap: () => _open(context, 'Mess menu', const StudentMenuScreen()),
         ),
       ],
     );
   }
 }
 
-class _OpenComplaints extends ConsumerWidget {
-  const _OpenComplaints({required this.me});
+/// The things a resident DOES, as opposed to the things they check.
+///
+/// Untinted, under the coloured band, exactly as in the reference: if the tools were coloured
+/// too there would be no band — just a screen of coloured boxes, which is what this rework is
+/// answering.
+class _Tools extends StatelessWidget {
+  const _Tools({required this.me});
+
   final Student me;
 
-  /// Two is enough to know whether anything needs chasing. The rest are one tap away.
-  static const _shown = 2;
-
-  /// How many are still open, and never a number that might be wrong.
-  ///
-  /// `hasMore` means the server had another page, so the count on this device is a FLOOR rather
-  /// than a total. It says "20+" in that case instead of stating a figure it cannot back up.
-  ///
-  /// SILENT UNLESS THE READ SUCCEEDED. While it is in flight there is no count to state. When
-  /// it FAILED there is none either, and `.value` does not go null on a failed refresh — it
-  /// keeps the last page — so reading it directly would have left "1 complaint still open"
-  /// standing as a heading over the panel that says the list could not be read.
-  static String? _openCaption(AsyncValue<PagedResult<Complaint>> complaints) {
-    final page = complaints.hasError ? null : complaints.value;
-    if (page == null) return null;
-    if (page.hasMore) return '${page.items.length}+ still open';
-    if (page.isEmpty) return 'Nothing open';
-    return '${countLabel(page.items.length, 'complaint')} still open';
-  }
-
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // openOnly narrows to what is still outstanding — the home screen is about today, and a
-    // complaint that was resolved last month is history, not news.
-    final query = ComplaintQuery(hostelId: me.hostelId, openOnly: true);
-    final complaints = ref.watch(complaintsProvider(query));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeading(
-          title: 'Your complaints',
-          caption: _openCaption(complaints),
-          domain: NivoraDomain.complaints,
-          trailing: SeeAllButton(
-            onPressed: () => _open(context, 'Complaints', const StudentComplaintsScreen()),
-          ),
+  Widget build(BuildContext context) {
+    return ToolsGrid(
+      tools: [
+        ToolTile(
+          icon: Icons.add_comment_rounded,
+          label: 'Raise a complaint',
+          tone: NivoraColors.warning,
+          onTap: () => raiseComplaint(context, me),
         ),
-        AsyncSection<PagedResult<Complaint>>(
-          value: complaints,
-          onRetry: () => ref.invalidate(complaintsProvider(query)),
-          builder: (page) {
-            if (page.isEmpty) {
-              // The tone is passed EXPLICITLY now that [EmptyNote] no longer defaults to green.
-              // This is one of the few empty states in the app where empty is genuinely good
-              // news — nothing of yours is unresolved — so it earns the positive glyph. An
-              // empty list that is merely empty gets the design's neutral outline instead.
-              return const EmptyNote(
-                icon: Icons.check_circle_outline_rounded,
-                title: 'Nothing outstanding',
-                message: 'Anything you raise will show its progress here.',
-                tone: NivoraColors.success,
-              );
-            }
-            return Column(
-              children: [
-                for (final complaint in page.items.take(_shown)) ...[
-                  ComplaintTile(
-                    complaint: complaint,
-                    onTap: () => showComplaintDetailSheet(context, complaint: complaint),
-                  ),
-                  const SizedBox(height: Space.xs),
-                ],
-              ],
-            );
-          },
+        ToolTile(
+          icon: Icons.receipt_long_rounded,
+          label: 'Fee history',
+          tone: NivoraColors.primary,
+          onTap: () => _open(context, 'Fees', const StudentFeesScreen()),
         ),
       ],
     );
   }
 }
 
-class _LatestNotices extends ConsumerWidget {
-  const _LatestNotices({required this.hostelId});
-  final String hostelId;
-
-  static const _shown = 2;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final notices = ref.watch(noticesProvider(hostelId));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeading(
-          title: 'Notices',
-          caption: 'From the hostel owner.',
-          domain: NivoraDomain.notices,
-          trailing: SeeAllButton(
-            onPressed: () => _open(context, 'Notices', const StudentNoticesScreen()),
-          ),
-        ),
-        AsyncSection<PagedResult<Notice>>(
-          value: notices,
-          onRetry: () => ref.invalidate(noticesProvider(hostelId)),
-          builder: (page) {
-            if (page.isEmpty) {
-              return const EmptyNote(
-                illustration: EmptyArt.notices,
-                icon: Icons.campaign_outlined,
-                title: 'No notices yet',
-                message: 'Announcements from the hostel owner appear here.',
-              );
-            }
-            return Column(
-              children: [
-                for (final notice in page.items.take(_shown)) ...[
-                  NoticeTile(
-                    notice: notice,
-                    author: ref.watch(noticeAuthorsProvider(hostelId)).value?[
-                        notice.authorUserId],
-                  ),
-                  const SizedBox(height: Space.xs),
-                ],
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
+/// The meal a resident is most likely asking about, by the clock.
+///
+/// Boundaries are the ones a PG actually runs to rather than clean quarters of the day: after
+/// breakfast has been served you want lunch, and from late afternoon onward the only question
+/// is dinner. Past dinner it rolls to breakfast, which is correct — at 11pm the next meal IS
+/// tomorrow's breakfast, and the menu screen is where a resident goes to see the rest.
+Meal _nextMeal(DateTime now) {
+  final h = now.hour;
+  if (h < 9) return Meal.breakfast;
+  if (h < 14) return Meal.lunch;
+  if (h < 17) return Meal.snacks;
+  return Meal.dinner;
 }
