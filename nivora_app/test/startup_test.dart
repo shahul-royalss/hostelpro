@@ -32,6 +32,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/boot/startup.dart';
 import 'package:mobile/features/splash/splash_screen.dart';
+import 'package:mobile/shared/wordmark.dart';
 import 'package:mobile/main.dart';
 
 /// A readiness future with the manners of the failure being guarded against: it is accepted and
@@ -39,6 +40,27 @@ import 'package:mobile/main.dart';
 Future<void> _neverReady() => Completer<void>().future;
 
 void main() {
+  testWidgets('the drawn wordmark still announces the app name', (tester) async {
+    // Replacing Text('NIVORA') with a CustomPaint silently removes the app's name from the
+    // accessibility tree unless the mark carries a label — a blind user opening the app would
+    // be handed an unlabelled box. Rendered at full opacity, away from the splash's fade,
+    // because that is what this test is about.
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 240,
+          height: 70,
+          child: NivoraWordmark(progress: 1, color: Color(0xFFF5F3EE)),
+        ),
+      ),
+    ));
+
+    expect(find.bySemanticsLabel('NIVORA'), findsOneWidget);
+    semantics.dispose();
+  });
+
   testWidgets('the splash is on screen while initialisation is still running', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -51,7 +73,14 @@ void main() {
     await tester.pump();
 
     expect(find.byType(SplashScreen), findsOneWidget);
-    expect(find.text('NIVORA'), findsOneWidget);
+    // The wordmark is drawn geometry now, not a Text — so this asserts the mark is mounted AND
+    // that it still announces the app's name. The name disappearing from the accessibility
+    // tree is exactly the regression that swapping a Text for a CustomPaint invites.
+    // The wordmark is drawn geometry now rather than a Text, so this asserts the mark itself
+    // is mounted. Its accessibility label is asserted separately, below: on this frame the
+    // reveal is still at zero and Opacity(0) legitimately drops its child from the semantics
+    // tree, so looking for the label here would be testing the fade, not the label.
+    expect(find.byType(NivoraWordmark), findsOneWidget);
     // The whole point: an initialisation that never finishes leaves the BRAND on screen, not
     // Android's flat window. Before this change there was no frame at all to hold it.
     expect(tester.takeException(), isNull);

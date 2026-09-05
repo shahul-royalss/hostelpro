@@ -51,6 +51,13 @@ dependencies:
   google_fonts: ^8.2.1
   fl_chart: ^1.2.0
   flutter_svg: ^2.3.0
+
+  # Turns the wordmark's SVG path data into a ui.Path so the splash can draw it stroke by
+  # stroke. It was already here as a transitive dependency of flutter_svg — this only names it,
+  # because a file that imports a package it does not declare breaks the day the package above
+  # it stops needing it. Pinned to the version already in pubspec.lock so `pub get --offline`
+  # during a release build resolves it from the cache rather than reaching for the network.
+  path_parsing: ^1.1.0
   # ONLINE PAYMENT IS BACK IN THE APP. This was absent for v1, when rent was taken only at the
   # warden's desk; the rule "everything has to be done in the application" is what brought it
   # back. The two companions the removal note named have been restored with it: the version pin

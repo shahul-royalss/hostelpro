@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
+import '../../shared/wordmark.dart';
 
 /// The launch animation.
 ///
@@ -79,19 +80,19 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   ///
   /// Typed as [CurvedAnimation] rather than [Animation] because a CurvedAnimation registers a
   /// listener on its parent and has to be disposed; the framework's leak tracker fails a test
-  /// that forgets. [_scale] needs no disposal — a Tween's animation holds nothing of its own.
+  /// that forgets.
   late final CurvedAnimation _reveal;
-  late final Animation<double> _scale;
   late final CurvedAnimation _cue;
+
+  /// The signature's drawn width. Wide enough to read the letterforms on the narrowest phone
+  /// this ships to and short of the screen edge on it.
+  static const double _markWidth = 240;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: Motion.slow);
     _reveal = CurvedAnimation(parent: _controller, curve: Motion.enter);
-    // Settles rather than pops: 4% is enough to read as arriving and small enough that a frame
-    // caught mid-way is not visibly the wrong size.
-    _scale = Tween<double>(begin: 0.96, end: 1).animate(_reveal);
     _cue = CurvedAnimation(
       parent: _controller,
       curve: const Interval(_cueStart, 1, curve: Motion.enter),
@@ -122,7 +123,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
     return Scaffold(
       // Not scaffoldBackgroundColor: see the header. This screen is the brand ground in both
       // themes, because the native window behind it is too.
@@ -131,16 +131,32 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // THE SIGNATURE WRITES ITSELF. This replaces a text wordmark that faded and
+            // settled 4% of its scale. Same constraint as before and it still governs: nothing
+            // waits for this, the router replaces the splash the instant the session restore
+            // resolves, and every frame of a stroke being laid down is a legitimate still of
+            // the same picture — so being cut off at 80ms looks like an interrupted signature
+            // rather than a glitch.
+            //
+            // The path is the one the website draws on its sign-in screen, so the mark the app
+            // opens with is the mark the user is about to see again. See shared/wordmark.dart
+            // for why the geometry is parsed rather than shipped as an .svg.
+            //
+            // A fixed 3:1 box: the signature is a wide, short mark, and giving it a ratio
+            // rather than a height keeps it the same relative size on a small phone and a
+            // tablet. ScaleTransition is gone — a stroke that is still being drawn does not
+            // also need to be growing.
             FadeTransition(
               opacity: _reveal,
-              child: ScaleTransition(
-                scale: _scale,
-                // displayMedium is the design's own wordmark step — 24/800, node 4:69 on
-                // `screen-signin` — so the mark the app opens with is the same mark the sign-in
-                // screen shows a moment later, at the same size and weight.
-                child: Text(
-                  'NIVORA',
-                  style: t.textTheme.displayMedium?.copyWith(color: NivoraColors.onSurface),
+              child: SizedBox(
+                width: _markWidth,
+                height: _markWidth / 3.4,
+                child: AnimatedBuilder(
+                  animation: _reveal,
+                  builder: (context, _) => NivoraWordmark(
+                    progress: _reveal.value,
+                    color: NivoraColors.onSurface,
+                  ),
                 ),
               ),
             ),
