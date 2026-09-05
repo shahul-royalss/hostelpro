@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/tokens.dart';
 import 'glass/glass.dart';
+import 'meter.dart';
 
 /// The dashboard vocabulary every role's home screen is built from.
 ///
@@ -169,6 +170,7 @@ class EssentialTile extends StatelessWidget {
     this.footnote,
     this.onTap,
     this.flagged = false,
+    this.progress,
   });
 
   final NivoraDomain domain;
@@ -185,6 +187,14 @@ class EssentialTile extends StatelessWidget {
   final String? footnote;
 
   final VoidCallback? onTap;
+
+  /// A 0..1 share, drawn as the reference's progress bar under the figure.
+  ///
+  /// ONLY WHERE A RATIO IS REAL. Occupancy is beds filled over beds that exist; collection is
+  /// money in over money billed. Both are genuine proportions with a meaningful 100%. A count of
+  /// open complaints is not — there is no denominator, and inventing one to fill a bar would be
+  /// drawing a measurement that does not exist. Most tiles leave this null.
+  final double? progress;
 
   /// Draws the reference's small dot in the corner: something here wants attention. Used for an
   /// overdue payment or an unread count, never as decoration — a dot that is always on is a dot
@@ -246,6 +256,10 @@ class EssentialTile extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
+            if (progress != null) ...[
+              const SizedBox(height: Space.xs),
+              ProportionMeter(value: progress!.clamp(0, 1), tone: domain.tone),
+            ],
             if (footnote != null) ...[
               const SizedBox(height: Space.xxs),
               Text(
