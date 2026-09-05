@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/features/auth/email_verification_service.dart';
+
+import 'support/fake_verification.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
@@ -74,13 +77,26 @@ class _ScriptedAuth extends AuthController {
 }
 
 void main() {
-  NivoraSession sessionFor({required bool mustChangePassword}) => NivoraSession(
+  /// A VERIFIED address by default, and that is now load-bearing rather than incidental.
+  ///
+  /// Finishing a password change hands an UNVERIFIED account to the verify-email screen before
+  /// the dashboard — the sequence the product owner asked for. Every test below is about where
+  /// the password change ARRIVES, so they need an account that is not owed that detour; the
+  /// detour itself has its own test at the bottom of this file.
+  NivoraSession sessionFor({
+    required bool mustChangePassword,
+    bool emailVerified = true,
+  }) =>
+      NivoraSession(
         userId: '00000000-0000-0000-0000-000000000001',
         role: UserRole.owner,
         fullName: 'New Owner',
         status: 'active',
         mustChangePassword: mustChangePassword,
         email: 'owner@example.com',
+        // A DateTime cannot be a const default, so the flag is the parameter and the instant is
+        // built here. Only its presence is ever read.
+        emailVerifiedAt: emailVerified ? DateTime.utc(2026, 1, 1) : null,
       );
 
   late GoRouter router;
@@ -98,14 +114,22 @@ void main() {
     WidgetTester tester, {
     required bool mustChangePassword,
     required Future<String?> Function(_ScriptedAuth self) behaviour,
+    bool emailVerified = true,
   }) async {
     late _ScriptedAuth auth;
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          // The verify screen is reachable from the end of this flow now, and it reads the
+          // verification service on build. Without an override that provider reaches for
+          // Supabase.instance, which no widget test initialises.
+          emailVerificationServiceProvider.overrideWithValue(FakeVerification()),
           authControllerProvider.overrideWith(() {
             auth = _ScriptedAuth(
-              AuthSignedIn(sessionFor(mustChangePassword: mustChangePassword)),
+              AuthSignedIn(sessionFor(
+                mustChangePassword: mustChangePassword,
+                emailVerified: emailVerified,
+              )),
               behaviour,
             );
             return auth;
@@ -238,6 +262,32 @@ void main() {
 
       await settle(tester);
       expect(where(), '/owner', reason: 'it has to take the user to their dashboard');
+    });
+
+    testWidgets('(c) unverified: the email is proved before the dashboard', (tester) async {
+      // The sequence the product owner asked for: a warden creates the account, the new user
+      // signs in with the temporary password, sets their own, and only THEN is asked to prove
+      // the address. Asking any earlier would be asking somebody to prove an address while
+      // they still hold a credential that was read out to them by somebody else.
+      await pumpApp(
+        tester,
+        mustChangePassword: true,
+        emailVerified: false,
+        behaviour: (self) async {
+          self.publish(AuthSignedIn(
+            sessionFor(mustChangePassword: false, emailVerified: false),
+          ));
+          return null;
+        },
+      );
+
+      await fillAndSubmit(tester, currentLabel: 'Temporary password');
+      await settle(tester);
+
+      expect(find.text('Verify your email'), findsOneWidget,
+          reason: 'an unverified account is asked to prove the address first');
+      expect(where(), isNot('/owner'),
+          reason: 'and is not quietly dropped on the dashboard behind it');
     });
 
     testWidgets('(a) voluntary: the same ending, from a screen nothing forced', (tester) async {

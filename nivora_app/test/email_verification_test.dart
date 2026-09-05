@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/fake_verification.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
 import 'package:mobile/core/config/env.dart';
@@ -120,51 +122,9 @@ class _StubAuth extends AuthController {
 }
 
 /// A stand-in for GoTrue (the send) and the Edge Function (the check).
-class _FakeVerification implements EmailVerificationService {
-  _FakeVerification({
-    this.resendAfter = const Duration(seconds: 60),
-    this.sendFailure,
-    this.statusFailure,
-  });
-
-  /// Flipped when the "user" opens the link. Everything about this feature is downstream of
-  /// this one boolean changing while the app is not looking.
-  bool verified = false;
-
-  Duration resendAfter;
-  VerificationFailure? sendFailure;
-  VerificationFailure? statusFailure;
-
-  int sends = 0;
-  int statusCalls = 0;
-  final List<String> sentTo = <String>[];
-
-  @override
-  Future<VerificationStatus> status() async {
-    statusCalls++;
-    final failure = statusFailure;
-    if (failure != null) throw failure;
-    return VerificationStatus(
-      email: 'owner@example.com',
-      verified: verified,
-      required_: !verified,
-      verifiedAt: verified ? DateTime.utc(2026, 9, 1, 10, 30) : null,
-    );
-  }
-
-  @override
-  Future<SendOutcome> sendLink(String email) async {
-    sends++;
-    sentTo.add(email);
-    final failure = sendFailure;
-    if (failure != null) throw failure;
-    return SendOutcome(email: email, resendAfter: resendAfter);
-  }
-}
-
 Future<void> _pumpScreen(
   WidgetTester tester,
-  _FakeVerification fake, {
+  FakeVerification fake, {
   _StubAuth? auth,
 }) async {
   tester.view.physicalSize = const Size(1000, 2400);
@@ -194,7 +154,7 @@ Future<void> _pumpScreen(
 Future<void> _pumpBanner(
   WidgetTester tester,
   NivoraSession session, {
-  _FakeVerification? fake,
+  FakeVerification? fake,
   _StubAuth? auth,
 }) async {
   tester.view.physicalSize = const Size(1000, 2000);
@@ -204,7 +164,7 @@ Future<void> _pumpBanner(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        emailVerificationServiceProvider.overrideWithValue(fake ?? _FakeVerification()),
+        emailVerificationServiceProvider.overrideWithValue(fake ?? FakeVerification()),
         authControllerProvider.overrideWith(
           () => auth ?? _StubAuth(AuthSignedIn(session)),
         ),
@@ -372,7 +332,7 @@ void main() {
   group('sending and confirming the link', () {
     testWidgets('the screen sends one link on open, to the address on the account',
         (tester) async {
-      final fake = _FakeVerification();
+      final fake = FakeVerification();
       await _pumpScreen(tester, fake);
 
       expect(fake.sends, 1, reason: 'the user arrived by tapping "Verify now" — asking them '
@@ -392,7 +352,7 @@ void main() {
       // The OTP UI is deleted, not hidden. Two ways to prove one thing is how one of them
       // rots — and a stale six-digit field would be an instruction to do something the server
       // no longer accepts.
-      final fake = _FakeVerification();
+      final fake = FakeVerification();
       await _pumpScreen(tester, fake);
 
       expect(find.byType(TextField), findsNothing);
@@ -402,7 +362,7 @@ void main() {
 
     testWidgets('"I have opened the link" asks the SERVER, and a proof clears the screen',
         (tester) async {
-      final fake = _FakeVerification()..verified = true;
+      final fake = FakeVerification()..verified = true;
       final auth = _StubAuth(
         const AuthSignedIn(_unverified),
         afterReload: AuthSignedIn(_verified),
@@ -427,7 +387,7 @@ void main() {
       // The failure this prevents: believing the button instead of the server. The user tapping
       // "I have opened the link" is a claim, not a proof; only the Edge Function has seen
       // GoTrue's record of the click.
-      final fake = _FakeVerification();
+      final fake = FakeVerification();
       await _pumpScreen(tester, fake);
 
       await tester.tap(_openedButton());
@@ -441,7 +401,7 @@ void main() {
       // The resume check is silent by design. This one must not be: the user pressed a button
       // and is owed an answer, and "nothing happened" is the one answer that teaches them
       // nothing.
-      final fake = _FakeVerification(
+      final fake = FakeVerification(
         statusFailure: const VerificationFailure(
           'The Nivora server did not answer. Your link still works — open it and come back.',
         ),
@@ -462,7 +422,7 @@ void main() {
 
   group('returning to the app is the completion signal', () {
     testWidgets('the screen re-checks on resume and clears itself', (tester) async {
-      final fake = _FakeVerification();
+      final fake = FakeVerification();
       final auth = _StubAuth(
         const AuthSignedIn(_unverified),
         afterReload: AuthSignedIn(_verified),
@@ -483,7 +443,7 @@ void main() {
       // in their inbox and comes straight back to their home screen. They never open the
       // verification screen at all, so if only that screen listened, the banner would sit there
       // asking for something they had already given.
-      final fake = _FakeVerification()..verified = true;
+      final fake = FakeVerification()..verified = true;
       final auth = _StubAuth(
         const AuthSignedIn(_unverified),
         afterReload: AuthSignedIn(_verified),
@@ -502,7 +462,7 @@ void main() {
       // One call per resume, forever, on every home screen, for every user who has already
       // finished — on a free-tier instance that flips to Unhealthy at ~72% RAM. The cheapest
       // request is the one that is not sent.
-      final fake = _FakeVerification();
+      final fake = FakeVerification();
       await _pumpBanner(tester, _verified, fake: fake);
 
       await _leaveAndReturn(tester);
@@ -511,7 +471,7 @@ void main() {
     });
 
     testWidgets('a phone-login resident never asks either', (tester) async {
-      final fake = _FakeVerification();
+      final fake = FakeVerification();
       await _pumpBanner(tester, _phoneOnlyStudent, fake: fake);
 
       await _leaveAndReturn(tester);
@@ -522,7 +482,7 @@ void main() {
     testWidgets('a re-check that fails leaves the banner and says nothing', (tester) async {
       // A resume-time error is an accusation aimed at someone who has done nothing wrong, on a
       // screen they did not open, about a request they did not make. The banner simply stays.
-      final fake = _FakeVerification(
+      final fake = FakeVerification(
         statusFailure: const VerificationFailure('Cannot reach Nivora.'),
       );
       await _pumpBanner(tester, _unverified, fake: fake);
@@ -538,7 +498,7 @@ void main() {
       // Resume fires on every task-switch, every notification pull-down, every unlock. If it
       // sent mail, one afternoon of ordinary phone use would spend the project's hourly
       // allowance and every other user's link would bounce off it.
-      final fake = _FakeVerification();
+      final fake = FakeVerification();
       await _pumpScreen(tester, fake);
       expect(fake.sends, 1);
 
@@ -555,7 +515,7 @@ void main() {
 
   group('the resend cooldown', () {
     testWidgets('is armed by the first send and counts down in seconds', (tester) async {
-      final fake = _FakeVerification(resendAfter: const Duration(seconds: 60));
+      final fake = FakeVerification(resendAfter: const Duration(seconds: 60));
       await _pumpScreen(tester, fake);
 
       // Disabled, and it says how long rather than just going grey.
@@ -578,7 +538,7 @@ void main() {
     });
 
     testWidgets('re-arms the button when it elapses, and a resend then works', (tester) async {
-      final fake = _FakeVerification(resendAfter: const Duration(seconds: 3));
+      final fake = FakeVerification(resendAfter: const Duration(seconds: 3));
       await _pumpScreen(tester, fake);
 
       final opening = _countdown(tester);
@@ -604,7 +564,7 @@ void main() {
       // not mean the person has nothing to confirm. It usually means a link is sitting in their
       // inbox and they tapped the button before reading it. Disabling the confirm button would
       // be refusing the answer because we would not repeat the question.
-      final fake = _FakeVerification(resendAfter: const Duration(seconds: 60))..verified = true;
+      final fake = FakeVerification(resendAfter: const Duration(seconds: 60))..verified = true;
       await _pumpScreen(tester, fake);
 
       expect(_resendButton(), findsNothing, reason: 'resend really is throttled');
@@ -621,7 +581,7 @@ void main() {
       // GoTrue is the thing that will refuse an early resend, and it says how long in the
       // refusal ("you can only request this once every 45 seconds"). That number is the one the
       // button comes back on — not a constant guessed on the phone.
-      final fake = _FakeVerification(
+      final fake = FakeVerification(
         sendFailure: const VerificationFailure(
           'A link was just sent. Check your inbox — and your spam folder — before asking for '
           'another.',
@@ -645,7 +605,7 @@ void main() {
       // is the wrong advice for both: no amount of retrying fixes a dashboard toggle, and
       // telling a resident to check their connection sends them chasing a fault they cannot
       // reach.
-      final fake = _FakeVerification(
+      final fake = FakeVerification(
         sendFailure: const VerificationFailure(
           'Nivora cannot send verification links yet: CAPTCHA protection is switched on.',
           operatorFault: true,
@@ -685,7 +645,7 @@ void main() {
 
   group('the removed setup panel stays removed', () {
     testWidgets('no control, no panel, and no claim about the landing page', (tester) async {
-      await _pumpScreen(tester, _FakeVerification());
+      await _pumpScreen(tester, FakeVerification());
 
       expect(find.text('The link opened a page that would not load'), findsNothing);
       expect(find.text('Hide setup details'), findsNothing);
@@ -702,7 +662,7 @@ void main() {
         (tester) async {
       // "Not yet" is what used to unfold the panel, unasked. It must now answer with the next
       // useful action instead — the newest link, or a new email — and nothing else.
-      final fake = _FakeVerification();
+      final fake = FakeVerification();
       await _pumpScreen(tester, fake);
 
       await tester.tap(_openedButton());
@@ -718,7 +678,7 @@ void main() {
         (tester) async {
       // The operator-fault sentence is NOT part of what was removed: it is about a send that
       // failed, it is true when it is shown, and "try again" is the wrong advice for it.
-      final fake = _FakeVerification(
+      final fake = FakeVerification(
         sendFailure: const VerificationFailure(
           'Nivora cannot send verification links yet: CAPTCHA protection is switched on.',
           operatorFault: true,
@@ -734,7 +694,7 @@ void main() {
     testWidgets('the four things left on the screen still make sense together', (tester) async {
       // Section 4's rule, restated against the screen as it now stands: whatever it is saying,
       // both escapes stay on it. This assertion outlived the panel it was written for.
-      final fake = _FakeVerification();
+      final fake = FakeVerification();
       await _pumpScreen(tester, fake);
       await tester.tap(_openedButton());
       await _settle(tester);
@@ -779,7 +739,7 @@ void main() {
 
   group('the setup note is earned, and it names one field', () {
     testWidgets('one "not yet" names no setting — slow mail is not evidence', (tester) async {
-      final fake = _FakeVerification();
+      final fake = FakeVerification();
       await _pumpScreen(tester, fake);
 
       await tester.tap(_openedButton());
@@ -792,7 +752,7 @@ void main() {
 
     testWidgets('the SECOND in a row names the field and the exact value to paste',
         (tester) async {
-      final fake = _FakeVerification();
+      final fake = FakeVerification();
       await _pumpScreen(tester, fake);
 
       await tester.tap(_openedButton());
@@ -816,7 +776,7 @@ void main() {
 
     testWidgets('a new link starts the run again — only the newest link is being asked about',
         (tester) async {
-      final fake = _FakeVerification(resendAfter: Duration.zero);
+      final fake = FakeVerification(resendAfter: Duration.zero);
       await _pumpScreen(tester, fake);
 
       await tester.tap(_openedButton());
@@ -832,7 +792,7 @@ void main() {
     });
 
     testWidgets('a check that FAILED is not an answer and does not count', (tester) async {
-      final fake = _FakeVerification();
+      final fake = FakeVerification();
       await _pumpScreen(tester, fake);
 
       await tester.tap(_openedButton());
@@ -853,7 +813,7 @@ void main() {
     });
 
     testWidgets('a proof clears the run as well as the screen', (tester) async {
-      final fake = _FakeVerification();
+      final fake = FakeVerification();
       await _pumpScreen(tester, fake);
 
       await tester.tap(_openedButton());
@@ -949,7 +909,7 @@ void main() {
   group('the instruction covers both places a link can be opened', () {
     testWidgets('it says the phone signs you in, and that a laptop still works',
         (tester) async {
-      await _pumpScreen(tester, _FakeVerification());
+      await _pumpScreen(tester, FakeVerification());
 
       expect(find.textContaining('opens Nivora and signs you in'), findsOneWidget);
       expect(find.textContaining('laptop'), findsOneWidget);
@@ -963,7 +923,7 @@ void main() {
     testWidgets('and the way out stays open in every state', (tester) async {
       // Four states, one rule: this screen never dead-ends. Somebody who cannot open their mail
       // must always be able to leave a REQUIREMENT that is not a TRAP.
-      final fake = _FakeVerification();
+      final fake = FakeVerification();
       await _pumpScreen(tester, fake);
       expect(find.widgetWithText(TextButton, 'I will do this later'), findsOneWidget);
 

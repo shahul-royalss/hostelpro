@@ -107,10 +107,21 @@ import 'email_verification_service.dart';
 
 /// Proving control of the address on the account.
 class VerifyEmailScreen extends ConsumerStatefulWidget {
-  const VerifyEmailScreen({super.key});
+  const VerifyEmailScreen({super.key, this.blocking = false});
 
-  static Route<bool> route() =>
-      MaterialPageRoute<bool>(builder: (_) => const VerifyEmailScreen());
+  /// Whether this is the GATE a new account passes through, or the optional detour offered by
+  /// the home screen's banner.
+  ///
+  /// An explicit flag rather than `Navigator.canPop()`, and that was a real bug rather than a
+  /// style preference: pushed from the change-password screen there IS something to pop back
+  /// to, so inferring from the stack offered "I will do this later" on the one path where
+  /// later is not on offer — and popping it returned to a screen whose very next line sends
+  /// the user to their dashboard. The gate would have been a suggestion.
+  final bool blocking;
+
+  static Route<bool> route({bool blocking = false}) => MaterialPageRoute<bool>(
+        builder: (_) => VerifyEmailScreen(blocking: blocking),
+      );
 
   @override
   ConsumerState<VerifyEmailScreen> createState() => _VerifyEmailScreenState();
@@ -347,8 +358,15 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
       });
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Verify your email')),
+    return PopScope(
+      // A gate the back gesture walks through is not a gate. When blocking, the visible way
+      // out is Sign out — a real action rather than a dead end.
+      canPop: !widget.blocking,
+      child: Scaffold(
+      appBar: AppBar(
+        title: const Text('Verify your email'),
+        automaticallyImplyLeading: !widget.blocking,
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -359,6 +377,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -372,7 +391,12 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
               'manage accounts as normal.',
           tone: context.tones.success,
           action: FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            // Pops when this was PUSHED from the home-screen banner. As the gate route it is
+            // the only thing on the stack and there is nothing to pop to — the redirect
+            // releases them the moment reload() lands a verified session, so this only needs
+            // to not throw.
+            onPressed: () =>
+                Navigator.of(context).canPop() ? Navigator.of(context).pop(true) : null,
             child: const Text('Done'),
           ),
         ),
@@ -511,12 +535,24 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
                     : 'Send again in ${cooldown.inSeconds}s'),
           ),
 
-          // The way out. Restates that leaving is allowed, so nobody sits here believing the
-          // app is stuck.
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('I will do this later'),
-          ),
+          // THE WAY OUT, AND IT CHANGES MEANING WITH THE CONTEXT.
+          //
+          // From the home-screen banner this is a real "later": the app is usable unverified and
+          // nobody should be nagged into a dead end. As the GATE — a new account that has just
+          // set its password — there is nothing behind this screen, and "later" would either do
+          // nothing (a broken button) or have to let them past, which is the one thing the gate
+          // exists to prevent. Signing out is the honest alternative: a real action that always
+          // works, with the account waiting when the mail arrives.
+          if (!widget.blocking)
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('I will do this later'),
+            )
+          else
+            TextButton(
+              onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
+              child: const Text('Sign out'),
+            ),
         ],
       ),
     );

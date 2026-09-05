@@ -10,6 +10,7 @@ import '../../features/auth/mfa_screen.dart';
 import '../../features/legal/consent_gate.dart';
 import '../../features/settings/security_screen.dart';
 import '../../features/shell/role_shell.dart';
+import '../../features/auth/verify_email_screen.dart';
 import '../../features/splash/splash_screen.dart';
 
 /// Routing, and the role → home mapping.
@@ -47,6 +48,14 @@ const mfaRoute = '/mfa';
 const mfaEnrolRoute = '/mfa-setup';
 const changePasswordRoute = '/change-password';
 
+/// The gate a brand-new account passes through after setting its own password.
+///
+/// Only ever reached when [NivoraSession.needsEmailVerification] is true, which is false for
+/// every resident whose login is a phone number — their synthetic `<digits>@student.hostelpro.local`
+/// address cannot receive mail, and gating them on it would lock them out of a product they can
+/// otherwise use perfectly. See isReachableLoginAddress.
+const verifyEmailRoute = '/verify-email';
+
 /// EVERY PATH THIS APP REGISTERS, AND THE SCREEN BEHIND IT.
 ///
 /// It is a map rather than a hand-written `routes:` list so a test can ask the question no test
@@ -66,6 +75,7 @@ final appScreens = <String, WidgetBuilder>{
   // The ONLY destination this app draws for AuthNeedsMfaEnrolment. See [mfaEnrolRoute].
   mfaEnrolRoute: (_) => const SecurityScreen(required: true),
   changePasswordRoute: (_) => const ChangePasswordScreen(),
+  verifyEmailRoute: (_) => const VerifyEmailScreen(),
   // One shell per role. Each owns its own navigation, because forcing five roles through one
   // tab bar is what makes an operational tool feel like an admin template.
   //
@@ -156,6 +166,7 @@ String? _decide({
     if (here == splashRoute ||
         here == mfaRoute ||
         here == mfaEnrolRoute ||
+        here == verifyEmailRoute ||
         here == '/' ||
         _publicRoutes.contains(here)) {
       return home;

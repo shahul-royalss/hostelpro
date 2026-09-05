@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'verify_email_screen.dart';
+
 import '../../core/auth/auth_controller.dart';
 // For [roleHome] — the role → home mapping, which mirrors the web app's lib/roles.ts and must
 // exist in exactly one place. router.dart imports this file back; Dart resolves the cycle, and
@@ -164,6 +166,32 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     setState(() => _done = true);
     await Future<void>.delayed(_confirmationHold);
     if (!mounted) return;
+
+    // ── AND THEN THE EMAIL, BEFORE THE DASHBOARD ────────────────────────────────────────────
+    //
+    // The product owner's sequence, in their words: after a new user "gives current and new
+    // password it has to show one dialog to verify their email before entering into the
+    // dashboard". This is that moment, and it is the right one — a temporary password read out
+    // by a warden is the weaker secret, so asking somebody to prove an address while they still
+    // hold it proves very little.
+    //
+    // WHY HERE AND NOT IN THE ROUTER. A redirect on needsEmailVerification would have gated
+    // every session at every launch, not just a new account finishing setup — a much broader
+    // change than was asked for, and one that turns the home screen's existing dismissible
+    // banner into a wall for people who have been using the app for weeks.
+    //
+    // IT CANNOT TRAP A RESIDENT WHO SIGNS IN WITH A PHONE NUMBER. needsEmailVerification is
+    // false whenever the address is unreachable, which is exactly the synthetic
+    // `<digits>@student.hostelpro.local` case those accounts get.
+    // `now` rather than `session`: the method already has one in scope from before the await,
+    // and that one is stale — the controller re-resolved the profile row when the password
+    // changed, so this must be the read taken after it.
+    final now = ref.read(sessionProvider);
+    if (now != null && now.needsEmailVerification) {
+      await Navigator.of(context).push(VerifyEmailScreen.route(blocking: true));
+      if (!mounted) return;
+    }
+
     _leave();
   }
 
