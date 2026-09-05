@@ -16,6 +16,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/shared/wordmark.dart';
+import 'package:mobile/shared/glass/glass.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
 import 'package:mobile/data/models/models.dart';
@@ -101,7 +103,11 @@ void main() {
     _expectNoLoadingIndicators('Complaints');
 
     await _tapTab(tester, 'Home');
-    expect(find.text('Hello, Priya'), findsOneWidget);
+    // The warden's home header is the masthead now — the signature centred with the account
+    // avatar beside it — so "Hello, Priya" is no longer written there. Her initials are, and
+    // that is what identifies the tab as hers. The greeting was the old header's job.
+    expect(find.byType(AccountAvatar), findsOneWidget);
+    expect(find.byType(NivoraWordmark), findsOneWidget);
     _expectNoLoadingIndicators('Home');
   });
 

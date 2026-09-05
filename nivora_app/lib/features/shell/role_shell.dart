@@ -5,6 +5,7 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/version/update_banner.dart';
+import '../../shared/aurora.dart';
 import '../../shared/glass/glass.dart';
 import '../../shared/wordmark.dart';
 import 'staff_profile_sheet.dart';
@@ -122,11 +123,20 @@ class _RoleShellState extends ConsumerState<RoleShell> {
     final tabs = _tabs[widget.role] ?? const [];
 
     return Scaffold(
-      body: Column(
+      // Transparent so the wash below is the ground rather than being painted over.
+      backgroundColor: Colors.transparent,
+      // THE SAME LIGHT AS THE SIGN-IN SCREEN, TURNED DOWN. The owner asked for the sign-in
+      // panel's colour across the dashboards; at full strength behind a screen of figures it
+      // competes with the data, so the dashboards get a third of it. The point is that opening
+      // the app and signing into it feel like one product, not that every screen glows.
+      body: AuroraField(
+        intensity: 0.34,
+        child: Column(
         children: [
           GlassHeader(child: _header(t, session)),
           Expanded(child: _body(t, tabs)),
         ],
+        ),
       ),
       bottomNavigationBar: tabs.isEmpty ? null : _navBar(t, tabs),
     );

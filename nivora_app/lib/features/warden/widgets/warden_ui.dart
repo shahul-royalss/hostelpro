@@ -7,6 +7,8 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../shared/glass/glass.dart';
+import '../../shell/staff_profile_sheet.dart';
+import '../../../shared/wordmark.dart';
 import '../../../shared/sign_in_again.dart';
 
 /// The pieces every warden screen is built from.
@@ -397,6 +399,7 @@ class WardenScreen extends StatelessWidget {
     required this.child,
     this.subtitle,
     this.actions = const [],
+    this.masthead = false,
   });
 
   final String title;
@@ -404,13 +407,23 @@ class WardenScreen extends StatelessWidget {
   final List<Widget> actions;
   final Widget child;
 
+  /// The dashboard treatment: the signature centred, the account avatar at the leading edge,
+  /// and nothing trailing.
+  ///
+  /// Only the warden's HOME sets it. Every other warden screen keeps its title, because a
+  /// masthead on "Rooms" or "Complaints" would take away the one thing telling you which of
+  /// five tabs you are standing in — the logo is an identity, not a label.
+  final bool masthead;
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return Column(
       children: [
         GlassHeader(
-          child: Row(
+          child: masthead
+              ? _masthead(context)
+              : Row(
             children: [
               Expanded(
                 child: Column(
@@ -444,6 +457,38 @@ class WardenScreen extends StatelessWidget {
           ),
         ),
         Expanded(child: child),
+      ],
+    );
+  }
+
+  /// Avatar, signature, and an empty box the same width as the avatar so the mark is centred on
+  /// the SCREEN rather than on the space left over beside it.
+  Widget _masthead(BuildContext context) {
+    final t = Theme.of(context);
+    final name = title.replaceFirst('Hello, ', '').trim();
+    return Row(
+      children: [
+        Tooltip(
+          message: 'Your account',
+          child: InkWell(
+            onTap: () => showStaffProfile(context),
+            customBorder: const CircleBorder(),
+            child: Padding(
+              padding: const EdgeInsets.all(Space.xxs),
+              child: AccountAvatar(name: name.isEmpty ? 'Nivora' : name, size: IconSize.xl),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Center(
+            child: SizedBox(
+              width: 116,
+              height: 116 / 3.4,
+              child: NivoraWordmark(progress: 1, color: t.colorScheme.onSurface),
+            ),
+          ),
+        ),
+        const SizedBox(width: IconSize.xl + Space.xxs * 2),
       ],
     );
   }

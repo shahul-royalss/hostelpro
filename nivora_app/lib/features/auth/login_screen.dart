@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/theme/tokens.dart';
+import '../../shared/aurora.dart';
+import '../../shared/beam_card.dart';
 import '../../shared/glass/glass.dart';
 
 /// Sign in — `screen-signin`, node 4:60.
@@ -167,13 +169,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final error = _error ?? (busy ? null : _arrivalMessage());
 
     return Scaffold(
-      body: SafeArea(
+      // TRANSPARENT so the aurora underneath is the ground. Scaffold would otherwise paint its
+      // own opaque background over it and the glow would never be seen.
+      backgroundColor: Colors.transparent,
+      body: AuroraField(
+        child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(Space.xl),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: GlassCard(
+              child: BeamCard(
                 padding: const EdgeInsets.all(Space.xl),
                 child: Form(
                   key: _form,
@@ -300,6 +306,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

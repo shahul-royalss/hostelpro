@@ -13,7 +13,6 @@ import '../../../shared/glass/glass.dart';
 import '../../common/refresh.dart';
 import '../../common/staff_notices.dart';
 import '../notices/warden_notices_screen.dart';
-import '../../settings/security_screen.dart';
 import '../../auth/verify_email_screen.dart';
 import '../actions/assign_bed_sheet.dart';
 import '../actions/register_student_sheet.dart';
@@ -45,7 +44,7 @@ class WardenHomeScreen extends ConsumerWidget {
     if (hostelId == null) {
       return WardenScreen(
         title: 'Today',
-        actions: const [_SecurityButton(), _SignOutButton()],
+        masthead: true,
         child: const EmptyState(
           icon: Icons.home_work_outlined,
           title: 'No hostel on this account',
@@ -76,7 +75,7 @@ class WardenHomeScreen extends ConsumerWidget {
       // labels this design does draw are section headings down in the body.
       title: firstName.isEmpty ? 'Today' : 'Hello, $firstName',
       subtitle: hostel?.name,
-      actions: const [_SecurityButton(), _SignOutButton()],
+      masthead: true,
       child: Column(
         children: [
           // Before the subscription strip. A lapsed subscription is the hostel's problem and
@@ -506,33 +505,7 @@ class _SubscriptionBanner extends StatelessWidget {
   }
 }
 
-/// Two-factor enrolment. Every role's header carries one — see
-/// features/settings/security_screen.dart.
-class _SecurityButton extends StatelessWidget {
-  const _SecurityButton();
 
-  @override
-  Widget build(BuildContext context) {
-    return HeaderAction(
-      tooltip: 'Security',
-      icon: Icons.shield_outlined,
-      onPressed: () => openSecurity(context),
-    );
-  }
-}
-
-class _SignOutButton extends ConsumerWidget {
-  const _SignOutButton();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return HeaderAction(
-      tooltip: 'Sign out',
-      icon: Icons.logout_rounded,
-      onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
-    );
-  }
-}
 
 /// The four cards' own shape, before the figures arrive.
 ///
