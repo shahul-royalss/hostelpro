@@ -102,6 +102,19 @@ void _expectAtLeast(double measured, double required_, String what) {
   );
 }
 
+/// The opposite bar: a pair that must stay QUIET. Used where two surfaces have to be
+/// distinguishable without becoming two different colours — the light theme's bar against its
+/// card, where too much separation reads as a grey band rather than a page.
+void _expectBelowRatio(Color a, Color b, double ceiling, String what) {
+  final measured = _ratio(a, b);
+  expect(
+    measured,
+    lessThan(ceiling),
+    reason: '$what measured ${measured.toStringAsFixed(3)}:1, '
+        'must stay under ${ceiling.toStringAsFixed(2)}:1',
+  );
+}
+
 void _againstAll(Map<String, Color> surfaces, Color fg, double need, String name) {
   surfaces.forEach((where, bg) {
     _expectAtLeast(_ratio(fg, bg), need, '$name ${_hex(fg)} on $where');
@@ -167,7 +180,9 @@ void main() {
     });
 
     test('key colours', () {
-      expect(_hex(NivoraColors.primary), '#C9A96E', reason: 'the gold accent');
+      expect(_hex(NivoraColors.gold), '#C9A96E', reason: 'the Figma accent, still exact');
+      expect(_hex(NivoraColors.primary), '#997FC5',
+          reason: 'primary is the brand now — the gold kept its hex and lost the job');
       expect(_hex(NivoraColors.primaryContainer), '#F5F3EE', reason: 'the CREAM filled button');
       expect(_hex(NivoraColors.secondary), '#D5A64C', reason: 'the amber');
       expect(_hex(NivoraColors.tertiary), '#5FAE82', reason: 'positive');
@@ -243,7 +258,11 @@ void main() {
       expect(scheme.surfaceBright, NivoraColors.surfaceBright);
       expect(scheme.surfaceContainerLow, NivoraColors.surfaceContainerLow);
       expect(scheme.surfaceContainer, NivoraColors.surfaceContainer);
-      expect(scheme.primary, NivoraColors.primary);
+      // `primary` is THE BRAND now, not the gold — see NivoraColors.gold for the arithmetic
+      // that forced the move. The Figma accent is still pinned, under the name it kept.
+      expect(scheme.primary, NivoraColors.brandDark);
+      expect(NivoraColors.gold, const Color(0xFFC9A96E),
+          reason: 'the Figma accent has not moved; only its job has');
       expect(scheme.onPrimary, NivoraColors.onPrimary);
       expect(scheme.primaryContainer, NivoraColors.primaryContainer);
       expect(scheme.secondary, NivoraColors.secondary);
@@ -257,8 +276,9 @@ void main() {
 
     test('THE FILLED BUTTON IS CREAM — the design\'s most distinctive decision', () {
       // 4:83 "Continue" and 4:1596 "Retry" are bg #F5F3EE with #0B0D0F text. Wiring
-      // FilledButton to `primary` instead would make every CTA in the app gold, which is the
-      // exact "fix" DESIGN-SYSTEM.md warns against.
+      // FilledButton to `primary` instead would make every CTA in the app the brand colour,
+      // which is the exact "fix" DESIGN-SYSTEM.md warns against. The LIGHT theme does not
+      // share this decision — cream on white is 1.07:1 — and its own test says so.
       final style = NivoraTheme.dark().filledButtonTheme.style!;
       const enabled = <WidgetState>{};
       expect(style.backgroundColor!.resolve(enabled), NivoraColors.primaryContainer);
@@ -269,34 +289,73 @@ void main() {
         'the cream button\'s own label',
       );
 
-      // The light theme cannot use it — a cream button on a cream page is not a button — so it
-      // keeps M3's derived primary pairing.
+      // The light theme cannot use it — cream on a white card is 1.07:1 — so it paints the
+      // brand block instead. Asserted in full by its own test in the light-scheme group.
       final lightStyle = NivoraTheme.light().filledButtonTheme.style!;
-      expect(lightStyle.backgroundColor!.resolve(enabled), NivoraTheme.light().colorScheme.primary);
+      expect(lightStyle.backgroundColor!.resolve(enabled), NivoraColors.brandDeep);
     });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════════════
-  group('the light scheme is DERIVED from #C9A96E, never drawn', () {
-    final derived = ColorScheme.fromSeed(seedColor: NivoraColors.seed);
+  group('the light scheme is DRAWN — and here is what it must never go back to', () {
+    // THIS GROUP USED TO ASSERT THE OPPOSITE. It pinned every light const to
+    // `ColorScheme.fromSeed(#C9A96E)` output, which is why the light theme shipped a
+    // quantiser's bronze #79590C as its brand for as long as it did: the seed produced a
+    // colour nobody chose, this test froze it, and the freeze read as rigour.
+    //
+    // Gold cannot be a light-theme brand, and that is arithmetic rather than taste. #C9A96E on
+    // white is 2.24:1; to clear 4.5:1 a gold has to darken to about L 0.30, and a gold at
+    // L 0.30 is a brown. The seed was always going to answer with a brown. So the light scheme
+    // is hand-drawn around hue 262 now, and what this group guards is that it can never
+    // quietly become derived output again.
+    final derived = ColorScheme.fromSeed(seedColor: NivoraColors.gold);
 
-    test('the seed is the design\'s own accent, not a colour invented for the light theme', () {
-      expect(NivoraColors.seed, NivoraColors.primary);
+    test('the light brand is NOT what the seed would have produced', () {
+      expect(NivoraColors.lightPrimary, isNot(derived.primary),
+          reason: 'if these are ever equal again, someone has reverted to fromSeed');
+      expect(NivoraColors.lightPrimary, NivoraColors.brandInk);
+      expect(_ratio(NivoraColors.gold, NivoraColors.surface), lessThan(3.0),
+          reason: 'the reason gold cannot be light-theme text, restated as a number');
     });
 
-    test('every pinned light const is still what fromSeed produces', () {
-      expect(NivoraColors.background, derived.surface, reason: 'canvas');
-      expect(NivoraColors.surface, derived.surfaceContainerLowest, reason: 'card');
-      expect(NivoraColors.lightSheet, derived.surfaceContainerHigh);
-      expect(NivoraColors.lightField, derived.surfaceContainerHighest);
-      expect(NivoraColors.textPrimary, derived.onSurface);
-      expect(NivoraColors.textSecondary, derived.onSurfaceVariant);
-      expect(NivoraColors.lightPrimary, derived.primary);
-      expect(NivoraColors.softBlueInk, derived.secondary);
-      expect(NivoraColors.controlBorder, derived.outline);
-      expect(NivoraColors.cardBorder, derived.outlineVariant);
+    test('the light brand works in BOTH directions, which is why it needs no second token', () {
+      // The rare property that lets one hex be the link AND the button fill.
+      _expectAtLeast(_ratio(NivoraColors.lightPrimary, NivoraColors.surface), 4.5,
+          'the brand as text on the card');
+      _expectAtLeast(_ratio(const Color(0xFFFFFFFF), NivoraColors.lightPrimary), 4.5,
+          'white as text on the brand');
+    });
+
+    test('the LIGHT filled button is the brand block, because cream on white is invisible', () {
+      final style = NivoraTheme.light().filledButtonTheme.style!;
+      final bg = style.backgroundColor!.resolve({})!;
+      final fg = style.foregroundColor!.resolve({})!;
+      expect(bg, NivoraColors.brandDeep);
+      expect(fg, const Color(0xFFFFFFFF));
+      _expectAtLeast(_ratio(fg, bg), 4.5, 'white on the light filled button');
+      // The mistake this exists to prevent: the dark theme's cream, pasted across.
+      expect(_ratio(NivoraColors.primaryContainer, NivoraColors.surface), lessThan(1.5),
+          reason: 'cream on the light card is not a button and never was');
+    });
+
+    test('the brand block is the SAME object in both themes', () {
+      // The one surface a light phone and a dark phone show identically. It is what makes the
+      // product recognisable before a word is read, and a light-only competitor cannot do it.
+      expect(NivoraTheme.light().colorScheme.primaryContainer, NivoraColors.brandDeep);
+      expect(NivoraColors.brandDeep, const Color(0xFF4D2896));
+      _expectAtLeast(_ratio(const Color(0xFFFFFFFF), NivoraColors.brandDeep), 4.5,
+          'white on the brand block');
+      _expectAtLeast(_ratio(NivoraColors.gold, NivoraColors.brandDeep), 4.5,
+          'the metal still reads as TEXT on the block, which is where gold belongs now');
+    });
+
+    test('the light aliases still point where the app expects', () {
       expect(NivoraColors.indigo, NivoraColors.lightPrimary);
-      expect(NivoraColors.hairline, NivoraColors.lightField);
+      expect(NivoraColors.brand, NivoraColors.rooms, reason: 'the brand is the rooms violet');
+      expect(NivoraColors.brandInk, NivoraColors.roomsInk);
+      expect(NivoraColors.brandDark, NivoraColors.roomsDark);
+      expect(NivoraColors.hairline, isNot(NivoraColors.lightField),
+          reason: 'the divider is lighter than the field now; they used to be one token');
     });
   });
 
@@ -753,18 +812,23 @@ void main() {
         for (final tones in [NivoraSemantics.dark, NivoraSemantics.light]) {
           final ink = tones.resolve(d.tone);
           // A domain that resolved to its own canonical would be one the paint site cannot
-          // make legible — except security, which is the scheme's primary and is meant to.
-          if (d == NivoraDomain.security) {
-            expect(ink, NivoraColors.primary, reason: 'security is the brand gold, unresolved');
-          } else {
-            expect(ink, isNot(d.tone), reason: '${d.name} did not resolve to a theme ink');
-          }
+          // make legible. THAT USED TO BE EXEMPTED FOR SECURITY, and the exemption was a bug
+          // this test was blessing: security named the gold, resolve() had no branch for it,
+          // and the paint site got #C9A96E at 2.24:1 on a white card — below even the 3:1
+          // graphics bar. Security is the Home/Dashboard domain for three of the five roles,
+          // so it was the most-drawn tone in the app. It resolves like every other domain now.
+          expect(ink, isNot(d.tone), reason: '${d.name} did not resolve to a theme ink');
         }
       }
-      // Seven domains, six distinct tones plus the brand: no two areas share a colour except
-      // by the documented decision that complaints and open work are both amber.
+      // ONE PAIR SHARES A COLOUR, ON PURPOSE. rooms and security are both the brand violet
+      // now, because in a PG product the building IS the platform — the floors-and-beds domain
+      // and the account-and-security domain are the same brand, not a collision. Security used
+      // to hold the gold on its own, which is what made it illegible in the light theme.
+      // Every other pair stays distinct, and this assertion is what keeps a third from
+      // quietly joining them.
       final tones = NivoraDomain.values.map((d) => d.tone).toSet();
-      expect(tones.length, NivoraDomain.values.length);
+      expect(tones.length, NivoraDomain.values.length - 1);
+      expect(NivoraDomain.security.tone, NivoraDomain.rooms.tone);
     });
   });
 
@@ -1100,12 +1164,25 @@ void main() {
           greaterThan(_luminance(GlassWeight.thin.surfaceOf(dark))),
           reason: 'a card and a bar must not be the same fill');
 
-      // The light theme elevates by shadow instead: the card is already the lightest surface,
-      // so stepping "up" would mean stepping toward grey.
+      // THE LIGHT THEME HAS A LADDER NOW, AND THIS TEST USED TO PROVE IT DID NOT. It asserted
+      // every weight returned `light.surface`, on the stated reasoning that light "elevates by
+      // shadow instead" — but Shadows.level1 and level2 are both empty lists, so light elevated
+      // by neither and card, bar and sheet were all #FFFFFF. The three-rung hierarchy this enum
+      // describes was invisible on every light-mode phone.
+      //
+      // The direction is inverted from dark, deliberately: a light card is white and the
+      // surfaces BEHIND it step DOWN toward the canvas, where a dark card is near-black and the
+      // surfaces above it step up.
       final light = NivoraTheme.light().colorScheme;
-      for (final w in GlassWeight.values) {
-        expect(w.surfaceOf(light), light.surface, reason: '${w.name} tinted the light theme');
-      }
+      expect(GlassWeight.thin.surfaceOf(light), light.surface, reason: 'the card is white');
+      expect(GlassWeight.thick.surfaceOf(light), light.surface,
+          reason: 'a sheet reads as a card lifted out, not as a tint');
+      expect(_luminance(GlassWeight.regular.surfaceOf(light)),
+          lessThan(_luminance(GlassWeight.thin.surfaceOf(light))),
+          reason: 'the bar and header must be distinguishable from the card they sit against');
+      // ...but only just. A bar that steps too far down reads as a different product.
+      _expectBelowRatio(GlassWeight.regular.surfaceOf(light), light.surface, 1.15,
+          'the light bar is a whisper below the card, not a grey band');
     });
 
     testWidgets('a dark pane edge is the design\'s own hairline, not a white alpha',
@@ -1475,12 +1552,16 @@ void main() {
     });
 
     test('the radius vocabulary is exactly the design\'s four steps', () {
-      // 14 screen · 12 card · 8 button/input/icon · 4 badge. Built through a list rather than a
-      // set literal because `surface` and `sheet` deliberately share 14.
+      // 20 screen · 16 card · 12 button/input/icon · 6 badge. Built through a list rather than
+      // a set literal because `surface` and `sheet` deliberately share 20.
+      //
+      // These were 14 / 12 / 8 / 4 until the competitor teardown: every card in all 282 of its
+      // layouts is 20dp, with no exceptions, and a 12dp card next to that reads as austere.
+      // See the note above Radii in tokens.dart for what was taken and what was refused.
       final named = <double>[
         Radii.tiny, Radii.control, Radii.card, Radii.surface, Radii.sheet, Radii.pill,
       ];
-      expect(named.toSet(), {4.0, 8.0, 12.0, 14.0, 999.0});
+      expect(named.toSet(), {6.0, 12.0, 16.0, 20.0, 999.0});
       expect(Radii.tiny, lessThan(Radii.control));
       expect(Radii.control, lessThan(Radii.card));
       expect(Radii.card, lessThan(Radii.surface));

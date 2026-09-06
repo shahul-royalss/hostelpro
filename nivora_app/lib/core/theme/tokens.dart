@@ -163,12 +163,46 @@ abstract final class NivoraColors {
 
   // ── key colours
 
-  /// `accent (gold)` #C9A96E — emphasis, links, active state, chart lines, the brand dot, and
-  /// the renew CTA's fill (4:1537). 8.70:1 on the ground, 7.16:1 on [surfaceBright].
-  static const primary = Color(0xFFC9A96E);
+  /// THE METAL. `#C9A96E`, the Figma accent — and no longer the brand.
+  ///
+  /// WHY IT WAS DEMOTED, WHICH IS ARITHMETIC AND NOT TASTE. On white this measures 2.24:1. To
+  /// clear 4.5:1 on white a gold has to be darkened to about L 0.30, and a gold at L 0.30 is a
+  /// brown — which is precisely what `ColorScheme.fromSeed(#C9A96E)` returned for the old light
+  /// theme (#79590C) and precisely the trap the competitor fell into with peach over brown.
+  /// Blue and violet keep their identity across the lightness range a dual-theme app needs;
+  /// gold does not. So gold keeps every job where it is unbeatable — the wordmark, the splash,
+  /// the BeamCard comet, the subscription accent, graphics on [brandDeep] (4.56:1 on it) — and
+  /// gives up the one it could never hold, which is being the colour on a white card.
+  ///
+  /// 8.70:1 on the ground, 7.16:1 on [surfaceBright]. NEVER light-theme text.
+  static const gold = Color(0xFFC9A96E);
 
-  /// Text on the gold. The design's own `text-[#0b0d0f]` on 4:1537. 8.70:1.
+  /// THE BRAND, dark theme. (= [roomsDark]) `scheme.primary` in dark: the FAB, the focus ring,
+  /// text buttons, the nav indicator. 4.73:1 worst on the four dark surfaces.
+  ///
+  /// This is the same hue 262 family as [brand] and [brandInk]; see [gold] for why the brand
+  /// moved off the gold at all.
+  static const primary = roomsDark;
+
+  /// Text on [primary]. The ground, at 5.74:1 — dimmer than the gold's 8.70:1 and well clear
+  /// of the 4.5 bar.
   static const onPrimary = ground;
+
+  /// THE FULL-BLEED BRAND. `#4D2896` — the hero brow, the four onboarding grounds, and the
+  /// light theme's filled button.
+  ///
+  /// IDENTICAL IN BOTH THEMES, deliberately: it is the one surface where a light phone and a
+  /// dark phone show literally the same object, which is what makes the app recognisable
+  /// before a single word is read. A light-theme-only competitor cannot answer that.
+  ///
+  /// Cream #F5F3EE on it 9.20:1 · white 10.20:1 · [gold] 4.56:1, so even gold TEXT passes.
+  /// Against the light canvas 8.96:1; against the dark ground 1.91:1 — quiet there, but 35%
+  /// louder than the 1.42:1 hairline that currently does all the separating, so it still reads
+  /// as a block.
+  ///
+  /// Painted with no BuildContext, so it is never a canonical tone and never goes through
+  /// [NivoraSemantics.resolve].
+  static const brandDeep = Color(0xFF4D2896);
 
   /// THE CREAM PRIMARY BUTTON — `bg-[#f5f3ee]` on 4:83 ("Continue") and 4:1596 ("Retry").
   /// Not a container in the M3 tonal sense; it is the design's filled action and this is the
@@ -315,29 +349,48 @@ abstract final class NivoraColors {
   /// (= [outline]) 3.70:1 on the design's own field fill.
   static const darkControlBorder = outline;
 
-  // ═══ LIGHT — derived from [seed], never drawn ═══════════════════════════════
-  // Every value below is `ColorScheme.fromSeed(seedColor: seed)` output, pinned as a const so
-  // it can be used in const expressions. theme.dart calls fromSeed for real; the test asserts
-  // these consts still match it, so they cannot quietly become hand-picked.
+  // ═══ LIGHT — DRAWN, at last ═════════════════════════════════════════════════
+  //
+  // These were `ColorScheme.fromSeed(seedColor: #C9A96E)` output until now, and the file said
+  // so in its own voice: "nobody designed a light Nivora… the honest recommendation is
+  // ThemeMode.dark". But main.dart ships ThemeMode.system, so on a light-mode phone — which is
+  // most phones — the quantiser's bronze #79590C WAS the product. A competitor teardown made
+  // that impossible to keep: peach-and-brown lost to us on rigour and beat us on presence, and
+  // our light theme was in the same brown family without even having chosen it.
+  //
+  // So the light scheme is now hand-drawn around hue 262, the indigo the app already owned as
+  // `rooms`. Every value below carries its MEASURED ratio and test/theme_contrast_test.dart
+  // recomputes all of them; a colour nudged by eye fails the build with the number it got.
+  //
+  // Worst plain text on any light surface: 5.14:1. Worst on a 10% chip of itself: 4.52:1.
+  // Worst control border: 3.26:1. Bars are 4.5 (§1.4.3) and 3.0 (§1.4.11).
+  //
+  // ── THE ONE NUMBER THAT LOOKS ARBITRARY AND IS NOT ────────────────────────────────────────
+  // [lightField] #DFE2EE has relative luminance 0.7625 against the old #EBE1D4's 0.7627. That
+  // is deliberate to four decimal places: the status chip is the tightest case in the app, its
+  // arithmetic is driven by the field, and holding the field's luminance still means seven of
+  // the eight semantic inks survive the redraw with no edit at all. Only [foodInk] moved, by
+  // one byte of red, because the shipped #864F1F measures 4.4986:1 on a 10% chip over the new
+  // field — one ten-thousandth under the bar.
 
   /// Derived `surface` — the light canvas. `scaffoldBackgroundColor`.
-  static const background = Color(0xFFFFF8F3);
+  static const background = Color(0xFFEEF0F8);
 
   /// Derived `surfaceContainerLowest` — a card. In the light direction elevation runs TOWARD
   /// white, which is why the card is the lowest container rather than the highest.
   static const surface = Color(0xFFFFFFFF);
 
   /// Derived `surfaceContainerHigh` — a sheet.
-  static const lightSheet = Color(0xFFF1E7D9);
+  static const lightSheet = Color(0xFFF7F8FC);
 
   /// Derived `surfaceContainerHighest` — chips and the input fill.
-  static const lightField = Color(0xFFEBE1D4);
+  static const lightField = Color(0xFFDFE2EE);
 
   /// Derived `onSurface`. 17.11:1 on the card.
-  static const textPrimary = Color(0xFF201B13);
+  static const textPrimary = Color(0xFF14161D);
 
   /// Derived `onSurfaceVariant`. 9.30:1 on the card, 7.19:1 on the field.
-  static const textSecondary = Color(0xFF4E4639);
+  static const textSecondary = Color(0xFF434857);
 
   /// Derived `primary`.
   ///
@@ -347,24 +400,24 @@ abstract final class NivoraColors {
   /// scheme nobody designed. It is at least the right FAMILY now — the previous seed produced
   /// a grey-violet that shared nothing with the product. The recommendation stands:
   /// run the app `ThemeMode.dark`.
-  static const lightPrimary = Color(0xFF79590C);
+  static const lightPrimary = roomsInk;
 
   /// (= [lightPrimary]) The name the existing call sites already use.
   static const indigo = lightPrimary;
 
   /// Derived `secondary`. 6.48:1 on the card. Kept under its old name for the call sites that
   /// mean "the other accent".
-  static const softBlueInk = Color(0xFF6C5C3F);
+  static const softBlueInk = Color(0xFF464E6B);
 
   /// Derived `outline` — the light control border. 4.48:1 on the card, 3.47:1 on the field.
-  static const controlBorder = Color(0xFF7F7667);
+  static const controlBorder = Color(0xFF767B8C);
 
   /// Derived `outlineVariant` — a card's edge. 1.70:1 on the card.
-  static const cardBorder = Color(0xFFD1C5B4);
+  static const cardBorder = Color(0xFFCDD1E0);
 
   /// A divider. (= [lightField]) 1.29:1 on the card — quieter than [cardBorder], which is the
   /// whole reason the two are separate tokens.
-  static const hairline = lightField;
+  static const hairline = Color(0xFFE4E7F1);
 
   // ═══ SEMANTIC ══════════════════════════════════════════════════════════════
 
@@ -473,11 +526,32 @@ abstract final class NivoraColors {
   static const peopleDark = Color(0xFF3F9995);
 
   /// [food] darkened for the light theme. 5.16:1 plain, 4.51:1 on a chip.
-  static const foodInk = Color(0xFF864F1F);
+  static const foodInk = Color(0xFF854F1F);
 
   /// [rooms] darkened for the light theme. 5.14:1 plain, 4.50:1 on a chip — at the bar, and
   /// the bar is the contract. The chip alpha is at its ceiling for every tone in this file.
   static const roomsInk = Color(0xFF6C4AA5);
+
+  // ── THE BRAND, under the name it earned ──────────────────────────────────────────────────
+  //
+  // Three aliases, no new hexes. `rooms` was always the only colour in this palette with a
+  // full-bleed presence — AuroraField paints it behind the sign-in screen and behind two of
+  // the shells — and it was the one canonical tone never allowed to be the brand, because the
+  // brand was the gold. See [gold] for why that could not survive a light theme.
+  //
+  // In a PG product the building IS the platform, so rooms and the brand being one colour is
+  // the honest reading rather than a coincidence being exploited.
+
+  /// THE BRAND, canonical. (= [rooms]) Context-free paint only: chart marks, avatar hashes,
+  /// domain icons. L 0.1803, which sits inside the dual-theme window, so it clears 3:1 on all
+  /// eight surfaces. NOT legible as small text — resolve it first.
+  static const brand = rooms;
+
+  /// THE BRAND as light-theme text. (= [roomsInk]) `scheme.primary` in light.
+  static const brandInk = roomsInk;
+
+  /// THE BRAND as dark-theme text. (= [roomsDark]) `scheme.primary` in dark.
+  static const brandDark = roomsDark;
 
   /// [people] darkened for the light theme. 5.19:1 plain, 4.56:1 on a chip.
   static const peopleInk = Color(0xFF296562);
@@ -585,6 +659,10 @@ class NivoraSemantics extends ThemeExtension<NivoraSemantics> {
     if (tone == NivoraColors.food) return food;
     if (tone == NivoraColors.rooms) return rooms;
     if (tone == NivoraColors.people) return people;
+    // [NivoraColors.brand] IS [NivoraColors.rooms], so the branch above already caught it and
+    // security resolves with every other domain. It did not used to: security named the gold,
+    // the gold had no branch, and `return tone` handed #C9A96E straight to the paint site —
+    // 2.24:1 on a white card, on the Home tab of three of the five roles.
     return tone;
   }
 
@@ -762,9 +840,15 @@ enum NivoraDomain {
   /// The weekly menu.
   food(NivoraColors.food, Icons.restaurant_rounded),
 
-  /// Security, the account, the platform itself. The brand's own gold — passed through
-  /// [NivoraSemantics.resolve] unchanged, because it is a scheme colour and not a semantic one.
-  security(NivoraColors.primary, Icons.shield_rounded);
+  /// Security, the account, the platform itself. The brand — and it resolves like every other
+  /// domain now.
+  ///
+  /// IT USED TO BE THE GOLD, AND THAT WAS A LIGHT-MODE BUG. `NivoraColors.primary` was
+  /// #C9A96E, [NivoraSemantics.resolve] had no branch for it, so the paint site received the
+  /// canonical gold and drew it at 2.24:1 on a white card — below even the 3:1 graphics bar.
+  /// This is the Home/Dashboard domain for the owner, student and manager shells, so it was
+  /// the most-drawn tone in the app. It now resolves to #6C4AA5 in light and #997FC5 in dark.
+  security(NivoraColors.brand, Icons.shield_rounded);
 
   const NivoraDomain(this.tone, this.icon);
 
@@ -812,23 +896,45 @@ abstract final class Space {
 /// the home indicator is 2. Those are strays rather than a second vocabulary: the same
 /// element is drawn at 8 elsewhere in the same file, and half of them are pill shapes whose
 /// radius is just half their height. Do not add steps to match them.
+// ── THE CORNERS GREW, AND HERE IS THE EVIDENCE THAT SAID THEY SHOULD ────────────────────────
+//
+// The values below used to be 4 / 8 / 12 / 14, taken from the Figma frames. Tearing down the
+// nearest shipping competitor settled the question of whether that was tight: across all 282
+// of its layouts, EVERY card is `cardCornerRadius=20dp` and every inner tile is 10dp, with no
+// exceptions — dashboard, inmate, bill, expense, notice, issue, payment-approval, people,
+// wallet and rooms cards all agree. Their consistency is as deliberate as ours; their number
+// is simply bigger, and next to it a 12dp card reads as austere rather than crisp.
+//
+// What we did NOT copy from them is elevation: every one of those cards is `cardElevation=0dp`.
+// They separate a card from its ground with a lighter fill, exactly as this file already does
+// with a hairline. So the no-shadow rule below stands, and only the corner moved.
+//
+// This is a two-line change that reaches ~145 call sites, because every corner in the app is
+// drawn from this class — there are exactly two hardcoded BorderRadius literals in lib/, and
+// both are shapes (a 999 pill and a 2px meter track) rather than strays.
 abstract final class Radii {
-  /// A badge — `rounded-[4px]` on every state badge (4:1576, 4:1589, 4:1600) and the
-  /// notification dot. Something too small to have a corner in the usual sense.
-  static const tiny = 4.0;
+  /// A badge — every state badge and the notification dot. Something too small to have a
+  /// corner in the usual sense, lifted from 4 so it does not read as a hard square beside the
+  /// softer controls around it.
+  static const tiny = 6.0;
 
-  /// Buttons, inputs, icon buttons, inner rows, small cards.
-  static const control = 8.0;
+  /// Buttons, inputs, icon buttons, inner rows, small cards. The competitor's inner tiles are
+  /// 10; 12 keeps this a clean step below [card] and above [tiny].
+  static const control = 12.0;
 
-  /// Cards and list groups — the empty / error / skeleton cards are `rounded-[12px]`.
-  static const card = 12.0;
+  /// Cards and list groups. 16 rather than the competitor's 20: NIVORA's cards are denser —
+  /// a warden's fee row carries four figures where theirs carries one — and 20dp on a 64dp-tall
+  /// row starts eating the content's own corners.
+  static const card = 16.0;
 
-  /// The largest step in the file: the screen shell itself. Large panels.
-  static const surface = 14.0;
+  /// The largest step in the file: the screen shell itself, and large panels. This is where
+  /// the competitor's 20 belongs, on the biggest surfaces, where it reads as generous rather
+  /// than bubbly.
+  static const surface = 20.0;
 
   /// Bottom sheets and modals. A sheet is a screen-sized surface, so it takes the screen's own
   /// corner rather than a card's.
-  static const sheet = 14.0;
+  static const sheet = 20.0;
 
   /// Only for things genuinely capsule-shaped that never wrap to a second line: a progress
   /// track, a drag handle, an avatar, the FAB. A status pill uses [control] — a capsule that
@@ -953,9 +1059,23 @@ enum GlassWeight {
 
   /// The surface this weight paints in the given scheme.
   Color surfaceOf(ColorScheme scheme) {
-    // Light elevates by shadow, not by colour: the card is already the lightest surface there,
-    // so stepping "up" would mean stepping toward grey.
-    if (scheme.brightness == Brightness.light) return scheme.surface;
+    // LIGHT HAS A RAMP NOW. This used to short-circuit to `scheme.surface` for every weight,
+    // on the reasoning that "light elevates by shadow, not by colour" — but Shadows.level1 and
+    // level2 are both empty lists, so light elevated by NEITHER and card, bar and sheet were
+    // all #FFFFFF. The three-rung hierarchy this enum describes was invisible on half the
+    // phones running the app.
+    //
+    // The direction is inverted from dark on purpose: a light card is white and the surfaces
+    // BEHIND it step down toward the canvas, where a dark card is near-black and the surfaces
+    // above it step up. `regular` — the bar, the header — is the only rung that moves, because
+    // it is the only one that is ever seen against another pane.
+    if (scheme.brightness == Brightness.light) {
+      return switch (this) {
+        GlassWeight.thin => scheme.surface, // #FFFFFF, the card
+        GlassWeight.regular => NivoraColors.lightSheet, // #F7F8FC, the bar and the header
+        GlassWeight.thick => scheme.surface, // #FFFFFF, a sheet reads as a card lifted out
+      };
+    }
     return switch (this) {
       GlassWeight.thin => scheme.surfaceContainerLow,
       GlassWeight.regular => scheme.surfaceContainer,
@@ -1065,7 +1185,9 @@ abstract final class Shadows {
   /// kept because a floating action button with no lift on a flat near-black page reads as a
   /// sticker. Sparingly: one per screen, on the one control that is the screen's purpose.
   static const glow = <BoxShadow>[
-    BoxShadow(color: Color(0x4DC9A96E), blurRadius: 20),
+    // Follows [NivoraColors.primary], which is the brand indigo #997FC5 now rather than the
+    // gold. A halo in a different colour from the button it surrounds reads as a bug.
+    BoxShadow(color: Color(0x4D997FC5), blurRadius: 20),
   ];
 }
 

@@ -103,19 +103,66 @@ abstract final class NivoraTheme {
     scrim: Color(0xFF000000),
   );
 
-  /// Derived once. `fromSeed` runs a quantiser and this is read on every theme rebuild, so it
-  /// is a `static final` rather than a call inside [light].
+  /// THE LIGHT SCHEME, DRAWN — and it used to be `ColorScheme.fromSeed(#C9A96E)`.
   ///
-  /// Two overrides: `surface` becomes the derived `surfaceContainerLowest` (white), for the
-  /// same reason as note 1 — `surface` is the card here too, and the derived `surface`
-  /// #FFF8F3 is the ground. `error` becomes the semantic ink so the light theme has one red
-  /// rather than a scheme red and a chip red a shade apart.
-  static final ColorScheme _lightScheme = ColorScheme.fromSeed(
-    seedColor: NivoraColors.seed,
-  ).copyWith(
-    surface: NivoraColors.surface, // white; the derived surfaceContainerLowest
+  /// WHY THAT HAD TO GO. The quantiser answered the gold with #79590C, a dark bronze, and every
+  /// filled button, link and focus ring in the light theme painted it. The file above this one
+  /// said so in its own voice — "nobody designed a light Nivora" — and recommended shipping
+  /// `ThemeMode.dark`. main.dart ships `ThemeMode.system`, so on a light-mode phone the
+  /// quantiser's bronze WAS the product. Every hex below was chosen and measured instead; see
+  /// the light block of tokens.dart for the ratios and design-competitor/NIVORA-REDESIGN-SPEC.md
+  /// for why the brand moved off the gold.
+  ///
+  /// `const` rather than `static final` now: there is no quantiser left to run once.
+  static const ColorScheme _lightScheme = ColorScheme.light(
+    brightness: Brightness.light,
+
+    // THE BRAND. #6C4AA5 — 6.64:1 on the card and 6.64:1 for white on it, which is the rare
+    // pairing that works in both directions and is why this colour can be both the link and
+    // the button without a second token.
+    primary: NivoraColors.lightPrimary,
+    onPrimary: Color(0xFFFFFFFF), // 6.64:1
+    // The full-bleed brand, shared with the dark theme and the hero brow.
+    primaryContainer: NivoraColors.brandDeep,
+    onPrimaryContainer: Color(0xFFFFFFFF), // 10.20:1
+
+    // SLATE is `secondary`: the quieter of the two inks, for supporting emphasis.
+    secondary: NivoraColors.softBlueInk, // 8.20:1 on the card
+    onSecondary: Color(0xFFFFFFFF),
+    secondaryContainer: NivoraColors.lightField,
+    onSecondaryContainer: NivoraColors.textPrimary, // 13.98:1
+
+    // The metal, kept reachable as a container for the subscription accent. Never as text.
+    tertiary: NivoraColors.foodInk, // 4.52:1 worst, on a chip of itself
+    onTertiary: Color(0xFFFFFFFF),
+    tertiaryContainer: NivoraColors.lightSheet,
+    onTertiaryContainer: NivoraColors.textPrimary,
+
+    // ONE RED. The semantic ink, so a scheme red and a chip red are not a shade apart.
     error: NivoraColors.errorInk, // 6.82:1 for white on it
-    onError: const Color(0xFFFFFFFF),
+    onError: Color(0xFFFFFFFF),
+    errorContainer: NivoraColors.lightField,
+    onErrorContainer: NivoraColors.errorInk,
+
+    // THE FOUR SURFACES. `surface` is the CARD, not the canvas — the same inversion the dark
+    // scheme makes, and for the same reason: GlassWeight.thin reads scheme.surface.
+    surface: NivoraColors.surface, // #FFFFFF, the card
+    onSurface: NivoraColors.textPrimary, // 18.07:1
+    onSurfaceVariant: NivoraColors.textSecondary, // 9.12:1
+    surfaceContainerLowest: NivoraColors.surface,
+    surfaceContainerLow: NivoraColors.lightSheet, // #F7F8FC
+    surfaceContainer: NivoraColors.lightSheet,
+    surfaceContainerHigh: NivoraColors.lightSheet,
+    surfaceContainerHighest: NivoraColors.lightField, // #DFE2EE
+    surfaceTint: NivoraColors.lightPrimary,
+
+    outline: NivoraColors.controlBorder, // 3.26:1 worst — §1.4.11
+    outlineVariant: NivoraColors.cardBorder,
+
+    inverseSurface: NivoraColors.textPrimary,
+    onInverseSurface: NivoraColors.surface,
+    shadow: Color(0xFF000000),
+    scrim: Color(0xFF000000),
   );
 
   static ThemeData dark() => _base(
@@ -141,10 +188,11 @@ abstract final class NivoraTheme {
         muted: NivoraColors.mutedInk,
         controlBorder: NivoraColors.controlBorder,
         fieldFill: NivoraColors.lightField,
-        // A cream button on a cream page is not a button. The light theme keeps M3's own
-        // primary/onPrimary pairing, which is derived and measures 6.47:1.
-        filledButtonBackground: _lightScheme.primary,
-        filledButtonForeground: _lightScheme.onPrimary,
+        // THE FULL-BLEED BRAND, not the lighter link colour. #4D2896 with white on it is
+        // 10.20:1, and it is the same object the hero brow and the onboarding pages paint, so
+        // the primary action on a light phone is recognisably the same colour as the product.
+        filledButtonBackground: NivoraColors.brandDeep,
+        filledButtonForeground: const Color(0xFFFFFFFF),
         semantics: NivoraSemantics.light,
       );
 
