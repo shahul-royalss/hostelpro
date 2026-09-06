@@ -13,6 +13,7 @@ import 'fees/warden_fees_screen.dart';
 import 'home/warden_home_screen.dart';
 import 'rooms/warden_rooms_screen.dart';
 import 'students/warden_students_screen.dart';
+import '../../shared/motion/tab_swap.dart';
 
 /// The warden's five tabs.
 ///
@@ -67,12 +68,12 @@ class _WardenShellState extends ConsumerState<WardenShell> {
   /// Home is the platform's own gold; the other four are the domains they open, in the same
   /// order as the destinations below and as features/shell/role_shell.dart.
   static NivoraDomain _domainOfTab(int index) => switch (index) {
-        1 => NivoraDomain.people,
-        2 => NivoraDomain.rooms,
-        3 => NivoraDomain.money,
-        4 => NivoraDomain.complaints,
-        _ => NivoraDomain.security,
-      };
+    1 => NivoraDomain.people,
+    2 => NivoraDomain.rooms,
+    3 => NivoraDomain.money,
+    4 => NivoraDomain.complaints,
+    _ => NivoraDomain.security,
+  };
 
   @override
   void initState() {
@@ -124,22 +125,33 @@ class _WardenShellState extends ConsumerState<WardenShell> {
     final stats = hostelId == null
         ? null
         : ref
-            .watch(hostelStatsProvider(StatsQuery(
-              hostelId: hostelId,
-              periodMonth: ref.watch(currentPeriodMonthProvider),
-            )))
-            .value;
+              .watch(
+                hostelStatsProvider(
+                  StatsQuery(
+                    hostelId: hostelId,
+                    periodMonth: ref.watch(currentPeriodMonthProvider),
+                  ),
+                ),
+              )
+              .value;
 
     return Scaffold(
-      body: IndexedStack(
+      // The bar animated its own indicator and the page it commands did not, which reads as
+      // the two being unconnected. TabSwap keeps this ONE IndexedStack — swapping it out for
+      // an AnimatedSwitcher would change its key and throw away every tab's scroll position,
+      // which is the whole reason an IndexedStack is here. See shared/motion/tab_swap.dart.
+      body: TabSwap(
         index: index,
-        children: [
-          const WardenHomeScreen(),
-          _mounted.contains(1) ? const WardenStudentsScreen() : const SizedBox.shrink(),
-          _mounted.contains(2) ? const WardenRoomsScreen() : const SizedBox.shrink(),
-          _mounted.contains(3) ? const WardenFeesScreen() : const SizedBox.shrink(),
-          _mounted.contains(4) ? const WardenComplaintsScreen() : const SizedBox.shrink(),
-        ],
+        child: IndexedStack(
+          index: index,
+          children: [
+            const WardenHomeScreen(),
+            _mounted.contains(1) ? const WardenStudentsScreen() : const SizedBox.shrink(),
+            _mounted.contains(2) ? const WardenRoomsScreen() : const SizedBox.shrink(),
+            _mounted.contains(3) ? const WardenFeesScreen() : const SizedBox.shrink(),
+            _mounted.contains(4) ? const WardenComplaintsScreen() : const SizedBox.shrink(),
+          ],
+        ),
       ),
       // THE FIGMA FILE DRAWS NO TAB BAR. Every `screen-warden-*` frame ends in an iOS home
       // indicator (4:721, 4:819) and nothing else, so there is no bar in the file to copy and
@@ -189,9 +201,10 @@ class _WardenShellState extends ConsumerState<WardenShell> {
               destinations: [
                 const NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Home'),
                 const NavigationDestination(
-                    icon: Icon(Icons.people_alt_rounded), label: 'Students'),
-                const NavigationDestination(
-                    icon: Icon(Icons.meeting_room_rounded), label: 'Rooms'),
+                  icon: Icon(Icons.people_alt_rounded),
+                  label: 'Students',
+                ),
+                const NavigationDestination(icon: Icon(Icons.meeting_room_rounded), label: 'Rooms'),
                 NavigationDestination(
                   icon: _Badged(
                     count: stats?.studentsUnpaid,

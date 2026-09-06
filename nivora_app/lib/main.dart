@@ -27,6 +27,8 @@ Future<void> main() async {
   // it in production. A first launch on a bad connection then still looks like Nivora.
   GoogleFonts.config.allowRuntimeFetching = false;
 
+  _installErrorHandlers();
+
   // NOTHING IS AWAITED BEFORE THIS LINE, AND THAT IS THE POINT. Every await here is a frame the
   // app does not draw, and the window Android shows in the meantime is a flat #0B0D0F rectangle
   // with no logo, no text and no spinner — the owner's "completely black screen". See
@@ -208,6 +210,91 @@ class _NivoraAppState extends ConsumerState<NivoraApp> {
       },
     );
   }
+}
+
+/// THE THREE HANDLERS FLUTTER LEAVES TO YOU, AND WHAT HAPPENED WITHOUT THEM.
+///
+/// Flutter has three separate error channels and, until this function existed, this app set
+/// none of them. StartupFailure below covers exactly one case — initialisation throwing — and
+/// every other failure fell through to the framework's defaults:
+///
+///   1. A throw inside build() painted [ErrorWidget], which in a RELEASE build is a grey
+///      rectangle with no text at all. The owner's ask was "no crashes has to occur"; a screen
+///      that silently becomes a grey block is worse than a crash, because a crash at least
+///      tells you it happened.
+///   2. A framework error printed to a console nobody on a phone can read.
+///   3. An unhandled async error — a Future with no catch, a stream error — reached the engine
+///      and TERMINATED THE PROCESS. The app simply vanishes from the screen.
+///
+/// None of these is caught by the guard()/AppFailure discipline the repositories use, because
+/// that only covers awaited calls the code knew to wrap. This is the floor under everything
+/// else.
+///
+/// ── DEBUG KEEPS THE RED BOX, ON PURPOSE ───────────────────────────────────────────────────
+///
+/// The red-and-yellow error box is one of the best diagnostics Flutter has, and replacing it in
+/// development would trade a stack trace for a polite sentence at exactly the moment a stack
+/// trace is what you want. The friendly panel is release-only.
+void _installErrorHandlers() {
+  // 1 — a throw inside build/layout/paint.
+  if (kReleaseMode) {
+    ErrorWidget.builder = (details) => const _BrokenScreen();
+  }
+
+  // 2 — every framework error. presentError still runs, so debug behaviour is unchanged and
+  // release still writes the detail to the platform log for `adb logcat` / Console.app.
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+  };
+
+  // 3 — errors that escape the framework entirely: an unawaited Future, a stream with no
+  // onError. Returning TRUE is the whole point — it tells the engine the error is handled, so
+  // the process is not torn down. Before this, one forgotten `await` anywhere in 183 files
+  // could close the app on a warden mid-payment.
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FlutterError.reportError(
+      FlutterErrorDetails(exception: error, stack: stack, library: 'nivora'),
+    );
+    return true;
+  };
+}
+
+/// What a user sees instead of a grey rectangle when one screen's build throws in release.
+///
+/// It says the app is still running and names the way out, because that is true: only the
+/// subtree that threw is replaced, so the shell, the bottom bar and every other tab are intact
+/// and one tap away. Hard-coded colours for the same reason [StartupFailure] uses them — this
+/// widget can be built in a context where the thing that threw WAS the theme.
+class _BrokenScreen extends StatelessWidget {
+  const _BrokenScreen();
+
+  @override
+  Widget build(BuildContext context) => const ColoredBox(
+        color: Color(0xFF0B0D0F),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'This part did not load',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFFF5F3EE)),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'The rest of Nivora is still working. Use the bar at the bottom to go to '
+                  'another tab, and come back to this one in a moment.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, height: 1.4, color: Color(0xFFA2A6AB)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
 }
 
 /// Shown when the app cannot start at all. Deliberately depends on nothing — no theme, no

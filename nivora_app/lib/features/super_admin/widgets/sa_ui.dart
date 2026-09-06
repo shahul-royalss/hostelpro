@@ -39,8 +39,7 @@ import '../data/sa_models.dart';
 // FORMATTERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-final NumberFormat _rupees =
-    NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+final NumberFormat _rupees = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 final NumberFormat _plain = NumberFormat.decimalPattern('en_IN');
 final DateFormat _day = DateFormat('d MMM yyyy');
 final DateFormat _dayShort = DateFormat('d MMM');
@@ -164,7 +163,7 @@ extension SaHostelWritability on SaHostelRow {
       return subEnd == null
           ? 'No subscription has ever been recorded, so every write is refused.'
           : 'The subscription ended on ${dateLabel(subEnd!)}. Staff can read but cannot '
-              'register residents, record payments or resolve complaints until it is renewed.';
+                'register residents, record payments or resolve complaints until it is renewed.';
     }
     return null;
   }
@@ -181,23 +180,23 @@ extension SaHostelWritability on SaHostelRow {
 /// The colour a subscription state is drawn in — resolved for THIS theme, so it is legible as
 /// text on a light surface and on a dark one. See NivoraSemantics.
 Color subscriptionTone(BuildContext context, SubscriptionState state) => switch (state) {
-      SubscriptionState.active => context.tones.success,
-      SubscriptionState.expiring => context.tones.warning,
-      SubscriptionState.expired => context.tones.error,
-    };
+  SubscriptionState.active => context.tones.success,
+  SubscriptionState.expiring => context.tones.warning,
+  SubscriptionState.expired => context.tones.error,
+};
 
 Color hostelTone(BuildContext context, HostelStatus status) => switch (status) {
-      HostelStatus.active => context.tones.success,
-      HostelStatus.readonly => context.tones.warning,
-      HostelStatus.suspended => context.tones.error,
-    };
+  HostelStatus.active => context.tones.success,
+  HostelStatus.readonly => context.tones.warning,
+  HostelStatus.suspended => context.tones.error,
+};
 
 Color severityTone(BuildContext context, AlertSeverity severity) => switch (severity) {
-      AlertSeverity.low => context.tones.muted,
-      AlertSeverity.medium => context.tones.info,
-      AlertSeverity.high => context.tones.warning,
-      AlertSeverity.critical => context.tones.error,
-    };
+  AlertSeverity.low => context.tones.muted,
+  AlertSeverity.medium => context.tones.info,
+  AlertSeverity.high => context.tones.warning,
+  AlertSeverity.critical => context.tones.error,
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STRUCTURE
@@ -267,32 +266,36 @@ class SaScreen extends StatelessWidget {
           child: masthead
               ? _masthead(context)
               : Row(
-            children: [
-              const SaBrandDot(),
-              const SizedBox(width: Space.xs),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(eyebrow, style: t.textTheme.labelSmall),
-                    // 4:135 sets the header's own title at 16/700, not at 20. The design has
-                    // no 20pt type on any screen; letting the bar outweigh the KPI figures
-                    // under it is what made this console read as a different app.
-                    Text(title,
-                        style: t.textTheme.titleMedium,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                    if (subtitle != null)
-                      Text(subtitle!,
-                          style: t.textTheme.bodySmall,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                    const SaBrandDot(),
+                    const SizedBox(width: Space.xs),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(eyebrow, style: t.textTheme.labelSmall),
+                          // 4:135 sets the header's own title at 16/700, not at 20. The design has
+                          // no 20pt type on any screen; letting the bar outweigh the KPI figures
+                          // under it is what made this console read as a different app.
+                          Text(
+                            title,
+                            style: t.textTheme.titleMedium,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (subtitle != null)
+                            Text(
+                              subtitle!,
+                              style: t.textTheme.bodySmall,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                    ),
+                    ...actions,
                   ],
                 ),
-              ),
-              ...actions,
-            ],
-          ),
         ),
         Expanded(child: body),
       ],
@@ -312,7 +315,12 @@ class SaScreen extends StatelessWidget {
             onTap: () => showStaffProfile(context),
             customBorder: const CircleBorder(),
             child: Padding(
-              padding: const EdgeInsets.all(Space.xxs),
+              // Space.xs, not Space.xxs. 32dp disc + 4 + 4 was a 40dp target — 8 under
+              // Material's 48dp floor and under Apple's 44pt — on the control that opens
+              // profile and sign out. `customBorder: CircleBorder()` also clips the hit region
+              // to a circle, so the corners were dead and the real target was smaller than the
+              // 40 it measured. 8 + 32 + 8 is 48. The visible disc does not change.
+              padding: const EdgeInsets.all(Space.xs),
               child: AccountAvatar(name: subtitle ?? 'Nivora', size: IconSize.xl),
             ),
           ),
@@ -342,18 +350,18 @@ class SaBrandDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: Space.xs,
-        height: Space.xs,
-        decoration: BoxDecoration(
-          // White on the brow. The dot is `primary`, and `primary` IS the brow's own family —
-          // a violet disc on #4D2896 is a disc nobody can see. It names its colour, so it
-          // cannot inherit the header's white the way the title beside it does.
-          color: BrowScope.of(context)
-              ? const Color(0xFFFFFFFF)
-              : Theme.of(context).colorScheme.primary,
-          shape: BoxShape.circle,
-        ),
-      );
+    width: Space.xs,
+    height: Space.xs,
+    decoration: BoxDecoration(
+      // White on the brow. The dot is `primary`, and `primary` IS the brow's own family —
+      // a violet disc on #4D2896 is a disc nobody can see. It names its colour, so it
+      // cannot inherit the header's white the way the title beside it does.
+      color: BrowScope.of(context)
+          ? const Color(0xFFFFFFFF)
+          : Theme.of(context).colorScheme.primary,
+      shape: BoxShape.circle,
+    ),
+  );
 }
 
 /// A pushed page inside the console — the hostel detail and the create wizard.
@@ -419,10 +427,12 @@ class SaPage extends StatelessWidget {
                     children: [
                       if (eyebrow != null) Text(eyebrow!, style: t.textTheme.labelSmall),
                       // Same 16/700 as [SaScreen]'s header, and for the same reason.
-                      Text(title,
-                          style: t.textTheme.titleMedium,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                      Text(
+                        title,
+                        style: t.textTheme.titleMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                 ),
@@ -489,8 +499,7 @@ class SaHeading extends StatelessWidget {
         // With an icon the 28dp box is the tallest thing in the row, so the label and the
         // right-hand figure centre on it; without one the row keeps the design's own
         // top-aligned line.
-        crossAxisAlignment:
-            domain == null ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+        crossAxisAlignment: domain == null ? CrossAxisAlignment.start : CrossAxisAlignment.center,
         children: [
           if (domain != null) ...[
             DomainIcon(domain: domain!, icon: icon, size: DomainIconSize.sm),
@@ -578,38 +587,55 @@ class SaIconButton extends StatelessWidget {
       label: tooltip,
       child: Tooltip(
         message: tooltip,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: Radii.rControl,
-          child: Container(
-            // The design's 32dp square. The 48dp tap minimum is met by the InkWell's parent
-            // padding in the header, which is where the rest of the target lives.
-            width: Space.xxl,
-            height: Space.xxl,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: t.colorScheme.surfaceContainer,
-              borderRadius: Radii.rControl,
-            ),
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                Icon(icon, size: IconSize.md, color: t.colorScheme.onSurface),
-                if (dot != null)
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: Container(
-                      width: Space.xs,
-                      height: Space.xs,
-                      decoration: BoxDecoration(
-                        color: context.tones.resolve(dot!),
-                        borderRadius: Radii.rTiny,
+        // ── THE TARGET IS 48, THE SQUARE IS 32 ──────────────────────────────────────────
+        //
+        // The comment that used to sit below this said the 48dp minimum "is met by the
+        // InkWell's parent padding in the header". It was not true, in two ways. The InkWell's
+        // child WAS the 32x32 Container, so the InkWell laid out at 32x32 and any padding
+        // outside it is outside the hit region by definition — and the header at :293 spreads
+        // `...actions` straight into a Row with no padding wrapper at all, so there was no
+        // outer padding even in principle. Sign out and Security were 32dp: a third under
+        // Material's floor, under Apple's 44pt, and flagged by Play's pre-launch report.
+        //
+        // The SizedBox is what the warden kit already does at warden_ui.dart:709-711 with
+        // IconButton constraints. Same answer, reached the same way: the visible square stays
+        // 32, the thing your thumb has to find is 48.
+        child: SizedBox.square(
+          dimension: Space.huge,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: Radii.rControl,
+            child: Center(
+              child: Container(
+                // The design's 32dp square.
+                width: Space.xxl,
+                height: Space.xxl,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: t.colorScheme.surfaceContainer,
+                  borderRadius: Radii.rControl,
+                ),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(icon, size: IconSize.md, color: t.colorScheme.onSurface),
+                    if (dot != null)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Container(
+                          width: Space.xs,
+                          height: Space.xs,
+                          decoration: BoxDecoration(
+                            color: context.tones.resolve(dot!),
+                            borderRadius: Radii.rTiny,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -665,8 +691,7 @@ class SaSubscriptionPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = switch (state) {
       SubscriptionState.active => 'Active',
-      SubscriptionState.expiring =>
-        daysLeft == null ? 'Expiring' : '${daysLeft}d left',
+      SubscriptionState.expiring => daysLeft == null ? 'Expiring' : '${daysLeft}d left',
       SubscriptionState.expired => 'Expired',
     };
     return SaPill(
@@ -738,10 +763,7 @@ class SaDetailRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 116,
-            child: Text(label.toUpperCase(), style: t.textTheme.labelSmall),
-          ),
+          SizedBox(width: 116, child: Text(label.toUpperCase(), style: t.textTheme.labelSmall)),
           const SizedBox(width: Space.xs),
           Expanded(
             child: Text(
@@ -761,13 +783,7 @@ class SaDetailRow extends StatelessWidget {
 /// A horizontal fill bar with its own label. Used for occupancy, which is the one ratio on
 /// these screens that is genuinely a ratio rather than a count.
 class SaMeter extends StatelessWidget {
-  const SaMeter({
-    super.key,
-    required this.rate,
-    required this.label,
-    this.caption,
-    this.tone,
-  });
+  const SaMeter({super.key, required this.rate, required this.label, this.caption, this.tone});
 
   /// 0.0–1.0. Clamped, because a bar that overflows its track reads as a rendering bug rather
   /// than as a number over 100%.
@@ -859,8 +875,7 @@ class SaSkeleton extends StatefulWidget {
 }
 
 class _SaSkeletonState extends State<SaSkeleton> with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse =
-      AnimationController(vsync: this, duration: Motion.slow);
+  late final AnimationController _pulse = AnimationController(vsync: this, duration: Motion.slow);
 
   @override
   void initState() {
@@ -888,8 +903,10 @@ class _SaSkeletonState extends State<SaSkeleton> with SingleTickerProviderStateM
     // appears; it just stops breathing.
     if (MediaQuery.disableAnimationsOf(context)) return box;
     return FadeTransition(
-      opacity: Tween<double>(begin: 0.45, end: 1)
-          .animate(CurvedAnimation(parent: _pulse, curve: Motion.move)),
+      opacity: Tween<double>(
+        begin: 0.45,
+        end: 1,
+      ).animate(CurvedAnimation(parent: _pulse, curve: Motion.move)),
       child: box,
     );
   }
@@ -1022,10 +1039,7 @@ class SaError extends StatelessWidget {
           Text(guidance.next, style: t.textTheme.bodySmall),
           if (!compact && needsSignIn) ...[
             const SizedBox(height: Space.sm),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: SignInAgainButton(outlined: true),
-            ),
+            const Align(alignment: Alignment.centerLeft, child: SignInAgainButton(outlined: true)),
           ] else if (guidance.canRetry && onRetry != null && !compact) ...[
             const SizedBox(height: Space.sm),
             Align(
@@ -1054,10 +1068,10 @@ class SaError extends StatelessWidget {
   final failure = AppFailure.from(error);
   return switch (failure) {
     OfflineFailure() => (
-        title: 'No connection',
-        next: 'This phone cannot reach Nivora. Reconnect, then pull down to refresh.',
-        canRetry: true,
-      ),
+      title: 'No connection',
+      next: 'This phone cannot reach Nivora. Reconnect, then pull down to refresh.',
+      canRetry: true,
+    ),
     // ═══ READ THE NOTE BEFORE REWORDING THIS ═══
     // This sentence is the one that cost a live debugging session. It was shown to the platform
     // owner — signed in as the super admin, on an aal2 session the server was perfectly willing
@@ -1071,44 +1085,46 @@ class SaError extends StatelessWidget {
     // asked was alive (data/repositories/repository.dart), and a dead one becomes
     // SessionExpiredFailure below. This branch now means what it says.
     AccessDeniedFailure() => (
-        title: 'Not permitted',
-        next: 'This console is for the Super Admin account. Sign in with that account to '
-            'see platform data.',
-        canRetry: false,
-      ),
+      title: 'Not permitted',
+      next:
+          'This console is for the Super Admin account. Sign in with that account to '
+          'see platform data.',
+      canRetry: false,
+    ),
     SessionExpiredFailure() => (
-        title: 'Sign-in expired',
-        next: 'Your sign-in ran out and could not be renewed, so the server answered nobody. '
-            'This is not about your account or your role — sign in again.',
-        canRetry: false,
-      ),
+      title: 'Sign-in expired',
+      next:
+          'Your sign-in ran out and could not be renewed, so the server answered nobody. '
+          'This is not about your account or your role — sign in again.',
+      canRetry: false,
+    ),
     ReadOnlyFailure() => (
-        title: 'Hostel is read-only',
-        next: 'That hostel refuses writes until its subscription is renewed.',
-        canRetry: false,
-      ),
+      title: 'Hostel is read-only',
+      next: 'That hostel refuses writes until its subscription is renewed.',
+      canRetry: false,
+    ),
     NotFoundFailure() => (
-        title: 'No longer there',
-        next: 'That record has been removed. Go back and pick it again from the list.',
-        canRetry: false,
-      ),
+      title: 'No longer there',
+      next: 'That record has been removed. Go back and pick it again from the list.',
+      canRetry: false,
+    ),
     SignedOutFailure() => (
-        title: 'Session ended',
-        next: 'Sign out and sign in again to continue.',
-        canRetry: false,
-      ),
+      title: 'Session ended',
+      next: 'Sign out and sign in again to continue.',
+      canRetry: false,
+    ),
     ServerFailure() => (
-        title: 'Nivora is struggling',
-        next: 'The server did not answer in time. Try again in a moment.',
-        canRetry: true,
-      ),
+      title: 'Nivora is struggling',
+      next: 'The server did not answer in time. Try again in a moment.',
+      canRetry: true,
+    ),
     ConflictFailure() => (title: 'Already recorded', next: failure.message, canRetry: false),
     InvalidInputFailure() => (title: 'Not accepted', next: failure.message, canRetry: false),
     UnexpectedFailure() => (
-        title: 'That did not load',
-        next: 'Something unexpected happened on the way. Try again.',
-        canRetry: true,
-      ),
+      title: 'That did not load',
+      next: 'Something unexpected happened on the way. Try again.',
+      canRetry: true,
+    ),
   };
 }
 
@@ -1349,10 +1365,7 @@ class SaSessionEnded extends StatelessWidget {
             style: t.textTheme.bodySmall,
           ),
           const SizedBox(height: Space.sm),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: SignInAgainButton(outlined: true),
-          ),
+          const Align(alignment: Alignment.centerLeft, child: SignInAgainButton(outlined: true)),
         ],
       ),
     );
@@ -1373,8 +1386,7 @@ class SaTapCard extends StatelessWidget {
   final EdgeInsetsGeometry padding;
 
   @override
-  Widget build(BuildContext context) =>
-      FlatSurface(onTap: onTap, padding: padding, child: child);
+  Widget build(BuildContext context) => FlatSurface(onTap: onTap, padding: padding, child: child);
 }
 
 /// Copies one value and says so. Used for the owner's email and phone here, and for the
@@ -1413,12 +1425,16 @@ class _SaCopyButtonState extends State<SaCopyButton> {
       if (!mounted) return;
       ScaffoldMessenger.maybeOf(context)
         ?..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-          content: Text('This device would not take the ${widget.label} — it is still on '
-              'screen above, so it can be written down.'),
-          behavior: SnackBarBehavior.floating,
-          duration: Motion.readMessage,
-        ));
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              'This device would not take the ${widget.label} — it is still on '
+              'screen above, so it can be written down.',
+            ),
+            behavior: SnackBarBehavior.floating,
+            duration: Motion.readMessage,
+          ),
+        );
       return;
     }
     if (!mounted) return;
@@ -1543,12 +1559,7 @@ class SaKpiTile extends StatelessWidget {
 /// One band of [SaSegmentBar], and one line of its legend.
 @immutable
 class SaSegment {
-  const SaSegment({
-    required this.label,
-    required this.value,
-    required this.tone,
-    this.onTap,
-  });
+  const SaSegment({required this.label, required this.value, required this.tone, this.onTap});
 
   final String label;
 
@@ -1609,7 +1620,9 @@ class SaSegmentBar extends StatelessWidget {
         Row(
           children: [
             for (final segment in segments)
-              Flexible(child: _SaLegendItem(segment: segment, of: total)),
+              Flexible(
+                child: _SaLegendItem(segment: segment, of: total),
+              ),
           ],
         ),
       ],
@@ -1764,16 +1777,11 @@ class _SaBarColumn extends StatelessWidget {
                   // for a single bar buys nothing the hairline-outlined neighbours do not
                   // already do — the difference between "the newest month" and "every other
                   // month" is fill versus outline, not eight percent of alpha.
-                  color: newest
-                      ? t.colorScheme.primary
-                      : t.colorScheme.surfaceContainer,
+                  color: newest ? t.colorScheme.primary : t.colorScheme.surfaceContainer,
                   borderRadius: Radii.rTiny,
                   border: newest
                       ? null
-                      : Border.all(
-                          color: t.colorScheme.outlineVariant,
-                          width: Strokes.hairline,
-                        ),
+                      : Border.all(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
                 ),
               ),
             ),
@@ -1830,11 +1838,7 @@ class SaLoadMoreFooter extends StatelessWidget {
         padding: const EdgeInsets.only(top: Space.md),
         child: Column(
           children: [
-            Text(
-              failure.message,
-              style: t.textTheme.bodySmall,
-              textAlign: TextAlign.center,
-            ),
+            Text(failure.message, style: t.textTheme.bodySmall, textAlign: TextAlign.center),
             const SizedBox(height: Space.xs),
             TextButton(onPressed: onRetry, child: const Text('Load more')),
           ],

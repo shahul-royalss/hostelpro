@@ -12,6 +12,7 @@ import 'expenses/manager_expenses_screen.dart';
 import 'home/manager_home_screen.dart';
 import 'menu/manager_menu_screen.dart';
 import 'tasks/manager_tasks_screen.dart';
+import '../../shared/motion/tab_swap.dart';
 
 /// The manager's four tabs.
 ///
@@ -59,11 +60,11 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
   /// money, the jobs are open work, and the menu is food. See [NivoraDomain] for the rule that
   /// keeps a domain on the indicator and off the surfaces behind it.
   static NivoraDomain _domainOfTab(int index) => switch (index) {
-        1 => NivoraDomain.money,
-        2 => NivoraDomain.complaints,
-        3 => NivoraDomain.food,
-        _ => NivoraDomain.security,
-      };
+    1 => NivoraDomain.money,
+    2 => NivoraDomain.complaints,
+    3 => NivoraDomain.food,
+    _ => NivoraDomain.security,
+  };
 
   /// Tabs that have been shown at least once, and are kept built (state, scroll, filters)
   /// from then on. Home is born visited.
@@ -105,10 +106,10 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
   /// Reads the hostel at FIRE time, not at mount: a warmer that runs after sign-out (or on an
   /// account with no hostel) must quietly do nothing rather than fetch under a stale key.
   Warmer _warm(Future<Object?> Function(String hostelId) read) => () {
-        final id = ref.read(currentHostelIdProvider);
-        if (id == null) return null;
-        return read(id);
-      };
+    final id = ref.read(currentHostelIdProvider);
+    if (id == null) return null;
+    return read(id);
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -141,12 +142,19 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
     final ink = tones.resolve(_domainOfTab(index).tone);
 
     return Scaffold(
-      body: IndexedStack(
+      // The bar animated its own indicator and the page it commands did not, which reads as
+      // the two being unconnected. TabSwap keeps this ONE IndexedStack — swapping it out for
+      // an AnimatedSwitcher would change its key and throw away every tab's scroll position,
+      // which is the whole reason an IndexedStack is here. See shared/motion/tab_swap.dart.
+      body: TabSwap(
         index: index,
-        children: [
-          for (var i = 0; i < _screens.length; i++)
-            _visited.contains(i) ? _screens[i] : const SizedBox.shrink(),
-        ],
+        child: IndexedStack(
+          index: index,
+          children: [
+            for (var i = 0; i < _screens.length; i++)
+              _visited.contains(i) ? _screens[i] : const SizedBox.shrink(),
+          ],
+        ),
       ),
       bottomNavigationBar: NavigationBarTheme(
         data: navTheme.copyWith(
@@ -159,8 +167,9 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
             final base = navTheme.labelTextStyle?.resolve(states);
             if (!states.contains(WidgetState.selected)) return base;
-            return (base ?? Theme.of(context).textTheme.labelMedium ?? const TextStyle())
-                .copyWith(color: ink);
+            return (base ?? Theme.of(context).textTheme.labelMedium ?? const TextStyle()).copyWith(
+              color: ink,
+            );
           }),
         ),
         child: NavigationBar(
@@ -168,8 +177,7 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
           onDestinationSelected: (i) => ref.read(managerTabProvider.notifier).go(i),
           destinations: [
             const NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Home'),
-            const NavigationDestination(
-                icon: Icon(Icons.trending_down_rounded), label: 'Expenses'),
+            const NavigationDestination(icon: Icon(Icons.trending_down_rounded), label: 'Expenses'),
             NavigationDestination(
               icon: _Badged(load: load, child: const Icon(Icons.checklist_rounded)),
               label: 'Tasks',

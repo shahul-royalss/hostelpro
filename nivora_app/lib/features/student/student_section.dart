@@ -11,6 +11,7 @@ import 'home_screen.dart';
 import 'notices_screen.dart';
 import 'profile_screen.dart';
 import 'student_providers.dart';
+import '../../shared/motion/tab_swap.dart';
 
 /// The student app, as five tab bodies.
 ///
@@ -35,12 +36,12 @@ const studentTabs = <({String label, IconData icon})>[
 
 /// The body for one tab. Exposed separately so a screen can also be pushed on its own.
 Widget studentScreenFor(int tabIndex) => switch (tabIndex) {
-      0 => const StudentHomeScreen(),
-      1 => const StudentFeesScreen(),
-      2 => const StudentComplaintsScreen(),
-      3 => const StudentNoticesScreen(),
-      _ => const StudentProfileScreen(),
-    };
+  0 => const StudentHomeScreen(),
+  1 => const StudentFeesScreen(),
+  2 => const StudentComplaintsScreen(),
+  3 => const StudentNoticesScreen(),
+  _ => const StudentProfileScreen(),
+};
 
 /// The background warm-up for every student tab except Home, in tap-likelihood order.
 ///
@@ -166,12 +167,19 @@ class _StudentSectionState extends ConsumerState<StudentSection> {
   Widget build(BuildContext context) {
     final index = widget.tabIndex.clamp(0, studentTabs.length - 1);
     _visited.add(index);
-    return IndexedStack(
+    // The bar animated its own indicator and the page it commands did not, which reads as
+    // the two being unconnected. TabSwap keeps this ONE IndexedStack — swapping it out for
+    // an AnimatedSwitcher would change its key and throw away every tab's scroll position,
+    // which is the whole reason an IndexedStack is here. See shared/motion/tab_swap.dart.
+    return TabSwap(
       index: index,
-      children: [
-        for (var i = 0; i < studentTabs.length; i++)
-          _visited.contains(i) ? studentScreenFor(i) : const SizedBox.shrink(),
-      ],
+      child: IndexedStack(
+        index: index,
+        children: [
+          for (var i = 0; i < studentTabs.length; i++)
+            _visited.contains(i) ? studentScreenFor(i) : const SizedBox.shrink(),
+        ],
+      ),
     );
   }
 }

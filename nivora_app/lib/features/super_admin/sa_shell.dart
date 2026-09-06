@@ -11,6 +11,7 @@ import 'sa_hostels_screen.dart';
 import 'sa_overview_screen.dart';
 import 'sa_security_screen.dart';
 import 'sa_subscriptions_screen.dart';
+import '../../shared/motion/tab_swap.dart';
 
 /// The Super Admin's four tabs.
 ///
@@ -66,11 +67,12 @@ class _SaShellState extends ConsumerState<SaShell> {
       // The two lists the Overview's attention band deep-links to. "3 expired — tap to see
       // which" must land on the answer, not on a skeleton earning it.
       () => ref.read(
-          saHostelListProvider(const SaHostelQuery(subState: SubscriptionState.expiring)).future),
+        saHostelListProvider(const SaHostelQuery(subState: SubscriptionState.expiring)).future,
+      ),
       () => ref.read(
-          saHostelListProvider(const SaHostelQuery(subState: SubscriptionState.expired)).future),
-    ])
-      ..start();
+        saHostelListProvider(const SaHostelQuery(subState: SubscriptionState.expired)).future,
+      ),
+    ])..start();
   }
 
   @override
@@ -92,10 +94,10 @@ class _SaShellState extends ConsumerState<SaShell> {
   /// the building on Hostels, the ledger green on Subscriptions, and the brand gold on the two
   /// that are the platform's own. A tab is a domain and never a state — see [NivoraDomain].
   static NivoraDomain _domainOf(int index) => switch (index) {
-        SaTabs.hostels => NivoraDomain.rooms,
-        SaTabs.subscriptions => NivoraDomain.money,
-        _ => NivoraDomain.security,
-      };
+    SaTabs.hostels => NivoraDomain.rooms,
+    SaTabs.subscriptions => NivoraDomain.money,
+    _ => NivoraDomain.security,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -113,12 +115,19 @@ class _SaShellState extends ConsumerState<SaShell> {
     final navTheme = t.navigationBarTheme;
 
     return Scaffold(
-      body: IndexedStack(
+      // The bar animated its own indicator and the page it commands did not, which reads as
+      // the two being unconnected. TabSwap keeps this ONE IndexedStack — swapping it out for
+      // an AnimatedSwitcher would change its key and throw away every tab's scroll position,
+      // which is the whole reason an IndexedStack is here. See shared/motion/tab_swap.dart.
+      body: TabSwap(
         index: index,
-        children: [
-          for (var i = 0; i < SaTabs.count; i++)
-            if (_visited.contains(i)) _tabs[i] else const SizedBox.shrink(),
-        ],
+        child: IndexedStack(
+          index: index,
+          children: [
+            for (var i = 0; i < SaTabs.count; i++)
+              if (_visited.contains(i)) _tabs[i] else const SizedBox.shrink(),
+          ],
+        ),
       ),
       bottomNavigationBar: NavigationBarTheme(
         data: navTheme.copyWith(
@@ -142,12 +151,12 @@ class _SaShellState extends ConsumerState<SaShell> {
           backgroundColor: t.colorScheme.surface,
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           destinations: [
+            const NavigationDestination(icon: Icon(Icons.grid_view_rounded), label: 'Overview'),
+            const NavigationDestination(icon: Icon(Icons.apartment_rounded), label: 'Hostels'),
             const NavigationDestination(
-                icon: Icon(Icons.grid_view_rounded), label: 'Overview'),
-            const NavigationDestination(
-                icon: Icon(Icons.apartment_rounded), label: 'Hostels'),
-            const NavigationDestination(
-                icon: Icon(Icons.card_membership_rounded), label: 'Subscriptions'),
+              icon: Icon(Icons.card_membership_rounded),
+              label: 'Subscriptions',
+            ),
             NavigationDestination(
               icon: _Badged(alerts: openAlerts, child: const Icon(Icons.shield_rounded)),
               label: 'Security',

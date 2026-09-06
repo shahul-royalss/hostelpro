@@ -11,6 +11,7 @@ import '../../../shared/glass/glass.dart';
 import '../../shell/staff_profile_sheet.dart';
 import '../../../shared/wordmark.dart';
 import '../../../shared/sign_in_again.dart';
+import '../../../shared/motion/settle.dart';
 
 /// The pieces every warden screen is built from.
 ///
@@ -489,7 +490,12 @@ class WardenScreen extends StatelessWidget {
             onTap: () => showStaffProfile(context),
             customBorder: const CircleBorder(),
             child: Padding(
-              padding: const EdgeInsets.all(Space.xxs),
+              // Space.xs, not Space.xxs. 32dp disc + 4 + 4 was a 40dp target — 8 under
+              // Material's 48dp floor and under Apple's 44pt — on the control that opens
+              // profile and sign out. `customBorder: CircleBorder()` also clips the hit region
+              // to a circle, so the corners were dead and the real target was smaller than the
+              // 40 it measured. 8 + 32 + 8 is 48. The visible disc does not change.
+              padding: const EdgeInsets.all(Space.xs),
               child: AccountAvatar(name: name.isEmpty ? 'Nivora' : name, size: IconSize.xl),
             ),
           ),
@@ -1129,9 +1135,18 @@ class AsyncSection<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (value.hasValue) return builder(value.requireValue);
-    if (value.hasError) return FailureState(error: value.error!, onRetry: onRetry);
-    return loading ?? const _Spinner();
+    // ── THE ONE PLACE THE WHOLE APP GAINS AN ARRIVAL ────────────────────────────────────
+    // This used to return the three branches directly, so a skeleton was present on one frame
+    // and the rows were present on the next. See shared/motion/settle.dart for why that single
+    // instant substitution is most of what the owner noticed against the competitor, and why
+    // the fix belongs here rather than at the 31 call sites.
+    if (value.hasValue) {
+      return Settle(state: 'data', child: builder(value.requireValue));
+    }
+    if (value.hasError) {
+      return Settle(state: 'error', child: FailureState(error: value.error!, onRetry: onRetry));
+    }
+    return Settle(state: 'loading', child: loading ?? const _Spinner());
   }
 }
 

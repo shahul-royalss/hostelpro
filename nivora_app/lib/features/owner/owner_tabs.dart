@@ -12,6 +12,7 @@ import 'owner_providers.dart';
 import 'owner_students_screen.dart';
 import 'staff/owner_staff_screen.dart';
 import 'staff/staff_providers.dart';
+import '../../shared/motion/tab_swap.dart';
 
 /// The owner's five tab slots. features/shell/role_shell.dart owns the bar — Dashboard, PGs,
 /// Students, Payments, More — and this file supplies the bodies behind it via [OwnerSection].
@@ -34,13 +35,13 @@ const ownerTabCount = 5;
 /// The shell supplies the "not built yet" placeholder for those, so this file cannot pretend
 /// to cover them.
 Widget? ownerTabScreen(int index) => switch (index) {
-      0 => const OwnerDashboardScreen(),
-      1 => const OwnerPgListScreen(),
-      2 => const OwnerStudentsScreen(),
-      3 => const OwnerPaymentsScreen(),
-      4 => const OwnerStaffScreen(),
-      _ => null,
-    };
+  0 => const OwnerDashboardScreen(),
+  1 => const OwnerPgListScreen(),
+  2 => const OwnerStudentsScreen(),
+  3 => const OwnerPaymentsScreen(),
+  4 => const OwnerStaffScreen(),
+  _ => null,
+};
 
 /// Hosts the owner's tab bodies for the shell, and keeps every one of them warm.
 ///
@@ -100,7 +101,8 @@ class _OwnerSectionState extends ConsumerState<OwnerSection> {
     //     is the follow-up question rather than the first one.
     //  4. Staff, behind More — rarely opened, so it warms last, but "rarely" is exactly when
     //     it is opened in a hurry.
-    _warmer = TabWarmer([_warmCashflow, _warmPgCards, _warmStudents, _warmPayments, _warmStaff])..start();
+    _warmer = TabWarmer([_warmCashflow, _warmPgCards, _warmStudents, _warmPayments, _warmStaff])
+      ..start();
   }
 
   @override
@@ -166,9 +168,16 @@ class _OwnerSectionState extends ConsumerState<OwnerSection> {
   Widget build(BuildContext context) {
     final index = widget.tabIndex.clamp(0, ownerTabCount - 1);
     _visited.add(index);
-    return IndexedStack(
+    // The bar animated its own indicator and the page it commands did not, which reads as
+    // the two being unconnected. TabSwap keeps this ONE IndexedStack — swapping it out for
+    // an AnimatedSwitcher would change its key and throw away every tab's scroll position,
+    // which is the whole reason an IndexedStack is here. See shared/motion/tab_swap.dart.
+    return TabSwap(
       index: index,
-      children: [for (var i = 0; i < ownerTabCount; i++) _child(context, i, index)],
+      child: IndexedStack(
+        index: index,
+        children: [for (var i = 0; i < ownerTabCount; i++) _child(context, i, index)],
+      ),
     );
   }
 

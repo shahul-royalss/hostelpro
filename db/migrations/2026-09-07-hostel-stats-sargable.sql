@@ -1,0 +1,80 @@
+-- THE MOST-CALLED QUERY IN THE APP COULD NOT USE ANY OF ITS THREE INDEXES.
+--
+-- rpc_hostel_stats backs the owner dashboard, the warden home, the super-admin hostel detail and
+-- every card in the owner's PG list. Three of its subqueries wrapped an indexed column in a
+-- function, and a function applied to a column makes a b-tree index unusable — so each of those
+-- three degraded to "read every row this hostel has ever written, then transform it":
+--
+--   (check_in_at at time zone 'Asia/Kolkata')::date = app.today()   -- visitors
+--   to_char(date,'YYYY-MM') = p_period_month                        -- revenues
+--   to_char(date,'YYYY-MM') = p_period_month                        -- expenses
+--
+-- The indexes were already there and already correct — visitors_hostel_idx(hostel_id,
+-- check_in_at), revenues_hostel_date_idx(hostel_id, date), expenses_hostel_date_idx(hostel_id,
+-- date). Nothing needed creating; they simply could not be reached. This is the cheapest kind of
+-- scaling fix there is, and the reason it stayed invisible is that it costs nothing at three
+-- hostels and everything at three hundred.
+--
+-- A hostel two years in with twenty gate entries a day holds ~14,600 visitor rows, and counting
+-- today's dozen read and converted all of them — on every home-screen load, for every hostel in
+-- the owner's list, concurrently.
+--
+-- ── MEASURED, NOT ASSUMED ──────────────────────────────────────────────────────────────────
+--
+-- EXPLAIN on revenues, before:
+--   Index Cond: (hostel_id = ...)
+--   Filter:     (to_char((date)::timestamptz,'YYYY-MM') = '2026-09')
+-- after:
+--   Index Cond: (hostel_id = ... AND date >= ... AND date < ...)
+--   Filter:     (deleted_at IS NULL)
+--
+-- The month moved out of Filter and into Index Cond. That is the entire change.
+--
+-- ── AND THE ANSWERS ARE IDENTICAL ──────────────────────────────────────────────────────────
+--
+-- Checked rather than asserted: the function was run against all three live hostels before and
+-- after, and every one of the seventeen columns matched.
+--
+--   Demo PG (Play review) · Kushi Hostels · Xeyrion Hostel
+--   beds 18/18/46 · occupied 1/0/4 · students 1/0/4 · complaints 1/0/1
+--   collected 0.00/0/6501.00 · pending 6500.00/0/3005.00 · paid 0/0/2 · unpaid 1/0/2
+--   visitors_today 0/0/0 · revenue_month 0/0/0 · expenses_month 0/0/0
+--   subscription 363/360/360 days, all active
+--
+-- ── WHY app.today() IS STILL THE DAY BOUNDARY ──────────────────────────────────────────────
+--
+-- Not current_date. These read `date = current_date` until 2026-09-01 and so were empty for the
+-- first five and a half hours of every Indian day. Converting the visitor predicate to a range
+-- preserves that: local midnight IST becomes a timestamptz through
+-- `app.today()::timestamp at time zone 'Asia/Kolkata'` — the same instant the old expression
+-- compared against, expressed as a bound instead of a transform.
+--
+-- ── THE SHAPE OF THE CHANGE ────────────────────────────────────────────────────────────────
+--
+-- Applied to the live project as the Supabase migration
+-- `make_hostel_stats_predicates_sargable`. A CTE computes the four bounds once:
+--
+--   with bounds as (
+--     select app.today()::timestamp at time zone 'Asia/Kolkata'       as day_from,
+--            (app.today() + 1)::timestamp at time zone 'Asia/Kolkata' as day_to,
+--            to_date(p_period_month || '-01','YYYY-MM-DD')            as month_from,
+--            (to_date(p_period_month || '-01','YYYY-MM-DD')
+--               + interval '1 month')::date                           as month_to
+--   )
+--
+-- and each of the three subqueries then takes a half-open range against it:
+--
+--   visitors.check_in_at >= bounds.day_from   and visitors.check_in_at <  bounds.day_to
+--   revenues.date        >= bounds.month_from and revenues.date        <  bounds.month_to
+--   expenses.date        >= bounds.month_from and expenses.date        <  bounds.month_to
+--
+-- Naming the bounds also stops three copies of a to_char() drifting apart, which is exactly how
+-- the IST bug reached two of these subqueries and not the third in the first place.
+--
+-- The two `date = app.today()` predicates are untouched. A plain column compared to a value is
+-- already sargable, and rewriting a correct thing to look like the thing beside it is churn.
+
+-- ═══ AFTER APPLYING ═══
+--   select h.name, s.* from public.hostels h
+--     cross join lateral public.rpc_hostel_stats(h.id) s order by h.name;
+-- Compare against the numbers recorded above. Any difference is a regression, not an improvement.
