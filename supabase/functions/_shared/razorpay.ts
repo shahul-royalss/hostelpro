@@ -166,15 +166,18 @@ export interface CreateOrderInput {
   /** Echoed back on the webhook. FOR HUMANS ONLY — see the warning below. */
   notes: Record<string, string>;
 
-  /** The hostel owner's Razorpay Route LINKED ACCOUNT (`acc_...`).
+  /** The hostel owner's Razorpay Route LINKED ACCOUNT (`acc_...`), or null for DIRECT.
    *
-   * REQUIRED, and deliberately not optional. An order created without a transfer settles into
-   * the PLATFORM's account, and this platform never owns a rupee of the rent it carries — so an
-   * order with no destination is not a lesser order, it is a wrong one. Making the field
-   * optional would let a future caller omit it by accident and never find out until money was
-   * already in the wrong place.
+   * NULL HAS ONE MEANING AND IT IS NARROW: the platform Razorpay account already belongs to
+   * this hostel's owner, so the money lands with the right person without being moved. Every
+   * other hostel MUST name an account, because this platform owns none of the rent it carries
+   * and an order with no destination would settle somebody else's money into its own balance.
+   *
+   * The caller is responsible for proving which case it is — see razorpay-order, where DIRECT
+   * is honoured only when the approval names the hostel's CURRENT owner. Null is not a default
+   * here; it is a decision.
    */
-  transferToAccount: string;
+  transferToAccount: string | null;
 }
 
 export class RazorpayApiError extends Error {
@@ -225,14 +228,20 @@ export async function createOrder(input: CreateOrderInput): Promise<{ id: string
         // on_hold: false settles on Razorpay's normal cycle. Holding would mean the platform
         // deciding when somebody else's rent is released, which is precisely the position this
         // change exists to get out of.
-        transfers: [
-          {
-            account: input.transferToAccount,
-            amount: input.amountPaise,
-            currency: "INR",
-            on_hold: false,
-          },
-        ],
+        // Omitted entirely for a DIRECT hostel. Razorpay treats an absent `transfers` as
+        // "settle to me", which is correct when "me" is the owner.
+        ...(input.transferToAccount
+          ? {
+              transfers: [
+                {
+                  account: input.transferToAccount,
+                  amount: input.amountPaise,
+                  currency: "INR",
+                  on_hold: false,
+                },
+              ],
+            }
+          : {}),
       }),
       signal: AbortSignal.timeout(15_000),
     });

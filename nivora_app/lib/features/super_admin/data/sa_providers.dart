@@ -192,6 +192,13 @@ final saHostelProvider =
 /// Backs the Overview — session-held per the lifetime policy, so a pull-to-refresh redraws the
 /// chart in place rather than blanking it, and the series is dropped the moment the admin
 /// signs out.
+/// Where one hostel's rent settles. autoDispose: it is read on one card of one screen, and it
+/// must be re-read after a change rather than served from a cache that predates it.
+final saPayoutProvider =
+    FutureProvider.autoDispose.family<SaPayout, String>((ref, hostelId) {
+  return ref.watch(saRepositoryProvider).payoutFor(hostelId);
+});
+
 final saOnboardingProvider = FutureProvider.autoDispose<List<OnboardingPoint>>((ref) {
   holdForSession(ref);
   return ref.watch(saRepositoryProvider).onboardingSeries();

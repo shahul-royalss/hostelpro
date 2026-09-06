@@ -212,13 +212,26 @@ Deno.serve(async (req: Request): Promise<Response> => {
       // — is not one to leave resting on a single check.
       const { data: payoutRow, error: payoutError } = await supabase
         .from("hostels")
-        .select("razorpay_account_id")
+        .select("razorpay_account_id, razorpay_direct_for_owner, owner_user_id")
         .eq("id", student.hostel_id)
         .maybeSingle();
       if (payoutError) throw dbError(payoutError);
-      const transferToAccount = (payoutRow as { razorpay_account_id: string | null } | null)
-        ?.razorpay_account_id ?? null;
-      if (!transferToAccount) {
+      const payout = payoutRow as {
+        razorpay_account_id: string | null;
+        razorpay_direct_for_owner: string | null;
+        owner_user_id: string | null;
+      } | null;
+
+      // DIRECT is only honoured for the owner it was approved for. A hostel that changed hands
+      // carries an approval naming the PREVIOUS owner, and paying into the platform account on
+      // the strength of it would hand the new owner's rent to the old one. rz_open_intent
+      // refuses this too; both sides check because the failure is unrecoverable.
+      const directValid = payout?.razorpay_direct_for_owner != null &&
+        payout.razorpay_direct_for_owner === payout.owner_user_id;
+
+      const transferToAccount = payout?.razorpay_account_id ?? null;
+
+      if (!directValid && !transferToAccount) {
         throw new HttpError(
           409,
           "Online payment is not set up for this hostel yet. Please pay your warden directly.",
@@ -230,6 +243,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       try {
         created = await createOrder({
           amountPaise,
+          // null for a DIRECT hostel: the platform account is the owner's, so the money is
+          // already where it belongs and a transfer would move it away from them.
           transferToAccount,
           // No PII: a truncated uuid is a lookup key for us and meaningless to anyone else.
           receipt: `rent_${period}_${student.id.slice(0, 8)}_${Date.now().toString(36)}`.slice(0, 40),

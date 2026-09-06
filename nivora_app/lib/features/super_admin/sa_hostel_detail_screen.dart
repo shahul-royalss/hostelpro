@@ -8,6 +8,8 @@ import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../../shared/glass/glass.dart';
 import '../common/refresh.dart';
+import 'sa_payout_card.dart';
+import '../../shared/dashboard.dart';
 import 'data/sa_models.dart';
 import 'data/sa_providers.dart';
 import 'widgets/sa_ui.dart';
@@ -193,6 +195,9 @@ class _Detail extends ConsumerWidget {
           title: 'This month',
         ),
         _OperatingCard(hostelId: hostel.hostelId, openComplaints: hostel.openComplaints),
+        const SaSectionRule(),
+        const DashboardBand(label: 'Where rent settles'),
+        SaPayoutCard(hostelId: hostel.hostelId, ownerName: hostel.ownerName),
       ],
     );
   }

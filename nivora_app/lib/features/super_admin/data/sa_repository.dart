@@ -176,6 +176,43 @@ final class SaRepository extends Repository implements SaPlatformWrites {
       });
 
   // ───────────────────────────────────────────────────────────────────────────
+  // WHERE THE RENT SETTLES
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /// A direct read of the two settlement columns, not a field on rpc_sa_hostels.
+  ///
+  /// That RPC is consumed by the list, the detail screen and the exports, and widening it for
+  /// one card would have made every one of those carry a linked account id they have no use
+  /// for. Two columns for one hostel is a cheaper read than the row it would have joined onto.
+  Future<SaPayout> payoutFor(String hostelId) => guard(() async {
+        final data = await db
+            .from('hostels')
+            .select('razorpay_account_id, razorpay_direct_for_owner, owner_user_id')
+            .eq('id', hostelId)
+            .maybeSingle();
+        return data == null ? const SaPayout() : SaPayout.fromJson(data);
+      });
+
+  /// public.sa_set_hostel_payout_account(p_hostel_id, p_account_id, p_direct).
+  ///
+  /// AN RPC RATHER THAN AN UPDATE, for the same reason acknowledgeAlert is: this field decides
+  /// where money goes. The function re-checks is_super_admin() server-side, refuses the two
+  /// modes together, validates the `acc_` shape, and records the change in the audit trail —
+  /// none of which a table UPDATE from the client would do.
+  Future<void> setPayout(
+    String hostelId, {
+    String? accountId,
+    bool direct = false,
+  }) =>
+      guard(() async {
+        await db.rpc('sa_set_hostel_payout_account', params: {
+          'p_hostel_id': hostelId,
+          'p_account_id': accountId,
+          'p_direct': direct,
+        });
+      });
+
+  // ───────────────────────────────────────────────────────────────────────────
   // OWNERS
   // ───────────────────────────────────────────────────────────────────────────
 

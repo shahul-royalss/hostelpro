@@ -476,3 +476,33 @@ class CreatedHostel {
     );
   }
 }
+
+/// Where one hostel's rent settles.
+///
+/// Two lawful shapes and no third — see rz_open_intent, which refuses anything else:
+///
+///   DIRECT  the platform's own Razorpay account belongs to this hostel's owner, so rent lands
+///           with the right person untouched and no transfer is made.
+///   ROUTE   somebody else's hostel: rent is transferred to their own linked account.
+///
+/// [directForOwner] deliberately holds an OWNER ID rather than a boolean. An approval is granted
+/// to a person, not to a building, so if the hostel changes hands the recorded id no longer
+/// matches and [directValid] goes false — which stops the new owner's rent being paid into the
+/// old owner's account. A boolean could not express that and would have gone on paying.
+class SaPayout {
+  const SaPayout({this.accountId, this.directForOwner, this.ownerUserId});
+
+  final String? accountId;
+  final String? directForOwner;
+  final String? ownerUserId;
+
+  bool get directValid => directForOwner != null && directForOwner == ownerUserId;
+  bool get directStale => directForOwner != null && directForOwner != ownerUserId;
+  bool get canTakePayments => directValid || accountId != null;
+
+  factory SaPayout.fromJson(Map<String, dynamic> row) => SaPayout(
+        accountId: row['razorpay_account_id'] as String?,
+        directForOwner: row['razorpay_direct_for_owner'] as String?,
+        ownerUserId: row['owner_user_id'] as String?,
+      );
+}
