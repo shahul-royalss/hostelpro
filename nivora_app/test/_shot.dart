@@ -27,14 +27,7 @@ import 'package:mobile/features/shell/role_shell.dart';
 
 const _hostelId = 'h-sunrise';
 const _period = '2026-08';
-const _session = NivoraSession(
-  userId: 'owner-1',
-  role: UserRole.owner,
-  fullName: 'Ananya Rao',
-  status: 'active',
-  mustChangePassword: false,
-  hostelId: _hostelId,
-);
+
 final _sunrise = Hostel(
   id: _hostelId,
   name: 'Sunrise Residency',
@@ -82,10 +75,10 @@ Future<void> _shoot(WidgetTester tester, String name, ThemeData theme, [UserRole
   await tester.runAsync(() async {
     final image = await boundary.toImage(pixelRatio: 1);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    final dir = Directory('build/shots')..createSync(recursive: true);
-    File('build/shots/' + name + '.png').writeAsBytesSync(bytes!.buffer.asUint8List());
+    Directory('build/shots').createSync(recursive: true);
+    File('build/shots/$name.png').writeAsBytesSync(bytes!.buffer.asUint8List());
     // ignore: avoid_print
-    print('WROTE C:/shots/' + name + '.png');
+    print('WROTE build/shots/$name.png');
   });
 }
 
@@ -105,9 +98,9 @@ Future<void> _shootPlain(WidgetTester tester, String name, Widget home, ThemeDat
     final image = await boundary.toImage(pixelRatio: 1);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     Directory('build/shots').createSync(recursive: true);
-    File('build/shots/' + name + '.png').writeAsBytesSync(bytes!.buffer.asUint8List());
+    File('build/shots/$name.png').writeAsBytesSync(bytes!.buffer.asUint8List());
     // ignore: avoid_print
-    print('WROTE C:/shots/' + name + '.png');
+    print('WROTE build/shots/$name.png');
   });
 }
 
