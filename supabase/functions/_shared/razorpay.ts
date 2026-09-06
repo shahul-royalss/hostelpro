@@ -165,6 +165,16 @@ export interface CreateOrderInput {
   receipt: string;
   /** Echoed back on the webhook. FOR HUMANS ONLY — see the warning below. */
   notes: Record<string, string>;
+
+  /** The hostel owner's Razorpay Route LINKED ACCOUNT (`acc_...`).
+   *
+   * REQUIRED, and deliberately not optional. An order created without a transfer settles into
+   * the PLATFORM's account, and this platform never owns a rupee of the rent it carries — so an
+   * order with no destination is not a lesser order, it is a wrong one. Making the field
+   * optional would let a future caller omit it by accident and never find out until money was
+   * already in the wrong place.
+   */
+  transferToAccount: string;
 }
 
 export class RazorpayApiError extends Error {
@@ -206,6 +216,23 @@ export async function createOrder(input: CreateOrderInput): Promise<{ id: string
         currency: "INR",
         receipt: input.receipt,
         notes: input.notes,
+        // ── ROUTE: THE MONEY GOES TO THE PG OWNER, NOT TO US ────────────────────────────────
+        //
+        // The whole amount, to the hostel's linked account. NIVORA takes nothing out of rent —
+        // it is paid by the owner as a subscription, recorded separately and never through this
+        // gateway — so there is no commission to hold back and the transfer is the full sum.
+        //
+        // on_hold: false settles on Razorpay's normal cycle. Holding would mean the platform
+        // deciding when somebody else's rent is released, which is precisely the position this
+        // change exists to get out of.
+        transfers: [
+          {
+            account: input.transferToAccount,
+            amount: input.amountPaise,
+            currency: "INR",
+            on_hold: false,
+          },
+        ],
       }),
       signal: AbortSignal.timeout(15_000),
     });

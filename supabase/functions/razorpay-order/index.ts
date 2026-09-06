@@ -200,11 +200,37 @@ Deno.serve(async (req: Request): Promise<Response> => {
     let orderId = (openIntent as { razorpay_order_id: string } | null)?.razorpay_order_id ?? null;
 
     if (!orderId) {
+      // ── 4b. WHERE THIS MONEY SETTLES ───────────────────────────────────────
+      //
+      // The hostel's Razorpay Route linked account — the OWNER's, not the platform's. Read
+      // here and passed into the order so Razorpay settles to them directly.
+      //
+      // rz_open_intent refuses an intent for a hostel with no linked account, so by the time
+      // execution reaches here one should exist. This checks anyway and refuses if it does
+      // not: the database guard and this one protect the same thing from opposite sides, and
+      // the failure they prevent — rent landing in an account that cannot lawfully release it
+      // — is not one to leave resting on a single check.
+      const { data: payoutRow, error: payoutError } = await supabase
+        .from("hostels")
+        .select("razorpay_account_id")
+        .eq("id", student.hostel_id)
+        .maybeSingle();
+      if (payoutError) throw dbError(payoutError);
+      const transferToAccount = (payoutRow as { razorpay_account_id: string | null } | null)
+        ?.razorpay_account_id ?? null;
+      if (!transferToAccount) {
+        throw new HttpError(
+          409,
+          "Online payment is not set up for this hostel yet. Please pay your warden directly.",
+        );
+      }
+
       // ── 5. Ask Razorpay for the order. The only use of the key SECRET. ─────
       let created: { id: string };
       try {
         created = await createOrder({
           amountPaise,
+          transferToAccount,
           // No PII: a truncated uuid is a lookup key for us and meaningless to anyone else.
           receipt: `rent_${period}_${student.id.slice(0, 8)}_${Date.now().toString(36)}`.slice(0, 40),
           // For a human reading the Razorpay dashboard. NOTHING on the settlement path reads
