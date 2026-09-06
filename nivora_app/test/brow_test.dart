@@ -72,21 +72,37 @@ void main() {
   });
 
   group('a header on the brow', () {
-    testWidgets('goes transparent and white, instead of covering the colour', (tester) async {
-      await tester.pumpWidget(_host(
-        child: const BrandBrow(
-          child: GlassHeader(onBrow: true, child: Text('Rooms')),
-        ),
-      ));
-      // The failure this catches: leaving the normal bar fill on, which paints a near-white
-      // slab over the band and strands a stripe of brand below the header.
+    testWidgets('IS the brow — opaque brand, curved, white ink', (tester) async {
+      await tester.pumpWidget(_host(child: const GlassHeader(onBrow: true, child: Text('Rooms'))));
+
+      // OPAQUE, not transparent. The first design made it see-through over a full-height brow
+      // and the list scrolled up THROUGH it — a header that is not opaque is not a header.
       expect(find.byType(GlassSurface), findsNothing,
-          reason: 'an on-brow header paints no surface of its own');
-      final style = DefaultTextStyle.of(
-        tester.element(find.text('Rooms')),
-      ).style;
+          reason: 'it paints the brand block directly, not a pane');
+      final box = tester.widget<ColoredBox>(
+        find.descendant(of: find.byType(ClipPath), matching: find.byType(ColoredBox)),
+      );
+      expect(box.color, NivoraColors.brandDeep);
+
+      final style = DefaultTextStyle.of(tester.element(find.text('Rooms'))).style;
       expect(style.color, const Color(0xFFFFFFFF),
           reason: 'white is 10.20:1 on the brow, in both themes');
+      expect(
+        tester.widget<IconTheme>(find.ancestor(
+          of: find.text('Rooms'),
+          matching: find.byType(IconTheme),
+        ).first).data.color,
+        const Color(0xFFFFFFFF),
+        reason: 'a header that flipped only the text would go half-white',
+      );
+    });
+
+    testWidgets('carries the curve, so the first card rides a seam', (tester) async {
+      await tester.pumpWidget(_host(child: const GlassHeader(onBrow: true, child: Text('R'))));
+      final clip = tester.widget<ClipPath>(find.byType(ClipPath));
+      final path = clip.clipper!.getClip(const Size(400, 200));
+      expect(path.contains(const Offset(200, 195)), isTrue);
+      expect(path.contains(const Offset(4, 195)), isFalse);
     });
 
     testWidgets('an ordinary header still paints its bar', (tester) async {

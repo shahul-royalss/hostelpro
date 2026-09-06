@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
+import '../../../shared/brow.dart';
 import '../../../shared/glass/glass.dart';
 import '../../shell/staff_profile_sheet.dart';
 import '../../../shared/wordmark.dart';
@@ -127,7 +128,13 @@ class ToneDot extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         width: size,
         height: size,
-        decoration: BoxDecoration(color: tone, shape: BoxShape.circle),
+        decoration: BoxDecoration(
+          // White on the brow, for the same reason SaBrandDot is: the header's indicator dot
+          // is the brand, and the brow is the brand. Only this one call site is ever on a
+          // brow; every other ToneDot marks a domain on a card and keeps its tone.
+          color: BrowScope.of(context) ? const Color(0xFFFFFFFF) : tone,
+          shape: BoxShape.circle,
+        ),
       );
 }
 
@@ -420,7 +427,11 @@ class WardenScreen extends StatelessWidget {
     final t = Theme.of(context);
     return Column(
       children: [
+        // The shell's top bar IS the brow — the brand block with the curved bottom edge that
+        // every role's home now opens with. See GlassHeader.onBrow for why the header draws it
+        // rather than a band sitting behind the whole shell.
         GlassHeader(
+          onBrow: true,
           child: masthead
               ? _masthead(context)
               : Row(

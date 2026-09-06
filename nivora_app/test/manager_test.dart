@@ -754,18 +754,22 @@ void main() {
       expect(find.text('Money this month'), findsNothing);
     });
 
-    testWidgets('the dashboard has exactly one pane on it, and it is the header',
+    testWidgets('the dashboard body has NO pane on it — only the header has a fill',
         (tester) async {
       await _pumpHome(tester);
 
       // Every frame in the file is flat: an opaque fill and a 1px hairline, no shadow and no
       // second rung of elevation. The old screen put its jobs figure on a raised pane as "the
       // one hero per screen"; 4:1159 has no hero and nothing lifted off the ground.
-      expect(find.byType(GlassSurface), findsOneWidget);
-      expect(
-        find.descendant(of: find.byType(GlassHeader), matching: find.byType(GlassSurface)),
-        findsOneWidget,
-      );
+      //
+      // THIS USED TO COUNT ONE PANE AND CALL IT THE HEADER. The header is the brow now — it
+      // paints the brand block directly rather than through GlassSurface — so the count is
+      // zero. The claim being protected is unchanged and is actually stated more exactly this
+      // way: nothing in the BODY is a pane. What the header is made of is the header's business
+      // and brow_test.dart's.
+      expect(find.byType(GlassSurface), findsNothing,
+          reason: 'the body is flat, and the header is a brow rather than a pane');
+      expect(find.byType(GlassHeader), findsOneWidget);
     });
 
     testWidgets('the KPI grid is four equal tiles — 4:1177', (tester) async {

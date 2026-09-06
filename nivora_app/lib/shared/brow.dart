@@ -81,7 +81,7 @@ class BrandBrow extends StatelessWidget {
               statusBarBrightness: Brightness.dark,
             ),
             child: ClipPath(
-              clipper: _BrowClipper(dip: dip),
+              clipper: BrowClipper(dip: dip),
               child: const ColoredBox(color: NivoraColors.brandDeep),
             ),
           ),
@@ -95,8 +95,11 @@ class BrandBrow extends StatelessWidget {
 /// The convex bottom edge. One quadratic, because one quadratic is what the shape is: a single
 /// bulge with no inflection. A cubic would let the edge wobble, and an edge that wobbles by a
 /// pixel is the kind of thing that looks wrong without anyone being able to say why.
-class _BrowClipper extends CustomClipper<Path> {
-  const _BrowClipper({required this.dip});
+///
+/// Public because a header on a scrolling screen draws its OWN brow rather than sitting on
+/// this one — see `GlassHeader.onBrow` for why a full-height brow behind a list cannot work.
+class BrowClipper extends CustomClipper<Path> {
+  const BrowClipper({required this.dip});
 
   final double dip;
 
@@ -113,5 +116,23 @@ class _BrowClipper extends CustomClipper<Path> {
   }
 
   @override
-  bool shouldReclip(_BrowClipper old) => old.dip != dip;
+  bool shouldReclip(BrowClipper old) => old.dip != dip;
+}
+
+/// "You are being drawn on the brand block." Read it with `BrowScope.of(context)`.
+///
+/// Most things on a brow need nothing: [GlassHeader] wraps its subtree in an [IconTheme] and a
+/// [DefaultTextStyle] set to white, and unstyled text and icons inherit those. This exists for
+/// the handful of widgets that name a colour of their own and therefore cannot inherit — a
+/// brand dot painted in `colorScheme.primary`, an avatar's identity hash. On #4D2896 those go
+/// invisible, and they cannot simply read the default text style because outside a brow that
+/// would repaint them the body ink.
+class BrowScope extends InheritedWidget {
+  const BrowScope({super.key, required super.child});
+
+  static bool of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<BrowScope>() != null;
+
+  @override
+  bool updateShouldNotify(BrowScope oldWidget) => false;
 }

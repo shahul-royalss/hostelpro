@@ -88,15 +88,47 @@ The competitor's cards are `cardElevation=0dp` at `cardCornerRadius=20dp` in all
 
 - **Radii**: `control` 8→12, `card` 12→16, `surface`/`sheet` 14→20. Three lines in
   `tokens.dart`, reaching 145 call sites. Only 2 hardcoded radius literals exist in `lib/`.
-- **The brow**: a full-bleed `brandDeep` block across the top of every signed-in screen whose
-  bottom edge is a convex curve, with the first card riding the seam. Mounted once at
-  `role_shell.dart:109` (`UpdateBannerHost(child: _shell(context))` — the one line every role
-  renders through), plus `backgroundColor: Colors.transparent` at `warden_shell.dart:133`,
-  `manager_shell.dart:143`, `sa_shell.dart:115`.
-- **Inputs**: 64dp tall, unfilled, 12dp radius, leading icon — `theme.dart` `inputDecorationTheme`.
-- **CTA**: pill radius on the primary action.
-- **Onboarding**: four full-bleed pages. There is none today — `PageView` appears twice in the
-  whole tree and both are comments saying the shells deliberately avoid it.
+- **The brow**: a full-bleed `brandDeep` block whose bottom edge is a convex curve, with the
+  first card riding the seam.
+
+  **BUILT DIFFERENTLY FROM THIS PLAN, and the plan was wrong.** The intent was one mount point
+  behind the whole shell at `role_shell.dart:109`. Rendering the owner's dashboard to a PNG
+  killed that twice: a transparent header stops being a header (the list scrolled up *through*
+  it), and the body's own greeting — theme ink, first thing in the scroll view — landed on the
+  indigo as near-black. Whitening the greeting only moves the bug, because it scrolls off the
+  band.
+
+  So on a **scrolling** screen the header IS the brow (`GlassHeader(onBrow: true)`): a fixed,
+  non-scrolling object exactly as tall as the bar plus its curve, and the only thing that ever
+  crosses the colour is a card, which brings its own opaque fill. The full-height `BrandBrow`
+  survives for **sign-in**, where nothing scrolls under it.
+
+  Widgets that name their own colour cannot inherit the header's white, so `BrowScope` — an
+  InheritedWidget the header provides — is read by `NivoraWordmark`, `AccountAvatar`,
+  `SaBrandDot` and warden's `ToneDot`. Reading a scope rather than taking a flag, because four
+  mastheads draw these and a flag is three chances to forget.
+- **Inputs**: taller, and STILL FILLED — a deliberate half-adoption. The teardown put the whole
+  difference down to generosity, but with both rendered side by side the fill is not the
+  problem: Figma 4:77 specifies `bg-[#171a1e]`, and a filled field on a dark card is more
+  legible than an outline. Padding 16 → 20 lands it near 58dp against their ~64dp.
+- **CTA**: a pill. Three things agree and rarely do — Material 3's default button shape is a
+  stadium, the competitor's CTA is fully rounded, and `Radii.pill`'s own rule ("only for things
+  genuinely capsule-shaped that never wrap") is satisfied by a full-width one-word button.
+- **Onboarding**: four full-bleed pages, in `features/onboarding/`. There was none at all —
+  `PageView` appeared twice in the whole tree and both were comments saying the shells
+  deliberately avoid one.
+
+  Grounds are the deep form of the domain tone that owns each feature, so the sequence is
+  NIVORA's own vocabulary rather than the competitor's four unrelated accents: `#4D2896` the
+  brand (white 10.20:1), `#0F5F5B` people (7.48), `#1B5E43` money (7.70), `#8A3D12` the daily
+  run of the place (7.62).
+
+  Gated by a zero-byte marker in the application support directory via `path_provider`, which
+  is already a direct dependency — `shared_preferences` is not, and reaching through
+  supabase_flutter's copy of it to store our own state breaks on somebody else's minor bump.
+  It wraps the login route rather than becoming a phase in `resolveRedirect`, because that
+  function is pure and its every-phase-against-every-route matrix test cannot see a disk read.
+  It never shows a spinner: the child renders until the marker resolves.
 
 ## 5. What is deliberately NOT changing
 

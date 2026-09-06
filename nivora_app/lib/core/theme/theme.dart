@@ -268,7 +268,12 @@ abstract final class NivoraTheme {
           // 48dp: Material's minimum, and above Apple's 44pt, so one number satisfies both.
           // The design's own button is 44 high, which is under Material's floor.
           minimumSize: const Size.fromHeight(48),
-          shape: const RoundedRectangleBorder(borderRadius: Radii.rControl),
+          // A PILL. Three things agree on this and they rarely do: Material 3's own default
+          // button shape is a stadium, the competitor's primary CTA is fully rounded, and
+          // Radii's rule for `pill` — "only for things genuinely capsule-shaped that never
+          // wrap" — is satisfied by a full-width button whose label is one or two words.
+          // It was a 12dp rectangle, which is the shape of a dialog's OK.
+          shape: const RoundedRectangleBorder(borderRadius: Radii.rPill),
           textStyle: text.labelLarge,
           padding: const EdgeInsets.symmetric(horizontal: Space.lg),
         ),
@@ -276,7 +281,9 @@ abstract final class NivoraTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(48),
-          shape: const RoundedRectangleBorder(borderRadius: Radii.rControl),
+          // Matches the filled button it stands beside; a pill next to a rectangle reads as
+          // two different systems.
+          shape: const RoundedRectangleBorder(borderRadius: Radii.rPill),
           // The control's only boundary. 3:1, not the decorative card hairline.
           side: BorderSide(color: controlBorder, width: Strokes.hairline),
           textStyle: text.labelLarge,
@@ -336,7 +343,16 @@ abstract final class NivoraTheme {
         // The fill and the hairline are the design's; the radius rounds to the vocabulary's 8
         // and the height goes to the 48dp tap floor.
         fillColor: fieldFill,
-        contentPadding: const EdgeInsets.symmetric(horizontal: Space.md, vertical: Space.md),
+        // TALLER, AND STILL FILLED — a deliberate half-adoption of the competitor's field.
+        //
+        // Theirs is ~64dp, unfilled, hairline-outlined. Ours measured ~50dp. The teardown put
+        // the whole difference down to generosity, but rendering both side by side, the fill
+        // is not the problem: Figma 4:77 specifies `bg-[#171a1e]` and a filled field on a dark
+        // card is more legible than an outline, not less. The HEIGHT was the problem.
+        //
+        // So the padding goes 16 → 20, which lands the field near 58dp: most of the reference's
+        // generosity, none of its rethinking of a decision the design already made.
+        contentPadding: const EdgeInsets.symmetric(horizontal: Space.md, vertical: Space.lg),
         border: OutlineInputBorder(
           borderRadius: Radii.rControl,
           borderSide: BorderSide(color: controlBorder, width: Strokes.hairline),

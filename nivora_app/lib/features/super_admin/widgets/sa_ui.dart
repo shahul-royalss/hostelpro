@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
+import '../../../shared/brow.dart';
 import '../../../shared/glass/glass.dart';
 import '../../shell/staff_profile_sheet.dart';
 import '../../../shared/wordmark.dart';
@@ -258,7 +259,11 @@ class SaScreen extends StatelessWidget {
 
     return Column(
       children: [
+        // The shell's top bar IS the brow — the brand block with the curved bottom edge that
+        // every role's home now opens with. See GlassHeader.onBrow for why the header draws it
+        // rather than a band sitting behind the whole shell.
         GlassHeader(
+          onBrow: true,
           child: masthead
               ? _masthead(context)
               : Row(
@@ -340,7 +345,12 @@ class SaBrandDot extends StatelessWidget {
         width: Space.xs,
         height: Space.xs,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primary,
+          // White on the brow. The dot is `primary`, and `primary` IS the brow's own family —
+          // a violet disc on #4D2896 is a disc nobody can see. It names its colour, so it
+          // cannot inherit the header's white the way the title beside it does.
+          color: BrowScope.of(context)
+              ? const Color(0xFFFFFFFF)
+              : Theme.of(context).colorScheme.primary,
           shape: BoxShape.circle,
         ),
       );

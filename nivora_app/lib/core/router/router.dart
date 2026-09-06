@@ -6,6 +6,7 @@ import '../auth/auth_controller.dart';
 import '../auth/session.dart';
 import '../../features/auth/change_password_screen.dart';
 import '../../features/auth/login_screen.dart';
+import '../../features/onboarding/onboarding_gate.dart';
 import '../../features/auth/mfa_screen.dart';
 import '../../features/legal/consent_gate.dart';
 import '../../features/settings/security_screen.dart';
@@ -70,7 +71,11 @@ const verifyEmailRoute = '/verify-email';
 /// exercises every AuthPhase against it automatically, without being told it exists.
 final appScreens = <String, WidgetBuilder>{
   splashRoute: (_) => const SplashScreen(),
-  loginRoute: (_) => const LoginScreen(),
+  // WRAPPED, so a first-time user is told what this app is before being asked to sign in to
+  // it. The gate reads a marker file and shows the child immediately if it exists, so this
+  // costs a repeat launch nothing. See features/onboarding/onboarding_gate.dart for why it is
+  // a wrapper here rather than a phase in [resolveRedirect].
+  loginRoute: (_) => const OnboardingGate(child: LoginScreen()),
   mfaRoute: (_) => const MfaScreen(),
   // The ONLY destination this app draws for AuthNeedsMfaEnrolment. See [mfaEnrolRoute].
   mfaEnrolRoute: (_) => const SecurityScreen(required: true),

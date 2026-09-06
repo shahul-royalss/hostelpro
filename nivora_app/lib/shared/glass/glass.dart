@@ -1,8 +1,10 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/tokens.dart';
+import '../brow.dart';
 
 /// The pane layer.
 ///
@@ -411,17 +413,32 @@ class GlassHeader extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
 
-  /// Draw over a [BrandBrow] instead of over the page ground.
+  /// Be the brow: paint the brand block, curve the bottom edge, and let the page's first card
+  /// ride the seam.
   ///
-  /// The header's whole job is to stay opaque while content scrolls under it. On a brow there
-  /// is nothing to hide behind it — the brow IS the opaque thing — and painting the bar fill
-  /// on top of it would cover the colour with a near-white slab and leave a band of brand
-  /// stranded below the header, which reads as a rendering fault rather than a design.
+  /// ── WHY THE HEADER DRAWS THIS AND NOT THE SHELL ───────────────────────────────────────────
   ///
-  /// So on a brow the bar goes transparent, drops its bottom hairline (a line across a colour
-  /// field is a seam, and the brow already has one where it curves), and flips its ink to
-  /// white — 10.20:1 on #4D2896, in both themes, because the brow is the same colour in both.
+  /// The first attempt put a full-height [BrandBrow] behind the whole shell and made the header
+  /// transparent so the colour showed through. Rendering the owner's dashboard to a PNG killed
+  /// that idea twice over:
+  ///
+  ///   1. A TRANSPARENT HEADER STOPS BEING A HEADER. Its entire job is to stay opaque while
+  ///      content scrolls under it. Transparent, the list scrolled up and showed THROUGH it.
+  ///   2. THE BODY'S OWN TEXT LANDED ON THE COLOUR. "Good evening, Ananya" is the first thing
+  ///      in the scroll view, it uses the theme's ink, and on #4D2896 that is near-black on
+  ///      deep indigo. Fixing it by whitening the greeting only moves the bug: the greeting
+  ///      SCROLLS, so it would be white-on-white the moment it left the band.
+  ///
+  /// Anything that scrolls cannot be styled for a ground it only sometimes sits on. So the brow
+  /// on a scrolling screen is exactly as tall as the header itself plus its curve — a fixed,
+  /// non-scrolling object — and the only thing that ever crosses it is a card, which brings its
+  /// own opaque fill.
+  ///
+  /// White ink, 10.20:1 on #4D2896, in both themes, because the brow is the same colour in both.
   final bool onBrow;
+
+  /// How far the centre of the bottom edge bulges below the bar. Matches [BrandBrow.dip].
+  static const browDip = 22.0;
 
   @override
   Widget build(BuildContext context) {
@@ -444,16 +461,35 @@ class GlassHeader extends StatelessWidget {
 
     const ink = Color(0xFFFFFFFF);
     final t = Theme.of(context);
-    return Padding(
-      padding: pad,
-      // Both are needed. Most header content is unstyled Text and Icon that inherits, but the
-      // slots that DO name a colour — a wordmark, an avatar's initials — read the icon theme,
-      // and a header that flipped only one of the two would go half-white.
-      child: IconTheme.merge(
-        data: const IconThemeData(color: ink),
-        child: DefaultTextStyle.merge(
-          style: (t.textTheme.bodyMedium ?? const TextStyle()).copyWith(color: ink),
-          child: child,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      // Dark icons on #4D2896 are a clock nobody can read, and on a light-mode phone the root
+      // sets exactly that. Same fix as BrandBrow's, for the same reason.
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Color(0x00000000),
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+      child: ClipPath(
+        clipper: const BrowClipper(dip: browDip),
+        child: ColoredBox(
+          color: NivoraColors.brandDeep,
+          child: Padding(
+            // The dip is added to the bottom so the curve is empty space below the content
+            // rather than a crescent cutting into it.
+            padding: pad.add(const EdgeInsets.only(bottom: browDip)),
+            // Both are needed. Most header content is unstyled Text and Icon that inherits, but
+            // the slots that DO name a colour — a wordmark, an avatar's initials — read the
+            // icon theme, and a header that flipped only one of the two would go half-white.
+            child: BrowScope(
+              child: IconTheme.merge(
+                data: const IconThemeData(color: ink),
+                child: DefaultTextStyle.merge(
+                  style: (t.textTheme.bodyMedium ?? const TextStyle()).copyWith(color: ink),
+                  child: child,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1221,23 +1257,11 @@ Color avatarToneFor(String? name) {
 /// [avatarToneFor] hue. That lives here in shared/ because the shell must not import a feature
 /// — the dependency runs the other way round.
 class AccountAvatar extends StatelessWidget {
-  const AccountAvatar({super.key, required this.name, this.size = 32, this.onBrow = false});
+  const AccountAvatar({super.key, required this.name, this.size = 32});
 
   final String? name;
   final double size;
 
-  /// Sitting on a [BrandBrow] rather than on a pane.
-  ///
-  /// THE IDENTITY COLOUR CANNOT SURVIVE THE BROW, and that is the whole reason this flag
-  /// exists. A normal avatar is a 10% chip of the name's own tone with the tone as initials —
-  /// arithmetic tuned against a white or near-black pane. On #4D2896 the chip fill all but
-  /// disappears and a violet-toned set of initials is violet on violet. Six of the eight
-  /// avatar tones fail 4.5:1 there and one of them is the brand itself.
-  ///
-  /// So on the brow the avatar drops the hash entirely and goes white-on-white-alpha. It loses
-  /// the per-person colour, which is a real loss — but the alternative is a header where some
-  /// people's initials are legible and others' are not, decided by their name.
-  final bool onBrow;
 
   Color _tone(BuildContext context) => context.tones.resolve(avatarToneFor(name));
 
@@ -1256,6 +1280,18 @@ class AccountAvatar extends StatelessWidget {
     const white = Color(0xFFFFFFFF);
     // 22% white on #4D2896 lands at 1.55:1 against the brow — a disc you can see without it
     // competing with the wordmark beside it. The initials are full white, 10.20:1.
+    // THE IDENTITY COLOUR CANNOT SURVIVE THE BROW. A normal avatar is a 10% chip of the name's
+    // own hash with the hash as initials, arithmetic tuned against a white or near-black pane.
+    // On #4D2896 the chip fill all but disappears and violet initials are violet on violet:
+    // six of the eight avatar tones fail 4.5:1 there and one of them IS the brand.
+    //
+    // So on a brow it drops the per-person colour for white on 22% white. That is a real loss,
+    // taken deliberately — a header where some people's initials are legible and others' are
+    // not, decided by their name, is worse than one where nobody's are coloured.
+    //
+    // Read from [BrowScope] rather than passed in: four mastheads draw this widget and a flag
+    // would have to be remembered at each of them, which is three chances to forget.
+    final onBrow = BrowScope.of(context);
     final fill = onBrow ? white.withValues(alpha: 0.22) : context.tones.chipFill(_tone(context));
     final ink = onBrow ? white : _tone(context);
     return Container(

@@ -239,7 +239,11 @@ class ManagerScreen extends StatelessWidget {
     final t = Theme.of(context);
     return Column(
       children: [
+        // The shell's top bar IS the brow — the brand block with the curved bottom edge that
+        // every role's home now opens with. See GlassHeader.onBrow for why the header draws it
+        // rather than a band sitting behind the whole shell.
         GlassHeader(
+          onBrow: true,
           child: masthead
               ? _masthead(context)
               : Row(

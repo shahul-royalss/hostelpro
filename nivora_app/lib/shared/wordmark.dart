@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+
+import 'brow.dart';
 import 'package:path_parsing/path_parsing.dart';
 
 /// The NIVORA signature, and the machinery to draw it as if it were being written.
@@ -207,7 +209,16 @@ class NivoraWordmark extends StatelessWidget {
       label: 'NIVORA',
       image: true,
       child: CustomPaint(
-        painter: _WordmarkPainter(progress: progress, color: color, strokeWidth: strokeWidth),
+        painter: _WordmarkPainter(
+          progress: progress,
+          // WHITE ON A BROW, whatever the caller asked for. The mark is a CustomPainter that
+          // takes its colour as a parameter, so unlike the text beside it there is nothing for
+          // it to inherit — rendering the owner's dashboard caught it drawing near-black on the
+          // indigo. Overriding here rather than at the four mastheads that draw it, because a
+          // parameter is something three of them would eventually forget.
+          color: BrowScope.of(context) ? const Color(0xFFFFFFFF) : color,
+          strokeWidth: strokeWidth,
+        ),
       ),
     );
   }

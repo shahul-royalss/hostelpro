@@ -6,7 +6,6 @@ import '../../core/auth/session.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/version/update_banner.dart';
 import '../../shared/aurora.dart';
-import '../../shared/brow.dart';
 import '../../shared/glass/glass.dart';
 import '../../shared/wordmark.dart';
 import 'staff_profile_sheet.dart';
@@ -132,26 +131,19 @@ class _RoleShellState extends ConsumerState<RoleShell> {
       // the app and signing into it feel like one product, not that every screen glows.
       body: AuroraField(
         intensity: 0.34,
-        // THE BROW, behind the masthead and the first card of every screen this shell draws.
-        //
-        // The wash alone was never enough: at 0.34 it is a mood, not a shape, and the top of a
-        // dashboard still read as an empty bar over an empty list. The brow gives the screen a
-        // top — the same one the sign-in screen has, so signing in does not change products —
-        // and the first card in the body rides its seam.
-        //
-        // Shorter than the sign-in screen's 42%: there the masthead is the whole top of the
-        // page, here it is a 56dp bar with a screenful of figures under it, and a deep band
-        // would push the first row of data below the fold.
-        child: BrandBrow(
         child: Column(
         children: [
-          // `onBrow` turns the bar transparent and flips its ink to white. Painting the normal
-          // bar fill here would cover the colour with a near-white slab and leave a stripe of
-          // brand stranded below the header, which reads as a rendering fault.
+          // THE BROW IS THE HEADER HERE, not a band behind the whole shell.
+          //
+          // A full-height brow was tried first and rendering this screen to a PNG killed it:
+          // the greeting is the first thing in the scroll view, it uses the theme's ink, and on
+          // #4D2896 that is near-black on deep indigo. Whitening it only moves the bug, because
+          // the greeting scrolls off the band. `onBrow` makes the header itself the brand block
+          // with the curved bottom edge — a fixed object the list passes under, so the only
+          // thing that ever crosses the colour is a card, which brings its own opaque fill.
           GlassHeader(onBrow: true, child: _header(t, session)),
           Expanded(child: _body(t, tabs)),
         ],
-        ),
         ),
       ),
       bottomNavigationBar: tabs.isEmpty ? null : _navBar(t, tabs),
@@ -241,9 +233,6 @@ class _RoleShellState extends ConsumerState<RoleShell> {
               child: AccountAvatar(
                 name: name.isEmpty ? 'Nivora' : name,
                 size: IconSize.xl,
-                // The header sits on the brow, so the avatar drops its identity hash for
-                // white — see AccountAvatar.onBrow for why the hash cannot survive there.
-                onBrow: true,
               ),
             ),
           ),
@@ -253,6 +242,8 @@ class _RoleShellState extends ConsumerState<RoleShell> {
             child: SizedBox(
               width: 116,
               height: 116 / 3.4,
+              // The colour named here is what it paints OFF a brow; on one the wordmark
+              // whitens itself from BrowScope, so every masthead gets it without remembering.
               child: NivoraWordmark(progress: 1, color: t.colorScheme.onSurface),
             ),
           ),

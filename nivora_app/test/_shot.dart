@@ -1,6 +1,12 @@
-// A THROWAWAY. Renders signed-in shells to real PNGs so a change to the chrome can be LOOKED
-// at without a device and without anybody's password. Not named *_test.dart, so `flutter test`
-// never picks it up; run it explicitly. Delete when the redesign is verified.
+// A DEV TOOL, not a test — `flutter test` skips it because the name does not end in _test.
+// Run it explicitly: `flutter test test/_shot.dart`, then look in build/shots/.
+//
+// WHY IT EARNS ITS PLACE. Signed-in screens cannot be reached on a device without credentials,
+// so chrome changes to the five shells were going in blind. This renders them to real PNGs from
+// a widget test in about five seconds. It has already caught two bugs nothing else would have:
+// a greeting drawn in near-black on the indigo brow, and a wordmark that names its own colour
+// and so could not inherit the header's white. Icons render as squares here — the test runner
+// stubs the icon font — so check glyphs on a device, not in these.
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -16,6 +22,7 @@ import 'package:mobile/data/models/models.dart';
 import 'package:mobile/data/providers.dart';
 import 'package:mobile/features/owner/owner_insights.dart';
 import 'package:mobile/features/owner/owner_providers.dart';
+import 'package:mobile/features/onboarding/onboarding_screen.dart';
 import 'package:mobile/features/shell/role_shell.dart';
 
 const _hostelId = 'h-sunrise';
@@ -40,7 +47,7 @@ final _sunrise = Hostel(
   updatedAt: DateTime.utc(2026, 3, 1),
 );
 
-Future<void> _shoot(WidgetTester tester, String name, ThemeData theme) async {
+Future<void> _shoot(WidgetTester tester, String name, ThemeData theme, [UserRole role = UserRole.owner]) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 2.75;
   addTearDown(tester.view.reset);
@@ -49,7 +56,7 @@ Future<void> _shoot(WidgetTester tester, String name, ThemeData theme) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        sessionProvider.overrideWithValue(_session),
+        sessionProvider.overrideWithValue(NivoraSession(userId: 'u-1', role: role, fullName: 'Ananya Rao', status: 'active', mustChangePassword: false, hostelId: _hostelId)),
         currentHostelIdProvider.overrideWithValue(_hostelId),
         currentPeriodMonthProvider.overrideWithValue(_period),
         myHostelsProvider.overrideWith((ref) => [_sunrise]),
@@ -60,7 +67,7 @@ Future<void> _shoot(WidgetTester tester, String name, ThemeData theme) async {
         key: key,
         child: MaterialApp(
           theme: theme,
-          home: const RoleShell(role: UserRole.owner),
+          home: RoleShell(role: role),
         ),
       ),
     ),
@@ -69,15 +76,47 @@ Future<void> _shoot(WidgetTester tester, String name, ThemeData theme) async {
   await tester.pump(const Duration(milliseconds: 500));
 
   final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-  final image = await boundary.toImage(pixelRatio: 1);
-  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-  final dir = Directory(r'C:\shots')..createSync(recursive: true);
-  File('${dir.path}\$name.png').writeAsBytesSync(bytes!.buffer.asUint8List());
-  // ignore: avoid_print
-  print('wrote ${dir.path}\$name.png');
+  // runAsync: PNG encoding is real async work on a real thread, and the fake async zone a
+  // widget test runs in never lets it complete. Without this the whole test hangs with no
+  // output at all, which is exactly what it did the first time.
+  await tester.runAsync(() async {
+    final image = await boundary.toImage(pixelRatio: 1);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    final dir = Directory('build/shots')..createSync(recursive: true);
+    File('build/shots/' + name + '.png').writeAsBytesSync(bytes!.buffer.asUint8List());
+    // ignore: avoid_print
+    print('WROTE C:/shots/' + name + '.png');
+  });
+}
+
+Future<void> _shootPlain(WidgetTester tester, String name, Widget home, ThemeData theme) async {
+  tester.view.physicalSize = const Size(1080, 2400);
+  tester.view.devicePixelRatio = 2.75;
+  addTearDown(tester.view.reset);
+  final key = GlobalKey();
+  await tester.pumpWidget(RepaintBoundary(
+    key: key,
+    child: MaterialApp(theme: theme, home: home),
+  ));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 500));
+  final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+  await tester.runAsync(() async {
+    final image = await boundary.toImage(pixelRatio: 1);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    Directory('build/shots').createSync(recursive: true);
+    File('build/shots/' + name + '.png').writeAsBytesSync(bytes!.buffer.asUint8List());
+    // ignore: avoid_print
+    print('WROTE C:/shots/' + name + '.png');
+  });
 }
 
 void main() {
-  testWidgets('owner shell, light', (t) async => _shoot(t, 'owner_light', NivoraTheme.light()));
-  testWidgets('owner shell, dark', (t) async => _shoot(t, 'owner_dark', NivoraTheme.dark()));
+  testWidgets('onboarding', (t) async => _shootPlain(
+      t, 'onboarding', OnboardingScreen(onDone: () {}), NivoraTheme.light()));
+
+  for (final role in [UserRole.owner, UserRole.warden, UserRole.manager, UserRole.superAdmin]) {
+    testWidgets('${role.name} light', (t) async => _shoot(t, '${role.name}_light', NivoraTheme.light(), role));
+    testWidgets('${role.name} dark', (t) async => _shoot(t, '${role.name}_dark', NivoraTheme.dark(), role));
+  }
 }
