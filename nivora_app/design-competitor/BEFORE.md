@@ -62,3 +62,29 @@ better than anything in the competitor, which has no dark theme at all. Three re
 
 NIVORA wins on rigour and loses on presence. The redesign has to keep the first and buy the
 second.
+
+---
+
+# After
+
+Same device, same emulator, HEAD at the end of the redesign. Files: `after-signin-light.png`,
+`after-signin-dark.png`, `after-onboarding-1.png`, `after-onboarding-3.png`,
+`after-owner-light.png`, `after-owner-dark.png`, `after-warden-light.png`,
+`after-superadmin-light.png`.
+
+The signed-in shots are rendered by `test/_shot.dart` rather than photographed, because those
+screens are behind a login. Icons show as squares in those two — the test runner stubs the icon
+font — so glyphs were checked on the device instead, where they render normally.
+
+| | before | after |
+|---|---|---|
+| Light-theme brand | `#79590C`, a quantiser's bronze | `#6C4AA5`, chosen and measured |
+| Light-theme depth | card, bar and sheet all `#FFFFFF` | a real three-rung ramp |
+| `NivoraDomain.security` in light | gold at **2.24:1** on a white card | the brand, 6.64:1 |
+| Card corner | 12dp | 16dp (screen 20dp) |
+| Primary CTA | 12dp rectangle | pill |
+| Field height | ~50dp | ~58dp |
+| Top third of sign-in | empty | the brow, with the card riding its seam |
+| Signed-in header | flat bar, 3 of 5 roles undecorated | the brow, all five |
+| Onboarding | none | four pages |
+| Contrast enforced in CI | 86 tests | 89, and the light group now asserts the opposite of what it did |
