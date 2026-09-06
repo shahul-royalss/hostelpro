@@ -186,14 +186,35 @@ class _PageBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: Space.xxl),
-      child: Column(
+    // THIS OVERFLOWED BY 67 PIXELS and test/responsive_test.dart is why I know the number: a
+    // 320dp phone at 2.0x system text, which is Android's accessibility maximum. A centred
+    // Column cannot yield, so a page that is one pixel too tall shows the hazard stripe.
+    //
+    // Scroll view first, centred inside a minimum height equal to the viewport: it stays
+    // optically centred at every size that fits, and becomes scrollable at the sizes that do
+    // not, instead of breaking. `LayoutBuilder` supplies the viewport height because a
+    // SingleChildScrollView gives its child unbounded height and Center inside one would
+    // otherwise collapse.
+    return LayoutBuilder(
+      builder: (context, box) => SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: Space.xxl, vertical: Space.xl),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: box.maxHeight - Space.xl * 2),
+          child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // A line glyph, large, in white — the competitor's own choice and the right one. A
-          // filled illustration at this size on a saturated ground turns into a blob.
-          Icon(page.icon, size: 96, color: _ink),
+          // A line glyph, in white — the competitor's own choice and the right one. A filled
+          // illustration at this size on a saturated ground turns into a blob.
+          //
+          // The size yields to the text scale rather than competing with it. At 2.0x the
+          // heading and paragraph need roughly twice the room, and 96dp of decoration is the
+          // first thing that should give it up — an icon at 56 still reads as the same icon,
+          // where a clipped paragraph does not read at all.
+          Icon(
+            page.icon,
+            size: 96 / MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.7),
+            color: _ink,
+          ),
           const SizedBox(height: Space.xxl),
           Text(
             page.title,
@@ -209,6 +230,8 @@ class _PageBody extends StatelessWidget {
             style: t.textTheme.bodyLarge?.copyWith(color: _ink.withValues(alpha: 0.82)),
           ),
         ],
+          ),
+        ),
       ),
     );
   }

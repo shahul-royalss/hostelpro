@@ -24,6 +24,18 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<!-- WITHOUT THESE TWO, iOS TERMINATES THE APP. Not a permission dialog that gets denied —
+	     the system kills the process the instant a picker is presented with no usage string, and
+	     App Store review rejects the binary before that. lib/data/capture.dart reaches for both
+	     ImageSource.camera and ImageSource.gallery, so both keys are required.
+
+	     The wording is specific on purpose. Apple rejects "This app needs camera access"; what a
+	     reviewer is looking for is WHICH feature and WHY, which is also what an actual user
+	     deserves to read in the dialog. -->
+	<key>NSCameraUsageDescription</key>
+	<string>NIVORA uses the camera so a warden can photograph a resident's ID proof or a maintenance issue while standing in front of it, instead of finding the file later.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>NIVORA opens your photo library so you can attach an existing photo of an ID proof, a paid receipt, or a maintenance issue to a resident's record or a complaint.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
