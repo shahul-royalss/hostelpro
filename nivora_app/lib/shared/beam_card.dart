@@ -61,10 +61,18 @@ class _BeamCardState extends State<BeamCard> with SingleTickerProviderStateMixin
         foregroundPainter: _BeamPainter(
           progress: still ? 0 : _c.value,
           radius: widget.radius,
-          // The gold, not white. The reference's beam is white on a purple field; here the
-          // field is NIVORA's purple and the accent that belongs on it is the brand's own.
-          ink: NivoraColors.primary,
-          visible: !still,
+          // THE GOLD, and it must be named explicitly now. This used to say
+          // `NivoraColors.primary` with a comment reading "the gold, not white" — true when
+          // primary WAS the gold. Primary is the brand violet now, so that line quietly became
+          // a violet comet travelling round a violet-lit card, which is invisible.
+          ink: NivoraColors.gold,
+          // DARK ONLY, and this is not a preference. The comet is a light travelling round the
+          // card's edge; a travelling light needs a dark edge to travel along. On the light
+          // theme's white card the same paint renders as a tan smear parked in one corner —
+          // I built it, looked at it on a device, and that is exactly what it did. There is
+          // nothing to rescue with an alpha: the effect is wrong for the surface, so it does
+          // not run on that surface.
+          visible: !still && t.brightness == Brightness.dark,
         ),
         child: child,
       ),
@@ -73,12 +81,25 @@ class _BeamCardState extends State<BeamCard> with SingleTickerProviderStateMixin
           borderRadius: r,
           // Near-opaque, deliberately: this is the surface the form's labels and inputs sit on,
           // and it is what keeps them measurable against a ground that is now glowing. The
-          // aurora shows THROUGH the card only as much as 0.86 allows.
-          color: t.colorScheme.surfaceContainer.withValues(alpha: 0.86),
+          // aurora shows THROUGH the card only as much as the alpha allows.
+          //
+          // THE CARD IS `surface`, NOT `surfaceContainer`. In the dark theme those are a rung
+          // apart and either would have read as a card, so the wrong one went in unnoticed. In
+          // the light theme surfaceContainer is the BAR fill #F7F8FC, and at 86% over a
+          // violet-tinted ground it rendered the sign-in card as a grey slab instead of the
+          // white card the scheme specifies. `surface` is the card in both themes by
+          // definition — it is what GlassWeight.thin returns — so it is what this paints.
+          color: t.colorScheme.surface.withValues(alpha: 0.92),
           border: Border.all(color: t.colorScheme.outlineVariant),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.45),
+              // A MODAL'S LIFT, TONED TO THE THEME. 45% black is a dark-theme shadow; on a
+              // near-white page it is a grey smudge, which is what it was drawing. This is the
+              // one surface in the app allowed to float — glass.dart:28-33 — so it keeps a
+              // shadow, but it takes the scheme's own shadow colour and a light-appropriate
+              // alpha rather than assuming the ground is near-black.
+              color: t.colorScheme.shadow
+                  .withValues(alpha: t.brightness == Brightness.dark ? 0.45 : 0.10),
               blurRadius: 32,
               offset: const Offset(0, 12),
             ),

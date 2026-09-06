@@ -5,6 +5,7 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/theme/tokens.dart';
 import '../../shared/aurora.dart';
 import '../../shared/beam_card.dart';
+import '../../shared/brow.dart';
 import '../../shared/glass/glass.dart';
 
 /// Sign in — `screen-signin`, node 4:60.
@@ -173,40 +174,84 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // own opaque background over it and the glow would never be seen.
       backgroundColor: Colors.transparent,
       body: AuroraField(
+        child: BrandBrow(
+        // A LITTLE TALLER THAN THE DEFAULT BROW, because this screen has no header and no
+        // tabs — the masthead IS its top content, and the band has to be deep enough to hold it
+        // and still have the card's top edge land inside the colour.
+        //
+        // 34% is the second number tried. 42% with the group centred put the mark at a third of
+        // the way down and left the top quarter of the band empty, which looked like a mistake
+        // rather than a margin; the reference's own block is about a third of the page with its
+        // mark centred in it, and this now matches that.
+        height: MediaQuery.sizeOf(context).height * 0.34,
         child: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(Space.xl),
+          child: LayoutBuilder(
+            builder: (context, box) => SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: Space.xl),
+            // CENTRED IN THE VIEWPORT, NOT TOP-ALIGNED. The first cut of this screen pinned
+            // the group to the top and left 42% of the page empty below the card — which is
+            // the same fault the brow was added to fix, moved from the top of the screen to
+            // the bottom of it. minHeight makes the column fill a short screen and scroll on
+            // a very short one.
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: BeamCard(
-                padding: const EdgeInsets.all(Space.xl),
-                child: Form(
-                  key: _form,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // 4:69 — the design's wordmark, 24/ExtraBold. displayMedium is that step,
-                      // and it is the same mark at the same size the splash opens with, so the
-                      // launch animation resolves INTO this screen rather than being replaced
-                      // by a different logo.
-                      Text(
-                        'NIVORA',
-                        style: t.textTheme.displayMedium,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: Space.md),
-                      // 4:73. titleLarge is the design's 20/700 heading; headlineMedium is the
-                      // same metrics with TABULAR figures, which is a stat card's slot, not a
-                      // sentence's.
-                      Text('Welcome back',
-                          style: t.textTheme.titleLarge, textAlign: TextAlign.center),
-                      const SizedBox(height: Space.xxs),
-                      // 4:74 — body 13/400.
-                      Text('Sign in to your PG workspace',
-                          style: t.textTheme.bodyMedium, textAlign: TextAlign.center),
-                      // The design's block gap on this screen.
-                      const SizedBox(height: Space.xl),
+              constraints: BoxConstraints(minHeight: box.maxHeight),
+              child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // TOP-ALIGNED, not centred. Centring the group balanced it against the whole
+                // viewport, which is the wrong frame: the masthead's job is to sit inside the
+                // brow, and the brow is anchored to the top of the screen. A proportional
+                // offset rather than a fixed one, so the mark lands in the same place on a
+                // 5-inch phone and a tablet.
+                SizedBox(height: box.maxHeight * 0.06),
+                // ── THE MASTHEAD, ON THE BROW ────────────────────────────────────────────
+                //
+                // These three lines used to be the first three rows INSIDE the card, which
+                // left the top 45% of this screen empty and the card floating in the middle
+                // of it. The competitor teardown in design-competitor/ is unambiguous that
+                // this is the single thing making their sign-in screen look designed and ours
+                // look assembled: they put their mark on the colour and let the card hold only
+                // the form. Same content, moved forty percent up the page.
+                //
+                // White rather than the theme's ink, because the brow is #4D2896 in BOTH
+                // themes — 10.20:1 for white on it, and it is the one surface a light phone
+                // and a dark phone render identically.
+                // 4:69 — the design's wordmark, 24/ExtraBold. displayMedium is that step, and
+                // it is the same mark at the same size the splash opens with, so the launch
+                // animation resolves INTO this screen rather than being replaced by a
+                // different logo.
+                Text(
+                  'NIVORA',
+                  style: t.textTheme.displayMedium?.copyWith(color: _onBrow),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: Space.md),
+                // 4:73. titleLarge is the design's 20/700 heading; headlineMedium is the same
+                // metrics with TABULAR figures, which is a stat card's slot, not a sentence's.
+                Text('Welcome back',
+                    style: t.textTheme.titleLarge?.copyWith(color: _onBrow),
+                    textAlign: TextAlign.center),
+                const SizedBox(height: Space.xxs),
+                // 4:74 — body 13/400. 76% white on the brow is 7.06:1, so the subtitle can be
+                // quieter than the heading without dropping under AA.
+                Text('Sign in to your PG workspace',
+                    style: t.textTheme.bodyMedium
+                        ?.copyWith(color: _onBrow.withValues(alpha: 0.76)),
+                    textAlign: TextAlign.center),
+                const SizedBox(height: Space.xxl),
+                // THE CARD RIDES THE SEAM. Nothing here positions it to: the brow's flat edge
+                // is 30% of the screen and this column reaches it naturally, so the overlap
+                // holds on a short phone and a tall one without a magic offset.
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: BeamCard(
+                      padding: const EdgeInsets.all(Space.xl),
+                      child: Form(
+                        key: _form,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
                       TextFormField(
                         controller: _id,
                         enabled: !busy,
@@ -299,15 +344,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       // that cannot act is worse than a plain sentence.
                       Text('Accounts are created by your administrator.',
                           style: t.textTheme.bodySmall, textAlign: TextAlign.center),
-                    ],
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
+              ],
               ),
+            ),
             ),
           ),
         ),
-      ),
+        ),
       ),
     );
   }
 }
+
+/// Text on the brow. White in both themes, because the brow is the same #4D2896 in both.
+const _onBrow = Color(0xFFFFFFFF);

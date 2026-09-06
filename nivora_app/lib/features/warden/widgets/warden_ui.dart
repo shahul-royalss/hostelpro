@@ -432,8 +432,12 @@ class WardenScreen extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        // `avatar-indicator` (4:654, 4:737): an 8px gold disc in front of the
-                        // page name, on every warden frame in the file.
+                        // `avatar-indicator` (4:654, 4:737): an 8px brand disc in front of the
+                        // page name, on every warden frame in the file. The design draws it
+                        // gold; it follows `primary`, which is the brand indigo now, and that
+                        // is the right answer rather than a side effect — gold measures 2.24:1
+                        // on the light card, under even the 3:1 bar a decorative disc has to
+                        // clear. See NivoraColors.gold.
                         const ToneDot(tone: NivoraColors.primary),
                         const SizedBox(width: Space.xxs + Space.xxs / 2),
                         Flexible(

@@ -407,23 +407,57 @@ class GlassCard extends StatelessWidget {
 /// stays opaque while content passes under it, which is what a header is for, and edges only
 /// along the bottom.
 class GlassHeader extends StatelessWidget {
-  const GlassHeader({super.key, required this.child, this.padding});
+  const GlassHeader({super.key, required this.child, this.padding, this.onBrow = false});
   final Widget child;
   final EdgeInsetsGeometry? padding;
 
+  /// Draw over a [BrandBrow] instead of over the page ground.
+  ///
+  /// The header's whole job is to stay opaque while content scrolls under it. On a brow there
+  /// is nothing to hide behind it — the brow IS the opaque thing — and painting the bar fill
+  /// on top of it would cover the colour with a near-white slab and leave a band of brand
+  /// stranded below the header, which reads as a rendering fault rather than a design.
+  ///
+  /// So on a brow the bar goes transparent, drops its bottom hairline (a line across a colour
+  /// field is a seam, and the brow already has one where it curves), and flips its ink to
+  /// white — 10.20:1 on #4D2896, in both themes, because the brow is the same colour in both.
+  final bool onBrow;
+
   @override
-  Widget build(BuildContext context) => GlassSurface(
+  Widget build(BuildContext context) {
+    // 16 is the design's own screen and card padding.
+    final pad = (padding ?? const EdgeInsets.symmetric(horizontal: Space.md, vertical: Space.sm))
+        .add(EdgeInsets.only(top: MediaQuery.paddingOf(context).top));
+
+    if (!onBrow) {
+      return GlassSurface(
         weight: GlassWeight.regular,
         borderRadius: BorderRadius.zero,
         shadows: Shadows.level1,
         border: Border(
           bottom: BorderSide(color: GlassSurface.edgeColor(context), width: Strokes.hairline),
         ),
-        // 16 is the design's own screen and card padding.
-        padding: (padding ?? const EdgeInsets.symmetric(horizontal: Space.md, vertical: Space.sm))
-            .add(EdgeInsets.only(top: MediaQuery.paddingOf(context).top)),
+        padding: pad,
         child: child,
       );
+    }
+
+    const ink = Color(0xFFFFFFFF);
+    final t = Theme.of(context);
+    return Padding(
+      padding: pad,
+      // Both are needed. Most header content is unstyled Text and Icon that inherits, but the
+      // slots that DO name a colour — a wordmark, an avatar's initials — read the icon theme,
+      // and a header that flipped only one of the two would go half-white.
+      child: IconTheme.merge(
+        data: const IconThemeData(color: ink),
+        child: DefaultTextStyle.merge(
+          style: (t.textTheme.bodyMedium ?? const TextStyle()).copyWith(color: ink),
+          child: child,
+        ),
+      ),
+    );
+  }
 }
 
 /// One statistic — the design's KPI card (4:460, 4:479, 4:1546).
@@ -1187,10 +1221,25 @@ Color avatarToneFor(String? name) {
 /// [avatarToneFor] hue. That lives here in shared/ because the shell must not import a feature
 /// — the dependency runs the other way round.
 class AccountAvatar extends StatelessWidget {
-  const AccountAvatar({super.key, required this.name, this.size = 32});
+  const AccountAvatar({super.key, required this.name, this.size = 32, this.onBrow = false});
 
   final String? name;
   final double size;
+
+  /// Sitting on a [BrandBrow] rather than on a pane.
+  ///
+  /// THE IDENTITY COLOUR CANNOT SURVIVE THE BROW, and that is the whole reason this flag
+  /// exists. A normal avatar is a 10% chip of the name's own tone with the tone as initials —
+  /// arithmetic tuned against a white or near-black pane. On #4D2896 the chip fill all but
+  /// disappears and a violet-toned set of initials is violet on violet. Six of the eight
+  /// avatar tones fail 4.5:1 there and one of them is the brand itself.
+  ///
+  /// So on the brow the avatar drops the hash entirely and goes white-on-white-alpha. It loses
+  /// the per-person colour, which is a real loss — but the alternative is a header where some
+  /// people's initials are legible and others' are not, decided by their name.
+  final bool onBrow;
+
+  Color _tone(BuildContext context) => context.tones.resolve(avatarToneFor(name));
 
   /// Up to two initials. Falls back to a single glyph rather than an empty circle, because a
   /// blank disc reads as a failed image load.
@@ -1204,15 +1253,19 @@ class AccountAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final tone = context.tones.resolve(avatarToneFor(name));
+    const white = Color(0xFFFFFFFF);
+    // 22% white on #4D2896 lands at 1.55:1 against the brow — a disc you can see without it
+    // competing with the wordmark beside it. The initials are full white, 10.20:1.
+    final fill = onBrow ? white.withValues(alpha: 0.22) : context.tones.chipFill(_tone(context));
+    final ink = onBrow ? white : _tone(context);
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: context.tones.chipFill(tone)),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: fill),
       child: Text(
         initialsFor(name),
-        style: t.textTheme.labelMedium?.copyWith(color: tone, fontWeight: FontWeight.w700),
+        style: t.textTheme.labelMedium?.copyWith(color: ink, fontWeight: FontWeight.w700),
         maxLines: 1,
       ),
     );
