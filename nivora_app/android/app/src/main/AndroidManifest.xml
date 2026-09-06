@@ -9,9 +9,30 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Lets the app tell "you are offline" apart from "the server is down". -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- ── THE SESSION MUST NOT LEAVE THE PHONE ────────────────────────────────────────────
+         Android Auto Backup is ON BY DEFAULT. With it on,
+         /data/data/app.nivora.mobile/shared_prefs/FlutterSharedPreferences.xml is uploaded to
+         the user's Google Drive and restored by Android 12+ device-to-device transfer — and
+         that file holds the persisted GoTrue session, including a long-lived refresh token for
+         an account that moves other people's rent.
+
+         A warden who hands on a phone, or restores onto a second handset, would carry a live
+         session with them. It is also an off-device transfer of account data that
+         docs/data-safety.md does not declare, in a document whose own §1 defines "collected"
+         as "transmitted off the user's device".
+
+         Nothing is lost by refusing it. This client keeps no local state worth restoring; every
+         screen is server-backed and the cost of a fresh install is signing in once.
+
+         BOTH attributes are needed and they are not duplicates: allowBackup governs cloud
+         backup on every version, dataExtractionRules governs cloud backup AND D2D transfer on
+         Android 12+ (targetSdk here is 36), and a device transfer is not a "backup". -->
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round">
         <activity

@@ -1,3 +1,5 @@
+import 'dart:ui' show PathMetric;
+
 import 'package:flutter/material.dart';
 
 import '../core/theme/tokens.dart';
@@ -125,20 +127,67 @@ class _BeamPainter extends CustomPainter {
   final Color ink;
   final bool visible;
 
+  // ── MEASURED ONCE PER GEOMETRY, NOT ONCE PER FRAME ─────────────────────────────────────
+  //
+  // This painter runs on every vsync of the first interactive screen in the app. Before this
+  // cache it allocated, sixty times a second: an RRect, a Path, a single-use metrics iterable
+  // walked into a List, a Paint, and a LinearGradient shader — the last one a real GPU resource
+  // created and thrown away 60 times a second.
+  //
+  // The fix is the one wordmark.dart:158-179 already applies to exactly this hazard, and its
+  // comment says why in as many words: "computeMetrics() also returns a single-use iterable, so
+  // re-walking it every frame would mean re-measuring ... sixty times a second." The beam was
+  // written after that lesson and did not inherit it.
+  //
+  // A single entry is enough. There is one BeamCard on screen at a time — it is the sign-in
+  // card — and a second one of a different size simply re-measures once and takes the slot.
+  // Keyed on size AND radius, so a rotation or a different card invalidates it honestly rather
+  // than drawing last screen's geometry.
+  static Size? _cachedSize;
+  static double? _cachedRadius;
+  static PathMetric? _cachedMetric;
+
+  static Color? _cachedInk;
+  static Paint? _cachedPaint;
+
+  static PathMetric? _metricFor(Size size, double radius) {
+    if (_cachedSize == size && _cachedRadius == radius && _cachedMetric != null) {
+      return _cachedMetric;
+    }
+    final rrect = RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius));
+    // The path IS the border, so the light follows the rounded corners instead of jumping the
+    // gap between four straight slivers — which is the visible flaw in the four-div version.
+    final metrics = (Path()..addRRect(rrect)).computeMetrics().toList();
+    if (metrics.isEmpty) return null;
+    _cachedSize = size;
+    _cachedRadius = radius;
+    return _cachedMetric = metrics.first;
+  }
+
+  static Paint _paintFor(Rect rect, Color ink) {
+    if (_cachedInk == ink && _cachedPaint != null) return _cachedPaint!;
+    _cachedInk = ink;
+    return _cachedPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..shader = LinearGradient(
+        colors: [ink.withValues(alpha: 0), ink.withValues(alpha: 0.85)],
+      ).createShader(rect)
+      // Kept, unlike every other blur in this app. The ban in glass.dart is on BackdropFilter,
+      // which samples and re-blurs everything behind a whole pane; this is a 1.2-sigma mask on
+      // a 1.5px stroke a sixth of one card's perimeter long. Different cost by orders of
+      // magnitude, and it is what stops the comet reading as a scratch.
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2);
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     if (!visible) return;
 
     final rect = Offset.zero & size;
-    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
-
-    // The path IS the border, so the light follows the rounded corners instead of jumping the
-    // gap between four straight slivers — which is the visible flaw in the four-div version.
-    final path = Path()..addRRect(rrect);
-    final metrics = path.computeMetrics().toList();
-    if (metrics.isEmpty) return;
-
-    final metric = metrics.first;
+    final metric = _metricFor(size, radius);
+    if (metric == null) return;
     final total = metric.length;
 
     // A sixth of the perimeter, so the head is a comet rather than a dot or a ring.
@@ -155,18 +204,11 @@ class _BeamPainter extends CustomPainter {
       segments.add(metric.extractPath(start, head));
     }
 
+    // extractPath still allocates per frame and that is unavoidable — it IS the drawing. What
+    // is gone is everything around it.
+    final paint = _paintFor(rect, ink);
     for (final seg in segments) {
-      canvas.drawPath(
-        seg,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5
-          ..strokeCap = StrokeCap.round
-          ..shader = LinearGradient(
-            colors: [ink.withValues(alpha: 0), ink.withValues(alpha: 0.85)],
-          ).createShader(rect)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2),
-      );
+      canvas.drawPath(seg, paint);
     }
   }
 

@@ -6,8 +6,12 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<!-- "Mobile" is the Dart package name leaking onto a home screen. Android already fixed this
+	     in strings.xml; iOS was left behind, so the icon, the app switcher, Settings and the
+	     share sheet all said Mobile. The display name is independent of the package name — do
+	     NOT rename the package to match. -->
 	<key>CFBundleDisplayName</key>
-	<string>Mobile</string>
+	<string>Nivora</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +19,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>mobile</string>
+	<string>Nivora</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -32,6 +36,27 @@
 	     The wording is specific on purpose. Apple rejects "This app needs camera access"; what a
 	     reviewer is looking for is WHICH feature and WHY, which is also what an actual user
 	     deserves to read in the dialog. -->
+	<!-- WITHOUT THIS, EMAIL VERIFICATION IS DEAD ON iOS. GoTrue redirects the confirmation
+	     link to app.nivora.mobile://verify-email?code=..., and with no app claiming the scheme
+	     Safari answers "cannot open the page because the address is invalid". The PKCE code
+	     verifier only exists inside the app, so the exchange cannot complete anywhere else —
+	     the link is not merely inconvenient off-device, it is unusable.
+
+	     The scheme is copied from android/app/src/main/AndroidManifest.xml:79 and from
+	     Env.emailLinkScheme. All three have to agree; if one is edited the other two must be. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>app.nivora.mobile</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>app.nivora.mobile</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>NIVORA uses the camera so a warden can photograph a resident's ID proof or a maintenance issue while standing in front of it, instead of finding the file later.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

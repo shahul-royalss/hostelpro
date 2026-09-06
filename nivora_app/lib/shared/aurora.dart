@@ -47,7 +47,31 @@ class _AuroraFieldState extends State<AuroraField> with SingleTickerProviderStat
     // One controller for both glows, running long and slow. The reference gives them 6s and 8s
     // and offsets one; a single 8s pass with the second glow reading it at a phase offset is the
     // same picture for one ticker instead of two.
-    _c = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat();
+    _c = AnimationController(vsync: this, duration: const Duration(seconds: 8));
+  }
+
+  /// THE TICKER ONLY RUNS WHEN IT CHANGES SOMETHING.
+  ///
+  /// It used to `..repeat()` in initState, unconditionally and forever. Two costs, both paid on
+  /// every screen in the app because RoleShell wraps its whole body in this:
+  ///
+  ///   1. WITH REDUCE MOTION ON, the builders below pin `pulse` to 0.5 — so the ticker was
+  ///      rebuilding two full-screen gradients sixty times a second to redraw the same picture.
+  ///      A user who asked the OS for less motion was paying MORE for it than anyone.
+  ///   2. Even with motion on, a controller started in initState keeps ticking while the app is
+  ///      backgrounded until the engine stops vsync, and there is no state in which a hidden
+  ///      wash needs to breathe.
+  ///
+  /// MediaQuery is not readable in initState, which is why this lives here.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final still = MediaQuery.disableAnimationsOf(context);
+    if (still && _c.isAnimating) {
+      _c.stop();
+    } else if (!still && !_c.isAnimating) {
+      _c.repeat();
+    }
   }
 
   @override
@@ -71,8 +95,21 @@ class _AuroraFieldState extends State<AuroraField> with SingleTickerProviderStat
         Positioned.fill(child: ColoredBox(color: t.scaffoldBackgroundColor)),
 
         // The top wash: a wide, very soft dome bleeding down from behind the status bar.
+        //
+        // ── THE RepaintBoundary IS NOT DECORATION, IT IS THE WHOLE COST OF THIS WIDGET ──────
+        //
+        // Without it these DecoratedBoxes are painted into the same layer as `widget.child`,
+        // because a bare Stack introduces no boundary. Every tick marks them dirty, the dirt
+        // propagates up to the nearest boundary — which was RenderView — and Flutter
+        // re-rasterises THE ENTIRE SCREEN: the header, the wordmark's CustomPaint, the brow's
+        // ClipPath, the nav bar and every row of data, sixty or a hundred and twenty times a
+        // second, for as long as the app is open, while the user does nothing.
+        //
+        // With it, a tick repaints one full-screen gradient into its own layer and the shell
+        // above is left alone. Same picture, and the rest of the app goes idle between frames.
         Positioned.fill(
-          child: IgnorePointer(
+          child: RepaintBoundary(
+            child: IgnorePointer(
             child: AnimatedBuilder(
               animation: _c,
               builder: (context, _) {
@@ -93,13 +130,15 @@ class _AuroraFieldState extends State<AuroraField> with SingleTickerProviderStat
                 );
               },
             ),
+            ),
           ),
         ),
 
         // The bottom wash, reading the same ticker half a cycle out so the two are never at
         // full strength together — which is what stops the screen looking like it is flashing.
         Positioned.fill(
-          child: IgnorePointer(
+          child: RepaintBoundary(
+            child: IgnorePointer(
             child: AnimatedBuilder(
               animation: _c,
               builder: (context, _) {
@@ -118,6 +157,7 @@ class _AuroraFieldState extends State<AuroraField> with SingleTickerProviderStat
                   ),
                 );
               },
+            ),
             ),
           ),
         ),
