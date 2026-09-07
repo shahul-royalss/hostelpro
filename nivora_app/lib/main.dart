@@ -154,13 +154,28 @@ class _NivoraAppState extends ConsumerState<NivoraApp> {
   /// didChangeDependencies is where the size is genuinely known, and it re-runs when the
   /// window changes — so a foldable opening flat drops the lock rather than keeping a phone
   /// rule on a tablet-sized screen.
+  /// What was last asked of the platform, so the same request is not repeated.
+  ///
+  /// `MediaQuery.sizeOf` registers a dependency on the SIZE aspect alone, so this does not run
+  /// when the keyboard opens or the padding changes — but it does run on every rotation, and on
+  /// a foldable it runs on every fold. Each call crosses a platform channel. Remembering the
+  /// answer makes the common case free and, more usefully, means the log shows a request only
+  /// when the decision actually changed.
+  bool? _lockedToPortrait;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final shortest = MediaQuery.sizeOf(context).shortestSide;
     if (shortest <= 0) return;
+
+    final portraitOnly = shortest < Breakpoints.medium;
+    if (portraitOnly == _lockedToPortrait) return;
+    _lockedToPortrait = portraitOnly;
+
     SystemChrome.setPreferredOrientations(
-      shortest < Breakpoints.medium
+      portraitOnly
+          // Both ways up: a phone in a car mount upside down is still a phone.
           ? const [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]
           : DeviceOrientation.values,
     );
