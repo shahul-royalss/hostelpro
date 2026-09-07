@@ -41,10 +41,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
-  /// THE N ARRIVES. It fades up and settles from very slightly large, which reads as a mark
-  /// coming to rest rather than one being stamped. Finished by 40% so the second phase has
-  /// something already-still to emerge from.
-  late final Animation<double> _markIn;
+  /// THE MARK SETTLES. It does NOT fade in, and that is the fix for something a device caught
+  /// that no test would have.
+  ///
+  /// Android 12 shows its own splash first — the launcher icon, which is this same mark, on the
+  /// same background. So by the time Flutter draws, the logo has ALREADY been on screen for a
+  /// second or more. Fading it up from zero made it blink out and back: logo, blank window while
+  /// Flutter boots, blank again, then the logo dissolving in. Three frames of nothing between
+  /// two frames of the same picture.
+  ///
+  /// Holding it at full opacity makes the handoff invisible — the system's logo and this one are
+  /// the same artwork at the same place on the same colour, so the seam disappears and all the
+  /// eye sees is the moment IVORA starts to unfold. Only a small scale settle is left, which
+  /// reads as the mark coming to rest rather than as an arrival.
   late final Animation<double> _markScale;
 
   /// IVORA COMES OUT OF THE N. Driven as a width factor on a clip: at 0 the letters are folded
@@ -69,11 +78,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     super.initState();
     _controller = AnimationController(vsync: this, duration: splashMinimum);
 
-    _markIn = CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0, 0.32, curve: Curves.easeOut),
-    );
-    _markScale = Tween<double>(begin: 1.18, end: 1).animate(CurvedAnimation(
+    // 1.06, not 1.18: a mark that is already visible when the animation starts should look
+    // like it is settling, not like it is being thrown at the screen.
+    _markScale = Tween<double>(begin: 1.06, end: 1).animate(CurvedAnimation(
       parent: _controller,
       curve: const Interval(0, 0.40, curve: Curves.easeOutCubic),
     ));
@@ -137,7 +144,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             AnimatedBuilder(
               animation: _controller,
               builder: (context, _) => _Lockup(
-                markOpacity: _markIn.value,
                 markScale: _markScale.value,
                 unfold: _unfold.value,
                 recentre: _recentre.value,
@@ -184,13 +190,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 /// are arriving from elsewhere; the whole idea is that they were inside the N all along.
 class _Lockup extends StatelessWidget {
   const _Lockup({
-    required this.markOpacity,
     required this.markScale,
     required this.unfold,
     required this.recentre,
   });
 
-  final double markOpacity;
   final double markScale;
   final double unfold;
   final double recentre;
@@ -232,19 +236,16 @@ class _Lockup extends StatelessWidget {
           // everything above the largest run of transparent rows, which is the same measured
           // split scripts/gen-icons.mjs uses to make the launcher icon. So the mark here and
           // the icon the user just tapped are the same artwork.
-          Opacity(
-            opacity: markOpacity,
-            child: Transform.scale(
-              scale: markScale,
-              child: Image.asset(
+          Transform.scale(
+            scale: markScale,
+            child: Image.asset(
                 'assets/brand_mark.png',
                 height: _markHeight,
                 // The mark is drawn at 781x510 and shown at 70 tall on a 3x screen, so this
                 // decodes at the size it is painted instead of holding a 781px bitmap for a
                 // 107px slot.
-                cacheHeight: (_markHeight * 3).round(),
-                filterQuality: FilterQuality.high,
-              ),
+              cacheHeight: (_markHeight * 3).round(),
+              filterQuality: FilterQuality.high,
             ),
           ),
           // A hair of air between the mark and the letters. The mark's own artwork has none.
