@@ -62,9 +62,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   /// as a list of instructions.
   late final Animation<double> _unfold;
 
-  /// The whole lockup drifts left by half of IVORA's width as those letters appear, so the
-  /// FINISHED mark is centred rather than the N being centred and the word hanging off it.
-  late final Animation<double> _recentre;
+  /// THERE IS NO `_recentre` ANY MORE, AND ITS ABSENCE IS THE FIX.
+  ///
+  /// It used to slide the whole lockup left by half of IVORA's width as the letters emerged, so
+  /// that the FINISHED mark would be centred rather than the N being centred with the word
+  /// hanging off it. The intent was right and the implementation double-counted: [Center]
+  /// re-centres the row on every frame already, because [Align.widthFactor] changes the row's
+  /// measured width as the clip opens. Doing it again by hand shifted the finished lockup left
+  /// by half of IVORA ON TOP OF a row that was already centred — which is exactly what the
+  /// product owner photographed: the mark jammed against the left edge with clear space on the
+  /// right. See _Lockup for the one small offset that IS still needed, and why.
 
   /// The slow-restore cue. Shares this controller rather than owning a timer, so "the opening
   /// has finished and we are STILL here" is one clock. On a warm start the gate opens and the
@@ -88,10 +95,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       parent: _controller,
       // easeOutCubic, not the app's Motion.enter: the letters should decelerate hard at the end
       // so the mark lands rather than glides to a stop.
-      curve: const Interval(0.30, 0.78, curve: Curves.easeOutCubic),
-    );
-    _recentre = CurvedAnimation(
-      parent: _controller,
       curve: const Interval(0.30, 0.78, curve: Curves.easeOutCubic),
     );
     _cue = CurvedAnimation(
@@ -146,7 +149,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               builder: (context, _) => _Lockup(
                 markScale: _markScale.value,
                 unfold: _unfold.value,
-                recentre: _recentre.value,
               ),
             ),
             const SizedBox(height: Space.xl),
@@ -188,44 +190,107 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 ///
 /// Opacity is deliberately NOT animated on them. A fade would make the letters look like they
 /// are arriving from elsewhere; the whole idea is that they were inside the N all along.
+///
+/// ── AND HOW IT ENDS UP IN THE MIDDLE ──────────────────────────────────────────────────────
+///
+/// By doing nothing. `widthFactor` changes the row's MEASURED width every frame, and the
+/// [Center] above re-centres whatever it measures — so the mark starts centred on its own, and
+/// slides left of its own accord as the letters take up room, finishing with the whole lockup
+/// centred. The previous version also translated the row left by half of IVORA to "fix" this,
+/// which applied the correction twice and pushed the finished mark hard against the left edge.
+///
+/// The one offset that IS still needed is [_trailingAir], and it is 3dp.
 class _Lockup extends StatelessWidget {
-  const _Lockup({
-    required this.markScale,
-    required this.unfold,
-    required this.recentre,
-  });
+  const _Lockup({required this.markScale, required this.unfold});
 
   final double markScale;
   final double unfold;
-  final double recentre;
 
-  /// The mark's drawn height. The asset is 781x510, so this gives it about 107 of width.
-  static const double _markHeight = 70;
+  /// The wordmark's size and tracking. 6 is wide enough to read as a mark at this size without
+  /// the letters losing their relationship to each other.
+  static const double fontSize = 44;
+  static const double letterSpacing = 6;
 
-  static const double _fontSize = 44;
-  static const _style = TextStyle(
-    fontSize: _fontSize,
-    fontWeight: FontWeight.w800,
-    // The light theme's ink: this screen is the light ground now, not the brand dark.
-    color: NivoraColors.textPrimary,
-    height: 1,
-    // The tracking is the whole difference between a logo and a word. 6 is wide enough to read
-    // as a mark at this size without the letters losing their relationship to each other.
-    letterSpacing: 6,
-  );
+  /// FLUTTER PUTS LETTER-SPACING AFTER THE LAST LETTER TOO.
+  ///
+  /// So the Text's measured box is [letterSpacing] wider than its ink, and a row centred on that
+  /// box sits its ink half of that to the left. Three device-independent pixels is not much, and
+  /// the ask was that the wordmark be centred "perfectly" — this is the difference between
+  /// centring the picture and centring the box the picture came in.
+  ///
+  /// Scaled by [unfold] because the dead space only exists once the final A is out; before that
+  /// the clip is cutting through a glyph.
+  static const double _trailingAir = letterSpacing / 2;
+
+  /// Inter's cap height is 1490/2048 of the em — the ratio published in the font's own metrics,
+  /// not a number measured off a screenshot.
+  static const double _capRatio = 1490 / 2048;
+
+  /// HOW BIG THE N IS, AS A MULTIPLE OF THE LETTERS BESIDE IT.
+  ///
+  /// The product owner's note was "the N goes so long". He is right: it was a flat 70dp against
+  /// a 32dp cap height — the mark stood at more than twice the height of the word, so the eye
+  /// read "[badge] IVORA" instead of NIVORA, which is the one thing a lockup must not do.
+  ///
+  /// 1.15 rather than 1.0 because this mark is a drawn house with a door and a lit window, not
+  /// a letterform, and a complex shape set at exactly cap height reads smaller than the type it
+  /// stands in. A sixth over is the usual optical correction, and it is the one knob here worth
+  /// turning if this ever needs another look.
+  ///
+  /// THIS NUMBER ONLY BECAME HONEST WHEN THE ASSET WAS RE-CUT. brand_mark.png used to carry a
+  /// fringe of alpha 1-3 out to its edges — invisible, and 20% of the file's height. Flutter
+  /// sizes the image BOX, so `height: 40` drew 32dp of visible mark and this ratio described
+  /// something that was not on the screen. See scripts/cut-brand-mark.py.
+  static const double _markToCap = 1.15;
+
+  /// The air between the mark and the letters, as a fraction of cap height.
+  ///
+  /// It was `Space.xs` — 8dp — plus, by accident, the 13dp of dead alpha inside the mark's own
+  /// box, which came to about 21. Re-cutting the asset removed the accident, so the intended
+  /// number has to be stated: 0.62 of a cap keeps the gap the eye had already been reading,
+  /// and is wide enough that the mark is a mark rather than a ligature.
+  static const double _gapToCap = 0.62;
+
+  /// The face is the app's own, not the platform default.
+  ///
+  /// This used to be a bare `TextStyle`, which on Android means Roboto — so the brand's name was
+  /// set in one typeface on the splash and in another (Inter, via the text theme) on every
+  /// masthead a second later. Two wordmarks that nearly match is worse than either.
+  static TextStyle styleOf(ThemeData t) =>
+      (t.textTheme.labelLarge ?? const TextStyle()).copyWith(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w800,
+        // The light theme's ink: this screen is the light ground now, not the brand dark.
+        color: NivoraColors.textPrimary,
+        height: 1,
+        letterSpacing: letterSpacing,
+      );
 
   @override
   Widget build(BuildContext context) {
-    // Measured, not guessed: the drift has to be exactly half of what IVORA occupies, or the
-    // finished lockup sits off-centre by however wrong the guess was.
-    final ivoraWidth = _measure('IVORA');
+    final style = styleOf(Theme.of(context));
+    final painter = TextPainter(
+      text: TextSpan(text: 'IVORA', style: style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    // THE MARK STANDS ON THE LETTERS' BASELINE, which is where a letter would stand.
+    //
+    // Centring the two against each other — what this did before — lines up the middle of the
+    // mark with the middle of the text's LINE BOX, and a line box has descender room under it
+    // that all-caps type never uses. The mark therefore sat low by half that descender. Taking
+    // the baseline from the painter rather than from a font constant means this stays true if
+    // the face is ever swapped.
+    final descent =
+        painter.height - painter.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+    final capHeight = fontSize * _capRatio;
+    final markHeight = capHeight * _markToCap;
 
     return Transform.translate(
-      // Starts centred on the N and ends centred on the whole mark.
-      offset: Offset(-ivoraWidth / 2 * recentre, 0),
+      offset: Offset(_trailingAir * unfold, 0),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // THE REAL MARK, not a letter N set in Inter.
           //
@@ -236,37 +301,32 @@ class _Lockup extends StatelessWidget {
           // everything above the largest run of transparent rows, which is the same measured
           // split scripts/gen-icons.mjs uses to make the launcher icon. So the mark here and
           // the icon the user just tapped are the same artwork.
-          Transform.scale(
-            scale: markScale,
-            child: Image.asset(
+          Padding(
+            padding: EdgeInsets.only(bottom: descent),
+            child: Transform.scale(
+              // Scale does not change the laid-out size, so the settle cannot disturb the
+              // baseline it is standing on.
+              scale: markScale,
+              child: Image.asset(
                 'assets/brand_mark.png',
-                height: _markHeight,
-                // The mark is drawn at 781x510 and shown at 70 tall on a 3x screen, so this
-                // decodes at the size it is painted instead of holding a 781px bitmap for a
-                // 107px slot.
-              cacheHeight: (_markHeight * 3).round(),
-              filterQuality: FilterQuality.high,
+                height: markHeight,
+                // Decoded at the size it is painted — 3x covers every phone this ships to —
+                // instead of holding a 781px bitmap for a 61px slot.
+                cacheHeight: (markHeight * 3).round(),
+                filterQuality: FilterQuality.high,
+              ),
             ),
           ),
-          // A hair of air between the mark and the letters. The mark's own artwork has none.
-          const SizedBox(width: Space.xs),
+          SizedBox(width: capHeight * _gapToCap),
           ClipRect(
             child: Align(
               alignment: Alignment.centerLeft,
               widthFactor: unfold,
-              child: const Text('IVORA', style: _style),
+              child: Text('IVORA', style: style),
             ),
           ),
         ],
       ),
     );
-  }
-
-  double _measure(String text) {
-    final painter = TextPainter(
-      text: const TextSpan(text: 'IVORA', style: _style),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    return painter.width;
   }
 }

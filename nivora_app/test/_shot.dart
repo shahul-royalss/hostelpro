@@ -23,7 +23,9 @@ import 'package:mobile/data/providers.dart';
 import 'package:mobile/features/owner/owner_insights.dart';
 import 'package:mobile/features/owner/owner_providers.dart';
 import 'package:mobile/features/onboarding/onboarding_screen.dart';
+import 'package:mobile/core/boot/splash_gate.dart';
 import 'package:mobile/features/shell/role_shell.dart';
+import 'package:mobile/features/splash/splash_screen.dart';
 
 const _hostelId = 'h-sunrise';
 const _period = '2026-08';
@@ -82,7 +84,8 @@ Future<void> _shoot(WidgetTester tester, String name, ThemeData theme, [UserRole
   });
 }
 
-Future<void> _shootPlain(WidgetTester tester, String name, Widget home, ThemeData theme) async {
+Future<void> _shootPlain(WidgetTester tester, String name, Widget home, ThemeData theme,
+    {Duration settle = const Duration(milliseconds: 500)}) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 2.75;
   addTearDown(tester.view.reset);
@@ -92,7 +95,17 @@ Future<void> _shootPlain(WidgetTester tester, String name, Widget home, ThemeDat
     child: MaterialApp(theme: theme, home: home),
   ));
   await tester.pump();
-  await tester.pump(const Duration(milliseconds: 500));
+  await tester.pump(settle);
+  // Images decode on a real thread, which the fake async zone of a widget test never lets
+  // finish — so every `Image.asset` in these shots rendered as nothing until this was added.
+  // The splash's brand mark was the one that made it obvious: the PNG showed IVORA alone.
+  for (final finder in <Finder>[find.byType(Image)]) {
+    for (var i = 0; i < finder.evaluate().length; i++) {
+      final widget = tester.widget<Image>(finder.at(i));
+      await tester.runAsync(() => precacheImage(widget.image, tester.element(finder.at(i))));
+    }
+  }
+  await tester.pump();
   final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
   await tester.runAsync(() async {
     final image = await boundary.toImage(pixelRatio: 1);
@@ -105,6 +118,14 @@ Future<void> _shootPlain(WidgetTester tester, String name, Widget home, ThemeDat
 }
 
 void main() {
+  // THE OPENING, AT REST. Shot at splashMinimum so this is the frame the wordmark FINISHES on
+  // — the one the product owner photographed off his phone and said was not centred. Rendering
+  // it here is how that gets looked at without a device and without racing a 1,500ms animation
+  // against a one-second adb screencap.
+  testWidgets('splash', (t) async => _shootPlain(
+      t, 'splash', const ProviderScope(child: SplashScreen()), NivoraTheme.light(),
+      settle: splashMinimum));
+
   testWidgets('onboarding', (t) async => _shootPlain(
       t, 'onboarding', OnboardingScreen(onDone: () {}), NivoraTheme.light()));
 
