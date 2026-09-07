@@ -386,6 +386,12 @@ sealed class AppFailure implements Exception {
   /// connection arrives in. Neither package is a direct dependency of this app, and importing
   /// one to `is`-check it would both trip depend_on_referenced_packages and break a web build,
   /// so this matches on the type name instead. Ugly, contained, and documented.
+  /// Public face of [_looksOffline], for the container's retry policy. The auth restore is
+  /// the one network path not wrapped in [guard], so its transport errors arrive raw, and the
+  /// policy has to recognise a dead socket without importing dart:io any more than this file
+  /// does.
+  static bool looksOffline(Object error) => _looksOffline(error);
+
   static bool _looksOffline(Object error) {
     final text = '${error.runtimeType} $error'.toLowerCase();
     return text.contains('socketexception') ||

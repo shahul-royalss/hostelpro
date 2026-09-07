@@ -486,6 +486,7 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
                                 'Nivora could not read your security settings. Try again.',
                               ),
                         onRetry: () => ref.invalidate(mfaStateProvider),
+                        onSignOut: _signOut,
                       ),
                       data: (mfa) => mfa.enrolled
                           ? _OnCard(
@@ -897,10 +898,17 @@ class _SavedKeyWarning extends StatelessWidget {
 /// A retry button under something retrying cannot fix — an expired session, a rate limit that
 /// has not run out — teaches people to tap it forever. [MfaFailure.retryable] is what decides.
 class _Failed extends StatelessWidget {
-  const _Failed({required this.failure, required this.onRetry});
+  const _Failed({required this.failure, required this.onRetry, this.onSignOut});
 
   final MfaFailure failure;
   final VoidCallback onRetry;
+
+  /// THE DOOR OUT OF THE TRAP. When this screen is the mandatory enrolment gate, the router
+  /// offers no other destination: an owner whose connection dropped here used to sit in front
+  /// of a failure with a Try again that failed the same way, unable to go back and unable to
+  /// reach any other screen. Signing out is always offered from here now, so the worst case is
+  /// a return to the sign-in form rather than a phone that has to be force-closed.
+  final VoidCallback? onSignOut;
 
   @override
   Widget build(BuildContext context) {
@@ -910,9 +918,18 @@ class _Failed extends StatelessWidget {
       child: StateBody(
         title: 'Could not read your security settings',
         message: failure.message,
-        action: failure.retryable
-            ? FilledButton(onPressed: onRetry, child: const Text('Try again'))
-            : null,
+        action: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (failure.retryable)
+              FilledButton(onPressed: onRetry, child: const Text('Try again')),
+            if (onSignOut != null) ...[
+              const SizedBox(height: Space.xs),
+              TextButton(onPressed: onSignOut, child: const Text('Sign out')),
+            ],
+          ],
+        ),
       ),
     );
   }

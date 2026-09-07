@@ -525,6 +525,44 @@ final class WardenRepository extends Repository implements StudentRegistrations 
         return rows.map(VisitorLog.fromJson).toList(growable: false);
       });
 
+  /// Sign a visitor in. Warden only — visitors_insert names the role and requires the hostel
+  /// to be writable (an expired subscription refuses the row, with the sentence for that).
+  ///
+  /// THE TENANT CHECK IS THE DATABASE'S. app.assert_student_in_hostel fires BEFORE INSERT and
+  /// refuses a student_id that belongs to another hostel, so this method does not re-check it:
+  /// a client-side check would be a second opinion that can only ever agree or be wrong.
+  /// `logged_by` is the signed-in warden, read from the session rather than passed in, so a
+  /// caller cannot attribute a visit to somebody else.
+  Future<VisitorLog> checkInVisitor({
+    required String hostelId,
+    required String studentId,
+    required String visitorName,
+    String? relation,
+    String? visitorPhone,
+  }) =>
+      guard(() async {
+        final name = visitorName.trim();
+        if (name.isEmpty) throw const InvalidInputFailure("Enter the visitor's name.");
+        final row = await db
+            .from('visitors')
+            .insert({
+              'hostel_id': hostelId,
+              'student_id': studentId,
+              'visitor_name': name,
+              'relation': _blankToNull(relation),
+              'visitor_phone': _blankToNull(visitorPhone),
+              'logged_by': db.auth.currentUser?.id,
+            })
+            .select(VisitorLog.columns)
+            .single();
+        return VisitorLog.fromJson(row);
+      });
+
+  static String? _blankToNull(String? v) {
+    final t = v?.trim();
+    return t == null || t.isEmpty ? null : t;
+  }
+
   /// Sign a visitor out. Warden only — visitors_update names the role.
   Future<void> checkOutVisitor(String visitorId) => guard(() async {
         final rows = await db

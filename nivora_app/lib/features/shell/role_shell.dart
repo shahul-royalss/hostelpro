@@ -296,9 +296,10 @@ class _RoleShellState extends ConsumerState<RoleShell> {
   Widget _body(ThemeData t, List<({String label, IconData icon})> tabs) {
     // The owner's section owns its bodies the way the student's does — an IndexedStack over
     // the tabs actually visited — and additionally warms the unvisited tabs' data in the
-    // background so a tap lands on drawn numbers, not a skeleton. The tabs nothing has built
-    // yet (Students) still show this shell's placeholder, passed in so the copy and
-    // the label stay in one place. See OwnerSection.
+    // background so a tap lands on drawn numbers, not a skeleton. All five owner tabs are
+    // built; the placeholder is still passed because OwnerSection's contract asks for one, and
+    // a sixth tab added to the bar before its screen exists should say so rather than render
+    // an empty page. See OwnerSection.
     if (widget.role == UserRole.owner) {
       return OwnerSection(tabIndex: _index, placeholder: (_) => _placeholder(t, tabs));
     }

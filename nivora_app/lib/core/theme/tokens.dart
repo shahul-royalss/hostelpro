@@ -1203,3 +1203,13 @@ abstract final class Breakpoints {
   /// nav is replaced by links in the header.
   static const expanded = 768.0;
 }
+
+/// The widest a tab body is allowed to be, from [Breakpoints.expanded] up.
+///
+/// 720 is the width at which a row of three KPI tiles, a fee ledger row with four figures, or
+/// a paragraph of a notice all still read at arm's length on a 10-inch tablet. Past it a card
+/// stretches until its title and its number are on opposite sides of the screen, which is
+/// the "website that happens to be installed" look this exists to prevent. Applied in
+/// shared/motion/tab_swap.dart, the one widget all five shells run their tabs through; the
+/// chrome around the body — brow, header, nav bar — stays full-bleed on purpose.
+const maxContentWidth = 720.0;

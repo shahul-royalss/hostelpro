@@ -35,6 +35,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
 import 'package:mobile/core/theme/theme.dart';
+import 'package:mobile/core/theme/tokens.dart';
 import 'package:mobile/data/models/models.dart';
 import 'package:mobile/data/providers.dart';
 import 'package:mobile/features/auth/login_screen.dart';
@@ -42,6 +43,7 @@ import 'package:mobile/features/onboarding/onboarding_screen.dart';
 import 'package:mobile/features/owner/owner_insights.dart';
 import 'package:mobile/features/owner/owner_providers.dart';
 import 'package:mobile/features/shell/role_shell.dart';
+import 'package:mobile/shared/motion/tab_swap.dart';
 
 typedef Device = ({String name, Size size, double dpr});
 
@@ -99,9 +101,16 @@ Widget _wrap(Widget home, ThemeData theme, double scale, UserRole role) => Provi
       ],
       child: MaterialApp(
         theme: theme,
-        home: MediaQuery(
-          data: MediaQueryData(textScaler: TextScaler.linear(scale)),
-          child: home,
+        // copyWith, not a fresh MediaQueryData: a bare MediaQueryData(textScaler: ...) has a
+        // ZERO size and no padding, so anything reading MediaQuery.sizeOf — the width cap, the
+        // brow's height, the bottom bar — was measuring a phone of no width at all. Layout
+        // itself still used the real view constraints, which is why the overflow matrix passed
+        // regardless; the cap test is what finally noticed.
+        home: Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
+            child: home,
+          ),
         ),
       ),
     );
@@ -192,6 +201,38 @@ void main() {
             reason: 'the growth is capped so the bar cannot crowd out the content');
       });
     }
+  });
+
+  group('a tab body is capped on a tablet and full-bleed on a phone', () {
+    // The failure on a tablet is the opposite of an overflow: nothing breaks, the fee ledger
+    // simply stretches to 800dp and reads as a website. So this asserts the cap directly —
+    // TabSwap centres its child inside a ConstrainedBox from Breakpoints.expanded up, and
+    // introduces no such box below it, where a cap would only waste a phone's width.
+    final tablet = _devices.last;
+    final phone = _devices[1];
+
+    testWidgets('tablet — the body is no wider than maxContentWidth', (tester) async {
+      await _pumpAndCatch(
+        tester,
+        _wrap(const RoleShell(role: UserRole.owner), NivoraTheme.light(), 1.0, UserRole.owner),
+        tablet,
+      );
+      final cap = find.byKey(contentCapKey);
+      expect(cap, findsOneWidget, reason: 'no width cap inside TabSwap on an 800dp tablet');
+      expect(tester.getSize(cap).width, lessThanOrEqualTo(maxContentWidth));
+    });
+
+    testWidgets('phone — no cap is introduced', (tester) async {
+      await _pumpAndCatch(
+        tester,
+        _wrap(const RoleShell(role: UserRole.owner), NivoraTheme.light(), 1.0, UserRole.owner),
+        phone,
+      );
+      // By key, not by type: a tab body legitimately holds twenty-odd ConstrainedBoxes of its
+      // own, and the first draft of this assertion found all of them and failed for it.
+      expect(find.byKey(contentCapKey), findsNothing,
+          reason: 'a phone body must use its whole width');
+    });
   });
 
   group('the dark theme has the same geometry', () {

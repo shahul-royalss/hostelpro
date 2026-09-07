@@ -31,6 +31,9 @@ import '../../core/theme/tokens.dart';
 /// changes. What you get is the new content arriving: a fade up from nothing with a small lift.
 /// That is the honest effect available here, and paying for a true cross-fade would mean giving
 /// up the state preservation, which is a bad trade for a 240ms flourish.
+/// Identifies the width cap [TabSwap] applies on wide screens. Public for tests only.
+const contentCapKey = ValueKey('tab-body-width-cap');
+
 class TabSwap extends StatefulWidget {
   const TabSwap({super.key, required this.index, required this.child});
 
@@ -79,14 +82,39 @@ class _TabSwapState extends State<TabSwap> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) {
     // A user who asked the OS to reduce motion gets the page, with no arrival. Checked on every
     // build rather than cached, because the setting can change while the app is open.
-    if (MediaQuery.disableAnimationsOf(context)) return widget.child;
+    final body = _capped(context, widget.child);
+    if (MediaQuery.disableAnimationsOf(context)) return body;
 
     return FadeTransition(
       opacity: _fade,
       // `child:` on both, so the subtree is built once and only the transitions rebuild per
       // frame. Passing it positionally instead would rebuild all five tabs on every frame of
       // every tab change.
-      child: SlideTransition(position: _lift, child: widget.child),
+      child: SlideTransition(position: _lift, child: body),
+    );
+  }
+
+  /// A tab body no wider than a hand can read.
+  ///
+  /// Every one of the five shells runs its tabs through this widget, which makes it the one
+  /// place a width rule reaches all of them. On a phone it is a no-op. From
+  /// [Breakpoints.expanded] up — a tablet, a foldable open flat, a Chromebook — the body is
+  /// centred at [maxContentWidth] instead of stretching a fee ledger across 1,200dp, which
+  /// reads as a website that happens to be installed. The header, the brow and the nav bar sit
+  /// outside this widget and stay full-bleed on purpose: they are the chrome, and chrome
+  /// should meet the edges.
+  static Widget _capped(BuildContext context, Widget child) {
+    if (MediaQuery.sizeOf(context).width < Breakpoints.expanded) return child;
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        // Keyed so a test can find THIS box and not the twenty-odd ConstrainedBoxes a tab body
+        // legitimately contains — the first version of that test asserted "no ConstrainedBox on
+        // a phone" and found twenty-two of them.
+        key: contentCapKey,
+        constraints: const BoxConstraints(maxWidth: maxContentWidth),
+        child: child,
+      ),
     );
   }
 }

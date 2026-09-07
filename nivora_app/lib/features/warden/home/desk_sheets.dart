@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
+import '../../../data/models/models.dart';
+import '../../../data/providers.dart';
 import '../../../shared/glass/glass.dart';
 import '../actions/sheet_scaffold.dart';
 import '../data/warden_models.dart';
@@ -205,11 +207,12 @@ class _LeaveRowState extends ConsumerState<_LeaveRow> {
 // VISITORS
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Who is in the building, and signing them out again.
+/// Who is in the building, signing them in, and signing them out again.
 ///
-/// LOGGING A NEW VISITOR IS NOT HERE. public.visitors_insert admits the warden, so it is
-/// permitted — it is simply not built in this release, and pretending otherwise with a disabled
-/// button would be worse than its absence. Check-in is done from the web console for now.
+/// Check-in lives in this sheet's header rather than as a separate desk tile: the warden who
+/// opens "Visitors on site" is the one standing at the gate, and the person in front of them is
+/// either arriving or leaving. Both actions belong on the one screen that shows who is here.
+/// See [showCheckInVisitorSheet].
 Future<void> showVisitorsSheet(BuildContext context, {required String hostelId}) {
   return showGlassSheet<void>(
     context: context,
@@ -230,6 +233,11 @@ class _VisitorsSheet extends ConsumerWidget {
       subtitle: visitors.value == null
           ? null
           : '${visitors.requireValue.length} not signed out',
+      trailing: TextButton.icon(
+        onPressed: () => showCheckInVisitorSheet(context, hostelId: hostelId),
+        icon: const Icon(Icons.person_add_alt_1_rounded, size: IconSize.sm),
+        label: const Text('Sign in'),
+      ),
       child: AsyncSection<List<VisitorLog>>(
         value: visitors,
         onRetry: () => ref.invalidate(visitorsOnSiteProvider(hostelId)),
@@ -238,7 +246,7 @@ class _VisitorsSheet extends ConsumerWidget {
             return const EmptyState(
               icon: Icons.door_front_door_outlined,
               title: 'Nobody signed in',
-              detail: 'Every visitor logged today has signed out again.',
+              detail: 'When a visitor arrives, use Sign in above to log who they are here for.',
               tone: NivoraColors.success,
             );
           }
@@ -328,6 +336,251 @@ class _VisitorRowState extends ConsumerState<_VisitorRow> {
               child: const Text('Sign out'),
             ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SIGNING A VISITOR IN
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Who has arrived, and which resident they are here for.
+///
+/// This was "done from the web console for now" until the client demo made that sentence
+/// untenable: a warden standing at the gate with a phone is the whole reason the app exists,
+/// and telling them to go and find a laptop is not a feature gap, it is the product not
+/// working. The insert is admitted by visitors_insert for the warden's own hostel, and the
+/// resident's tenancy is checked by app.assert_student_in_hostel BEFORE INSERT — so the only
+/// thing this sheet has to get right is asking the two questions in the order a person would.
+Future<void> showCheckInVisitorSheet(BuildContext context, {required String hostelId}) {
+  return showGlassSheet<void>(
+    context: context,
+    builder: (_) => _CheckInVisitorSheet(hostelId: hostelId),
+  );
+}
+
+class _CheckInVisitorSheet extends ConsumerStatefulWidget {
+  const _CheckInVisitorSheet({required this.hostelId});
+  final String hostelId;
+
+  @override
+  ConsumerState<_CheckInVisitorSheet> createState() => _CheckInVisitorSheetState();
+}
+
+class _CheckInVisitorSheetState extends ConsumerState<_CheckInVisitorSheet> {
+  final _search = TextEditingController();
+  final _name = TextEditingController();
+  final _relation = TextEditingController();
+  final _phone = TextEditingController();
+  String _term = '';
+  Student? _resident;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _name.dispose();
+    _relation.dispose();
+    _phone.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final resident = _resident;
+    if (resident == null) {
+      setState(() => _error = 'Choose the resident they are here to see.');
+      return;
+    }
+    if (_name.text.trim().isEmpty) {
+      setState(() => _error = "Enter the visitor's name.");
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final ok = await runAction(
+      context,
+      success: '${_name.text.trim()} signed in for ${resident.fullName}',
+      action: () => ref.read(wardenRepositoryProvider).checkInVisitor(
+            hostelId: widget.hostelId,
+            studentId: resident.id,
+            visitorName: _name.text,
+            relation: _relation.text,
+            visitorPhone: _phone.text,
+          ),
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (ok) {
+      refreshVisitors(ref);
+      Navigator.of(context).pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    // Active residents only: somebody on leave or vacated is not in the building to be visited.
+    // The search is Postgres's `ilike` over name and phone, exactly as the Residents tab does
+    // it, so a warden who knows the roster by phone number is served too.
+    final query = StudentQuery(
+      hostelId: widget.hostelId,
+      search: _term.isEmpty ? null : _term,
+      status: StudentStatus.active,
+    );
+    final residents = ref.watch(studentsProvider(query));
+    final chosen = _resident;
+
+    return SheetBody(
+      title: 'Sign in a visitor',
+      subtitle: chosen == null ? 'Who are they here to see?' : 'Visiting ${chosen.fullName}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _search,
+            enabled: !_busy,
+            onChanged: (v) => setState(() => _term = v.trim()),
+            textInputAction: TextInputAction.search,
+            decoration: const InputDecoration(
+              labelText: 'Find the resident',
+              hintText: 'Name or phone',
+              prefixIcon: Icon(Icons.search_rounded),
+            ),
+          ),
+          const SizedBox(height: Space.sm),
+          residents.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(Space.md),
+              child: Center(child: InlineSpinner()),
+            ),
+            error: (e, _) => Text(
+              AppFailure.from(e).message,
+              style: t.textTheme.bodySmall?.copyWith(color: context.tones.error),
+            ),
+            data: (page) => page.items.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: Space.sm),
+                    child: Text(
+                      _term.isEmpty
+                          ? 'No active residents in this hostel yet.'
+                          : 'No resident matches "$_term".',
+                      style: t.textTheme.bodyMedium,
+                    ),
+                  )
+                : Column(
+                    children: [
+                      // Eight is the most a sheet can show above the form without the form
+                      // leaving the screen; the search narrows it long before that matters.
+                      for (final s in page.items.take(8))
+                        _ResidentRow(
+                          student: s,
+                          selected: chosen?.id == s.id,
+                          onTap: _busy ? null : () => setState(() => _resident = s),
+                        ),
+                    ],
+                  ),
+          ),
+          const SizedBox(height: Space.md),
+          TextField(
+            controller: _name,
+            enabled: !_busy,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: "Visitor's name",
+              prefixIcon: Icon(Icons.person_outline_rounded),
+            ),
+          ),
+          const SizedBox(height: Space.sm),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _relation,
+                  enabled: !_busy,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Relation',
+                    hintText: 'Father, friend',
+                    prefixIcon: Icon(Icons.badge_outlined),
+                  ),
+                ),
+              ),
+              const SizedBox(width: Space.sm),
+              Expanded(
+                child: TextField(
+                  controller: _phone,
+                  enabled: !_busy,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone',
+                    prefixIcon: Icon(Icons.call_outlined),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: Space.sm),
+            Text(_error!, style: t.textTheme.bodySmall?.copyWith(color: context.tones.error)),
+          ],
+          const SizedBox(height: Space.md),
+          FilledButton.icon(
+            onPressed: _busy ? null : _submit,
+            icon: _busy
+                ? const SizedBox(width: IconSize.md, height: IconSize.md, child: InlineSpinner())
+                : const Icon(Icons.login_rounded, size: IconSize.sm),
+            label: Text(_busy ? 'Signing in' : 'Sign in'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResidentRow extends StatelessWidget {
+  const _ResidentRow({required this.student, required this.selected, required this.onTap});
+  final Student student;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final tone = selected ? context.tones.resolve(NivoraColors.brand) : null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Space.xxs),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: Radii.rControl,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Space.xs, vertical: Space.xs),
+          child: Row(
+            children: [
+              Avatar(name: student.fullName, tone: NivoraColors.people),
+              const SizedBox(width: Space.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(student.fullName,
+                        style: t.textTheme.titleMedium?.copyWith(color: tone),
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(student.phone, style: t.textTheme.bodySmall),
+                  ],
+                ),
+              ),
+              Icon(
+                selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                size: IconSize.lg,
+                color: tone ?? t.colorScheme.outline,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

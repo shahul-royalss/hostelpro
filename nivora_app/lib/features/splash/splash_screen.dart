@@ -203,11 +203,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     height: IconSize.md,
                     child: const CircularProgressIndicator(
                       strokeWidth: Strokes.glyph,
-                      // The gold, named rather than taken from the scheme, for the same
-                      // reason as the ground: on a light-mode phone `colorScheme.primary` is
-                      // the derived bronze #79590C, which measures 2.97:1 on #0B0D0F and
-                      // fails WCAG 1.4.11. The design's own accent measures 8.70:1 there.
-                      color: NivoraColors.primary,
+                      // THE GOLD, BY ITS OWN NAME. `NivoraColors.primary` is the brand
+                      // indigo now, so the line this replaced had quietly turned the splash's
+                      // one moving part violet while its comment still called it gold. The
+                      // splash is where the metal lives — the wordmark draws in it — and the
+                      // cue beneath should match. 8.70:1 on this ground, in both themes,
+                      // because the splash ground never follows the scheme.
+                      color: NivoraColors.gold,
                     ),
                   ),
                 ),

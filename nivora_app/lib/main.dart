@@ -1,11 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart' show SystemChrome, SystemUiMode, SystemUiOverlayStyle;
+import 'package:flutter/services.dart' show DeviceOrientation, SystemChrome, SystemUiMode, SystemUiOverlayStyle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/boot/retry_policy.dart';
 import 'core/boot/startup.dart';
 import 'core/auth/auth_controller.dart';
 import 'core/config/env.dart';
@@ -20,6 +21,21 @@ Future<void> main() async {
   // for it explicitly makes older devices match, and NivoraTheme.systemBars (applied at the
   // app root below) is what keeps the bar icons legible on whichever ground is under them.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+  // PORTRAIT ON PHONES, EITHER WAY ON TABLETS. Nothing in this app is designed sideways on a
+  // phone: the brow is a third of the screen's HEIGHT, the sign-in card is centred in what is
+  // left, and a landscape phone gives both about 360dp to work with. Rather than ship a
+  // layout nobody drew, the phone keeps the orientation every screen was built for. A tablet
+  // has the room, so it keeps the choice. Measured off the implicit view because there is no
+  // MediaQuery yet — this runs before the first frame — and guarded, because on some platforms
+  // that size is zero until then and zero must not read as "a very small phone".
+  final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+  if (view != null && view.devicePixelRatio > 0) {
+    final shortest = view.physicalSize.shortestSide / view.devicePixelRatio;
+    if (shortest > 0 && shortest < Breakpoints.medium) {
+      SystemChrome.setPreferredOrientations(const [DeviceOrientation.portraitUp]);
+    }
+  }
 
   // The typeface is bundled (see pubspec.yaml), so nothing should ever be fetched. Turning
   // runtime fetching off makes that a guarantee rather than an intention: if a weight is ever
@@ -110,6 +126,11 @@ class _NivoraBootState extends State<NivoraBoot> {
       // The ONE override in the app's real startup. Everything downstream that needs a live
       // Supabase client waits on this rather than assuming one exists.
       overrides: [supabaseReadyProvider.overrideWith((ref) => _ready)],
+      // THE THIRTY-EIGHT SECONDS LIVED HERE. Riverpod's default retries a failed provider ten
+      // times with backoff that sums to 38.2s, during which the splash, the 2FA screen and
+      // every skeleton in the app stayed up for an answer that arrived in the first hundred
+      // milliseconds. See core/boot/retry_policy.dart for what is and is not worth a second try.
+      retry: nivoraRetry,
       child: const NivoraApp(),
     );
   }
