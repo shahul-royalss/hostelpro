@@ -73,14 +73,20 @@ void main() {
     await tester.pump();
 
     expect(find.byType(SplashScreen), findsOneWidget);
-    // The wordmark is drawn geometry now, not a Text — so this asserts the mark is mounted AND
-    // that it still announces the app's name. The name disappearing from the accessibility
-    // tree is exactly the regression that swapping a Text for a CustomPaint invites.
-    // The wordmark is drawn geometry now rather than a Text, so this asserts the mark itself
-    // is mounted. Its accessibility label is asserted separately, below: on this frame the
-    // reveal is still at zero and Opacity(0) legitimately drops its child from the semantics
-    // tree, so looking for the label here would be testing the fade, not the label.
-    expect(find.byType(NivoraWordmark), findsOneWidget);
+    // THE MARK IS TYPE AGAIN, so this looks for the letters rather than for a CustomPaint.
+    //
+    // The splash drew NivoraWordmark — a traced outline — until the opening was rebuilt as the
+    // N assembling into NIVORA. Asserting the old widget here would now be asserting the
+    // implementation of a screen this test is not about; what it actually cares about is that
+    // an initialisation which never finishes leaves the BRAND on screen rather than Android's
+    // flat window.
+    //
+    // Both halves of the lockup, because the N alone is also what is on screen at frame zero
+    // of a working opening — finding only that would pass on a splash whose second phase never
+    // ran. `findsWidgets` rather than `findsOneWidget`: IVORA is inside a zero-width clip on
+    // this frame, which keeps it in the tree.
+    expect(find.text('N'), findsOneWidget);
+    expect(find.text('IVORA'), findsOneWidget);
     // The whole point: an initialisation that never finishes leaves the BRAND on screen, not
     // Android's flat window. Before this change there was no frame at all to hold it.
     expect(tester.takeException(), isNull);

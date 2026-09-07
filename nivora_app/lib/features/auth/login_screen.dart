@@ -203,11 +203,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         // tabs — the masthead IS its top content, and the band has to be deep enough to hold it
         // and still have the card's top edge land inside the colour.
         //
-        // 34% is the second number tried. 42% with the group centred put the mark at a third of
-        // the way down and left the top quarter of the band empty, which looked like a mistake
-        // rather than a margin; the reference's own block is about a third of the page with its
-        // mark centred in it, and this now matches that.
-        height: MediaQuery.sizeOf(context).height * 0.34,
+        // 46%, and it is not a free choice — it is a consequence of the card being centred.
+        //
+        // With the group top-aligned, 34% was right: the masthead sat in the top third and the
+        // brow covered it. The product owner asked for the CARD to sit in the middle, so the
+        // whole group moved down — and a brow still ending at 34% would have left "Welcome
+        // back" in white type on the light ground below it, which is invisible rather than
+        // merely ugly. The band has to reach past the masthead's new bottom edge.
+        //
+        // The two numbers are therefore coupled, and anyone changing the alignment below has to
+        // change this with it.
+        height: MediaQuery.sizeOf(context).height * 0.46,
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, box) => SingleChildScrollView(
@@ -220,14 +226,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: box.maxHeight),
               child: Column(
+              // ── CENTRED AT REST; THE KEYBOARD LIFTS IT BY SCROLLING ────────────────────
+              //
+              // The card was pinned near the top by a flat 6% spacer, so on a tall phone it sat
+              // high with a third of the screen empty beneath it. Centring the group is the
+              // whole fix, and the two behaviours the owner asked for both fall out of it
+              // rather than needing to be built:
+              //
+              //   AT REST the column is exactly viewport-height (minHeight below), so
+              //   MainAxisAlignment.center puts the masthead-and-card group in the middle at
+              //   any screen size, with no magic offsets to retune per device.
+              //
+              //   WHEN TYPING Scaffold shrinks the body by the keyboard's height, so
+              //   box.maxHeight drops, the content becomes TALLER than the viewport, and
+              //   centring stops applying — the column is simply its natural height inside a
+              //   scroll view. Flutter then scrolls the focused field into view on its own.
+              //   That is "it goes up only when the user wants to type", implemented by not
+              //   fighting the framework, and it cannot crash because there is no arithmetic
+              //   on viewInsets to get wrong and no fixed offset to overshoot a notch with.
+              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // TOP-ALIGNED, not centred. Centring the group balanced it against the whole
-                // viewport, which is the wrong frame: the masthead's job is to sit inside the
-                // brow, and the brow is anchored to the top of the screen. A proportional
-                // offset rather than a fixed one, so the mark lands in the same place on a
-                // 5-inch phone and a tablet.
-                SizedBox(height: box.maxHeight * 0.06),
                 // ── THE MASTHEAD, ON THE BROW ────────────────────────────────────────────
                 //
                 // These three lines used to be the first three rows INSIDE the card, which

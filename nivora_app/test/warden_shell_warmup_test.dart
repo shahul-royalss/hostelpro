@@ -103,11 +103,18 @@ void main() {
     _expectNoLoadingIndicators('Complaints');
 
     await _tapTab(tester, 'Home');
-    // The warden's home header is the masthead now — the signature centred with the account
-    // avatar beside it — so "Hello, Priya" is no longer written there. Her initials are, and
-    // that is what identifies the tab as hers. The greeting was the old header's job.
+    // THE GREETING IS BACK, and this assertion has now swung twice — worth recording why.
+    //
+    // The header first carried "Hello, Priya", then became the drawn signature alone (and this
+    // comment was rewritten to say the greeting "was the old header's job"), and is now the
+    // masthead block: the greeting on top with NIVORA set as type beneath it. The product
+    // owner's call each time, and the second reversal is the one that stuck because a masthead
+    // that says who you are is more use at 8am than a logo on a screen you already know is ours.
+    //
+    // First name only, by MastheadBlock's own rule — a full name read aloud is a database row.
     expect(find.byType(AccountAvatar), findsOneWidget);
-    expect(find.byType(NivoraWordmark), findsOneWidget);
+    expect(find.text('Hello Priya'), findsOneWidget);
+    expect(find.byType(NivoraTypeMark), findsOneWidget);
     _expectNoLoadingIndicators('Home');
   });
 

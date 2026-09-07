@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../boot/splash_gate.dart';
 import '../auth/auth_controller.dart';
 import '../auth/session.dart';
 import '../../features/auth/change_password_screen.dart';
@@ -111,7 +112,20 @@ Set<String> get appRoutes => appScreens.keys.toSet();
 String? resolveRedirect({
   required AsyncValue<AuthPhase> phase,
   required String here,
+  bool openingFinished = true,
 }) {
+  // THE OPENING FINISHES BEFORE ANYTHING REPLACES IT.
+  //
+  // "Whatever the speed our dashboard or login shows, firstly it has to complete its
+  // animation." Without this the redirect fired the moment a session resolved — under 200ms on
+  // a warm start — and cut the mark off mid-assembly, so the animation played in full only
+  // when the network was slow. Precisely backwards.
+  //
+  // It gates only DEPARTURE from the splash, never arrival: a phase that wants the splash
+  // still gets it, and every other rule below is untouched. See core/boot/splash_gate.dart for
+  // why the clock lives in a provider rather than in the screen.
+  if (!openingFinished && here == splashRoute) return null;
+
   final to = _decide(phase: phase, here: here);
   // NEVER REDIRECT TO WHERE WE ALREADY ARE, whatever the rule below concluded.
   //
@@ -195,6 +209,10 @@ String? _decide({
 class _AuthRefresh extends ChangeNotifier {
   _AuthRefresh(this._ref) {
     _ref.listen(authControllerProvider, (_, _) => notifyListeners());
+    // AND the splash gate. Without this second listener the redirect is never re-evaluated
+    // after the opening finishes, so an app whose session resolved during the animation would
+    // sit on a completed splash until something else happened to poke the router.
+    _ref.listen(splashGateProvider, (_, _) => notifyListeners());
   }
   final Ref _ref;
 }
@@ -213,6 +231,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) => resolveRedirect(
       phase: ref.read(authControllerProvider),
       here: state.matchedLocation,
+      openingFinished: ref.read(splashGateProvider),
     ),
 
     // Built from [appScreens], so what the redirect can reach and what the router can draw are

@@ -7,6 +7,7 @@ import 'package:mobile/features/auth/email_verification_service.dart';
 
 import 'support/fake_verification.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile/core/boot/splash_gate.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
 import 'package:mobile/core/router/router.dart';
@@ -120,6 +121,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          splashGateProvider.overrideWith(OpenSplashGate.new),
           // The verify screen is reachable from the end of this flow now, and it reads the
           // verification service on build. Without an override that provider reaches for
           // Supabase.instance, which no widget test initialises.

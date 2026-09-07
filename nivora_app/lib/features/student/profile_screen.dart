@@ -8,6 +8,7 @@ import '../../core/router/router.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../settings/security_screen.dart';
 import 'student_providers.dart';
 import 'widgets/common.dart';
 import 'widgets/format.dart';
@@ -135,6 +136,20 @@ class _Profile extends ConsumerWidget {
                   label: 'Change password',
                   caption: 'Confirm it is you, then choose a new one.',
                   onTap: () => Navigator.of(context).pushNamed(changePasswordRoute),
+                ),
+                Divider(color: t.colorScheme.outlineVariant, height: Space.lg),
+                // ── MOVED HERE FROM THE HEADER ──────────────────────────────────────────
+                //
+                // The resident's masthead carried a shield icon for this and a door for sign
+                // out. Both were asked to go. Sign out was already on this card; security was
+                // NOT — the icon was its only route — so deleting it alone would have removed
+                // two-factor authentication from residents entirely. That is a security
+                // downgrade wearing a layout change, so the capability moved instead of going.
+                _AccountAction(
+                  icon: Icons.shield_outlined,
+                  label: 'Two-factor authentication',
+                  caption: 'Add a second step when you sign in on a new phone.',
+                  onTap: () => openSecurity(context),
                 ),
                 Divider(color: t.colorScheme.outlineVariant, height: Space.lg),
                 _AccountAction(

@@ -1,124 +1,106 @@
+// THE OPENING.
+//
+// ── WHAT THIS REPLACED, AND WHY ───────────────────────────────────────────────────────────
+//
+// Until now this screen drew the wordmark as a handwriting animation — a path traced stroke by
+// stroke — with "NIVORA WELCOMES YOU" fading in beneath it. The product owner's verdict was that
+// it did not look nice, and on a second reading of it he is right for a reason worth writing
+// down: a signature being drawn is a gesture about the ACT of writing, which says nothing about
+// a company that manages buildings. It also made the mark look hand-made at exactly the moment
+// the app is trying to look built.
+//
+// What he asked for instead is a better idea, and it is the brand's own shape:
+//
+//     the N arrives on its own, in the middle — and then IVORA comes out from inside it.
+//
+// That is a mark that ASSEMBLES rather than one that is drawn, and it earns the wordmark instead
+// of just presenting it. The letters are type, set in the app's own display face, not a traced
+// outline: "simply elegant typographic which represents our logo / brand".
+//
+// ── THE TIMING IS A CONTRACT, NOT A PREFERENCE ────────────────────────────────────────────
+//
+// 1,500ms, and it always finishes. See core/boot/splash_gate.dart: the router cannot leave this
+// screen until the gate opens, so a warm start that resolves a session in 180ms still shows the
+// whole opening. Without that the animation played in full only on a bad connection, which is
+// precisely backwards.
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/boot/splash_gate.dart';
 import '../../core/theme/tokens.dart';
-import '../../shared/wordmark.dart';
 
-/// The launch animation.
-///
-/// ── THE DECISION THIS FILE RECORDS ───────────────────────────────────────────────────────
-///
-/// This screen used to be deliberately STATIC, and the comment that stood here said so: an
-/// animation had been rejected because the splash exists only to cover the session restore,
-/// and anything that performs during a restore is a delay wearing a brand's clothes. The
-/// product owner has overruled that — "when i opens the app firstly the nivora animation has
-/// to display" — so there is an animation now, and the old note is deleted rather than left
-/// contradicting the code underneath it.
-///
-/// The REASON behind the old decision survives as the constraint this animation is built to,
-/// because that reason was never wrong:
-///
-///   1. IT NEVER HOLDS THE USER BACK. There is no minimum duration, no `await`, no completion
-///      callback, and nothing here that navigation waits on. This widget only draws. The
-///      router decides when the splash is replaced — see `resolveRedirect` — and it does that
-///      the instant the first session restore resolves, which on a warm start is a frame or
-///      two because supabase_flutter has already rehydrated the token from the keystore. If
-///      that lands 80ms in, the reveal is cut off 80ms in. That is the correct outcome, not a
-///      glitch to pad around.
-///
-///   2. SO IT IS BUILT TO BE CUT OFF. One controller, one curve, one composition: the wordmark
-///      fades up while it settles the last 4% of its scale. There is no stagger, no second
-///      phase, and nothing whose meaning depends on the animation finishing — so every frame
-///      of it is a legitimate still of the same picture, and the cross-fade the router runs on
-///      top (`FadeForwardsPageTransitionsBuilder`) picks up from wherever it got to. A
-///      letter-by-letter reveal or a logo that assembles from pieces would look broken at
-///      exactly the moment this screen is most likely to end.
-///
-///   3. IT IS CHEAP. Two render-object transitions over one `Text`. No `BackdropFilter`, no
-///      shader, no image decode — the three things that actually cost a frame at startup, on
-///      the budget handset whose owner reported "stuck, lag". `FadeTransition` and
-///      `ScaleTransition` listen to the controller directly, so not one widget in this tree
-///      rebuilds while it plays.
-///
-/// ── THE GROUND IS THE BRAND'S, IN BOTH THEMES ────────────────────────────────────────────
-///
-/// This is the one screen that does not follow `ThemeMode.system`. It paints
-/// [NivoraColors.ground] and cream ink explicitly (17.56:1) whichever theme is on, because
-/// the colour behind it — the Android launch window, `android/app/src/main/res` — is a single
-/// static colour that cannot know the theme either. Pinning both to #0B0D0F is what removes
-/// the flash: before this, the launch window resolved to `?android:colorBackground`, which is
-/// WHITE on a light-mode phone, so the app opened with a white rectangle that snapped to
-/// near-black the moment Flutter painted. A launch screen is brand, not chrome, and the brand
-/// is dark.
-///
-/// ── A NOTE FOR TESTS ─────────────────────────────────────────────────────────────────────
-///
-/// The reveal itself finishes and stops. The slow-restore cue below it is a
-/// `CircularProgressIndicator`, which never stops, so `pumpAndSettle` on this screen still
-/// hangs — pump fixed durations instead, as the existing router tests already do.
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
-  /// Where the slow-restore cue starts fading in, as a fraction of the reveal.
-  ///
-  /// It shares the wordmark's controller rather than owning one, so "the reveal has finished
-  /// and we are STILL here" is expressed by a single clock instead of a timer that could fire
-  /// after the screen is gone. On a warm start the splash is replaced before this point and
-  /// the cue is never seen at all, which is the point: a spinner that flashes for 60ms is
-  /// noise, and one that appears only when there is genuinely something to wait for is
-  /// information.
-  static const _cueStart = 0.75;
-
+class _SplashScreenState extends ConsumerState<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
-  /// The wordmark's reveal. [Motion.enter] is the app's decelerating curve — motion that
-  /// arrives rather than bounces.
-  ///
-  /// Typed as [CurvedAnimation] rather than [Animation] because a CurvedAnimation registers a
-  /// listener on its parent and has to be disposed; the framework's leak tracker fails a test
-  /// that forgets.
-  late final CurvedAnimation _reveal;
-  late final CurvedAnimation _cue;
-  late final CurvedAnimation _welcome;
+  /// THE N ARRIVES. It fades up and settles from very slightly large, which reads as a mark
+  /// coming to rest rather than one being stamped. Finished by 40% so the second phase has
+  /// something already-still to emerge from.
+  late final Animation<double> _markIn;
+  late final Animation<double> _markScale;
 
-  /// The signature's drawn width. Wide enough to read the letterforms on the narrowest phone
-  /// this ships to and short of the screen edge on it.
-  ///
-  /// 200, down from 240: the product owner asked for the mark to be "medium, not too big than
-  /// present one". It now shares the screen with the welcome line beneath it, and a signature
-  /// that filled the width left that line looking like a caption to a poster rather than the
-  /// second half of one sentence.
-  static const double _markWidth = 200;
+  /// IVORA COMES OUT OF THE N. Driven as a width factor on a clip: at 0 the letters are folded
+  /// entirely behind the N, at 1 they are fully out. Starting at 0.30 — before the N has quite
+  /// settled — because two movements that overlap read as one gesture, where two that queue read
+  /// as a list of instructions.
+  late final Animation<double> _unfold;
+
+  /// The whole lockup drifts left by half of IVORA's width as those letters appear, so the
+  /// FINISHED mark is centred rather than the N being centred and the word hanging off it.
+  late final Animation<double> _recentre;
+
+  /// The slow-restore cue. Shares this controller rather than owning a timer, so "the opening
+  /// has finished and we are STILL here" is one clock. On a warm start the gate opens and the
+  /// screen is replaced before this is ever seen, which is the point: a spinner that flashes for
+  /// 60ms is noise; one that appears only when there is genuinely something to wait for is
+  /// information.
+  late final Animation<double> _cue;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: Motion.slow);
-    _reveal = CurvedAnimation(parent: _controller, curve: Motion.enter);
+    _controller = AnimationController(vsync: this, duration: splashMinimum);
+
+    _markIn = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0, 0.32, curve: Curves.easeOut),
+    );
+    _markScale = Tween<double>(begin: 1.18, end: 1).animate(CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0, 0.40, curve: Curves.easeOutCubic),
+    ));
+    _unfold = CurvedAnimation(
+      parent: _controller,
+      // easeOutCubic, not the app's Motion.enter: the letters should decelerate hard at the end
+      // so the mark lands rather than glides to a stop.
+      curve: const Interval(0.30, 0.78, curve: Curves.easeOutCubic),
+    );
+    _recentre = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.30, 0.78, curve: Curves.easeOutCubic),
+    );
     _cue = CurvedAnimation(
       parent: _controller,
-      curve: const Interval(_cueStart, 1, curve: Motion.enter),
-    );
-    // The welcome line arrives while the signature is finishing rather than after it: two
-    // things that happen in sequence read as a queue, two that overlap read as one gesture.
-    // 0.55 is where the last stroke of the mark is being drawn.
-    _welcome = CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0.55, 1, curve: Motion.enter),
+      curve: const Interval(0.86, 1, curve: Curves.easeOut),
     );
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // "Remove animations" in the OS accessibility settings means exactly that. Jumping to the
-    // end shows the finished composition — which, because the reveal has no second phase, is
-    // the same picture the animation was heading for.
-    if (MediaQuery.disableAnimationsOf(context)) {
+    final still = MediaQuery.disableAnimationsOf(context);
+    // Told to the gate as well as obeyed here: a person who asked the OS for less motion must
+    // not be held for 1.5 seconds in front of a still picture.
+    SplashGate.reportReducedMotion(disabled: still);
+    if (still) {
       _controller.value = 1;
     } else if (_controller.isDismissed) {
       _controller.forward();
@@ -127,88 +109,47 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   void dispose() {
-    // CurvedAnimation holds a listener on its parent; all three go before the controller.
-    _reveal.dispose();
-    _cue.dispose();
-    _welcome.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Reading it here is what starts the 1.5s clock — the provider's build() schedules it — so
+    // the wait begins when the screen does, not when the router first happens to ask.
+    ref.watch(splashGateProvider);
+
     return Scaffold(
-      // Not scaffoldBackgroundColor: see the header. This screen is the brand ground in both
-      // themes, because the native window behind it is too.
+      // NOT scaffoldBackgroundColor. This screen is the brand ground in both themes because the
+      // native window behind it is, and a light-mode splash would flash white before the first
+      // Flutter frame lands on it.
       backgroundColor: NivoraColors.ground,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // THE SIGNATURE WRITES ITSELF. This replaces a text wordmark that faded and
-            // settled 4% of its scale. Same constraint as before and it still governs: nothing
-            // waits for this, the router replaces the splash the instant the session restore
-            // resolves, and every frame of a stroke being laid down is a legitimate still of
-            // the same picture — so being cut off at 80ms looks like an interrupted signature
-            // rather than a glitch.
-            //
-            // The path is the one the website draws on its sign-in screen, so the mark the app
-            // opens with is the mark the user is about to see again. See shared/wordmark.dart
-            // for why the geometry is parsed rather than shipped as an .svg.
-            //
-            // A fixed 3:1 box: the signature is a wide, short mark, and giving it a ratio
-            // rather than a height keeps it the same relative size on a small phone and a
-            // tablet. ScaleTransition is gone — a stroke that is still being drawn does not
-            // also need to be growing.
-            FadeTransition(
-              opacity: _reveal,
-              child: SizedBox(
-                width: _markWidth,
-                height: _markWidth / 3.4,
-                child: AnimatedBuilder(
-                  animation: _reveal,
-                  builder: (context, _) => NivoraWordmark(
-                    progress: _reveal.value,
-                    color: NivoraColors.onSurface,
-                  ),
-                ),
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, _) => _Lockup(
+                markOpacity: _markIn.value,
+                markScale: _markScale.value,
+                unfold: _unfold.value,
+                recentre: _recentre.value,
               ),
             ),
-            const SizedBox(height: Space.md),
-            // "NIVORA WELCOMES YOU", asked for by name. Caps and tracked rather than set in the
-            // signature face: the mark above is the handwriting, and repeating that texture in
-            // a second line would compete with it instead of finishing it.
-            FadeTransition(
-              opacity: _welcome,
-              child: Text(
-                'NIVORA WELCOMES YOU',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      letterSpacing: 2.4,
-                      fontWeight: FontWeight.w600,
-                      color: NivoraColors.onSurfaceVariant,
-                    ),
-              ),
-            ),
-            const SizedBox(height: Space.lg),
-            // Reserved whether or not it is showing, so the wordmark does not shift downward
-            // when a slow restore brings the cue in.
+            const SizedBox(height: Space.xl),
             SizedBox(
               height: IconSize.lg,
               child: FadeTransition(
                 opacity: _cue,
-                child: Center(
+                child: const Center(
                   child: SizedBox(
                     width: IconSize.md,
                     height: IconSize.md,
-                    child: const CircularProgressIndicator(
+                    child: CircularProgressIndicator(
                       strokeWidth: Strokes.glyph,
-                      // THE GOLD, BY ITS OWN NAME. `NivoraColors.primary` is the brand
-                      // indigo now, so the line this replaced had quietly turned the splash's
-                      // one moving part violet while its comment still called it gold. The
-                      // splash is where the metal lives — the wordmark draws in it — and the
-                      // cue beneath should match. 8.70:1 on this ground, in both themes,
-                      // because the splash ground never follows the scheme.
+                      // The metal, named rather than taken from the scheme: this ground never
+                      // follows the theme, and gold measures 8.70:1 on it.
                       color: NivoraColors.gold,
                     ),
                   ),
@@ -219,5 +160,82 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         ),
       ),
     );
+  }
+}
+
+/// The N, and the letters that come out of it.
+///
+/// ── HOW "OUT OF THE N" IS ACTUALLY DONE ───────────────────────────────────────────────────
+///
+/// A ClipRect with a rightward-growing [Align] widthFactor. At 0 the clip has no width, so IVORA
+/// occupies no space and is invisible — it is not off-screen or transparent, it is folded to
+/// nothing at the N's trailing edge. As the factor grows the letters are revealed left-to-right
+/// from precisely that edge, which is what makes them read as emerging FROM the N rather than
+/// sliding in beside it.
+///
+/// Opacity is deliberately NOT animated on them. A fade would make the letters look like they
+/// are arriving from elsewhere; the whole idea is that they were inside the N all along.
+class _Lockup extends StatelessWidget {
+  const _Lockup({
+    required this.markOpacity,
+    required this.markScale,
+    required this.unfold,
+    required this.recentre,
+  });
+
+  final double markOpacity;
+  final double markScale;
+  final double unfold;
+  final double recentre;
+
+  static const double _fontSize = 44;
+  static const _style = TextStyle(
+    fontSize: _fontSize,
+    fontWeight: FontWeight.w800,
+    color: NivoraColors.onSurface,
+    height: 1,
+    // The tracking is the whole difference between a logo and a word. 6 is wide enough to read
+    // as a mark at this size without the letters losing their relationship to each other.
+    letterSpacing: 6,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    // Measured, not guessed: the drift has to be exactly half of what IVORA occupies, or the
+    // finished lockup sits off-centre by however wrong the guess was.
+    final ivoraWidth = _measure('IVORA');
+
+    return Transform.translate(
+      // Starts centred on the N and ends centred on the whole mark.
+      offset: Offset(-ivoraWidth / 2 * recentre, 0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Opacity(
+            opacity: markOpacity,
+            child: Transform.scale(
+              scale: markScale,
+              child: const Text('N', style: _style),
+            ),
+          ),
+          ClipRect(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              widthFactor: unfold,
+              child: const Text('IVORA', style: _style),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  double _measure(String text) {
+    final painter = TextPainter(
+      text: const TextSpan(text: 'IVORA', style: _style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    return painter.width;
   }
 }

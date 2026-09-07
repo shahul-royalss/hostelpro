@@ -480,7 +480,6 @@ class WardenScreen extends StatelessWidget {
   /// Avatar, signature, and an empty box the same width as the avatar so the mark is centred on
   /// the SCREEN rather than on the space left over beside it.
   Widget _masthead(BuildContext context) {
-    final t = Theme.of(context);
     final name = title.replaceFirst('Hello, ', '').trim();
     return Row(
       children: [
@@ -500,15 +499,12 @@ class WardenScreen extends StatelessWidget {
             ),
           ),
         ),
-        Expanded(
-          child: Center(
-            child: SizedBox(
-              width: 116,
-              height: 116 / 3.4,
-              child: NivoraWordmark(progress: 1, color: t.colorScheme.onSurface),
-            ),
-          ),
-        ),
+        // ── HELLO FIRST, BRAND SECOND ────────────────────────────────────────────────
+        //
+        // Was the drawn wordmark alone. The masthead now greets the person and signs the app
+        // underneath, which is [MastheadBlock] — one widget, so this and the other three
+        // shells cannot drift apart the way they did when each owned a copy of the layout.
+        Expanded(child: Center(child: MastheadBlock(name: name))),
         const SizedBox(width: IconSize.xl + Space.xxs * 2),
       ],
     );

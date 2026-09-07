@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../core/theme/tokens.dart';
 import 'brow.dart';
 import 'package:path_parsing/path_parsing.dart';
 
@@ -279,4 +280,78 @@ class _WordmarkPainter extends CustomPainter {
   @override
   bool shouldRepaint(_WordmarkPainter old) =>
       old.progress != progress || old.color != color || old.strokeWidth != strokeWidth;
+}
+
+/// THE BRAND, SET AS TYPE — the masthead's second line and the splash's resting state.
+///
+/// [NivoraWordmark] above traces an outline and exists for animation. This is the same mark as
+/// TYPE: the display face at the lockup's own tracking. Asked for by the product owner as
+/// "simply elegant typographic which represents our logo / brand", and it is the right call for
+/// a masthead — a traced path has to be redrawn on every rebuild, where this is a Text.
+///
+/// The tracking is what makes it a mark rather than a word. 4 at this size is wide enough to
+/// read as a logotype without the letters losing their relationship to each other.
+class NivoraTypeMark extends StatelessWidget {
+  const NivoraTypeMark({super.key, this.color, this.fontSize = 15});
+
+  /// Null takes the surrounding ink, which is what a masthead on a brow wants.
+  final Color? color;
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return Text(
+      'NIVORA',
+      style: (t.textTheme.labelLarge ?? const TextStyle()).copyWith(
+        color: color,
+        fontSize: fontSize,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 4,
+        height: 1,
+      ),
+      maxLines: 1,
+    );
+  }
+}
+
+/// The masthead block: who you are, and whose app this is.
+///
+/// One widget rather than two call sites, because the resident's header and every staff header
+/// draw the identical thing and a copy of it would drift the moment one was tuned.
+class MastheadBlock extends StatelessWidget {
+  const MastheadBlock({super.key, required this.name, this.color});
+
+  /// The signed-in person's full name. Only the FIRST word is greeted — "Hello Lakshmi" is a
+  /// greeting, "Hello Lakshmi Venkataraman Subramanian" is a database row read aloud, and on a
+  /// 320dp phone it is also two lines where one was intended.
+  final String name;
+
+  /// Null takes the surrounding ink. Set only where the block sits on a coloured brow.
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final first = name.trim().split(RegExp(r'\s+')).firstWhere((w) => w.isNotEmpty,
+        orElse: () => '');
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          first.isEmpty ? 'Hello' : 'Hello $first',
+          style: t.textTheme.titleMedium?.copyWith(color: color, height: 1.1),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: Space.xxs / 2),
+        // 76% of the ink: the brand is a signature under the greeting, not a competing headline.
+        NivoraTypeMark(
+          color: (color ?? t.colorScheme.onSurface).withValues(alpha: 0.76),
+        ),
+      ],
+    );
+  }
 }

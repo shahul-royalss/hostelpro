@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/core/boot/splash_gate.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
 import 'package:mobile/core/router/router.dart';
@@ -36,7 +37,8 @@ void main() {
   Future<void> pump(WidgetTester tester, AuthPhase phase) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [authControllerProvider.overrideWith(() => _StubAuth(phase))],
+        overrides: [
+          splashGateProvider.overrideWith(OpenSplashGate.new),authControllerProvider.overrideWith(() => _StubAuth(phase))],
         child: Consumer(
           builder: (context, ref, _) => MaterialApp.router(
             routerConfig: ref.watch(routerProvider),
@@ -59,6 +61,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          splashGateProvider.overrideWith(OpenSplashGate.new),
           authControllerProvider.overrideWith(
             () => _StubAuth(AuthSignedIn(sessionFor(mustChangePassword: mustChangePassword))),
           ),

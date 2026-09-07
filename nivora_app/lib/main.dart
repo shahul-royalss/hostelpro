@@ -241,8 +241,19 @@ class _NivoraAppState extends ConsumerState<NivoraApp> {
       // theme.dart's comments and are asserted in test/theme_contrast_test.dart, which is what
       // makes shipping the light half safe now and unsafe before.
       theme: NivoraTheme.light(),
+      // ── LIGHT ONLY, BY DECISION ────────────────────────────────────────────────────────
+      //
+      // This shipped as ThemeMode.system with a dark theme that is genuinely good — better
+      // than the competitor's, which has no dark mode at all. The product owner has asked for
+      // one appearance regardless of the phone's setting, and that is his call to make: a
+      // product shown to clients on whatever handset is nearest should look the same on all of
+      // them, and half the screenshots in a pitch deck coming back dark is a real cost.
+      //
+      // darkTheme is still WIRED rather than deleted. It costs nothing while themeMode pins
+      // light, every one of its colours is still asserted by test/theme_contrast_test.dart, and
+      // turning dark back on is then one word here rather than an archaeology exercise.
       darkTheme: NivoraTheme.dark(),
-      themeMode: ThemeMode.system,
+      themeMode: ThemeMode.light,
       builder: (context, child) {
         // Cap text scaling. Respecting the user's font size matters, but past ~1.4x a dense
         // operational screen stops being usable, so it is clamped rather than ignored.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/core/boot/splash_gate.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
 import 'package:mobile/core/router/router.dart';
@@ -72,6 +73,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          splashGateProvider.overrideWith(OpenSplashGate.new),
           authControllerProvider.overrideWith(() => _StubAuth(phase)),
           mfaServiceProvider.overrideWithValue(_OfflineMfa()),
           legalConsentStoreProvider

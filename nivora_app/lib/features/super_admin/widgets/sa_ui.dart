@@ -306,7 +306,10 @@ class SaScreen extends StatelessWidget {
   /// SCREEN. The SaBrandDot is not drawn here — it exists to put the brand in front of a text
   /// title, and the brand IS the title now.
   Widget _masthead(BuildContext context) {
-    final t = Theme.of(context);
+    // `subtitle` carries the signed-in person's name here — the avatar two lines down has
+    // always read it — so the greeting reads it from the same place rather than inventing a
+    // second source that could disagree with the initials beside it.
+    final name = subtitle ?? '';
     return Row(
       children: [
         Tooltip(
@@ -325,15 +328,12 @@ class SaScreen extends StatelessWidget {
             ),
           ),
         ),
-        Expanded(
-          child: Center(
-            child: SizedBox(
-              width: 116,
-              height: 116 / 3.4,
-              child: NivoraWordmark(progress: 1, color: t.colorScheme.onSurface),
-            ),
-          ),
-        ),
+        // ── HELLO FIRST, BRAND SECOND ────────────────────────────────────────────────
+        //
+        // Was the drawn wordmark alone. The masthead now greets the person and signs the app
+        // underneath, which is [MastheadBlock] — one widget, so this and the other three
+        // shells cannot drift apart the way they did when each owned a copy of the layout.
+        Expanded(child: Center(child: MastheadBlock(name: name))),
         const SizedBox(width: IconSize.xl + Space.xxs * 2),
       ],
     );

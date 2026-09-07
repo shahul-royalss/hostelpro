@@ -13,7 +13,6 @@ import '../manager/manager_shell.dart';
 import '../super_admin/sa_shell.dart';
 import '../warden/warden_shell.dart';
 import '../owner/owner_tabs.dart';
-import '../settings/security_screen.dart';
 import '../student/student_section.dart';
 
 /// Per-role navigation. Each role gets the tabs its job needs — the brief's point that forcing
@@ -205,27 +204,30 @@ class _RoleShellState extends ConsumerState<RoleShell> {
   /// this is where those are plugged in. Anything a feature has not built yet returns null and
   /// falls through to the placeholder below, which says so rather than rendering an empty page
   /// that looks finished.
-  /// ── TWO HEADERS, AND WHY ──────────────────────────────────────────────────────────────
+  /// ── THE MASTHEAD SAYS WHO YOU ARE FIRST, AND WHOSE APP IT IS SECOND ──────────────────
   ///
-  /// A RESIDENT keeps the header they had: their role and name on the left, the shield and the
-  /// door on the right. They also have a Profile TAB, and the Account card on it already names
-  /// both of those actions and says what each one costs. Moving the icons out of their header
-  /// would take away a shortcut they may already have learned and give nothing back.
+  /// It used to be the drawn wordmark alone, centred. The product owner's objection was exact:
+  /// "the NIVORA name at top middle isn't good and it has to say hello Username. Below of that
+  /// it has to show the NIVORA."
   ///
-  /// EVERY OTHER ROLE gets the arrangement the product owner asked for: the signature centred,
-  /// their avatar at the top left, and nothing at the top right. The two icons that used to
-  /// live there are inside the sheet the avatar opens — see staff_profile_sheet.dart for why a
-  /// sheet and not a fifth tab.
+  /// He is right, and the reason is that a masthead is not a logo slot. Every screen in this
+  /// app already belongs to Nivora; what the top of the screen can usefully tell a warden at
+  /// 8am is that the app knows which warden. The brand goes underneath, quieter, where it reads
+  /// as a signature on the greeting rather than as a banner over it.
   ///
-  /// The mark is drawn at progress: 1, not animated. It is a masthead here; the drawing is the
-  /// splash's job and doing it again on every screen would be a logo that fidgets.
+  /// ── AND IT IS TYPE, NOT THE DRAWN PATH ────────────────────────────────────────────────
+  ///
+  /// [NivoraWordmark] traces an outline, which is what the old splash animated. Asked for
+  /// "simply elegant typographic which represents our logo / brand", so this is the display
+  /// face with the mark's own tracking — the same lockup the new splash resolves into, so
+  /// opening the app and using it show one wordmark rather than two that nearly match.
   Widget _header(ThemeData t, NivoraSession? session) {
     if (widget.role == UserRole.student) return _residentHeader(t, session);
 
     final name = session?.fullName.trim() ?? '';
     return Row(
       children: [
-        // Leading and trailing are the same width so the mark between them is centred on the
+        // Leading and trailing are the same width so the block between them is centred on the
         // SCREEN rather than on the space left over — an avatar on one side and nothing on the
         // other would push it off-centre by exactly one avatar.
         Tooltip(
@@ -247,50 +249,28 @@ class _RoleShellState extends ConsumerState<RoleShell> {
             ),
           ),
         ),
-        Expanded(
-          child: Center(
-            child: SizedBox(
-              width: 116,
-              height: 116 / 3.4,
-              // The colour named here is what it paints OFF a brow; on one the wordmark
-              // whitens itself from BrowScope, so every masthead gets it without remembering.
-              child: NivoraWordmark(progress: 1, color: t.colorScheme.onSurface),
-            ),
-          ),
-        ),
+        Expanded(child: Center(child: MastheadBlock(name: name))),
         // The empty twin of the avatar. Sized from the same constants so the two cannot drift.
         const SizedBox(width: IconSize.xl + Space.xxs * 2),
       ],
     );
   }
 
-  Widget _residentHeader(ThemeData t, NivoraSession? session) => Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.role.label.toUpperCase(), style: t.textTheme.labelSmall),
-                Text(
-                  session?.fullName.isNotEmpty == true ? session!.fullName : 'Nivora',
-                  style: t.textTheme.titleLarge,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            tooltip: 'Security',
-            onPressed: () => openSecurity(context),
-            icon: const Icon(Icons.shield_outlined),
-          ),
-          IconButton(
-            tooltip: 'Sign out',
-            onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
-            icon: const Icon(Icons.logout_rounded),
-          ),
-        ],
+  /// The resident's masthead, which is now the same one everybody else gets.
+  ///
+  /// ── WHAT CAME OFF IT, AND WHERE THOSE ACTIONS WENT ───────────────────────────────────
+  ///
+  /// This used to carry the role in small caps, the name, and two icon buttons at the trailing
+  /// edge: a shield for security and a door for sign out. The owner asked for both to go, "at
+  /// any cost". They are gone.
+  ///
+  /// Neither capability is lost, and that mattered more than obeying literally. Sign out was
+  /// already on the Profile tab. Security was NOT — it existed only as this icon — so removing
+  /// the icon alone would have taken two-factor authentication away from residents entirely,
+  /// which is a security downgrade dressed up as a layout change. It is a row on the Profile
+  /// tab now, beside sign out, which is where a resident would look for it anyway.
+  Widget _residentHeader(ThemeData t, NivoraSession? session) => Center(
+        child: MastheadBlock(name: session?.fullName.trim() ?? ''),
       );
 
   Widget _body(ThemeData t, List<({String label, IconData icon})> tabs) {
