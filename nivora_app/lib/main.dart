@@ -22,21 +22,6 @@ Future<void> main() async {
   // app root below) is what keeps the bar icons legible on whichever ground is under them.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-  // PORTRAIT ON PHONES, EITHER WAY ON TABLETS. Nothing in this app is designed sideways on a
-  // phone: the brow is a third of the screen's HEIGHT, the sign-in card is centred in what is
-  // left, and a landscape phone gives both about 360dp to work with. Rather than ship a
-  // layout nobody drew, the phone keeps the orientation every screen was built for. A tablet
-  // has the room, so it keeps the choice. Measured off the implicit view because there is no
-  // MediaQuery yet — this runs before the first frame — and guarded, because on some platforms
-  // that size is zero until then and zero must not read as "a very small phone".
-  final view = WidgetsBinding.instance.platformDispatcher.implicitView;
-  if (view != null && view.devicePixelRatio > 0) {
-    final shortest = view.physicalSize.shortestSide / view.devicePixelRatio;
-    if (shortest > 0 && shortest < Breakpoints.medium) {
-      SystemChrome.setPreferredOrientations(const [DeviceOrientation.portraitUp]);
-    }
-  }
-
   // The typeface is bundled (see pubspec.yaml), so nothing should ever be fetched. Turning
   // runtime fetching off makes that a guarantee rather than an intention: if a weight is ever
   // used without shipping its file, google_fonts throws in debug instead of quietly downloading
@@ -147,6 +132,38 @@ class _NivoraAppState extends ConsumerState<NivoraApp> {
   void initState() {
     super.initState();
     _decideGlassBudget();
+  }
+
+  /// PORTRAIT ON PHONES, EITHER WAY ON TABLETS.
+  ///
+  /// Nothing in this app is designed sideways on a phone: the brow is a third of the screen's
+  /// HEIGHT and the sign-in card is centred in what is left, so a landscape phone gives both
+  /// about 360dp. Shipping a layout nobody drew is worse than not offering it. A tablet has the
+  /// room, so it keeps the choice — and that is also where the width cap in TabSwap starts, so
+  /// the two rules agree on what "big enough" means.
+  ///
+  /// ── THIS USED TO LIVE IN main(), AND IT DID NOTHING ────────────────────────────────────
+  ///
+  /// The first version read platformDispatcher.implicitView before runApp, guarded with
+  /// `physicalSize > 0` because that size is not always populated before the first frame. On
+  /// the emulator it was not, the guard skipped, and the app rotated exactly as before. The
+  /// guard turned the feature into a silent no-op and the code still read as if it worked —
+  /// I only found out by forcing the device to landscape and measuring the screenshot, which
+  /// came back 2400x1080.
+  ///
+  /// didChangeDependencies is where the size is genuinely known, and it re-runs when the
+  /// window changes — so a foldable opening flat drops the lock rather than keeping a phone
+  /// rule on a tablet-sized screen.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final shortest = MediaQuery.sizeOf(context).shortestSide;
+    if (shortest <= 0) return;
+    SystemChrome.setPreferredOrientations(
+      shortest < Breakpoints.medium
+          ? const [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]
+          : DeviceOrientation.values,
+    );
   }
 
   /// Release builds never blur. Decided by a field report, not a heuristic.
