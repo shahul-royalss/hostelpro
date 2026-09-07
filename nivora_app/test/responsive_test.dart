@@ -158,6 +158,42 @@ void main() {
     }
   });
 
+  group('the bottom bar grows for large text, in every shell', () {
+    // WHY THIS IS SEPARATE FROM THE OVERFLOW MATRIX ABOVE.
+    //
+    // The 107-combination matrix passed at 2.0x text BEFORE this was fixed, which is the whole
+    // point of writing it down. NavigationBar clips its label rather than overflowing it, so
+    // there is no FlutterError for tester.takeException() to catch — the label just quietly
+    // loses its descenders and nobody notices until a user with large text does.
+    //
+    // So this asserts the mechanism instead of the symptom: `height` is honoured LITERALLY by
+    // NavigationBar, so a bar pinned at 64 is a bar whose label has nowhere to go. Only the
+    // warden shell scaled it; the other three were 64 flat or Material's default.
+    for (final role in UserRole.values) {
+      testWidgets('${role.name} — the bar is taller at 1.4x than at 1.0x', (tester) async {
+        final heights = <double, double>{};
+        for (final scale in [1.0, 1.4]) {
+          tester.view.physicalSize = const Size(1080, 2400);
+          tester.view.devicePixelRatio = 2.625;
+          addTearDown(tester.view.reset);
+          await tester.pumpWidget(
+            _wrap(RoleShell(role: role), NivoraTheme.light(), scale, role),
+          );
+          await tester.pump(const Duration(milliseconds: 400));
+          final bar = find.byType(NavigationBar);
+          if (bar.evaluate().isEmpty) return; // a role with no tabs has no bar to check
+          heights[scale] = tester.getSize(bar.first).height;
+        }
+        expect(heights[1.4]!, greaterThan(heights[1.0]!),
+            reason: 'the ${role.name} bottom bar is ${heights[1.0]} at 1.0x and '
+                '${heights[1.4]} at 1.4x — a bar that does not grow clips its labels');
+        // ...but not without limit. A bar that ate a third of a short screen would be its own bug.
+        expect(heights[1.4]!, lessThanOrEqualTo(88.0),
+            reason: 'the growth is capped so the bar cannot crowd out the content');
+      });
+    }
+  });
+
   group('the dark theme has the same geometry', () {
     // Colour cannot cause an overflow, but a theme can: a different font weight or a different
     // component density changes intrinsic widths. Checked at the two extremes only, because

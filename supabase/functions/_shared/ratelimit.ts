@@ -47,10 +47,44 @@ export interface RateLimitSpec {
  */
 export const LIMITS = {
   accountCreatePerUser: { max: 20, windowSeconds: 3600 },
-  loginPerIp: { max: 20, windowSeconds: 300 },
+  /**
+   * PER IP, and this number is about India rather than about security theory.
+   *
+   * It was 20 per 5 minutes. On carrier-grade NAT — which is how most of Jio and Airtel's
+   * mobile subscribers reach the internet — thousands of unrelated people egress from one
+   * address. A PG with forty residents all on the same network is one address too. At 20 the
+   * honest failure arrives long before the malicious one: twenty-one residents sign in after a
+   * power cut and the twenty-first is told "Too many attempts. Please wait 5 minutes."
+   *
+   * 240 per 5 minutes is still a hard ceiling on a single host spraying passwords, and it no
+   * longer punishes a building for sharing a router. The real defence against guessing ONE
+   * account was never this key anyway — it is loginPerIdentifier below, which is per-account
+   * and stays deliberately tight at 8 per 15 minutes.
+   */
+  loginPerIp: { max: 240, windowSeconds: 300 },
   loginPerIdentifier: { max: 8, windowSeconds: 900 },
   mfaVerifyPerUser: { max: 6, windowSeconds: 600 },
-  mfaVerifyPerIp: { max: 20, windowSeconds: 300 },
+  /** Same CGNAT reasoning as loginPerIp. The per-user budget above is the real guard on a TOTP. */
+  mfaVerifyPerIp: { max: 240, windowSeconds: 300 },
+
+  /**
+   * ORDER CREATION, per student per hour.
+   *
+   * rz_open_intent already refuses an eleventh intent in an hour — but it is called at step 6
+   * of razorpay-order, and createOrder() is step 5. So the floor was checked AFTER a real order
+   * already existed in the merchant account. Looping the endpoint minted unlimited orphaned
+   * live orders: no intent row will ever claim them, they sit in the owner's dashboard, and
+   * Razorpay's own per-merchant API limits eventually throttle the WHOLE account — at which
+   * point residents of every hostel tap Pay and are told payments are unavailable.
+   *
+   * Six, not ten. The database floor stays at ten and this sits under it deliberately, so the
+   * refusal comes from here — before Razorpay is ever called — and the DB floor becomes the
+   * backstop it was written to be rather than the only line.
+   *
+   * A student paying rent legitimately opens one order, maybe two if the first sheet is
+   * dismissed. Six an hour is already generous for the honest case.
+   */
+  paymentOrderPerUser: { max: 6, windowSeconds: 3600 },
 } as const satisfies Record<string, RateLimitSpec>;
 
 /** Mirrors LIMITS.accountCreatePerUser in lib/rate-limit.ts. */

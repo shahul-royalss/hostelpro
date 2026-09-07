@@ -39,6 +39,7 @@
  */
 import { callerClient } from "../_shared/supabase.ts";
 import { dbError } from "../_shared/errors.ts";
+import { LIMITS, consumeRateLimit, throttled } from "../_shared/ratelimit.ts";
 import { HttpError, ok, preflight, toResponse } from "../_shared/http.ts";
 import {
   createOrder,
@@ -235,6 +236,39 @@ Deno.serve(async (req: Request): Promise<Response> => {
         throw new HttpError(
           409,
           "Online payment is not set up for this hostel yet. Please pay your warden directly.",
+        );
+      }
+
+      // ── 4b. SPEND THE BUDGET BEFORE SPENDING RAZORPAY'S API ───────────────
+      //
+      // This has to happen HERE — above createOrder — and that placement is the entire fix.
+      //
+      // rz_open_intent already refuses an eleventh intent in an hour. But it is called at
+      // step 6, and step 5 below is the call that creates a REAL order in the live merchant
+      // account. So the floor was being checked after the thing it was meant to prevent had
+      // already happened: every extra iteration minted an orphaned live order that no intent
+      // row will ever claim, littered the owner's Razorpay dashboard, and counted against
+      // Razorpay's per-merchant API limits. Enough of them and the whole merchant account is
+      // throttled — at which point residents of EVERY hostel tap Pay and are told payments
+      // are unavailable. One student could do that to all of them.
+      //
+      // Keyed on the student, not the IP: the attacker here holds a valid session, and a
+      // hostel behind one router shares an IP legitimately.
+      //
+      // FAILS CLOSED, unlike the database-side app.spend() added for notices and complaints.
+      // The asymmetry is deliberate and it is about what the failure costs. If the counter is
+      // unreachable there, a warden cannot post a notice; here, an uncounted request spends
+      // real money-moving API quota. A student refused for sixty seconds can still pay their
+      // warden in cash — the product has always supported that — so the safe direction is to
+      // refuse.
+      const wait = await consumeRateLimit(`rzorder:${student.id}`, LIMITS.paymentOrderPerUser, {
+        unavailableMessage:
+          "Online payment is briefly unavailable. Please try again in a minute, or pay your warden directly.",
+      });
+      if (wait > 0) {
+        throw throttled(
+          "You have started several payments in the last hour. Finish one of those, or try again shortly.",
+          wait,
         );
       }
 

@@ -147,7 +147,12 @@ class _SaShellState extends ConsumerState<SaShell> {
           selectedIndex: index,
           onDestinationSelected: (i) => ref.read(saTabProvider.notifier).go(i),
           // 64dp keeps every destination above the 48dp minimum with room for the label.
-          height: 64,
+          // 64dp keeps every destination above the 48dp minimum with room for the label — at
+          // 1.0x. NavigationBar honours `height` LITERALLY: it does not grow for text scale, so
+          // at the root's 1.4x ceiling the label was clipped against the icon. Scaling it and
+          // capping the growth keeps the bar off the content. Same expression as
+          // warden_shell.dart:196, which had this right and was the only one of the four.
+          height: MediaQuery.textScalerOf(context).scale(64).clamp(64.0, 88.0),
           backgroundColor: t.colorScheme.surface,
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           destinations: [

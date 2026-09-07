@@ -107,8 +107,23 @@ final class SaRepository extends Repository implements SaPlatformWrites {
   /// deliberate: the owner's name, the subscription state and the bed counts are all computed
   /// there, in one query, and a detail page that recomputed them from separate reads would be
   /// able to disagree with the row the admin just tapped.
+  ///
+  /// ── THE ARGUMENT GOES IN, IT IS NOT A FILTER ON THE WAY OUT ─────────────────────────────
+  ///
+  /// This used to be `db.rpc('rpc_sa_hostels').eq('hostel_id', hostelId)`, and the reasoning
+  /// above stayed right while the implementation was quietly wrong. `.eq()` on an RPC is a
+  /// PostgREST filter over the function's RESULT — so the function ran with p_hostel_id NULL,
+  /// enumerated every hostel on the platform, executed four correlated count subqueries plus
+  /// two subscription lookups against each of them, sorted the lot, and then PostgREST threw
+  /// away everything except one row.
+  ///
+  /// rpc_sa_hostels already takes p_hostel_id and applies it in its own WHERE
+  /// (`p_hostel_id is null or h.id = p_hostel_id`), so passing it lets Postgres reach the row
+  /// by primary key and run those six subqueries ONCE. At a thousand hostels this is the
+  /// difference between ~6,000 subquery executions per tap and six.
   Future<SaHostelRow?> hostel(String hostelId) => guard(() async {
-        final data = await db.rpc('rpc_sa_hostels').eq('hostel_id', hostelId).limit(1);
+        final data =
+            await db.rpc('rpc_sa_hostels', params: {'p_hostel_id': hostelId}).limit(1);
         final row = rpcRow(data, 'rpc_sa_hostels');
         return row == null ? null : SaHostelRow.fromJson(row);
       });

@@ -87,7 +87,13 @@ export async function getUserAgent(): Promise<string> {
 
 /** Standard limits used across the app (per key, per window). */
 export const LIMITS = {
-  loginPerIp: { max: 20, windowSeconds: 300 },
+  // 240, not 20, and the reason is India rather than security theory: on carrier-grade NAT —
+  // how most Jio and Airtel mobile subscribers reach the internet — thousands of unrelated
+  // people egress from one address, and a PG whose forty residents share a router is one
+  // address too. At 20 the honest failure arrived long before the malicious one. The real
+  // guard on a single account is loginPerIdentifier below, which stays tight.
+  // Mirrored in supabase/functions/_shared/ratelimit.ts; change both together.
+  loginPerIp: { max: 240, windowSeconds: 300 },
   loginPerIdentifier: { max: 8, windowSeconds: 900 },
   passwordChangePerUser: { max: 5, windowSeconds: 900 },
   mfaVerifyPerUser: { max: 6, windowSeconds: 600 },

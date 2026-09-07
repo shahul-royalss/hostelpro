@@ -155,9 +155,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   ///
   /// LOADING, EMPTY, FAILED and REFUSED are four states everywhere else in this app. A refusal
   /// rendered as a blank form is that rule broken on the one screen every user reaches.
+  ///
+  /// ── AND THE ERROR ARM, WHICH WAS THE OTHER HALF OF THE SAME BUG ─────────────────────────
+  ///
+  /// `.value` is null on an AsyncError, so a restore that FAILED — rather than one that
+  /// completed and decided to sign you out — fell straight through this to `null`. That is the
+  /// no-network cold start: the app holds a perfectly good saved session, cannot reach the
+  /// server to refresh it, spends its retry budget, and lands the user on an empty form with
+  /// nothing said. They then type the correct password into a device with no network and are
+  /// told nothing again.
+  ///
+  /// It is also the single most common real-world case, because it is every metro, lift and
+  /// dropped connection. The restore's own doc-comment calls a mute arrival at this screen the
+  /// exact failure it was written to kill; it killed the infinite splash and left this behind.
   String? _arrivalMessage() {
-    final phase = ref.watch(authControllerProvider).value;
-    return phase is AuthSignedOut ? phase.message : null;
+    final auth = ref.watch(authControllerProvider);
+
+    final phase = auth.value;
+    if (phase is AuthSignedOut && phase.message != null) return phase.message;
+
+    // A failed restore says so, in the user's terms rather than the exception's. There is
+    // nothing for them to fix by typing, so the sentence points at the one thing that is
+    // actually wrong.
+    if (auth.hasError) {
+      return 'We could not reach Nivora to check your session. Your details are safe — check '
+          'your connection and sign in again.';
+    }
+    return null;
   }
 
   @override

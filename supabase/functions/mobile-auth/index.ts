@@ -217,8 +217,22 @@ async function signIn(req: Request, body: Record<string, unknown>): Promise<Resp
   // Both are consumed before either verdict is read, so a request that trips the IP limit
   // still counts against the identifier it was aimed at, and no timing difference reveals
   // which of the two tripped.
+  //
+  // ── NO SHARED "unknown" BUCKET ────────────────────────────────────────────────────────────
+  //
+  // `ip ?? "unknown"` used to funnel every request with no resolvable address into ONE counter
+  // called login:ip:unknown. That is not a rate limit, it is a global kill switch: the moment
+  // the gateway stops forwarding the header — or forwards one this code cannot parse — the
+  // twenty-first sign-in ANYWHERE in the product is refused, and the message blames the user
+  // for trying too often.
+  //
+  // With no address there is nothing to key an IP budget on, so no IP budget is spent. The
+  // per-identifier budget below is untouched and is the one that actually protects an account.
+  const ipKey = ip ? `login:ip:${ip}` : null;
   const [ipWait, idWait] = await Promise.all([
-    consumeRateLimit(`login:ip:${ip ?? "unknown"}`, LIMITS.loginPerIp, { unavailableMessage: SIGNIN_UNAVAILABLE }),
+    ipKey
+      ? consumeRateLimit(ipKey, LIMITS.loginPerIp, { unavailableMessage: SIGNIN_UNAVAILABLE })
+      : Promise.resolve(0),
     consumeRateLimit(`login:id:${idHash}`, LIMITS.loginPerIdentifier, { unavailableMessage: SIGNIN_UNAVAILABLE }),
   ]);
   const wait = Math.max(ipWait, idWait);
@@ -359,8 +373,15 @@ async function verifyMfa(req: Request, body: Record<string, unknown>): Promise<R
     throw new HttpError(400, "Enter the 6-digit code from your authenticator app.");
   }
 
+  // Same shape as the sign-in path above, and for the same two reasons: no shared "unknown"
+  // bucket, and the per-USER budget is the one that protects a factor. Six codes per ten
+  // minutes per user is 10^6 / 6 attempts to guess a TOTP — the IP key here only stops one host
+  // farming many accounts, so it can afford to be loose enough for a hostel behind one router.
+  const mfaIpKey = caller.ip ? `mfa:ip:${caller.ip}` : null;
   const [ipWait, userWait] = await Promise.all([
-    consumeRateLimit(`mfa:ip:${caller.ip ?? "unknown"}`, LIMITS.mfaVerifyPerIp, { unavailableMessage: MFA_UNAVAILABLE }),
+    mfaIpKey
+      ? consumeRateLimit(mfaIpKey, LIMITS.mfaVerifyPerIp, { unavailableMessage: MFA_UNAVAILABLE })
+      : Promise.resolve(0),
     consumeRateLimit(`mfa:user:${caller.id}`, LIMITS.mfaVerifyPerUser, { unavailableMessage: MFA_UNAVAILABLE }),
   ]);
   const wait = Math.max(ipWait, userWait);
