@@ -3,21 +3,37 @@ library;
 import '../models/models.dart';
 import 'repository.dart';
 
-/// THE ONE WRITE THAT RESHAPES A BUILDING, behind an interface.
+/// THE WRITES THAT RESHAPE A BUILDING, behind an interface.
 ///
 /// Same shape and same reasoning as `OwnerStaffWrites`. The reads in this file are tested by
-/// overriding the provider that holds the answer; this one cannot be, because its interesting
-/// states are all things only the SERVER knows — a floor that still has somebody on it, a
-/// hostel gone read-only, a plan whose floors have a hole in them. Those are the states worth
-/// holding down in `flutter test`, and a test needs a stand-in for them that has no network and
-/// no Supabase client in it.
+/// overriding the provider that holds the answer; these cannot be, because their interesting
+/// states are all things only the SERVER knows — a floor that still has somebody on it, a room
+/// whose beds are all slept in, a hostel gone read-only, a plan whose floors have a hole in it.
+/// Those are the states worth holding down in `flutter test`, and a test needs a stand-in for
+/// them that has no network and no Supabase client in it.
 ///
 /// [RoomRepository] implements this; `roomLayoutWritesProvider` hands it out by the interface.
+///
+/// ── WHY updateRoom IS HERE AND NOT ONLY ON THE REPOSITORY ────────────────────────────────
+///
+/// It was on the repository alone, so shared/rooms/edit_room_sheet.dart reached for the whole
+/// [RoomRepository] — a `final class` wrapping a Supabase client, which no test can stand in
+/// for. The result was that renaming a room and changing its bed count, the two writes the
+/// product owner cares most about, had ZERO test coverage of any kind while a method with no
+/// callers at all sat next to them. Both writes belong to the same subject; one seam covers
+/// them both.
 abstract interface class RoomLayoutWrites {
   /// See [RoomRepository.setFloorPlan].
   Future<FloorPlanResult> setFloorPlan({
     required String hostelId,
     required List<FloorPlanEntry> plan,
+  });
+
+  /// See [RoomRepository.updateRoom].
+  Future<Room> updateRoom({
+    required String roomId,
+    String? roomNumber,
+    int? capacity,
   });
 }
 
@@ -101,6 +117,7 @@ final class RoomRepository extends Repository implements RoomLayoutWrites {
   /// when it goes up and removes FREE beds when it goes down, refusing to strip a bed someone
   /// is sleeping in. So the returned room may come back with beds that did not exist a moment
   /// ago — re-read the beds after calling this rather than adjusting a local list.
+  @override
   Future<Room> updateRoom({
     required String roomId,
     String? roomNumber,

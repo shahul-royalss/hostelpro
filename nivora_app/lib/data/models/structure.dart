@@ -36,6 +36,36 @@ class Floor {
   }
 }
 
+/// HOW MANY BEDS A SINGLE ROOM MAY HOLD.
+///
+/// `rooms.capacity` is `check (capacity between 1 and 12)`, and public.ow_set_floor_plan says
+/// the same thing in words — "Floor N: a room holds between 1 and 12 beds." — so a bad value is
+/// refused with a sentence rather than a constraint name.
+///
+/// ── WHY THESE LIVE HERE AND NOT IN THE SCREEN THAT FIRST NEEDED THEM ─────────────────────
+///
+/// They started in features/owner/rooms/floor_plan_edit.dart, which was fine while the layout
+/// editor was the only thing that knew them. It is not: shared/rooms/edit_room_sheet.dart caps
+/// its own stepper, and it had a bare `12` written into the widget — so the two agreed only by
+/// coincidence, and a shared widget reaching into a feature folder to fix that would have been
+/// the wrong direction. These describe a COLUMN, so they belong beside the model of it.
+///
+/// ── RAISING THE CEILING ──────────────────────────────────────────────────────────────────
+///
+/// db/migrations/2026-09-07-per-room-beds.sql widens both database CHECKs to 20, because twelve
+/// was a number rather than a rule and Indian hostels run dormitories past it. THAT MIGRATION IS
+/// NOT YET APPLIED, and this constant deliberately still says 12: a stepper that offers a value
+/// the server will reject is a trap, and the whole argument of the layout editor is that the
+/// refusal is said before the tap. Run the migration and this becomes 20 — it is the only place
+/// the app states the bound.
+const int minBedsPerRoom = 1;
+const int maxBedsPerRoom = 12;
+
+/// [beds] brought inside the bounds the server will accept.
+int clampBeds(int beds) => beds < minBedsPerRoom
+    ? minBedsPerRoom
+    : (beds > maxBedsPerRoom ? maxBedsPerRoom : beds);
+
 /// public.rooms.
 ///
 /// `capacity` is kept in step with the bed rows by a trigger (app.rooms_capacity_sync), so

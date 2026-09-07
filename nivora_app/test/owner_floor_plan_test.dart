@@ -380,6 +380,180 @@ void main() {
   // Four things design review found, each of which shipped once. The fixes are cheap; the
   // reason they are pinned is that every one of them is invisible in ordinary use and only
   // bites on the path somebody takes when they are in a hurry.
+  group('every room can be a different size, from this screen', () {
+    // ── WHAT THIS GROUP IS FOR ────────────────────────────────────────────────────────
+    //
+    // The product owner looked at this screen, saw one stepper per floor labelled "Beds in each
+    // new room", and reported that the app could not give room 103 four beds and room 104
+    // three. It could — public.rooms.capacity is per room and app.rooms_capacity_sync turns a
+    // change to it into bed rows — but the only way to reach that was three taps into a
+    // different screen, and this screen's own caption pointed at it without linking to it.
+    //
+    // These tests hold down the reach, not the arithmetic: that every existing room is on the
+    // screen with its own bed count, that tapping one opens it, and that what the server is
+    // sent is one room and not a plan.
+
+    testWidgets('each existing room is listed with its own bed count', (tester) async {
+      await _pump(tester, rooms: _roomsWithASpareRoom);
+
+      // Floor 1 holds 101, 102 and 103; floor 2 holds 201. All four, on one screen.
+      for (final number in ['101', '102', '103', '201']) {
+        expect(find.text(number), findsOneWidget, reason: 'room $number is not listed');
+      }
+
+      // AND THE COUNT IS ON THE FACE OF THE CHIP. This is the assertion that matters: a list of
+      // room numbers would not have answered the owner's question, because his question was
+      // whether the counts can differ. 101/102/103 are triples, 201 is a double.
+      expect(find.text('3 beds'), findsNWidgets(3));
+      expect(find.text('2 beds'), findsOneWidget);
+    });
+
+    testWidgets('tapping a room opens it on ITS OWN name and beds', (tester) async {
+      await _pump(tester);
+
+      await tester.tap(find.text('201'));
+      await _settle(tester);
+
+      expect(find.text('Edit room'), findsOneWidget);
+      // Floor 2's double, not floor 1's triple: the identity of the tapped room has to survive
+      // the trip into the sheet, and passing the wrong RoomOccupancy is a mistake that would
+      // otherwise be found by renaming the wrong room in production.
+      expect(find.text('Floor 2 · 0 of 2 beds taken'), findsOneWidget);
+      // The CONTROLLER, not a text finder. `widgetWithText` matched twice here and the second
+      // match was worth knowing about: the sheet offers the floor's house-style name as a
+      // one-tap shortcut, and on floor 2 that suggestion was "201" — the name the room already
+      // had. The button is hidden when it would change nothing now; see edit_room_sheet.dart.
+      expect(
+        tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+        '201',
+      );
+    });
+
+    testWidgets('a bed count is changed on ONE room, and only that room', (tester) async {
+      final writes = await _pump(tester);
+
+      await tester.tap(find.text('201'));
+      await _settle(tester);
+
+      // Two taps up: 2 beds becomes 4. The stepper moves one at a time by design.
+      await tester.tap(find.byIcon(Icons.add_rounded).last);
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.add_rounded).last);
+      await tester.pump();
+      expect(find.text('Adding 2 empty bed(s).'), findsOneWidget);
+
+      await tester.tap(find.text('Save changes'));
+      await _settle(tester);
+
+      expect(writes.roomEdits, hasLength(1));
+      expect(writes.roomEdits.single.roomId, 'r-201');
+      expect(writes.roomEdits.single.capacity, 4);
+      // Null, not '201': the sheet sends only what changed, so an unchanged name cannot
+      // collide with a rename somebody else made between the read and the write.
+      expect(writes.roomEdits.single.roomNumber, isNull);
+
+      // AND NO PLAN WENT WITH IT. Changing one room's beds must not touch which rooms exist —
+      // ow_set_floor_plan is the destructive call, and it is not this one.
+      expect(writes.plan, isNull);
+    });
+
+    testWidgets('a room can be renamed to something that is not a number', (tester) async {
+      final writes = await _pump(tester);
+
+      await tester.tap(find.text('201'));
+      await _settle(tester);
+
+      // rooms.room_number is text precisely so a PG can call a room what it calls it. The
+      // owner asked for renaming; a control that only accepted digits would not be renaming.
+      await tester.enterText(find.widgetWithText(TextFormField, '201'), 'Annexe A');
+      await tester.tap(find.text('Save changes'));
+      await _settle(tester);
+
+      expect(writes.roomEdits.single.roomNumber, 'Annexe A');
+      expect(writes.roomEdits.single.capacity, isNull);
+    });
+
+    testWidgets('the stepper will not offer to remove a bed somebody is asleep in',
+        (tester) async {
+      final writes = await _pump(tester);
+
+      // 101 is a triple with all three taken. app.rooms_capacity_sync removes only FREE beds
+      // and refuses the rest by exception; a stepper that let the owner reach 2 would be
+      // offering a value the server is certain to reject.
+      await tester.tap(find.text('101'));
+      await _settle(tester);
+      expect(find.text('Floor 1 · 3 of 3 beds taken'), findsOneWidget);
+
+      final minus = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.remove_rounded).last,
+      );
+      expect(minus.onPressed, isNull,
+          reason: 'the minus is live on a room whose every bed is occupied');
+      expect(
+        find.textContaining('This is as low as it goes'),
+        findsOneWidget,
+        reason: 'the floor on the stepper is not explained, only enforced',
+      );
+
+      await tester.tap(find.text('Save changes'));
+      await _settle(tester);
+      // Nothing changed, so nothing was sent — the sheet closes rather than writing a no-op.
+      expect(writes.roomEdits, isEmpty);
+    });
+
+    testWidgets('the server refusal reaches this sheet in the server own words', (tester) async {
+      final writes = await _pump(
+        tester,
+        failure: const InvalidInputFailure(
+          'Room 201 has 2 occupied beds — capacity cannot be lower than that.',
+        ),
+      );
+
+      await tester.tap(find.text('201'));
+      await _settle(tester);
+      await tester.tap(find.byIcon(Icons.add_rounded).last);
+      await tester.pump();
+      await tester.tap(find.text('Save changes'));
+      await _settle(tester);
+
+      // VERBATIM, and the sheet stays open. The message names the room; a tidier generic one
+      // would send an owner to walk the floor looking for which.
+      expect(
+        find.text('Room 201 has 2 occupied beds — capacity cannot be lower than that.'),
+        findsOneWidget,
+      );
+      expect(find.text('Edit room'), findsOneWidget, reason: 'the sheet closed on a failure');
+      expect(writes.roomEdits, hasLength(1));
+    });
+
+    testWidgets('a new floor has no rooms to list, and says nothing about them', (tester) async {
+      await _pump(tester);
+
+      await tester.tap(find.text('Add floor 3'));
+      await _settle(tester);
+
+      // Floor 3 exists only in the plan; ow_set_floor_plan has not created it. Listing rooms
+      // under it would be inventing them, which is the failure this whole screen is built to
+      // avoid — every number on it is counted from rpc_room_occupancy.
+      expect(find.text('New floor'), findsOneWidget);
+      expect(find.text('Rooms on this floor'), findsNWidgets(2));
+    });
+
+    testWidgets('the chips are a real tap target, and grow with the system text size',
+        (tester) async {
+      await _pump(tester);
+
+      // 48dp is Material's floor and Apple's is 44pt. This is a WRITE control on a phone held
+      // one-handed in a corridor; the avatar in the staff header had to be widened for exactly
+      // this reason once already.
+      final chip = tester.getSize(find.ancestor(
+        of: find.text('201'),
+        matching: find.byType(InkWell),
+      ).first);
+      expect(chip.height, greaterThanOrEqualTo(48));
+    });
+  });
+
   group('the ways this screen went wrong once', () {
     testWidgets('backing out mid-save still refreshes the building', (tester) async {
       // THE ONE WITH TEETH. The refresh used to sit BELOW `if (!mounted) return;`, and moving it
@@ -592,6 +766,10 @@ final class _FakeLayout implements RoomLayoutWrites {
   /// Null until the button is actually pressed.
   List<FloorPlanEntry>? plan;
 
+  /// Every room edit that reached the server, in order. A list rather than a single value so a
+  /// test can assert that a no-op save sent NOTHING — the state that a `last` would hide.
+  final List<({String roomId, String? roomNumber, int? capacity})> roomEdits = [];
+
   @override
   Future<FloorPlanResult> setFloorPlan({
     required String hostelId,
@@ -602,5 +780,26 @@ final class _FakeLayout implements RoomLayoutWrites {
     final thrown = failure;
     if (thrown != null) throw thrown;
     return result;
+  }
+
+  @override
+  Future<Room> updateRoom({
+    required String roomId,
+    String? roomNumber,
+    int? capacity,
+  }) async {
+    roomEdits.add((roomId: roomId, roomNumber: roomNumber, capacity: capacity));
+    if (hold) await _gate.future;
+    final thrown = failure;
+    if (thrown != null) throw thrown;
+    return Room(
+      id: roomId,
+      hostelId: _hostelId,
+      floorId: 'f-1',
+      roomNumber: roomNumber ?? '101',
+      capacity: capacity ?? 3,
+      createdAt: DateTime.utc(2026, 3, 1),
+      updatedAt: DateTime.utc(2026, 3, 1),
+    );
   }
 }

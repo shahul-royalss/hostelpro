@@ -17,6 +17,7 @@ import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
 import 'package:mobile/data/models/models.dart';
 import 'package:mobile/data/providers.dart';
+import 'package:mobile/data/repositories/room_repository.dart';
 import 'package:mobile/features/warden/data/warden_models.dart';
 import 'package:mobile/features/warden/data/warden_providers.dart';
 import 'package:mobile/features/warden/home/warden_home_screen.dart';
@@ -319,6 +320,40 @@ void main() {
       expect(find.textContaining('aintenance'), findsNothing);
       expect(find.textContaining('AINTENANCE'), findsNothing);
     });
+
+    testWidgets('the warden can rename a room and change its beds, from the grid',
+        (tester) async {
+      // ── THE HALF OF THE ASK THAT WAS NOT THE OWNER'S ──────────────────────────────────
+      //
+      // "owner and warden can change the room names". The warden's route is the grid rather
+      // than the layout editor, because reshaping a BUILDING is the owner's call and
+      // ow_set_floor_plan says so; renaming a room and moving a bed into it is the job of the
+      // person standing in the corridor.
+      //
+      // The database has agreed for a while — the rooms_update policy admits the warden — and
+      // nothing tested that the app agreed too. The room sheet had told the warden the
+      // opposite in a comment as recently as this month.
+      final writes = _FakeRoomWrites();
+      await _pumpRooms(tester, rooms: _threeRooms(), roomWrites: writes);
+
+      await tester.tap(find.text('201'));
+      await _settleRooms(tester);
+      await tester.tap(find.text('Edit room'));
+      await _settleRooms(tester);
+
+      expect(find.text('Floor 2 · 1 of 3 beds taken'), findsOneWidget);
+
+      await tester.enterText(find.byType(EditableText), 'Terrace room');
+      await tester.tap(find.byIcon(Icons.add_rounded).last);
+      await tester.pump();
+      await tester.tap(find.text('Save changes'));
+      await _settleRooms(tester);
+
+      expect(writes.edits, hasLength(1));
+      expect(writes.edits.single.roomId, 'r3');
+      expect(writes.edits.single.roomNumber, 'Terrace room');
+      expect(writes.edits.single.capacity, 4);
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -441,18 +476,70 @@ Hostel _hostel() => Hostel(
 
 /// Riverpod 3 does not export the `Override` type, so the override lists below are built
 /// inline where the analyzer can infer them.
-Future<void> _pumpRooms(WidgetTester tester, {required List<RoomOccupancy> rooms}) async {
+Future<void> _pumpRooms(
+  WidgetTester tester, {
+  required List<RoomOccupancy> rooms,
+  RoomLayoutWrites? roomWrites,
+}) async {
+  // Taller than the default, so the room sheet's whole body — including the Save button at the
+  // bottom of it — is on screen and tappable.
+  tester.view.physicalSize = const Size(1200, 3000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         currentHostelIdProvider.overrideWithValue(_hostelId),
         roomOccupancyProvider.overrideWith((ref, hostelId) => rooms),
+        // The room sheet asks these two for the beds and who is in them. Empty is a real
+        // state — a room whose bed rows have not arrived yet — and it is enough here, because
+        // what is under test is the route to the room EDITOR, not the bed list.
+        bedsInRoomProvider.overrideWith((ref, roomId) => const <Bed>[]),
+        studentsInRoomProvider.overrideWith((ref, roomId) => const <Student>[]),
+        if (roomWrites != null) roomLayoutWritesProvider.overrideWithValue(roomWrites),
       ],
       child: const MaterialApp(home: Scaffold(body: WardenRoomsScreen())),
     ),
   );
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
+}
+
+Future<void> _settleRooms(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
+/// Stands in for the two writes that reshape a building. Only [updateRoom] is exercised here —
+/// the warden has no route to the floor plan, which is the point of the other one throwing.
+final class _FakeRoomWrites implements RoomLayoutWrites {
+  final List<({String roomId, String? roomNumber, int? capacity})> edits = [];
+
+  @override
+  Future<FloorPlanResult> setFloorPlan({
+    required String hostelId,
+    required List<FloorPlanEntry> plan,
+  }) async =>
+      throw StateError('a warden has no route to the floor plan');
+
+  @override
+  Future<Room> updateRoom({
+    required String roomId,
+    String? roomNumber,
+    int? capacity,
+  }) async {
+    edits.add((roomId: roomId, roomNumber: roomNumber, capacity: capacity));
+    return Room(
+      id: roomId,
+      hostelId: _hostelId,
+      floorId: 'f2',
+      roomNumber: roomNumber ?? '201',
+      capacity: capacity ?? 3,
+      createdAt: DateTime.utc(2026, 1, 1),
+      updatedAt: DateTime.utc(2026, 1, 1),
+    );
+  }
 }
 
 Future<void> _pumpHome(

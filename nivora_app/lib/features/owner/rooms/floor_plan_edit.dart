@@ -104,11 +104,6 @@ bool planCanDescribe(List<FloorSnapshot> building) {
   return true;
 }
 
-/// `rooms.capacity` is `check (capacity between 1 and 12)`, and ow_set_floor_plan says the same
-/// thing in words: "Floor N: a room holds between 1 and 12 beds."
-const int minBedsPerRoom = 1;
-const int maxBedsPerRoom = 12;
-
 /// "Floor N must have between 1 and 200 rooms." — the RPC's own bounds, not this screen's.
 const int minRoomsPerFloor = 1;
 const int maxRoomsPerFloor = 200;
@@ -123,10 +118,6 @@ const int maxRoomsPerFloor = 200;
 /// room grid, one room at a time, where each deletion is its own decision.
 const int minFloors = 1;
 const int maxFloors = 50;
-
-int clampBeds(int beds) => beds < minBedsPerRoom
-    ? minBedsPerRoom
-    : (beds > maxBedsPerRoom ? maxBedsPerRoom : beds);
 
 /// THE PLAN THE EDITOR OPENS ON: the building exactly as it stands.
 ///

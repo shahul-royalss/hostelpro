@@ -91,10 +91,22 @@ alter table public.rooms enable row level security;
 select app.drop_policies('rooms');
 create policy rooms_select on public.rooms for select using (app.can_read_hostel(hostel_id));
 create policy rooms_insert on public.rooms for insert with check (app.is_super_admin());
--- Warden may edit room_number / capacity (§4.2); floor/room counts are SA-only (enforced by no insert/delete)
+-- OWNER AND WARDEN may edit room_number / capacity (§4.2). Floor and room COUNTS stay SA-only,
+-- enforced by there being no insert or delete policy — adding and removing rooms is
+-- public.ow_set_floor_plan's job, which counts occupants first and names the room it refuses.
+--
+-- THIS FILE SAID "warden" ALONE UNTIL 2026-09-07, AND THE LIVE DATABASE HAD NOT SINCE 09-02.
+-- The owner was granted there and in the Flutter comments, and no migration ever recorded it —
+-- so restoring this database from the repository would quietly have taken back the owner's
+-- ability to rename a room or change its beds, while every screen went on offering both. The
+-- recording migration is db/migrations/2026-09-07-per-room-beds.sql.
 create policy rooms_update on public.rooms for update
-  using (app.is_super_admin() or app.has_role_in(hostel_id, 'warden'))
-  with check (app.is_super_admin() or (app.has_role_in(hostel_id, 'warden') and app.hostel_writable(hostel_id)));
+  using (app.is_super_admin()
+      or app.has_role_in(hostel_id, 'owner')
+      or app.has_role_in(hostel_id, 'warden'))
+  with check (app.is_super_admin()
+      or ((app.has_role_in(hostel_id, 'owner') or app.has_role_in(hostel_id, 'warden'))
+          and app.hostel_writable(hostel_id)));
 create policy rooms_delete on public.rooms for delete using (app.is_super_admin());
 
 alter table public.beds enable row level security;

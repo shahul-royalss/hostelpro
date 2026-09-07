@@ -70,7 +70,11 @@ class _EditRoom extends ConsumerStatefulWidget {
 
 class _EditRoomState extends ConsumerState<_EditRoom> {
   late final TextEditingController _number =
-      TextEditingController(text: widget.roomNumber);
+      TextEditingController(text: widget.roomNumber)..addListener(_onNameTyped);
+
+  /// The suggestion button appears and disappears as the field is typed in, so the field has
+  /// to rebuild the surrounding decoration rather than only its own text.
+  void _onNameTyped() => setState(() {});
   late int _capacity = widget.capacity;
   final _formKey = GlobalKey<FormState>();
   bool _busy = false;
@@ -86,6 +90,7 @@ class _EditRoomState extends ConsumerState<_EditRoom> {
 
   @override
   void dispose() {
+    _number.removeListener(_onNameTyped);
     _number.dispose();
     super.dispose();
   }
@@ -104,7 +109,9 @@ class _EditRoomState extends ConsumerState<_EditRoom> {
       _error = null;
     });
     try {
-      await ref.read(roomRepositoryProvider).updateRoom(
+      // roomLayoutWritesProvider, not roomRepositoryProvider: the narrow interface is the one
+      // a test can stand in for, and it is why this sheet's refusals are now covered at all.
+      await ref.read(roomLayoutWritesProvider).updateRoom(
             roomId: widget.roomId,
             roomNumber: name == widget.roomNumber ? null : name,
             capacity: _capacity == widget.capacity ? null : _capacity,
@@ -127,7 +134,7 @@ class _EditRoomState extends ConsumerState<_EditRoom> {
     final error = _error;
     // Never below the number of people already sleeping there: the server refuses it, and a
     // control that offers a value the server will reject is a trap.
-    final floor = widget.occupied < 1 ? 1 : widget.occupied;
+    final floor = widget.occupied < minBedsPerRoom ? minBedsPerRoom : widget.occupied;
 
     return Form(
       key: _formKey,
@@ -148,10 +155,19 @@ class _EditRoomState extends ConsumerState<_EditRoom> {
             decoration: InputDecoration(
               labelText: 'Room name or number',
               helperText: 'Anything your residents will recognise.',
-              suffixIcon: TextButton(
-                onPressed: _busy ? null : () => _number.text = _suggested,
-                child: Text(_suggested),
-              ),
+              // HIDDEN WHEN IT WOULD DO NOTHING. The shortcut offers the floor's house
+              // style — "201" on floor 2 — and the first room on any floor is already called
+              // exactly that, so it was rendering a button that changed nothing on precisely
+              // the room an owner is most likely to open first. Found by a test finder that
+              // matched two widgets where one was expected.
+              suffixIcon: _number.text.trim() == _suggested
+                  ? null
+                  : TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() => _number.text = _suggested),
+                      child: Text(_suggested),
+                    ),
             ),
             validator: (raw) {
               final v = (raw ?? '').trim();
@@ -176,7 +192,9 @@ class _EditRoomState extends ConsumerState<_EditRoom> {
                     textAlign: TextAlign.center, style: t.textTheme.headlineMedium),
               ),
               IconButton.outlined(
-                onPressed: _busy || _capacity >= 12
+                // maxBedsPerRoom, not a `12` typed into this widget. The bound belongs to
+                // rooms.capacity and is stated once, beside the model — see structure.dart.
+                onPressed: _busy || _capacity >= maxBedsPerRoom
                     ? null
                     : () => setState(() => _capacity++),
                 icon: const Icon(Icons.add_rounded),

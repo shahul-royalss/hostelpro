@@ -5,6 +5,7 @@ import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
 import '../../../shared/glass/glass.dart';
+import '../../../shared/rooms/edit_room_sheet.dart';
 import '../owner_providers.dart';
 import '../widgets/states.dart';
 import 'floor_plan_edit.dart';
@@ -228,6 +229,53 @@ class _EditorState extends ConsumerState<_Editor> {
     _edit(() => _plan = _plan.sublist(0, _plan.length - 1));
   }
 
+  /// ONE ROOM AT A TIME, FROM THE SCREEN WHERE THE BUILDING IS.
+  ///
+  /// -- WHY THIS IS HERE AND NOT ONLY IN THE ROOM GRID -----------------------------------
+  ///
+  /// It was already possible: the sheet exists, the RLS admits the owner, and the repository
+  /// call has been there the whole time. It was reachable in three taps from a DIFFERENT screen
+  /// -- tile, bed sheet, a text button -- and this screen's own caption told the owner to go and
+  /// find it ("change those from the room grid") while offering no way to get there. The product
+  /// owner read that caption, saw a stepper labelled "Beds in each new room", and concluded the
+  /// app could not give room 103 four beds and room 104 three. A capability nobody can find is
+  /// indistinguishable from one that does not exist.
+  ///
+  /// The chips also do something the room grid cannot: they put every room's bed count on one
+  /// line per floor, so the VARIATION the owner is asking to create is legible at a glance
+  /// rather than one sheet at a time.
+  ///
+  /// -- THE TWO WRITES DO NOT COLLIDE ---------------------------------------------------
+  ///
+  /// The sheet writes public.rooms directly; Save writes public.ow_set_floor_plan. They touch
+  /// different things -- capacity and name here, which rooms exist there -- so an owner may do
+  /// both in either order. The refresh below re-reads the building, which rebuilds this widget
+  /// with a new `building` snapshot; `_plan` survives that because it is State and not a field,
+  /// so a half-composed plan is not thrown away by a room rename.
+  Future<void> _editRoom(RoomOccupancy room) async {
+    if (_busy) return;
+    // Resolved before the await, as _save does: this element may be gone by the time the sheet
+    // closes, and invalidating through a dead WidgetRef throws.
+    final container = ProviderScope.containerOf(context, listen: false);
+    final period = ref.read(currentPeriodMonthProvider);
+
+    final changed = await showEditRoomSheet(
+      context,
+      roomId: room.roomId,
+      roomNumber: room.roomNumber,
+      capacity: room.capacity,
+      occupied: room.occupied,
+      floorNumber: room.floorNumber,
+    );
+    if (!changed) return;
+
+    // Capacity changes create and destroy BED rows server-side (app.rooms_capacity_sync), so
+    // the counts on every staff dashboard for this PG have moved -- not just this screen.
+    refreshOwnerBuilding(container, hostelId: widget.hostelId, period: period);
+    // A refusal left standing after an edit can name a room by a name it no longer has.
+    if (mounted) setState(() => _error = null);
+  }
+
   Future<void> _save() async {
     if (_busy) return;
     final preview = previewPlan(building: widget.building, plan: _plan);
@@ -347,8 +395,9 @@ class _EditorState extends ConsumerState<_Editor> {
                 domain: NivoraDomain.rooms,
                 icon: Icons.stairs_rounded,
                 title: 'Floors and rooms',
-                caption: 'The bed count sets how many beds a NEW room gets. Rooms that already '
-                    'exist keep the beds they have — change those from the room grid.',
+                caption: 'The bed count sets how many beds a NEW room gets. Rooms that '
+                    'already exist keep the beds they have — tap any room below to rename it '
+                    'or give it a different number of beds.',
               ),
               if (_plan.isEmpty)
                 const EmptyNote(
@@ -364,6 +413,7 @@ class _EditorState extends ConsumerState<_Editor> {
                   enabled: !_busy,
                   onRooms: (value) => _setRooms(i, value),
                   onBeds: (value) => _setBeds(i, value),
+                  onEditRoom: _editRoom,
                 ),
                 const SizedBox(height: Space.sm),
               ],
@@ -409,6 +459,7 @@ class _FloorRow extends StatelessWidget {
     required this.enabled,
     required this.onRooms,
     required this.onBeds,
+    required this.onEditRoom,
   });
 
   final FloorPlanEntry entry;
@@ -418,6 +469,9 @@ class _FloorRow extends StatelessWidget {
   final bool enabled;
   final ValueChanged<int> onRooms;
   final ValueChanged<int> onBeds;
+
+  /// Opens one EXISTING room for a rename or a change of beds.
+  final ValueChanged<RoomOccupancy> onEditRoom;
 
   @override
   Widget build(BuildContext context) {
@@ -471,6 +525,31 @@ class _FloorRow extends StatelessWidget {
             increaseTooltip: 'One more bed in new rooms on floor ${entry.floor}',
             onChanged: onBeds,
           ),
+          if (now != null && now.rooms.isNotEmpty) ...[
+            const SizedBox(height: Space.md),
+            Text('Rooms on this floor', style: t.textTheme.bodyMedium),
+            const SizedBox(height: Space.xxs),
+            Text(
+              // Said plainly, because the two bed controls on this card mean different things
+              // and the difference is exactly what confused the owner. The stepper above is
+              // about rooms that do not exist yet; these are the rooms that do.
+              'Tap one to rename it or change its beds. Every room can be different.',
+              style: t.textTheme.bodySmall,
+            ),
+            const SizedBox(height: Space.xs),
+            Wrap(
+              spacing: Space.xs,
+              runSpacing: Space.xs,
+              children: [
+                for (final room in now.rooms)
+                  _RoomChip(
+                    room: room,
+                    enabled: enabled,
+                    onTap: () => onEditRoom(room),
+                  ),
+              ],
+            ),
+          ],
           if (blocked.isNotEmpty) ...[
             const SizedBox(height: Space.sm),
             Semantics(
@@ -482,6 +561,75 @@ class _FloorRow extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// ONE ROOM, AND WHAT IT HOLDS -- the smallest thing that can carry "103 has four beds".
+///
+/// The bed count is on the face of the chip rather than behind a tap, because a floor of
+/// three-bed rooms with one four-bed room in it is precisely the state the owner is trying to
+/// create, and a row of chips is where that becomes visible at all. The OCCUPIED count is not
+/// here: it belongs to the decision about removing a bed, and that decision is made inside the
+/// sheet, where the server's own refusal can be spelled out beside the stepper.
+class _RoomChip extends StatelessWidget {
+  const _RoomChip({required this.room, required this.enabled, required this.onTap});
+
+  final RoomOccupancy room;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final beds = room.capacity == 1 ? '1 bed' : '${room.capacity} beds';
+
+    return Semantics(
+      button: true,
+      label: 'Room ${room.roomNumber}, $beds, ${room.occupied} taken. Edit.',
+      excludeSemantics: true,
+      child: Material(
+        color: GlassWeight.regular.surfaceOf(t.colorScheme),
+        borderRadius: Radii.rControl,
+        child: InkWell(
+          borderRadius: Radii.rControl,
+          onTap: enabled ? onTap : null,
+          child: Container(
+            // A real target, not a 32dp chip: this is a WRITE control on a phone held
+            // one-handed in a corridor, so Material's 48dp floor applies to it like anything
+            // else. minHeight rather than height, so it grows with the system text size
+            // instead of clipping -- the failure the bottom bar had.
+            constraints: const BoxConstraints(minHeight: Space.xxxl + Space.md),
+            padding: const EdgeInsets.symmetric(horizontal: Space.sm, vertical: Space.xs),
+            decoration: BoxDecoration(
+              borderRadius: Radii.rControl,
+              border: Border.all(
+                color: t.colorScheme.outlineVariant,
+                width: Strokes.hairline,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(room.roomNumber, style: t.textTheme.titleSmall),
+                    Text(beds, style: t.textTheme.bodySmall),
+                  ],
+                ),
+                const SizedBox(width: Space.xs),
+                Icon(
+                  Icons.edit_outlined,
+                  size: IconSize.sm,
+                  color: t.colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

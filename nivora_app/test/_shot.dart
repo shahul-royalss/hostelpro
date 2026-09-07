@@ -23,6 +23,7 @@ import 'package:mobile/data/providers.dart';
 import 'package:mobile/features/owner/owner_insights.dart';
 import 'package:mobile/features/owner/owner_providers.dart';
 import 'package:mobile/features/onboarding/onboarding_screen.dart';
+import 'package:mobile/features/owner/rooms/floor_plan_screen.dart';
 import 'package:mobile/core/boot/splash_gate.dart';
 import 'package:mobile/features/shell/role_shell.dart';
 import 'package:mobile/features/splash/splash_screen.dart';
@@ -117,7 +118,62 @@ Future<void> _shootPlain(WidgetTester tester, String name, Widget home, ThemeDat
   });
 }
 
+/// The layout editor, on a building whose rooms are deliberately NOT all the same size —
+/// which is the whole thing the product owner asked to be able to do.
+Future<void> _shootLayout(WidgetTester tester) async {
+  tester.view.physicalSize = const Size(1080, 2400);
+  tester.view.devicePixelRatio = 2.75;
+  addTearDown(tester.view.reset);
+
+  const rooms = [
+    RoomOccupancy(roomId: 'r1', floorId: 'f1', floorNumber: 1,
+        roomNumber: '101', capacity: 3, occupied: 3),
+    RoomOccupancy(roomId: 'r2', floorId: 'f1', floorNumber: 1,
+        roomNumber: '102', capacity: 3, occupied: 1),
+    RoomOccupancy(roomId: 'r3', floorId: 'f1', floorNumber: 1,
+        roomNumber: '103', capacity: 4, occupied: 0),
+    RoomOccupancy(roomId: 'r4', floorId: 'f1', floorNumber: 1,
+        roomNumber: '104', capacity: 2, occupied: 1),
+    RoomOccupancy(roomId: 'r5', floorId: 'f2', floorNumber: 2,
+        roomNumber: '201', capacity: 6, occupied: 2),
+  ];
+
+  final key = GlobalKey();
+  await tester.pumpWidget(ProviderScope(
+    overrides: [
+      sessionProvider.overrideWithValue(NivoraSession(
+          userId: 'u-1', role: UserRole.owner, fullName: 'Ananya Rao',
+          status: 'active', mustChangePassword: false, hostelId: _hostelId)),
+      currentHostelIdProvider.overrideWithValue(_hostelId),
+      currentPeriodMonthProvider.overrideWithValue(_period),
+      hostelProvider.overrideWith((ref, id) => _sunrise),
+      roomOccupancyProvider.overrideWith((ref, id) => rooms),
+    ],
+    child: RepaintBoundary(
+      key: key,
+      child: MaterialApp(
+        theme: NivoraTheme.light(),
+        home: const OwnerFloorPlanScreen(hostelId: _hostelId),
+      ),
+    ),
+  ));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+
+  final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+  await tester.runAsync(() async {
+    final image = await boundary.toImage(pixelRatio: 1);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    Directory('build/shots').createSync(recursive: true);
+    File('build/shots/layout.png').writeAsBytesSync(bytes!.buffer.asUint8List());
+    // ignore: avoid_print
+    print('WROTE build/shots/layout.png');
+  });
+}
+
 void main() {
+  testWidgets('layout', _shootLayout);
+
   // THE OPENING, AT REST. Shot at splashMinimum so this is the frame the wordmark FINISHES on
   // — the one the product owner photographed off his phone and said was not centred. Rendering
   // it here is how that gets looked at without a device and without racing a 1,500ms animation
