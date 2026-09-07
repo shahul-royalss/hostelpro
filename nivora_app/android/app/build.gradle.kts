@@ -67,6 +67,43 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // ── A SINGLE-ABI BUILD MUST PACKAGE A SINGLE ABI ────────────────────────────────────
+        //
+        // `--target-platform android-arm64` tells FLUTTER what to compile. It does not tell
+        // GRADLE what to package, and Gradle packages every .so it finds in every plugin AAR.
+        // Two plugins ship all three architectures, so the "arm64" APK came out containing:
+        //
+        //   lib/arm64-v8a/    libapp.so  libflutter.so  libdartjni.so  libdatastore....so
+        //   lib/armeabi-v7a/                            libdartjni.so  libdatastore....so
+        //   lib/x86_64/                                 libdartjni.so  libdatastore....so
+        //
+        // Android chooses its primary ABI by looking for a matching lib/ directory. On an
+        // armeabi-v7a-only handset — ordinary in India's budget segment, which is this
+        // product's market — it found one, installed cleanly, and then died on
+        // System.loadLibrary("flutter") the instant FlutterJNI started. Installs, then will not
+        // open: the exact failure this project already fought once.
+        //
+        // ── WHY IT IS CONDITIONAL, AND WHY ON A COMMA ──────────────────────────────────────
+        //
+        // The AAB must stay complete — Play splits it per device, and filtering it here would
+        // ship an arm64-only bundle to every phone on earth. So this narrows the ABI set ONLY
+        // when exactly one target platform was requested, which is what the per-CPU APK build
+        // does and nothing else does. `flutter build apk` (universal) passes all three
+        // comma-separated, and `flutter build appbundle` passes none; both fall through
+        // untouched.
+        val requested = project.findProperty("target-platform")?.toString()
+        if (requested != null && !requested.contains(",")) {
+            val abi = when (requested) {
+                "android-arm64" -> "arm64-v8a"
+                "android-arm" -> "armeabi-v7a"
+                "android-x64" -> "x86_64"
+                else -> null
+            }
+            if (abi != null) {
+                ndk { abiFilters.clear(); abiFilters.add(abi) }
+            }
+        }
     }
 
     buildTypes {

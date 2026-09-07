@@ -38,22 +38,6 @@ STARTED=$(date +%s)
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 die() { printf '\n\033[31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
 
-say "Gates"
-# Captured rather than piped, for the pipefail reason documented under "Verifying" below, and
-# because the actual counts are worth printing: "316 passed" tells you something that a silent
-# success does not.
-analyze_out="$(flutter analyze 2>&1 || true)"
-case "$analyze_out" in
-  *"No issues found"*) printf '  analyzer clean\n' ;;
-  *) printf '%s\n' "$analyze_out" | tail -20; die "analyzer is not clean" ;;
-esac
-
-test_out="$(flutter test 2>&1 || true)"
-case "$test_out" in
-  *"All tests passed"*) printf '  %s\n' "$(printf '%s' "$test_out" | tail -1 | sed 's/^[0-9:]* //')" ;;
-  *) printf '%s\n' "$test_out" | tail -25; die "tests are not passing" ;;
-esac
-
 say "Preparing a build tree outside OneDrive"
 # WHY BUILD ELSEWHERE, and why THIS way rather than the way I tried first.
 #
@@ -86,6 +70,43 @@ if [[ "$APP_DIR" == *OneDrive* ]]; then
 else
   printf '  repo is outside OneDrive — building in place\n'
 fi
+
+# ── THE GATES RUN HERE, NOT BEFORE THE COPY, AND ONEDRIVE TAUGHT THAT TWICE IN ONE HOUR ─────
+#
+# `flutter analyze` and `flutter test` used to run above, in the repository itself. They failed
+# twice running, on two different paths, both inside the synced tree:
+#
+#   Flutter failed to write to .dart_tool/hooks_runner/objective_c/.../stdout.txt
+#   Flutter failed to delete a directory at build/unit_test_assets
+#
+# and both times this script printed "FAILED: tests are not passing" — which was a lie. The same
+# suite passed immediately in the work tree. A gate that fails for a reason unrelated to the
+# thing it guards is worse than no gate at all: it teaches whoever runs it to rerun until green,
+# which is exactly the habit that lets a real failure through.
+#
+# The argument for the copy below applies to the gates as squarely as it does to the compile.
+# `flutter test` writes build/unit_test_assets and .dart_tool/hooks_runner just as Gradle writes
+# build/app, and OneDrive holds handles on both. So the copy happens first and everything that
+# touches a derived directory happens on the far side of it.
+#
+# Nothing about what is verified changes: the same analyzer over the same source and the same
+# suite over the same tests. The work tree is a byte-for-byte tar of the repository taken
+# seconds earlier.
+say "Gates"
+# Captured rather than piped, for the pipefail reason documented under "Verifying" below, and
+# because the actual counts are worth printing: "316 passed" tells you something that a silent
+# success does not.
+analyze_out="$(flutter analyze 2>&1 || true)"
+case "$analyze_out" in
+  *"No issues found"*) printf '  analyzer clean\n' ;;
+  *) printf '%s\n' "$analyze_out" | tail -20; die "analyzer is not clean" ;;
+esac
+
+test_out="$(flutter test 2>&1 || true)"
+case "$test_out" in
+  *"All tests passed"*) printf '  %s\n' "$(printf '%s' "$test_out" | tail -1 | sed 's/^[0-9:]* //')" ;;
+  *) printf '%s\n' "$test_out" | tail -25; die "tests are not passing" ;;
+esac
 
 say "Building"
 # A OneDrive lock is transient: it releases once the upload finishes. Clearing the directories
@@ -280,12 +301,43 @@ verify_apk() {
     *) die "$label: launcher label is not Nivora" ;;
   esac
 
-  # 3. Real phones are ARM. A build missing arm64-v8a installs on nothing anyone owns — and for
-  #    the split build this is also the check that it really is the arm64 one.
-  case "$badging" in
-    *"arm64-v8a"*) ;;
-    *) die "$label: arm64-v8a is missing" ;;
+  # 3. EVERY ABI DIRECTORY IN THE FILE MUST CARRY libflutter.so.
+  #
+  #    The old check was `case "$badging" in *"arm64-v8a"*)` — a substring test, which passes on
+  #    an APK containing arm64-v8a and says nothing about what else is in there. That gap shipped
+  #    a real bug, and unzipping the artifact is what found it:
+  #
+  #      lib/arm64-v8a/    libapp.so  libdartjni.so  libdatastore_shared_counter.so  libflutter.so
+  #      lib/armeabi-v7a/             libdartjni.so  libdatastore_shared_counter.so
+  #      lib/x86_64/                  libdartjni.so  libdatastore_shared_counter.so
+  #
+  #    `--target-platform android-arm64` limits what FLUTTER compiles. It does not limit what
+  #    Gradle packages out of plugin AARs, so two plugin libraries shipped for all three ABIs and
+  #    created armeabi-v7a and x86_64 directories with no engine in them.
+  #
+  #    Android picks the primary ABI by looking for a matching lib/ directory. On an
+  #    armeabi-v7a-only handset — still ordinary in India's budget segment, which is this
+  #    product's market — it finds one, installs happily, and then dies on
+  #    System.loadLibrary("flutter") the moment FlutterJNI starts. The user watches the app
+  #    install and then refuse to open: the exact failure this repo already fought once.
+  #
+  #    Play is unaffected, because it splits the AAB and the AAB is complete. This only ever bit
+  #    the copy sent by download link, which is the one the script designates as primary.
+  #
+  #    So the invariant is not "arm64 is present" but "no ABI is present WITHOUT an engine",
+  #    which is the thing that actually has to be true for the file to launch.
+  abis="$(printf '%s' "$entries" | grep -o 'lib/[a-z0-9_-]*/' | sort -u | cut -d/ -f2)"
+  [ -n "$abis" ] || die "$label: no native libraries at all"
+  case "$abis" in
+    *arm64-v8a*) ;;
+    *) die "$label: arm64-v8a is missing — this installs on nothing anyone owns" ;;
   esac
+  for abi in $abis; do
+    case "$entries" in
+      *"lib/$abi/libflutter.so"*) ;;
+      *) die "$label: lib/$abi/ ships without libflutter.so — Android will select $abi on a $abi device, install, and then crash on System.loadLibrary. Add ndk { abiFilters += \"arm64-v8a\" } so the stray directory is not packaged." ;;
+    esac
+  done
 
   # 4. The typeface must ship. google_fonts fetches at runtime by default, and an app that
   #    downloads its own font renders as the system font on a first launch with no network.
