@@ -22,4 +22,4 @@
   must then be set explicitly in values-v31/ to keep Android 12 from falling back to white.
 -->
 <color xmlns:android="http://schemas.android.com/apk/res/android"
-    android:color="@color/nivora_ground" />
+    android:color="@color/nivora_ground_light" />

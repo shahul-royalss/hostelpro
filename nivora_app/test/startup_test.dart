@@ -81,11 +81,22 @@ void main() {
     // an initialisation which never finishes leaves the BRAND on screen rather than Android's
     // flat window.
     //
-    // Both halves of the lockup, because the N alone is also what is on screen at frame zero
+    // Both halves of the lockup, because the mark alone is also what is on screen at frame zero
     // of a working opening — finding only that would pass on a splash whose second phase never
-    // ran. `findsWidgets` rather than `findsOneWidget`: IVORA is inside a zero-width clip on
-    // this frame, which keeps it in the tree.
-    expect(find.text('N'), findsOneWidget);
+    // ran. IVORA is inside a zero-width clip on this frame, which keeps it in the tree.
+    //
+    // The N is an Image now rather than a Text: it is the real drawn mark, a house with an
+    // arched door and one lit window, not the letter set in Inter. Asserting the asset PATH is
+    // the point — a splash that silently lost the artwork and fell back to a letter would
+    // otherwise still pass.
+    // Unwrapped, because `cacheHeight:` on the Image wraps the provider in a ResizeImage —
+    // which is the decode-at-display-size optimisation and would otherwise make this cast
+    // throw. The nesting is the thing being relied on, so the test says so rather than
+    // reaching for `toString().contains`.
+    final mark = tester.widget<Image>(find.byType(Image));
+    final provider = mark.image;
+    final asset = provider is ResizeImage ? provider.imageProvider : provider;
+    expect((asset as AssetImage).assetName, 'assets/brand_mark.png');
     expect(find.text('IVORA'), findsOneWidget);
     // The whole point: an initialisation that never finishes leaves the BRAND on screen, not
     // Android's flat window. Before this change there was no frame at all to hold it.

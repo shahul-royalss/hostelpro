@@ -22,6 +22,10 @@
           flash for the same structural reason. Both are pinned to the one value so there is
           no configuration in which the handoff shows. See values/styles.xml.
         -->
-        <item name="android:windowBackground">@color/nivora_ground</item>
+        <!-- The LIGHT ground, deliberately, in the night-mode file. main.dart pins
+             themeMode.light, so a phone in dark mode still opens a light app — and a launch
+             window that honoured the system setting would be the only dark frame in the whole
+             session. See values/colors.xml. -->
+        <item name="android:windowBackground">@color/nivora_ground_light</item>
     </style>
 </resources>

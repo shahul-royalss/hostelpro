@@ -9,10 +9,20 @@
       they did not.
     -->
     <color name="nivora_ground">#0B0D0F</color>
-    <!-- The Flutter light theme's ground (NivoraColors.background, #FFF8F3). The launch
-         window must match the scheme the app is about to draw or there is a flash on
-         every cold start; values-night/ uses nivora_ground for the same reason. -->
-    <color name="nivora_ground_light">#FFF8F3</color>
+    <!--
+      The Flutter light theme's ground, NivoraColors.background — and it is #EEF0F8 now, not
+      #FFF8F3. Two things moved and this had to move with them:
+
+        1. The light palette was redrawn off the gold seed onto hue 262, so the canvas changed
+           from a warm #FFF8F3 to the cool #EEF0F8. This file kept the old value and nothing
+           failed, because a launch-window mismatch is a 200ms flash rather than an error.
+        2. The app is themeMode.light now, so this colour is what EVERY phone sees at launch —
+           values-night/ points here too rather than at the dark ground.
+
+      The chain is one colour end to end: launcher plate, launch window, splash, first screen.
+      If NivoraColors.background changes again, change this in the same commit.
+    -->
+    <color name="nivora_ground_light">#EEF0F8</color>
 
     <!-- theme_color from app/manifest.ts -->
     <color name="colorPrimary">#F6F4EF</color>

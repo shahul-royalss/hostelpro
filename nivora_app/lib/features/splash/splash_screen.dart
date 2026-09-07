@@ -120,10 +120,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     ref.watch(splashGateProvider);
 
     return Scaffold(
-      // NOT scaffoldBackgroundColor. This screen is the brand ground in both themes because the
-      // native window behind it is, and a light-mode splash would flash white before the first
-      // Flutter frame lands on it.
-      backgroundColor: NivoraColors.ground,
+      // THE LIGHT GROUND, and it is the same value at every step of the launch.
+      //
+      // This painted NivoraColors.ground (#0B0D0F) to match the native window behind it. Both
+      // premises changed on the same day: the app is themeMode.light now, and the light canvas
+      // was redrawn to #EEF0F8. A near-black splash in a light-only app is a flash from dark to
+      // light on every single launch, and it was going to be the first thing anyone saw.
+      //
+      // The chain is now one colour end to end — launcher plate, launch window (values/ AND
+      // values-night/), this screen, and the first real screen. Nothing blinks.
+      backgroundColor: NivoraColors.background,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -148,9 +154,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     height: IconSize.md,
                     child: CircularProgressIndicator(
                       strokeWidth: Strokes.glyph,
-                      // The metal, named rather than taken from the scheme: this ground never
-                      // follows the theme, and gold measures 8.70:1 on it.
-                      color: NivoraColors.gold,
+                      // The brand ink. Gold was right on the old near-black ground and is
+                      // 2.24:1 on this one — the same arithmetic that moved the brand off gold
+                      // in the first place. See NivoraColors.gold.
+                      color: NivoraColors.brandInk,
                     ),
                   ),
                 ),
@@ -163,7 +170,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 }
 
-/// The N, and the letters that come out of it.
+/// The mark, and the letters that come out of it.
 ///
 /// ── HOW "OUT OF THE N" IS ACTUALLY DONE ───────────────────────────────────────────────────
 ///
@@ -188,11 +195,15 @@ class _Lockup extends StatelessWidget {
   final double unfold;
   final double recentre;
 
+  /// The mark's drawn height. The asset is 781x510, so this gives it about 107 of width.
+  static const double _markHeight = 70;
+
   static const double _fontSize = 44;
   static const _style = TextStyle(
     fontSize: _fontSize,
     fontWeight: FontWeight.w800,
-    color: NivoraColors.onSurface,
+    // The light theme's ink: this screen is the light ground now, not the brand dark.
+    color: NivoraColors.textPrimary,
     height: 1,
     // The tracking is the whole difference between a logo and a word. 6 is wide enough to read
     // as a mark at this size without the letters losing their relationship to each other.
@@ -212,13 +223,32 @@ class _Lockup extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // THE REAL MARK, not a letter N set in Inter.
+          //
+          // I built this with a typographic N first and it was wrong: NIVORA's N is a drawn
+          // thing — a house with an arched door and one lit amber window, which is the whole
+          // idea of the company in one glyph — and Inter's N says none of that. The asset is
+          // assets/brand_mark.png, cut from nivoralogo.png by trimming the padding and taking
+          // everything above the largest run of transparent rows, which is the same measured
+          // split scripts/gen-icons.mjs uses to make the launcher icon. So the mark here and
+          // the icon the user just tapped are the same artwork.
           Opacity(
             opacity: markOpacity,
             child: Transform.scale(
               scale: markScale,
-              child: const Text('N', style: _style),
+              child: Image.asset(
+                'assets/brand_mark.png',
+                height: _markHeight,
+                // The mark is drawn at 781x510 and shown at 70 tall on a 3x screen, so this
+                // decodes at the size it is painted instead of holding a 781px bitmap for a
+                // 107px slot.
+                cacheHeight: (_markHeight * 3).round(),
+                filterQuality: FilterQuality.high,
+              ),
             ),
           ),
+          // A hair of air between the mark and the letters. The mark's own artwork has none.
+          const SizedBox(width: Space.xs),
           ClipRect(
             child: Align(
               alignment: Alignment.centerLeft,

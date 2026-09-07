@@ -143,6 +143,10 @@ flutter:
   assets:
     - google_fonts/
 
+    # THE BRAND MARK. Cut from nivoralogo.png by the same measured split scripts/gen-icons.mjs
+    # uses for the launcher icon, so the splash and the app icon are one artwork.
+    - assets/brand_mark.png
+
     # THE EMPTY-STATE ARTWORK. Four wordless PNGs — see lib/shared/illustrations.dart for what
     # is true of every file in here. The directory is declared rather than the four paths so a
     # fifth drawing is one file to add and nothing to remember; the constants in EmptyArt are
