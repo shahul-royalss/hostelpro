@@ -312,7 +312,18 @@ class _RoleShellState extends ConsumerState<RoleShell> {
     return _placeholder(t, tabs);
   }
 
-  /// The "not built yet" page, for any tab slot no feature has claimed.
+  /// The safety net, for any tab slot no feature has claimed.
+  ///
+  /// UNREACHABLE TODAY, and deliberately kept. All five roles resolve their own bodies — owner
+  /// and student through their sections, warden, manager and super admin through their own
+  /// shells — so nothing currently falls here. It stays because a sixth tab added to the bar
+  /// before its screen exists should land somewhere honest rather than on a blank Scaffold that
+  /// looks finished.
+  ///
+  /// THE COPY IS WRITTEN FOR WHOEVER SEES IT, which is what changed. It used to end "see the
+  /// migration status in the repo" — a sentence addressed to me, on a screen only a customer
+  /// can reach. If this ever draws in front of one it should read as a section on its way, not
+  /// as a confession.
   Widget _placeholder(ThemeData t, List<({String label, IconData icon})> tabs) {
     return Center(
       child: Padding(
@@ -326,8 +337,8 @@ class _RoleShellState extends ConsumerState<RoleShell> {
             ),
             const SizedBox(height: Space.xs),
             Text(
-              'This screen is not built yet. The shell, theme, routing and\n'
-              'authentication are — see the migration status in the repo.',
+              'This section is on its way. Everything else in the app is ready to use — '
+              'pick another tab below.',
               style: t.textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),

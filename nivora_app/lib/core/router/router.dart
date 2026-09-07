@@ -222,10 +222,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(path: entry.key, builder: (context, _) => entry.value(context)),
     ],
 
-    errorBuilder: (_, state) => _Placeholder(
-      title: 'Not found',
-      detail: state.uri.toString(),
-    ),
+    // The raw URI belongs in the log, not on the screen. Somebody who lands here followed a
+    // stale link or a deep link into a screen that has moved; showing them "/owner/pg/3f2a…"
+    // tells them nothing and reads as a crash. The path still reaches the console.
+    errorBuilder: (_, state) {
+      debugPrint('no route for ${state.uri}');
+      return const _Placeholder(
+        title: 'That page has moved',
+        detail: 'Use the tabs at the bottom to get back to where you were.',
+      );
+    },
   );
 });
 
