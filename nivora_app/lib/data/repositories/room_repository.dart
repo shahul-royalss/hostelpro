@@ -35,6 +35,9 @@ abstract interface class RoomLayoutWrites {
     String? roomNumber,
     int? capacity,
   });
+
+  /// See [RoomRepository.setFloorName].
+  Future<void> setFloorName({required String floorId, String? name});
 }
 
 /// Rooms, beds and who is in them.
@@ -140,6 +143,29 @@ final class RoomRepository extends Repository implements RoomLayoutWrites {
         return Room.fromJson(row);
       }, unresolved: 'Reload the room before changing it again — a capacity change adds or '
           'removes bed rows, so the room may already look different.');
+
+  /// WHAT A FLOOR IS CALLED. public.set_floor_name.
+  ///
+  /// A NAME, NOT A NUMBER. floors.floor_number stays the identity — ow_set_floor_plan reasons in
+  /// 1..N and room numbers are derived from it — and this is a label on top of it: "Ground
+  /// floor", "Terrace", "Girls' wing". [name] null or blank clears it and the screens fall back
+  /// to "Floor N" (see floorLabel).
+  ///
+  /// AN RPC AND NOT AN UPDATE, because public.floors has no update policy for anybody but the
+  /// Super Admin — floors are created and destroyed by ow_set_floor_plan and nothing else may
+  /// touch them. set_floor_name is SECURITY DEFINER and admits the hostel's owner or an active
+  /// warden (app.can_edit_layout), which is narrower than granting UPDATE on the table would be:
+  /// this can only ever change the one column.
+  @override
+  Future<void> setFloorName({required String floorId, String? name}) => guardWrite(
+        () async {
+          await db.rpc('set_floor_name', params: {
+            'p_floor_id': floorId,
+            'p_name': name,
+          });
+        },
+        unresolved: 'Open the layout again to see whether the floor was renamed.',
+      );
 
   /// THE OWNER MAPS THE BUILDING: how many floors, how many rooms on each, and how many beds
   /// the rooms this call CREATES are given. public.ow_set_floor_plan.

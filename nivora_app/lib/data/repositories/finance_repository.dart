@@ -21,6 +21,7 @@ final class FinanceRepository extends Repository {
     int page = 0,
     int pageSize = PagedResult.defaultPageSize,
     ExpenseCategory? category,
+    ExpenseKind? kind,
     DateTime? from,
     DateTime? to,
   }) =>
@@ -32,6 +33,7 @@ final class FinanceRepository extends Repository {
             .eq('hostel_id', hostelId)
             .isFilter('deleted_at', null);
         if (category != null) query = query.eq('category', category.wire);
+        if (kind != null) query = query.eq('kind', kind.wire);
         if (from != null) query = query.gte('date', toDateWire(from));
         if (to != null) query = query.lte('date', toDateWire(to));
 
@@ -152,6 +154,43 @@ final class FinanceRepository extends Repository {
         });
         return rpcRows(data, 'rpc_daily_finance')
             .map(FinanceDay.fromJson)
+            .toList(growable: false);
+      });
+
+  /// Month totals for the last [months] months including this one, split by kind and category.
+  ///
+  /// public.rpc_expense_months, SECURITY INVOKER — expenses_select is what decides whether the
+  /// caller sees anything, exactly as it does for the list above. The server clamps [months] to
+  /// 1..24, so a client cannot ask it to scan a decade.
+  Future<List<ExpenseMonthSlice>> expenseMonths({
+    required String hostelId,
+    int months = 6,
+  }) =>
+      guard(() async {
+        final data = await db.rpc('rpc_expense_months', params: {
+          'p_hostel_id': hostelId,
+          'p_months': months,
+        });
+        return rpcRows(data, 'rpc_expense_months')
+            .map(ExpenseMonthSlice.fromJson)
+            .toList(growable: false);
+      });
+
+  /// Day totals for one month, split by kind — the day-to-day line.
+  ///
+  /// [periodMonth] is `YYYY-MM`. The RPC validates the shape with a regex and returns nothing
+  /// for anything else, rather than throwing: a malformed month is an empty chart, not a crash.
+  Future<List<ExpenseDaySlice>> expenseDays({
+    required String hostelId,
+    required String periodMonth,
+  }) =>
+      guard(() async {
+        final data = await db.rpc('rpc_expense_days', params: {
+          'p_hostel_id': hostelId,
+          'p_period_month': periodMonth,
+        });
+        return rpcRows(data, 'rpc_expense_days')
+            .map(ExpenseDaySlice.fromJson)
             .toList(growable: false);
       });
 }

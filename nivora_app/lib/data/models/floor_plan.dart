@@ -14,6 +14,7 @@ class FloorPlanEntry {
     required this.floor,
     required this.rooms,
     required this.bedsPerNewRoom,
+    this.name,
   });
 
   /// 1-based, and contiguous across the whole plan. ow_set_floor_plan answers a gap with
@@ -35,7 +36,16 @@ class FloorPlanEntry {
   /// every call site that reads this field should have to say the longer, truer word.
   final int bedsPerNewRoom;
 
-  /// The wire shape: `{"floor":1,"rooms":4,"beds":3}`.
+  /// WHAT THIS FLOOR SHOULD BE CALLED, or null to leave whatever it is called alone.
+  ///
+  /// ONLY EVER SET FOR A FLOOR THAT DOES NOT EXIST YET. An existing floor is renamed
+  /// immediately through public.set_floor_name, the same way a room is renamed one at a time —
+  /// so a plan composed before somebody else renamed a floor cannot travel back in time and
+  /// undo them. ow_set_floor_plan reads the key only when it is PRESENT, and [toJson] omits it
+  /// when null, which is what makes that true on the wire rather than only in this comment.
+  final String? name;
+
+  /// The wire shape: `{"floor":1,"rooms":4,"beds":3}`, plus `"name"` when there is one.
   ///
   /// The key is `beds`, which is p_plan's vocabulary rather than this class's. Renaming it to
   /// match the Dart field would not fail to compile and would not fail a round trip either —
@@ -44,6 +54,9 @@ class FloorPlanEntry {
         'floor': floor,
         'rooms': rooms,
         'beds': bedsPerNewRoom,
+        // Present-and-null clears a name server-side; ABSENT leaves it alone. Only a floor
+        // being created carries one, so the key is omitted rather than sent as null.
+        if (name != null) 'name': name,
       };
 
   /// [floor] is deliberately absent. A plan is a contiguous 1..N list and renumbering one line
@@ -53,6 +66,17 @@ class FloorPlanEntry {
         floor: floor,
         rooms: rooms ?? this.rooms,
         bedsPerNewRoom: bedsPerNewRoom ?? this.bedsPerNewRoom,
+        name: name,
+      );
+
+  /// The same line with a different name. SEPARATE FROM [copyWith] because null is a value
+  /// here — "no name" — and a `String? name` parameter on copyWith could not tell that apart
+  /// from "leave it as it was".
+  FloorPlanEntry withName(String? value) => FloorPlanEntry(
+        floor: floor,
+        rooms: rooms,
+        bedsPerNewRoom: bedsPerNewRoom,
+        name: value,
       );
 
   @override
@@ -60,10 +84,11 @@ class FloorPlanEntry {
       other is FloorPlanEntry &&
       other.floor == floor &&
       other.rooms == rooms &&
-      other.bedsPerNewRoom == bedsPerNewRoom;
+      other.bedsPerNewRoom == bedsPerNewRoom &&
+      other.name == name;
 
   @override
-  int get hashCode => Object.hash(floor, rooms, bedsPerNewRoom);
+  int get hashCode => Object.hash(floor, rooms, bedsPerNewRoom, name);
 
   @override
   String toString() => 'FloorPlanEntry(floor: $floor, rooms: $rooms, beds: $bedsPerNewRoom)';

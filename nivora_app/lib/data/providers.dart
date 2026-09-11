@@ -798,3 +798,44 @@ final saStatsProvider = FutureProvider.autoDispose<SaStats?>((ref) {
   holdForSession(ref);
   return ref.watch(dashboardRepositoryProvider).superAdminStats();
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPENSE STATISTICS — the month-by-month charts
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// RECORDS AS FAMILY KEYS, NOT CLASSES. A Riverpod family caches per key and therefore needs
+/// value equality; Dart records have it structurally, so `(hostelId: h, months: 6)` is the same
+/// key on every rebuild without a hand-written == and hashCode that can drift from the fields.
+typedef ExpenseStatsQuery = ({String hostelId, int months});
+typedef ExpenseDaysQuery = ({String hostelId, String periodMonth});
+
+/// Month totals, split by kind and category. public.rpc_expense_months.
+///
+/// Read by BOTH the owner and the manager, which is why it lives here rather than under either
+/// feature: the two see the same figures for the same PG, and a second copy of this query is
+/// how they would start disagreeing. RLS (expenses_select) is what decides that the owner and
+/// the manager are the only two who get an answer.
+final expenseMonthsProvider =
+    FutureProvider.autoDispose.family<List<ExpenseMonthSlice>, ExpenseStatsQuery>((ref, q) {
+  holdForSession(ref);
+  return ref.watch(financeRepositoryProvider).expenseMonths(
+        hostelId: q.hostelId,
+        months: q.months,
+      );
+});
+
+/// Day totals for one month. public.rpc_expense_days.
+final expenseDaysProvider =
+    FutureProvider.autoDispose.family<List<ExpenseDaySlice>, ExpenseDaysQuery>((ref, q) {
+  holdForSession(ref);
+  return ref.watch(financeRepositoryProvider).expenseDays(
+        hostelId: q.hostelId,
+        periodMonth: q.periodMonth,
+      );
+});
+
+/// Both charts for one PG, after a manager records something.
+void refreshExpenseStats(WidgetRef ref) {
+  ref.invalidate(expenseMonthsProvider);
+  ref.invalidate(expenseDaysProvider);
+}

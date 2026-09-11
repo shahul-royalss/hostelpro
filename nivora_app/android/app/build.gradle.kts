@@ -6,6 +6,29 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+/*
+ * FIREBASE, IF THIS CHECKOUT HAS IT.
+ *
+ * The Google Services plugin reads android/app/google-services.json and fails the build when it
+ * is absent. That file is not a secret — it ships inside the APK — but it belongs to whoever
+ * owns the Play listing, so it is gitignored, and a fresh clone (or CI) has no copy. Applying
+ * the plugin unconditionally would mean nobody but the account holder could build the app at
+ * all.
+ *
+ * So it is applied only when the file is there. Without it the app still builds and still runs:
+ * Firebase.initializeApp() is guarded in lib/core/notify/ and push simply stays off, while every
+ * notification is still written to public.notifications and still visible in the app.
+ *
+ * `apply(plugin = ...)` rather than a `plugins {}` entry, because the plugins DSL is declarative
+ * and cannot take an `if`. The version is pinned in settings.gradle.kts with `apply false`.
+ */
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    logger.lifecycle("Nivora: google-services.json found - Firebase Cloud Messaging is enabled.")
+} else {
+    logger.lifecycle("Nivora: no google-services.json - building WITHOUT push notifications.")
+}
+
 
 /*
  * Release signing.

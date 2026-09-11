@@ -65,22 +65,38 @@ dependencies:
   # range cannot resolve offline) and the R8 keeps in android/app/proguard-rules.pro (the SDK
   # builds its payment screens reflectively and is blank without them).
   razorpay_flutter: ^1.4.5
-  # firebase_core / firebase_messaging ARE DELIBERATELY ABSENT, and were removed rather than
-  # left in place, because they could never have worked:
+  # ── PUSH NOTIFICATIONS, ADDED 2026-09-12 IN THE ORDER THE REMOVAL NOTE PRESCRIBED ────────
   #
-  #   * ZERO Dart files referenced either package — nothing called Firebase.initializeApp(),
-  #     nothing asked for an FCM token, nothing registered a message handler;
-  #   * android/app/google-services.json was ABSENT, without which initializeApp() throws;
-  #   * the com.google.gms.google-services Gradle plugin was never applied.
+  # These two were removed once before, and the note left behind said exactly how to bring them
+  # back: "create a Firebase project, put its google-services.json in android/app/, apply the
+  # google-services plugin, add both packages back, then write the code that asks for a token and
+  # a server path that sends to it. The packages are the LAST step, not the first."
   #
-  # So this was several MB of native library that no code path could reach — and worse than dead
-  # weight: shipping the FCM SDK while the Play Data Safety form declares no device identifiers
-  # is an inconsistency a reviewer can see in the manifest merge.
+  # The server path exists (supabase/functions/push-send, and the trigger that calls it), the
+  # client code exists (lib/core/notify/), and the Gradle plugin is applied CONDITIONALLY — only
+  # when android/app/google-services.json is present. So the state the removal note warned about
+  # — several MB of native library no code path can reach — is not the state this is in: the only
+  # missing piece is the project file, which belongs to whoever owns the Play listing, and the app
+  # runs unchanged without it (Firebase.initializeApp is guarded and push simply stays off).
   #
-  # TO ADD REAL PUSH LATER, in this order: create a Firebase project, put its google-services.json
-  # in android/app/, apply the google-services plugin, add both packages back, then write the code
-  # that asks for a token and a server path that sends to it. The packages are the LAST step, not
-  # the first — putting them back alone reproduces exactly the state just removed.
+  # DATA SAFETY: the FCM registration token is a device identifier and is declared as one —
+  # docs/data-safety.md §3.5. FCM does not pull in play-services-ads-identifier (Analytics does,
+  # and Analytics is deliberately absent), and the manifest removes AD_ID explicitly.
+  firebase_core: ^4.14.0
+  firebase_messaging: ^16.6.0
+
+  # Android does NOT show an FCM notification while the app is in the foreground, and it drops any
+  # notification whose channel does not exist — silently, with nothing in logcat naming the cause.
+  # This package creates the `nivora_default` channel at startup (the same id push-send sends to)
+  # and draws the banner for messages that arrive while somebody is looking at the app.
+  flutter_local_notifications: ^22.3.0
+
+  # POST_NOTIFICATIONS is a runtime permission from Android 13, and CAMERA became mandatory the
+  # moment the manifest declared it: ACTION_IMAGE_CAPTURE throws SecurityException for an app that
+  # holds the declaration without the grant. Both are asked for in words first — see
+  # lib/core/notify/ and lib/data/capture.dart.
+  permission_handler: ^13.0.2
+
   share_plus: ^13.3.0
   image_picker: ^1.2.3
 

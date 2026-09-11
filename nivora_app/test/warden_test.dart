@@ -523,6 +523,11 @@ final class _FakeRoomWrites implements RoomLayoutWrites {
   }) async =>
       throw StateError('a warden has no route to the floor plan');
 
+  /// The warden reaches the layout editor now, but this fake stands in for the ROOM sheet;
+  /// renaming a floor has its own coverage in owner_floor_plan_test.dart.
+  @override
+  Future<void> setFloorName({required String floorId, String? name}) async {}
+
   @override
   Future<Room> updateRoom({
     required String roomId,

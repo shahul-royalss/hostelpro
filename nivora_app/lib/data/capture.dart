@@ -4,6 +4,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+import 'models/failure.dart';
 
 /// PICKING AN IMAGE, ONCE, FOR THE WHOLE APP.
 ///
@@ -98,8 +101,41 @@ final class PluginDocumentCapture implements DocumentCapture {
 
   final ImagePicker _picker;
 
+  /// THE CAMERA PERMISSION IS NOW MANDATORY, AND DECLARING IT IS WHAT MADE IT SO.
+  ///
+  /// Until 2026-09-12 this app did not declare `android.permission.CAMERA`, and it did not need
+  /// to: `ACTION_IMAGE_CAPTURE` hands the job to the system camera app, which holds its own
+  /// permission. The manifest declares it now — the product owner asked for the app to ask —
+  /// and Android's rule is the reverse of the intuitive one: an app that DECLARES the permission
+  /// without HOLDING it gets a SecurityException from that same intent. Declaring it is what
+  /// creates the obligation.
+  ///
+  /// So this asks first. A refusal becomes an [AccessDeniedFailure], which is what the callers
+  /// already render: register_student_sheet.dart says out loud that anything the plugin throws
+  /// "becomes the same snackbar every other failure uses", and this is now one of those things.
+  ///
+  /// THE GALLERY IS NOT GATED, deliberately. It goes through Android's photo picker, which
+  /// returns one chosen image and needs no permission at all — asking for READ_MEDIA_IMAGES
+  /// would trigger Play's Photo and Video Permissions declaration for a capability this app
+  /// does not use. See the manifest.
+  static Future<void> _requireCamera() async {
+    final status = await Permission.camera.request();
+    if (status.isGranted || status.isLimited) return;
+    throw AccessDeniedFailure(
+      status.isPermanentlyDenied
+          // permission_handler cannot distinguish "denied twice" from "blocked by policy", and
+          // both end the same way: the system dialog will not appear again, so the only route
+          // left is Settings. Saying which screen beats "permission denied".
+          ? 'Nivora cannot open the camera. Turn it on in Settings → Apps → Nivora → '
+              'Permissions → Camera, then try again. You can also choose an existing photo.'
+          : 'Nivora needs the camera to take this photo. You can also choose an existing photo '
+              'instead.',
+    );
+  }
+
   @override
   Future<CapturedDocument?> pick(CaptureSource source) async {
+    if (source == CaptureSource.camera) await _requireCamera();
     final file = await _picker.pickImage(
       source: source == CaptureSource.camera ? ImageSource.camera : ImageSource.gallery,
       maxWidth: 1600,

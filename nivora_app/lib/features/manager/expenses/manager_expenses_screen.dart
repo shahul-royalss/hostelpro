@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/finance/expense_stats_screen.dart';
 import '../../../shared/glass/glass.dart';
 import '../../common/refresh.dart';
 import '../data/manager_providers.dart';
@@ -58,15 +59,58 @@ class ManagerExpensesScreen extends ConsumerWidget {
           ? 'Everything the hostel has spent'
           : 'Entries booked by hand — not rent',
       actions: [
-        IconButton(
-          tooltip: direction == MoneyDirection.out ? 'Record an expense' : 'Record money in',
-          // 16 inside a 32dp button, which is the size the design draws a header glyph at
-          // (4:454) — not 24 inside 40.
-          icon: const Icon(Icons.add_rounded, size: IconSize.md),
-          onPressed: () => direction == MoneyDirection.out
-              ? showRecordExpenseSheet(context, hostelId: hostelId)
-              : showRecordRevenueSheet(context, hostelId: hostelId),
-        ),
+        // The charts are about EXPENSES, so the way in sits on the expense side of the switch.
+        // It opens the same screen the owner opens from More: one set of figures, one widget,
+        // no second place for them to drift.
+        if (direction == MoneyDirection.out)
+          IconButton(
+            tooltip: 'Month by month',
+            icon: const Icon(Icons.bar_chart_rounded, size: IconSize.md),
+            onPressed: () => Navigator.of(context).push(ExpenseStatsScreen.route(hostelId)),
+          ),
+        // TWO MENU OPTIONS FOR MONEY OUT, one for money in.
+        //
+        // The product owner asked for exactly this split: "one time monthly expense" and "day
+        // to day expenses". They are two different acts — a bill that belongs to a month, and
+        // a purchase that belongs to a day — and the sheet asks a different question for each,
+        // so the choice is made before it opens rather than as a toggle inside it.
+        //
+        // Revenue keeps a plain +: public.revenues has no kind column, and offering the same
+        // menu there would be a control that writes nowhere.
+        if (direction == MoneyDirection.out)
+          PopupMenuButton<ExpenseKind>(
+            tooltip: 'Record an expense',
+            // 16 inside a 32dp button, the size the design draws a header glyph at (4:454).
+            icon: const Icon(Icons.add_rounded, size: IconSize.md),
+            onSelected: (kind) =>
+                showRecordExpenseSheet(context, hostelId: hostelId, kind: kind),
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: ExpenseKind.monthly,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.event_repeat_rounded),
+                  title: Text('Monthly expense'),
+                  subtitle: Text('Rent, salaries, a bill — once for a month'),
+                ),
+              ),
+              PopupMenuItem(
+                value: ExpenseKind.daily,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.today_rounded),
+                  title: Text('Day-to-day expense'),
+                  subtitle: Text('Vegetables, gas, a repair'),
+                ),
+              ),
+            ],
+          )
+        else
+          IconButton(
+            tooltip: 'Record money in',
+            icon: const Icon(Icons.add_rounded, size: IconSize.md),
+            onPressed: () => showRecordRevenueSheet(context, hostelId: hostelId),
+          ),
       ],
       child: direction == MoneyDirection.out
           ? _ExpenseList(hostelId: hostelId)
@@ -114,7 +158,8 @@ class _ExpenseList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final category = ref.watch(expenseFilterProvider);
-    final query = ExpenseQuery(hostelId: hostelId, category: category);
+    final kind = ref.watch(expenseKindFilterProvider);
+    final query = ExpenseQuery(hostelId: hostelId, category: category, kind: kind);
     final page = ref.watch(managerExpensesProvider(query));
 
     return PagedList<Expense>(
@@ -134,7 +179,8 @@ class _ExpenseList extends ConsumerWidget {
             ? 'Nothing booked yet'
             : 'Nothing under ${category.label.toLowerCase()}',
         detail: category == null
-            ? 'Tap + to record the first expense. It shows on the trend the same day.'
+            ? 'Tap + and choose a monthly or a day-to-day expense. It shows on the charts the '
+                'same day.'
             : 'Clear the filter to see the rest of the book.',
         // The ledger's own green on the glyph — identity, not a verdict, the same green the
         // wallet wears on the Expenses pill and on the two Record buttons. Only on the
@@ -160,6 +206,36 @@ class _ExpenseFilters extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _Direction(),
+        const SizedBox(height: Space.sm),
+        // KIND FIRST, THEN CATEGORY. Two axes, narrowing different things: "what do the monthly
+        // bills come to" is a question about kind alone, and having to clear a category to ask
+        // it would be the filter fighting the question.
+        // A WRAP, NOT A ROW. Three chips do not fit 320dp at 2.0x text — the manager suite
+        // pumps exactly that — and a Row has no give: it overflows with the hazard stripe
+        // rather than dropping to a second line. The category row below solves the same
+        // problem by scrolling horizontally; this one has few enough chips to wrap.
+        //
+        // "All kinds", not "All": the category row already has an "All" chip, and two controls
+        // with the same word on one screen is a screen that cannot be described out loud.
+        Wrap(
+          spacing: Space.xs,
+          runSpacing: Space.xs,
+          children: [
+            ToggleChip(
+              label: 'All kinds',
+              selected: ref.watch(expenseKindFilterProvider) == null,
+              onSelected: (_) => ref.read(expenseKindFilterProvider.notifier).set(null),
+            ),
+            for (final k in ExpenseKind.values)
+              ToggleChip(
+                label: k.label,
+                selected: ref.watch(expenseKindFilterProvider) == k,
+                onSelected: (_) => ref
+                    .read(expenseKindFilterProvider.notifier)
+                    .set(ref.read(expenseKindFilterProvider) == k ? null : k),
+              ),
+          ],
+        ),
         const SizedBox(height: Space.sm),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -228,9 +304,17 @@ class _ExpenseRow extends StatelessWidget {
                 ),
                 const SizedBox(height: Space.xxs / 2),
                 Text(
-                  note == null || note.isEmpty
-                      ? shortDate(expense.date)
-                      : '${shortDate(expense.date)} · $note',
+                  // A MONTHLY EXPENSE IS DATED THE FIRST, and that day means nothing: the bill
+                  // belongs to the month. Printing "1 Sep" for it would invite somebody to
+                  // "correct" it. The kind is named on the row for the same reason the filter
+                  // exists — two bills of the same category can be different kinds.
+                  [
+                    if (expense.kind == ExpenseKind.monthly)
+                      'Monthly · ${monthTitle(expense.date)}'
+                    else
+                      shortDate(expense.date),
+                    if (note != null && note.isNotEmpty) note,
+                  ].join(' · '),
                   style: t.textTheme.labelSmall
                       ?.copyWith(color: context.tones.muted, letterSpacing: 0.2),
                   maxLines: 1,

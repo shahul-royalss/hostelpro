@@ -153,7 +153,7 @@ Future<void> _shootLayout(WidgetTester tester) async {
       key: key,
       child: MaterialApp(
         theme: NivoraTheme.light(),
-        home: const OwnerFloorPlanScreen(hostelId: _hostelId),
+        home: const FloorPlanScreen(hostelId: _hostelId),
       ),
     ),
   ));

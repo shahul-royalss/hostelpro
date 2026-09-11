@@ -10,14 +10,19 @@ import 'owner_payments_screen.dart';
 import 'owner_pg_list_screen.dart';
 import 'owner_providers.dart';
 import 'owner_students_screen.dart';
-import 'staff/owner_staff_screen.dart';
+import 'more/owner_more_screen.dart';
 import 'staff/staff_providers.dart';
 import '../../shared/motion/tab_swap.dart';
 
 /// The owner's five tab slots. features/shell/role_shell.dart owns the bar — Dashboard, PGs,
 /// Students, Payments, More — and this file supplies the bodies behind it via [OwnerSection].
 ///
-/// ── WHY STAFF IS UNDER "MORE" ────────────────────────────────────────────────────────────
+/// ── WHY STAFF IS UNDER "MORE" ────────────────────────────────────────────────
+///
+/// 2026-09-12: the second thing arrived, so this IS a menu now — [OwnerMoreScreen] — and
+/// the index stayed where it is, exactly as the note below said it would. Staff is one tap
+/// further than it was; Tasks, which the owner assigns and the manager works, is the other
+/// row.────────────
 ///
 /// The bar's five labels live in role_shell.dart and are shared with every other role, so this
 /// file cannot rename one. "More" was the only tab with nothing behind it, and staff accounts
@@ -39,7 +44,7 @@ Widget? ownerTabScreen(int index) => switch (index) {
   1 => const OwnerPgListScreen(),
   2 => const OwnerStudentsScreen(),
   3 => const OwnerPaymentsScreen(),
-  4 => const OwnerStaffScreen(),
+  4 => const OwnerMoreScreen(),
   _ => null,
 };
 

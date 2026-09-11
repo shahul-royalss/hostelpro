@@ -19,7 +19,7 @@
 | # | Requirement | Status |
 |---|---|---|
 | 1 | Target API level (API 36 required for new submissions from 31 Aug 2026) | **PASS** — `targetSdkVersion 36` |
-| 2 | Permissions minimal and justified | **PASS** — 5 entries, every one traced to a source; see §2 |
+| 2 | Permissions minimal and justified | **RE-VERIFY** — 7 entries after 2026-09-12 (POST_NOTIFICATIONS, CAMERA added); the dump in §2 predates them. Every entry is traced to a source; see §2 |
 | 3 | Signing key strength | **PASS** — RSA 2048, `CN=HostelPro, O=HostelPro, C=IN` |
 | 4 | Signature schemes | **PASS** — AAB is JAR-signed (`META-INF/HOSTELPR.RSA`), which is what Play requires; APK is v2 |
 | 5 | **16 KB page-size compatibility** (required from 1 Nov 2025) | **PASS** — 4 native libraries, all aligned ≥ 16 KB; see §3 |
@@ -79,8 +79,27 @@ rather than guessed at:
 **Specifically absent**, and each absence is load-bearing for the Data safety answers:
 
 - no `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION`
-- no `CAMERA`, `READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE`
-- no `com.google.android.gms.permission.AD_ID` — there is no advertising ID to declare
+- no `READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE` — the gallery goes through Android's photo
+  picker, which returns one chosen image and needs no permission at all. Asking for the media
+  library would trigger Play's Photo and Video Permissions declaration for a capability this app
+  does not use
+- no `READ_CONTACTS` — nothing in Nivora reads a contact
+- no `com.google.android.gms.permission.AD_ID` — there is no advertising ID to declare, and since
+  2026-09-12 it is removed EXPLICITLY (`tools:node="remove"`) rather than merely left out, because
+  a dependency's manifest can merge one in and its presence would contradict the Data safety form
+
+### Added 2026-09-12, and the dump above predates both
+
+| Permission | Why | What makes it mandatory |
+|---|---|---|
+| `POST_NOTIFICATIONS` | Rent reminders, a notice from the owner, "payment received", a task assigned | Runtime permission from Android 13. Without it the app can hold a valid FCM token and the server can send a perfectly good message and NOTHING APPEARS, silently |
+| `CAMERA` | A warden photographs an ID proof; a resident photographs a complaint | Declaring it is what makes it mandatory — `ACTION_IMAGE_CAPTURE` throws `SecurityException` for an app that declares CAMERA without holding it. `lib/data/capture.dart` requests it first. `<uses-feature android:required="false"/>` keeps the app installable on a device with no camera |
+
+**Re-run the dump against the next build before signing anything off.** The listing above is from
+`NIVORA-1.0.0.apk` built under the old package name; the next artifact is `com.srnivora.app` and
+carries the two permissions in this table. The AD_ID assertion in particular must be checked on the
+MERGED manifest — that is the whole point of removing it explicitly rather than trusting its
+absence from source.
 - no `READ_PHONE_STATE` (the full-scope one), no `READ_CONTACTS`, no `QUERY_ALL_PACKAGES`
 
 ---

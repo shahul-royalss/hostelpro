@@ -132,7 +132,7 @@ class _Floors extends StatelessWidget {
                 'You can also map the building yourself.',
             action: OutlinedButton.icon(
               onPressed: () =>
-                  Navigator.of(context).push(OwnerFloorPlanScreen.route(hostelId)),
+                  Navigator.of(context).push(FloorPlanScreen.route(hostelId)),
               icon: const Icon(Icons.dashboard_customize_outlined, size: IconSize.sm),
               label: const Text('Edit layout'),
             ),
@@ -225,7 +225,7 @@ class _BuildingSummary extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 onPressed: () =>
-                    Navigator.of(context).push(OwnerFloorPlanScreen.route(hostelId)),
+                    Navigator.of(context).push(FloorPlanScreen.route(hostelId)),
                 icon: const Icon(Icons.dashboard_customize_outlined, size: IconSize.sm),
                 label: const Text('Edit layout'),
               ),

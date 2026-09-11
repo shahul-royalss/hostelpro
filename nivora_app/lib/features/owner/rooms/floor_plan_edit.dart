@@ -28,6 +28,13 @@ class FloorSnapshot {
 
   int get roomCount => rooms.length;
 
+  /// public.floors.id, taken from any room on the floor — rpc_room_occupancy carries it on
+  /// every row. Null only for a floor with no rooms, which the RPC cannot return at all.
+  String? get id => rooms.isEmpty ? null : rooms.first.floorId;
+
+  /// What the PG calls this storey, or null. Same source, same reasoning.
+  String? get name => rooms.isEmpty ? null : rooms.first.floorName;
+
   int get bedCount => rooms.fold(0, (sum, r) => sum + r.capacity);
 
   int get occupiedBeds => rooms.fold(0, (sum, r) => sum + r.occupied);

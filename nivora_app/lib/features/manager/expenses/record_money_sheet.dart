@@ -27,10 +27,24 @@ import '../widgets/manager_ui.dart';
 /// bounds, one notch stricter at the bottom (a zero-rupee expense is a slip, not an entry), so
 /// a mistake costs a keystroke rather than a round trip. If the two ever disagree, the database
 /// is right.
-Future<bool?> showRecordExpenseSheet(BuildContext context, {required String hostelId}) {
+/// Book money out.
+///
+/// [kind] is the product owner's "two menu options in manager in expenses section": a ONE-TIME
+/// MONTHLY expense — the building's rent, salaries, the electricity bill — or DAY-TO-DAY
+/// spending. It changes three things on this sheet and nothing else: the words at the top, the
+/// date control (a month for the first, a day for the second), and the column it writes.
+Future<bool?> showRecordExpenseSheet(
+  BuildContext context, {
+  required String hostelId,
+  ExpenseKind kind = ExpenseKind.daily,
+}) {
   return showGlassSheet<bool>(
     context: context,
-    builder: (_) => _RecordMoneySheet(hostelId: hostelId, direction: MoneyDirection.out),
+    builder: (_) => _RecordMoneySheet(
+      hostelId: hostelId,
+      direction: MoneyDirection.out,
+      kind: kind,
+    ),
   );
 }
 
@@ -42,10 +56,18 @@ Future<bool?> showRecordRevenueSheet(BuildContext context, {required String host
 }
 
 class _RecordMoneySheet extends ConsumerStatefulWidget {
-  const _RecordMoneySheet({required this.hostelId, required this.direction});
+  const _RecordMoneySheet({
+    required this.hostelId,
+    required this.direction,
+    this.kind = ExpenseKind.daily,
+  });
 
   final String hostelId;
   final MoneyDirection direction;
+
+  /// Ignored for money IN: public.revenues has no kind, and inventing one on this sheet would
+  /// mean a control that writes nowhere.
+  final ExpenseKind kind;
 
   @override
   ConsumerState<_RecordMoneySheet> createState() => _RecordMoneySheetState();
@@ -62,6 +84,9 @@ class _RecordMoneySheetState extends ConsumerState<_RecordMoneySheet> {
   bool _busy = false;
 
   bool get _isOut => widget.direction == MoneyDirection.out;
+
+  /// A monthly expense belongs to a MONTH, not to the day somebody typed it in.
+  bool get _isMonthly => _isOut && widget.kind == ExpenseKind.monthly;
 
   static DateTime _today() {
     final now = DateTime.now();
@@ -84,6 +109,44 @@ class _RecordMoneySheetState extends ConsumerState<_RecordMoneySheet> {
     if (value <= 0) return 'Must be more than zero';
     if (value > 100000000) return 'Too large — the limit is ₹10,00,00,000';
     return null;
+  }
+
+  /// WHICH MONTH THIS BILL IS FOR.
+  ///
+  /// A list of the last twelve months rather than a calendar: the day is not a fact anybody
+  /// has about an electricity bill, and a date picker would force one to be invented and then
+  /// drawn on a chart. The stored date is the FIRST of the chosen month, which is what
+  /// rpc_expense_months groups by, so "September" always lands in September however late it
+  /// was entered.
+  Future<void> _pickMonth() async {
+    final today = _today();
+    final months = [
+      for (var i = 0; i < 12; i++) DateTime(today.year, today.month - i, 1),
+    ];
+    final chosen = await showDialog<DateTime>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Which month is this for?'),
+        children: [
+          for (final month in months)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(ctx).pop(month),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: Space.xxs),
+                child: Text(
+                  monthTitle(month),
+                  style: Theme.of(ctx).textTheme.bodyLarge?.copyWith(
+                        color: month.month == _on.month && month.year == _on.year
+                            ? Theme.of(ctx).colorScheme.primary
+                            : null,
+                      ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (chosen != null && mounted) setState(() => _on = chosen);
   }
 
   Future<void> _pickDate() async {
@@ -120,6 +183,7 @@ class _RecordMoneySheetState extends ConsumerState<_RecordMoneySheet> {
           ? repo.addExpense(
               hostelId: widget.hostelId,
               category: _category,
+              kind: widget.kind,
               amount: amount,
               date: _on,
               note: note.isEmpty ? null : note,
@@ -137,6 +201,9 @@ class _RecordMoneySheetState extends ConsumerState<_RecordMoneySheet> {
     setState(() => _busy = false);
     if (ok) {
       refreshMoney(ref);
+      // The charts read the same rows through two aggregate RPCs, so an entry that does not
+      // invalidate them shows in the list and not on the graph — which reads as a lost entry.
+      refreshExpenseStats(ref);
       if (mounted) Navigator.of(context).pop(true);
     }
   }
@@ -146,9 +213,13 @@ class _RecordMoneySheetState extends ConsumerState<_RecordMoneySheet> {
     final t = Theme.of(context);
 
     return SheetBody(
-      title: _isOut ? 'Record money out' : 'Record money in',
+      title: _isOut
+          ? (_isMonthly ? 'Monthly expense' : 'Day-to-day expense')
+          : 'Record money in',
       subtitle: _isOut
-          ? 'Goes to the hostel expense book'
+          ? (_isMonthly
+              ? 'Paid once for a month — rent, salaries, a bill'
+              : 'Spent today or on a particular day')
           : 'Mess income, deposits — not rent, which the warden collects',
       child: Form(
         key: _form,
@@ -198,16 +269,26 @@ class _RecordMoneySheetState extends ConsumerState<_RecordMoneySheet> {
             ),
             const SizedBox(height: Space.md),
             InputDecorator(
-              decoration: const InputDecoration(labelText: 'Date'),
+              decoration: InputDecoration(labelText: _isMonthly ? 'For month' : 'Date'),
               child: InkWell(
-                onTap: _pickDate,
+                onTap: _isMonthly ? _pickMonth : _pickDate,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: Space.xxs),
                   child: Row(
                     children: [
-                      Expanded(child: Text(shortDate(_on), style: t.textTheme.bodyLarge)),
-                      Icon(Icons.calendar_today_rounded,
-                          size: IconSize.sm, color: t.colorScheme.onSurfaceVariant),
+                      Expanded(
+                        child: Text(
+                          _isMonthly ? monthTitle(_on) : shortDate(_on),
+                          style: t.textTheme.bodyLarge,
+                        ),
+                      ),
+                      Icon(
+                        _isMonthly
+                            ? Icons.calendar_month_rounded
+                            : Icons.calendar_today_rounded,
+                        size: IconSize.sm,
+                        color: t.colorScheme.onSurfaceVariant,
+                      ),
                     ],
                   ),
                 ),
@@ -231,7 +312,9 @@ class _RecordMoneySheetState extends ConsumerState<_RecordMoneySheet> {
               child: _busy
                   ? const SizedBox(
                       width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : Text(_isOut ? 'Save expense' : 'Save entry'),
+                  : Text(_isOut
+                      ? (_isMonthly ? 'Save monthly expense' : 'Save expense')
+                      : 'Save entry'),
             ),
           ],
         ),

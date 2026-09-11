@@ -9,6 +9,7 @@ import '../../../data/providers.dart';
 import '../../common/refresh.dart';
 import '../../../shared/glass/glass.dart';
 import '../widgets/warden_ui.dart';
+import '../../owner/rooms/floor_plan_screen.dart';
 import 'room_sheet.dart';
 
 /// The building, floor by floor.
@@ -70,6 +71,19 @@ class WardenRoomsScreen extends ConsumerWidget {
       // hero card at the top of the grid (_BuildingSummary) — same fold over the same list, so
       // the summary still cannot disagree with the tiles beneath it.
       title: 'Rooms & beds',
+      actions: [
+        // THE WARDEN EDITS THE LAYOUT TOO, as of 2026-09-12. The product owner: "like how admin
+        // can edit layout same as like that warden also can have edit layout option."
+        // public.ow_set_floor_plan admits an active warden of this hostel now
+        // (app.can_edit_layout), and this grid is the screen a warden is standing on when a
+        // floor is split or a room is added. The owner reaches the same editor from the PG
+        // detail card.
+        IconButton(
+          tooltip: 'Edit layout',
+          icon: const Icon(Icons.dashboard_customize_outlined, size: IconSize.md),
+          onPressed: () => Navigator.of(context).push(FloorPlanScreen.route(hostelId)),
+        ),
+      ],
       child: RefreshIndicator(
         // The grid is the one screen a warden pulls standing in a stairwell, which is also
         // where the signal goes. Bounded and spoken — see features/common/refresh.dart.

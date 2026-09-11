@@ -267,7 +267,6 @@ void main() {
       for (final (label, expected) in <(String, NoticeAudience)>[
         ('Students', NoticeAudience.students),
         ('Wardens', NoticeAudience.warden),
-        ('Managers', NoticeAudience.manager),
       ]) {
         final writes = await openSheet(tester);
 
@@ -281,14 +280,30 @@ void main() {
       }
     });
 
-    testWidgets('all four audiences the enum declares are offered', (tester) async {
+    testWidgets('three audiences are offered, and Managers is not one of them',
+        (tester) async {
       await openSheet(tester);
-      // Targeting a single role is already possible in the schema; offering only "everyone"
-      // would hide a control the database has always had.
-      expect(noticeAudienceChoices.toSet(), NoticeAudience.values.toSet());
-      for (final audience in NoticeAudience.values) {
+      // Targeting a single role is possible in the schema and is offered: everyone, the
+      // residents, the wardens.
+      expect(noticeAudienceChoices, const [
+        NoticeAudience.all,
+        NoticeAudience.students,
+        NoticeAudience.warden,
+      ]);
+      for (final audience in noticeAudienceChoices) {
         expect(find.text(audience.label), findsOneWidget);
       }
+
+      // MANAGERS WAS THE FOURTH UNTIL 2026-09-12, and offering it now would be offering a
+      // refusal: announcements_insert gained `and audience <> 'manager'`, and
+      // announcements_select shows a manager no notice at all. A manager's instructions arrive
+      // as TASKS, which carry a due date and a status where a notice carries neither.
+      expect(find.text(NoticeAudience.manager.label), findsNothing);
+      expect(noticeAudienceChoices, isNot(contains(NoticeAudience.manager)));
+
+      // The enum keeps the value: old rows carry it, and dropping a label from a Postgres enum
+      // means rewriting every row that uses it.
+      expect(NoticeAudience.values, contains(NoticeAudience.manager));
     });
 
     testWidgets('a refused post is named, and nothing is claimed to have been sent',

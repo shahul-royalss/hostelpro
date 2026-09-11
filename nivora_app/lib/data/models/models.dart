@@ -9,6 +9,7 @@ export 'complaint.dart';
 export 'enums.dart';
 export 'failure.dart';
 export 'fee.dart';
+export 'expense_stats.dart';
 export 'finance.dart';
 export 'floor_plan.dart';
 export 'hostel.dart';

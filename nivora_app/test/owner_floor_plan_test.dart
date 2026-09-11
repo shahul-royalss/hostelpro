@@ -134,7 +134,7 @@ Future<_FakeLayout> _pump(
       ),
     ),
   );
-  navigator.currentState!.push(OwnerFloorPlanScreen.route(_hostelId));
+  navigator.currentState!.push(FloorPlanScreen.route(_hostelId));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
   return writes;
@@ -603,7 +603,7 @@ void main() {
         ),
       );
       await _settle(tester);
-      navigator.currentState!.push(OwnerFloorPlanScreen.route(_hostelId));
+      navigator.currentState!.push(FloorPlanScreen.route(_hostelId));
       await _settle(tester);
 
       final before = buildsOfTheGrid;
@@ -780,6 +780,18 @@ final class _FakeLayout implements RoomLayoutWrites {
     final thrown = failure;
     if (thrown != null) throw thrown;
     return result;
+  }
+
+  /// Renaming a floor is not what this screen's tests are about; recorded so a test CAN assert
+  /// it, and so the fake keeps satisfying the interface.
+  final List<({String floorId, String? name})> floorRenames = [];
+
+  @override
+  Future<void> setFloorName({required String floorId, String? name}) async {
+    floorRenames.add((floorId: floorId, name: name));
+    if (hold) await _gate.future;
+    final thrown = failure;
+    if (thrown != null) throw thrown;
   }
 
   @override

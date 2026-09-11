@@ -73,11 +73,19 @@ Map<String, String> validateNoticeDraft(NoticeDraft draft) {
 /// hidden: `announcement_audience` has had them since the first migration, the select policy
 /// already enforces them row by row, and a "staff only" notice that reaches the residents is a
 /// worse outcome than one extra control on a sheet.
+///
+/// MANAGER IS NOT ON THIS LIST ANY MORE, and leaving it would be offering a refusal:
+/// `announcements_insert` gained `and audience <> 'manager'` on 2026-09-12, and
+/// `announcements_select` no longer shows a manager any notice at all. A manager's instructions
+/// arrive as TASKS, which carry a due date and a status where a notice carries neither — see
+/// features/owner/tasks/owner_tasks_screen.dart.
+///
+/// The enum value stays in [NoticeAudience] because old rows carry it, and dropping a label from
+/// a Postgres enum means rewriting every row that uses it.
 const noticeAudienceChoices = <NoticeAudience>[
   NoticeAudience.all,
   NoticeAudience.students,
   NoticeAudience.warden,
-  NoticeAudience.manager,
 ];
 
 /// One line under the audience picker saying who will actually see it, in people-words.

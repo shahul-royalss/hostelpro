@@ -272,11 +272,29 @@ void main() {
     expect(find.text('₹6,200'), findsOneWidget);
     expect(find.text('Priya Nair (Warden)'), findsOneWidget);
 
-    // More: the staff roster is already there.
+    // MORE IS A MENU NOW (2026-09-12), not the staff roster: Tasks and the expense charts
+    // live behind it too. The warm-up contract is unchanged and is asserted one hop further
+    // in — the roster was fetched in the background, so opening Staff accounts lands on
+    // people rather than on a skeleton.
     await tester.tap(find.text('More'));
     await tester.pump();
     _expectNoLoadingUi();
+    expect(find.text('Staff accounts'), findsOneWidget);
+
+    // EXPLICIT PUMPS, NOT pumpAndSettle. Settling waits for EVERY animation to stop, and this
+    // shell has ones that never do — a skeleton shimmer repeats forever by design, so the one
+    // frame where a pushed route still shows one is a test that hangs rather than fails. The
+    // rest of this file pumps a frame and then a fixed duration for exactly that reason.
+    await tester.tap(find.text('Staff accounts'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    _expectNoLoadingUi();
     expect(find.text('Ravi Kulkarni'), findsOneWidget);
+
+    // Back out to the shell for the rest of the sweep.
+    Navigator.of(tester.element(find.text('Ravi Kulkarni'))).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
 
     // Back to the Dashboard: the hero figure is still standing.
     await tester.tap(find.text('Dashboard'));

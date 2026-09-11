@@ -126,6 +126,20 @@ class ExpenseFilterState extends Notifier<ExpenseCategory?> {
 final expenseFilterProvider =
     NotifierProvider<ExpenseFilterState, ExpenseCategory?>(ExpenseFilterState.new);
 
+/// Monthly, day-to-day, or null for both.
+///
+/// Separate from the category filter on purpose: the two narrow different things and an owner
+/// looking for "what do the monthly bills come to" should not have to clear a category first.
+class ExpenseKindFilterState extends Notifier<ExpenseKind?> {
+  @override
+  ExpenseKind? build() => null;
+
+  void set(ExpenseKind? kind) => state = kind;
+}
+
+final expenseKindFilterProvider =
+    NotifierProvider<ExpenseKindFilterState, ExpenseKind?>(ExpenseKindFilterState.new);
+
 /// Which day of the week the menu screen is showing. Starts on today.
 class MenuDayState extends Notifier<MenuDay> {
   @override
@@ -142,17 +156,24 @@ final menuDayProvider = NotifierProvider<MenuDayState, MenuDay>(MenuDayState.new
 
 /// Which expenses to list. Value equality, or Riverpod caches two entries for one query.
 final class ExpenseQuery {
-  const ExpenseQuery({required this.hostelId, this.category});
+  const ExpenseQuery({required this.hostelId, this.category, this.kind});
 
   final String hostelId;
   final ExpenseCategory? category;
 
-  @override
-  bool operator ==(Object other) =>
-      other is ExpenseQuery && other.hostelId == hostelId && other.category == category;
+  /// Monthly, day-to-day, or null for both. A SECOND axis rather than seven more categories:
+  /// electricity is a monthly bill in one PG and a daily top-up in another.
+  final ExpenseKind? kind;
 
   @override
-  int get hashCode => Object.hash(hostelId, category);
+  bool operator ==(Object other) =>
+      other is ExpenseQuery &&
+      other.hostelId == hostelId &&
+      other.category == category &&
+      other.kind == kind;
+
+  @override
+  int get hashCode => Object.hash(hostelId, category, kind);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -184,6 +205,7 @@ class ManagerExpensesNotifier extends PagedNotifier<Expense> {
             hostelId: query.hostelId,
             page: page,
             category: query.category,
+            kind: query.kind,
           );
 }
 

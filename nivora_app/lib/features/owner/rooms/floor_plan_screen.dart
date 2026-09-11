@@ -10,8 +10,20 @@ import '../owner_providers.dart';
 import '../widgets/states.dart';
 import 'floor_plan_edit.dart';
 
-/// THE OWNER MAPS THE BUILDING: how many floors, how many rooms on each, and how many beds the
-/// rooms Nivora is about to CREATE are given.
+/// MAPPING THE BUILDING: how many floors, how many rooms on each, and how many beds the rooms
+/// Nivora is about to CREATE are given.
+///
+/// ── THE WARDEN OPENS THIS TOO, AND THE FILE STAYS WHERE IT IS ────────────────────────────
+///
+/// It was OwnerFloorPlanScreen until 2026-09-12. The product owner: "like how admin can edit
+/// layout same as like that warden also can have edit layout option". public.ow_set_floor_plan
+/// admits an active warden of the hostel now (app.can_edit_layout), and the warden's room grid
+/// pushes this screen.
+///
+/// It is NOT moved to lib/shared/. Everything it composes lives under features/owner —
+/// refreshOwnerBuilding, the owner's state widgets — so shared/ would end up importing
+/// features/owner, which is a worse dependency than a warden screen importing a sibling
+/// feature. The name lost its prefix; the folder is where the code it uses is.
 ///
 /// WRITES: public.ow_set_floor_plan, once, on Save.
 /// READS:  rpc_room_occupancy — the same rows the room grid draws, and the only thing this
@@ -42,12 +54,13 @@ import 'floor_plan_edit.dart';
 /// the occupied count of that one room is known and therefore the only place a bed can safely
 /// be taken away. The caption under the heading says so in the owner's words, because a stepper
 /// labelled "beds" that silently ignores half the building is a lie told with a control.
-class OwnerFloorPlanScreen extends ConsumerWidget {
-  const OwnerFloorPlanScreen({super.key, required this.hostelId});
+class FloorPlanScreen extends ConsumerWidget {
+  const FloorPlanScreen({super.key, required this.hostelId});
 
-  /// Pushed from the room grid, which is where an owner is already looking at the floors.
+  /// Pushed from either room grid — the owner's PG detail, or the warden's Rooms tab — which is
+  /// where the person is already looking at the floors.
   static Route<void> route(String hostelId) => MaterialPageRoute<void>(
-        builder: (_) => OwnerFloorPlanScreen(hostelId: hostelId),
+        builder: (_) => FloorPlanScreen(hostelId: hostelId),
       );
 
   final String hostelId;
@@ -276,6 +289,64 @@ class _EditorState extends ConsumerState<_Editor> {
     if (mounted) setState(() => _error = null);
   }
 
+  /// The snapshot of one storey as it stands, or null for a storey only the plan knows about.
+  FloorSnapshot? _snapshotFor(int floor) {
+    for (final f in widget.building) {
+      if (f.floor == floor) return f;
+    }
+    return null;
+  }
+
+  /// WHAT A STOREY IS CALLED.
+  ///
+  /// TWO PATHS, BECAUSE A FLOOR THAT DOES NOT EXIST CANNOT BE RENAMED. An existing floor is
+  /// renamed IMMEDIATELY through public.set_floor_name — the same shape as renaming a room, and
+  /// the reason is the same: a plan composed ten minutes ago must not travel back in time and
+  /// undo somebody else's edit. A floor that only exists in the plan carries its name along
+  /// with it and gets it at Save, which is the only moment it exists at all.
+  Future<void> _renameFloor(int index) async {
+    if (_busy) return;
+    final entry = _plan[index];
+    final existing = _snapshotFor(entry.floor);
+
+    final typed = await showFloorNameDialog(
+      context,
+      floorNumber: entry.floor,
+      current: existing?.name ?? entry.name,
+    );
+    if (typed == null || !mounted) return;
+    final name = typed.trim().isEmpty ? null : typed.trim();
+
+    final floorId = existing?.id;
+    if (floorId == null) {
+      _edit(() => _plan[index] = _plan[index].withName(name));
+      return;
+    }
+
+    // Resolved before the await, as everything else on this screen is: the element may be gone
+    // by the time the write returns, and invalidating through a dead WidgetRef throws.
+    final container = ProviderScope.containerOf(context, listen: false);
+    final period = ref.read(currentPeriodMonthProvider);
+    setState(() => _busy = true);
+    try {
+      await ref.read(roomLayoutWritesProvider).setFloorName(floorId: floorId, name: name);
+      refreshOwnerBuilding(container, hostelId: widget.hostelId, period: period);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = null;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = AppFailure.from(error).message;
+        });
+      }
+    }
+  }
+
   Future<void> _save() async {
     if (_busy) return;
     final preview = previewPlan(building: widget.building, plan: _plan);
@@ -414,6 +485,7 @@ class _EditorState extends ConsumerState<_Editor> {
                   onRooms: (value) => _setRooms(i, value),
                   onBeds: (value) => _setBeds(i, value),
                   onEditRoom: _editRoom,
+                  onRename: () => _renameFloor(i),
                 ),
                 const SizedBox(height: Space.sm),
               ],
@@ -460,6 +532,7 @@ class _FloorRow extends StatelessWidget {
     required this.onRooms,
     required this.onBeds,
     required this.onEditRoom,
+    required this.onRename,
   });
 
   final FloorPlanEntry entry;
@@ -473,11 +546,18 @@ class _FloorRow extends StatelessWidget {
   /// Opens one EXISTING room for a rename or a change of beds.
   final ValueChanged<RoomOccupancy> onEditRoom;
 
+  /// Names the storey itself.
+  final VoidCallback onRename;
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final now = existing;
     final blocked = now == null ? const <RoomOccupancy>[] : now.blockedBy(entry.rooms);
+    // The saved name for a storey that exists, the pending one for a storey being added.
+    final name = now?.name ?? entry.name;
+    final hasName = (name ?? '').trim().isNotEmpty;
+    final named = floorLabel(entry.floor, name);
 
     return FlatSurface(
       padding: const EdgeInsets.all(Space.md),
@@ -485,10 +565,19 @@ class _FloorRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                child: Text('Floor ${entry.floor}', style: t.textTheme.titleMedium),
+                // The NAME when the PG has given this storey one, "Floor N" when it has not.
+                // The number does not follow it into the title — a heading that reads
+                // "Terrace (Floor 4)" is a screen that does not trust the person who typed the
+                // name — it goes in the caption below, where the plan's own arithmetic is.
+                child: Text(named, style: t.textTheme.titleMedium),
+              ),
+              IconButton(
+                tooltip: 'Name this floor',
+                onPressed: enabled ? onRename : null,
+                icon: const Icon(Icons.drive_file_rename_outline_rounded, size: IconSize.md),
               ),
               if (now == null)
                 const StatusChip(label: 'New floor', tone: NivoraColors.info),
@@ -497,10 +586,14 @@ class _FloorRow extends StatelessWidget {
           const SizedBox(height: Space.xxs),
           Text(
             // Counted from rpc_room_occupancy, never from hostels.total_rooms.
-            now == null
-                ? 'Nothing on this floor yet.'
-                : '${roomsLabel(now.roomCount)} now · '
+            [
+              if (hasName) 'Floor ${entry.floor}',
+              if (now == null)
+                'Nothing on this floor yet.'
+              else
+                '${roomsLabel(now.roomCount)} now · '
                     '${now.occupiedBeds} of ${now.bedCount} beds taken',
+            ].join(' · '),
             style: t.textTheme.bodySmall,
           ),
           const SizedBox(height: Space.sm),
@@ -562,6 +655,85 @@ class _FloorRow extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// NAMING A STOREY.
+///
+/// Returns null when it was cancelled, the typed name otherwise — and an EMPTY STRING means
+/// "clear it", which is a real answer rather than a cancellation. The caller turns blank into
+/// null; the database stores null and every screen falls back to "Floor N" (see [floorLabel]).
+///
+/// A StatefulWidget rather than a function holding a TextEditingController, because a
+/// controller created inside a builder is never disposed — Flutter's test framework reports it,
+/// and on a device it is a listener left attached to a dead route.
+Future<String?> showFloorNameDialog(
+  BuildContext context, {
+  required int floorNumber,
+  String? current,
+}) =>
+    showDialog<String>(
+      context: context,
+      builder: (_) => _FloorNameDialog(floorNumber: floorNumber, current: current),
+    );
+
+class _FloorNameDialog extends StatefulWidget {
+  const _FloorNameDialog({required this.floorNumber, required this.current});
+
+  final int floorNumber;
+  final String? current;
+
+  @override
+  State<_FloorNameDialog> createState() => _FloorNameDialogState();
+}
+
+class _FloorNameDialogState extends State<_FloorNameDialog> {
+  late final TextEditingController _name = TextEditingController(text: widget.current ?? '');
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return AlertDialog(
+      title: Text('Name floor ${widget.floorNumber}'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'What this storey is called — "Ground floor", "Terrace", "Girls\' wing". Leave it '
+            'empty to go back to "Floor ${widget.floorNumber}".',
+            style: t.textTheme.bodySmall,
+          ),
+          const SizedBox(height: Space.sm),
+          TextField(
+            controller: _name,
+            autofocus: true,
+            // The column's own CHECK: 1–40 characters, trimmed. Enforced here so the refusal
+            // is a keystroke that does not land rather than a round trip.
+            maxLength: 40,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Floor name', counterText: ''),
+            onSubmitted: (value) => Navigator.of(context).pop(value),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_name.text),
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }
