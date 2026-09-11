@@ -12,7 +12,10 @@
 // animation. So the device can tell me the opening EXISTS and cannot tell me it PROGRESSES.
 // This can, exactly, with no video tooling on the machine and nothing to eyeball.
 
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/boot/splash_gate.dart';
@@ -25,6 +28,64 @@ double _unfold(WidgetTester tester) {
     find.ancestor(of: find.text('IVORA'), matching: find.byType(Align)).first,
   );
   return align.widthFactor!;
+}
+
+
+/// One island of ink on the lockup's row.
+typedef _Run = ({int start, int end, int height});
+
+/// Render the tree under [key] and find the horizontal runs of drawn pixels across the band the
+/// lockup occupies.
+///
+/// PIXELS, BECAUSE THE QUESTION IS ABOUT PIXELS. Widget rects answer where a box is; a letter's
+/// bearings and an image's transparent margin both live inside the box, and every complaint this
+/// test exists for was about the space between the DRAWINGS.
+Future<List<_Run>> _inkColumnRuns(WidgetTester tester, GlobalKey key) async {
+  final markRect = tester.getRect(find.byType(Image));
+  final wordRect = tester.getRect(find.text('IVORA'));
+  final top = markRect.top.floor() - 4;
+  final bottom = wordRect.bottom.ceil() + 2;
+
+  late final List<_Run> runs;
+  // runAsync: encoding an image is real work on a real thread, which the fake clock a widget
+  // test runs on never lets finish.
+  await tester.runAsync(() async {
+    final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+    final image = await boundary.toImage(pixelRatio: 1);
+    final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    final px = data!.buffer.asUint8List();
+    final w = image.width;
+
+    // The ground is NivoraColors.background. 12 of tolerance ignores the anti-aliased fringe
+    // without ignoring any stroke.
+    bool ink(int x, int y) {
+      final i = (y * w + x) * 4;
+      return (px[i] - 238).abs() > 12 || (px[i + 1] - 240).abs() > 12 || (px[i + 2] - 248).abs() > 12;
+    }
+
+    final found = <_Run>[];
+    int? start;
+    for (var x = 0; x <= w; x++) {
+      final filled = x < w && [for (var y = top; y < bottom; y++) y].any((y) => ink(x, y));
+      if (filled && start == null) {
+        start = x;
+      } else if (!filled && start != null) {
+        var hi = bottom, lo = top;
+        for (var y = top; y < bottom; y++) {
+          for (var c = start; c < x; c++) {
+            if (ink(c, y)) {
+              if (y < hi) hi = y;
+              if (y > lo) lo = y;
+            }
+          }
+        }
+        found.add((start: start, end: x - 1, height: lo - hi + 1));
+        start = null;
+      }
+    }
+    runs = found;
+  });
+  return runs;
 }
 
 Widget _app() => const ProviderScope(
@@ -186,6 +247,71 @@ void main() {
         word.top + painter.computeDistanceToActualBaseline(TextBaseline.alphabetic);
     expect(mark.bottom, closeTo(baseline, 0.5),
         reason: 'the mark does not stand on the letters\' baseline');
+  });
+
+  testWidgets('the N is a letter of the word, not a badge in front of it', (tester) async {
+    // ── WHAT THE PRODUCT OWNER SAW, AND WHY ONLY PIXELS COULD ANSWER IT ───────────────────
+    //
+    // "The N letter is longer than compared to other letters I V O R A... please make it to
+    // symmetry same gapping, don't give more gap between them."
+    //
+    // Both halves of that are about INK, and neither is visible from the widget tree. The gap
+    // between two letters is not `letterSpacing`: it is letterSpacing plus the side bearings of
+    // the pair, and Inter's I carries about 5.4dp of left bearing at this size — which is why a
+    // SizedBox that looked small (8dp) rendered a 25dp hole beside a mark whose own box is
+    // flush with its artwork. And an Image's height is its BOX; the drawing inside it is only
+    // the same thing because scripts/cut-brand-mark.py trims to visible alpha.
+    //
+    // So this renders the screen and scans columns. It is slower than every other test in this
+    // file and it is the only one that can fail for the reason the owner filed.
+    tester.view.physicalSize = const Size(1080, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final key = GlobalKey();
+    await tester.pumpWidget(ProviderScope(
+      child: RepaintBoundary(
+        key: key,
+        child: MaterialApp(theme: NivoraTheme.light(), home: const SplashScreen()),
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(splashMinimum);
+    await _decodeTheMark(tester);
+
+    final runs = await _inkColumnRuns(tester, key);
+    // The mark, then I, V, O, R, A: six islands of ink and no more. Fewer means two glyphs are
+    // touching; more means something else is on the row.
+    expect(runs, hasLength(6), reason: 'expected the mark and five letters, got ${runs.length}');
+
+    final gaps = [
+      for (var i = 1; i < runs.length; i++) runs[i].start - runs[i - 1].end - 1,
+    ];
+    final markToWord = gaps.first;
+    final betweenLetters = gaps.skip(1).toList();
+    final mean = betweenLetters.reduce((a, b) => a + b) / betweenLetters.length;
+
+    // WITHIN THE LETTERS' OWN RHYTHM. Those gaps are not equal to each other either — measured
+    // 8, 5, 9, 6 — because each pair has its own bearings, so the target is the spread the eye
+    // already accepts rather than a single number. It was 25 against a mean of 7.
+    expect(
+      markToWord,
+      lessThanOrEqualTo(mean + 3),
+      reason: 'the mark stands ${markToWord}px from the I while the letters average '
+          '${mean.toStringAsFixed(1)}px apart',
+    );
+    expect(markToWord, greaterThanOrEqualTo(1),
+        reason: 'the mark is touching the I at ${markToWord}px');
+
+    // AND IT IS THE SAME HEIGHT AS THE LETTERS. Not taller: a mark that stands proud of the cap
+    // line reads as a badge with a word after it, which is the one thing a lockup must not do.
+    final markHeight = runs.first.height;
+    final glyphHeight = runs.last.height;
+    expect(
+      (markHeight - glyphHeight).abs(),
+      lessThanOrEqualTo(2),
+      reason: 'the mark is ${markHeight}px tall against the letters\' $glyphHeight',
+    );
   });
 
   testWidgets('the ground is the light canvas, so the launch does not flash', (tester) async {

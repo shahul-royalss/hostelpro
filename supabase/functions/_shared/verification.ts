@@ -52,7 +52,7 @@
  *
  * ═══ 2026-09-01: THE LINK NOW OPENS THE APP, AND THIS FILE DID NOT HAVE TO CHANGE ═══
  *
- * The redirect became a custom scheme (app.nivora.mobile://verify-email) so that the link opens
+ * The redirect became a custom scheme (com.srnivora.app://verify-email) so that the link opens
  * Nivora and signs the person in, which is what the owner asked for. Nothing here moved, and
  * that is worth saying rather than assuming: both arms of email_link_proof() are written by
  * GoTrue's /auth/v1/verify handler BEFORE the 303, and the redirect target does not participate

@@ -21,12 +21,13 @@ class Hostel {
     required this.updatedAt,
     this.address,
     this.rules,
+    this.rentDueDay = 5,
   });
 
   /// Kept next to [fromJson] so a column can never be added to one and not the other.
   static const columns =
       'id, name, owner_user_id, total_floors, total_rooms, beds_per_room_default, '
-      'address, rules, status, created_at, updated_at';
+      'address, rules, rent_due_day, status, created_at, updated_at';
 
   final String id;
   final String name;
@@ -38,6 +39,15 @@ class Hostel {
 
   /// Free text, owner-editable, up to 20 000 characters (truncated server-side).
   final String? rules;
+
+  /// The day of the month rent is expected, 1–28.
+  ///
+  /// 28 and not 31: a due day of the 30th does not exist in February, and a reminder that
+  /// silently never fires for one month a year is worse than a control that cannot express it.
+  /// The schema had NO due date at all until 2026-09-12 — features/student/widgets/rent.dart
+  /// says so out loud and stops short of inventing one — so this is the column
+  /// app.send_rent_reminders() counts from every morning.
+  final int rentDueDay;
   final HostelStatus status;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -53,6 +63,9 @@ class Hostel {
       bedsPerRoomDefault: reqInt(row, src, 'beds_per_room_default'),
       address: optString(row, 'address'),
       rules: optString(row, 'rules'),
+      // Defaulted rather than required: a client reading a row selected without this column
+      // (an older query, a narrower view) must not throw over a reminder setting.
+      rentDueDay: (row['rent_due_day'] as num?)?.toInt() ?? 5,
       status: wireOrThrow(HostelStatus.values, row['status'], src, 'status'),
       createdAt: reqTimestamp(row, src, 'created_at'),
       updatedAt: reqTimestamp(row, src, 'updated_at'),

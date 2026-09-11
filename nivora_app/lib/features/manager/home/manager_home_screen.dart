@@ -4,19 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/auth_controller.dart';
-import '../../../core/auth/session.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
 import '../../../shared/dashboard.dart';
-import '../../../shared/glass/glass.dart';
 import '../../common/refresh.dart';
-import '../../common/staff_notices.dart';
-import '../notices/manager_notices_screen.dart';
 import '../data/manager_models.dart';
 import '../../auth/verify_email_screen.dart';
 import '../data/manager_providers.dart';
-import '../expenses/record_money_sheet.dart';
 import '../tasks/task_sheet.dart';
 import '../widgets/in_out_bars.dart';
 import '../widgets/manager_ui.dart';
@@ -41,6 +36,12 @@ import '../widgets/manager_ui.dart';
 /// 4:1159 is three blocks: a 2x2 KPI grid, `TODAY'S TASKS` over boxed rows, and
 /// `CATEGORIZED EXPENSES` over a stacked bar with a percentage legend. The first two are here,
 /// in that order and in that dress.
+///
+/// THE NOTICEBOARD AND THE ACTION GRID CAME OFF ON 2026-09-12, both at the product owner's
+/// request, and both for a reason worth keeping. Notices reach wardens and residents now — a
+/// manager's instructions arrive as TASKS, which carry a due date and a status, where the
+/// noticeboard was a second inbox with neither. The four "Do it now" buttons led to destinations
+/// the tab bar already carries; recording money is one tap from the Expenses tab's + button.
 ///
 /// THE THIRD IS NOT, and it is the one thing on either of this role's frames that the database
 /// cannot answer. A share-per-category needs `sum(amount) group by category`, and nothing in
@@ -121,12 +122,7 @@ class ManagerHomeScreen extends ConsumerWidget {
             const DashboardBand(label: 'Today'),
             _TodaysTasks(hostelId: hostelId),
             const SizedBox(height: Space.md),
-            _NoticesSection(hostelId: hostelId),
-            const SizedBox(height: Space.md),
             _MoneySection(hostelId: hostelId, finance: finance),
-            const SizedBox(height: Space.md),
-            const DashboardBand(label: 'Tools'),
-            _QuickActions(hostelId: hostelId),
           ],
         ),
       ),
@@ -308,75 +304,6 @@ class _TodaysTasks extends ConsumerWidget {
     );
   }
 }
-
-/// What the owner has posted to this hostel.
-///
-/// ── THIS SECTION IS WHY THE MANAGER NOW HAS A NOTICEBOARD AT ALL ─────────────────────────
-///
-/// `app.announcements_after_insert` has always written this role a `notifications` row when the
-/// owner posts to `all` or to `manager` — with `link` set to `/manager` — and until this
-/// section existed there was nothing behind that link. The notification was real and the
-/// destination was not.
-///
-/// TWO ROWS, NOT THE PAGE. The manager's home screen is a list of things that need attention
-/// today; the whole noticeboard belongs on its own screen, which [ManagerNoticesScreen] is.
-class _NoticesSection extends ConsumerWidget {
-  const _NoticesSection({required this.hostelId});
-  final String hostelId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final page = ref.watch(noticesProvider(hostelId));
-
-    return Section(
-      label: 'Notices',
-      child: AsyncSection<PagedResult<Notice>>(
-        value: page,
-        onRetry: () => ref.invalidate(noticesProvider(hostelId)),
-        builder: (result) {
-          if (result.isEmpty) {
-            // The noticeboard's own blue on the glyph — identity, not a verdict. An empty
-            // noticeboard is neither good news nor bad, which is why this is the DOMAIN tone
-            // and not the reassuring green a cleared task list earns: the megaphone is blue on
-            // every screen it appears on, and here it says "this is the noticeboard, and it is
-            // empty" rather than congratulating anybody. See NivoraDomain.
-            return EmptyNote(
-              icon: Icons.campaign_outlined,
-              title: 'No notices yet',
-              detail: 'Anything the owner posts to this hostel appears here.',
-              // NO TONE: an empty noticeboard is neither good news nor bad, which is the reason
-              // the warden's, the owner's and both of the resident's identical empties give.
-              // This card was the only one of the five that coloured it, so it was the outlier
-              // rather than the example — and EmptyNote's own contract is "pass a tone only
-              // where empty genuinely means something".
-            );
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              StaffNoticeList(
-                hostelId: hostelId,
-                page: result,
-                viewerRole: UserRole.manager,
-                limit: 2,
-                // Embedded in this screen's own ListView: a nested scroll view here would
-                // fight the page for the gesture.
-                scrollable: false,
-              ),
-              const SizedBox(height: Space.sm),
-              CapsButton(
-                label: 'View all notices',
-                onTap: () =>
-                    Navigator.of(context).push(ManagerNoticesScreen.route(hostelId)),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
 /// The frame's third block — `CATEGORIZED EXPENSES` (4:1213), filled with the only aggregate
 /// this role can actually read.
 ///
@@ -436,14 +363,13 @@ class _MoneySection extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: Space.xxs),
-              // Said every time, because the number invites exactly one wrong reading. Rent
-              // lives in public.fee_payments; a manager cannot read that table, this figure
-              // does not contain it, and calling the difference "profit" would be a lie.
-              Text(
-                '${monthTitle(window.monthStart)} so far. Rent is collected separately by the '
-                'warden and is not counted here.',
-                style: t.textTheme.bodySmall,
-              ),
+              // The month, and nothing else. The sentence that used to follow it — "Rent is
+              // collected separately by the warden and is not counted here" — came off at the
+              // product owner's request. What it guarded against is still true and is still
+              // said: the "Recorded in" tile above is captioned "Mess and deposits, not rent",
+              // and the Money screen's subtitle repeats it. A third telling, in two lines under
+              // a figure, read as an apology for the number.
+              Text(monthTitle(window.monthStart), style: t.textTheme.bodySmall),
               const SizedBox(height: Space.sm),
               InOutBars(window: window),
             ],
@@ -453,87 +379,6 @@ class _MoneySection extends ConsumerWidget {
     );
   }
 }
-
-/// The four things this role does most.
-///
-/// NOT IN THE DESIGN — `screen-manager-dashboard` is a reading screen with no action grid on
-/// it at all. These are kept because they are real features (two write sheets and two tabs),
-/// and each is drawn as a [DomainButton] IN THE COLOUR OF WHERE IT GOES: the two ledger
-/// entries in money's green, the menu in food's saffron, the jobs in the amber of open work.
-/// Four shortcuts in four tints say four destinations before a word is read, which a row of
-/// identical hairline boxes never could; see [NivoraDomain] for the rule. The screen's one
-/// cream [FilledButton] is not here — none of these is the action the dashboard exists for.
-///
-/// The Stitch mockup's version of this was four expense CATEGORIES — Utilities, Consumables,
-/// Repairs, Other — as one-tap shortcuts. Those were never built and still are not: an expense
-/// needs an amount and a date before it can be written, so a tile that books one in a single
-/// tap would have to invent both.
-class _QuickActions extends ConsumerWidget {
-  const _QuickActions({required this.hostelId});
-  final String hostelId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Section(
-      label: 'Do it now',
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: DomainButton(
-                  domain: NivoraDomain.money,
-                  icon: Icons.remove_circle_outline_rounded,
-                  label: 'Record expense',
-                  onPressed: () => showRecordExpenseSheet(context, hostelId: hostelId),
-                ),
-              ),
-              const SizedBox(width: Space.xs),
-              Expanded(
-                child: DomainButton(
-                  domain: NivoraDomain.money,
-                  icon: Icons.add_circle_outline_rounded,
-                  label: 'Record money in',
-                  onPressed: () => showRecordRevenueSheet(context, hostelId: hostelId),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: Space.xs),
-          Row(
-            children: [
-              Expanded(
-                child: DomainButton(
-                  domain: NivoraDomain.food,
-                  label: "Today's menu",
-                  onPressed: () {
-                    ref.read(menuDayProvider.notifier).set(MenuDay.of(DateTime.now()));
-                    ref.read(managerTabProvider.notifier).go(3);
-                  },
-                ),
-              ),
-              const SizedBox(width: Space.xs),
-              Expanded(
-                child: DomainButton(
-                  domain: NivoraDomain.complaints,
-                  // The role's own jobs glyph — the same one on the Tasks tab — rather than the
-                  // domain's warning triangle, which is what a COMPLAINT wears.
-                  icon: Icons.checklist_rounded,
-                  label: 'Work through jobs',
-                  onPressed: () {
-                    ref.read(taskFilterProvider.notifier).set(TaskFilter.needsAction);
-                    ref.read(managerTabProvider.notifier).go(2);
-                  },
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Whether this hostel can be written to — INCLUDING WHEN WE DO NOT KNOW.
 ///
 /// THE MOST IMPORTANT WIDGET ON THIS SCREEN, and it used to be the quietest. It was written as

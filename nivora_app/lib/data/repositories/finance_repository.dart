@@ -82,6 +82,7 @@ final class FinanceRepository extends Repository {
     required String hostelId,
     required ExpenseCategory category,
     required double amount,
+    ExpenseKind kind = ExpenseKind.daily,
     DateTime? date,
     String? note,
     String? receiptUrl,
@@ -92,6 +93,7 @@ final class FinanceRepository extends Repository {
             .insert({
               'hostel_id': hostelId,
               'category': category.wire,
+              'kind': kind.wire,
               'amount': amount,
               // Omitted rather than defaulted in Dart: the column defaults to current_date on
               // the SERVER, which is the clock the rest of the books are kept on.

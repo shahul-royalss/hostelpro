@@ -33,7 +33,7 @@ Future<bool?> showAddStaffSheet(
   required String hostelId,
   String? hostelName,
   required StaffRole initialRole,
-  Set<StaffRole> taken = const {},
+  Set<StaffRole> full = const {},
 }) {
   return showGlassSheet<bool>(
     context: context,
@@ -41,7 +41,7 @@ Future<bool?> showAddStaffSheet(
       hostelId: hostelId,
       hostelName: hostelName,
       initialRole: initialRole,
-      taken: taken,
+      full: full,
     ),
   );
 }
@@ -51,17 +51,17 @@ class _AddStaffSheet extends ConsumerStatefulWidget {
     required this.hostelId,
     required this.hostelName,
     required this.initialRole,
-    required this.taken,
+    required this.full,
   });
 
   final String hostelId;
   final String? hostelName;
   final StaffRole initialRole;
 
-  /// Roles that already have an active holder. Their card is drawn as taken rather than
-  /// hidden, so the owner can see that the post exists and is filled — §4.3 is a rule about
-  /// their PG, not a missing feature.
-  final Set<StaffRole> taken;
+  /// Roles that already hold [maxStaffPerRole] active people. Their card is drawn as full
+  /// rather than hidden, so the owner can see that the post exists and has no room — §4.3 is a
+  /// rule about their PG, not a missing feature.
+  final Set<StaffRole> full;
 
   @override
   ConsumerState<_AddStaffSheet> createState() => _AddStaffSheetState();
@@ -267,10 +267,10 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                       StaffRoleCard(
                         role: role,
                         selected: role == _role,
-                        // A taken post is drawn as taken rather than hidden: §4.3 is a rule
+                        // A full post is drawn as full rather than hidden: §4.3 is a rule
                         // about the owner's PG, not a missing feature.
-                        taken: widget.taken.contains(role),
-                        enabled: !_busy && !widget.taken.contains(role),
+                        full: widget.full.contains(role),
+                        enabled: !_busy && !widget.full.contains(role),
                         onTap: () => _pickRole(role),
                       ),
                     ],
@@ -404,7 +404,7 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
 /// choice is being made, which is when they are worth reading.
 ///
 /// PUBLIC because owner_staff_test.dart drives §4.3 through it: a post with an active holder
-/// arrives here as [taken], and the test asserts that such a card cannot be chosen.
+/// arrives here as [full], and the test asserts that such a card cannot be chosen.
 class StaffRoleCard extends StatelessWidget {
   const StaffRoleCard({
     super.key,
@@ -412,17 +412,17 @@ class StaffRoleCard extends StatelessWidget {
     required this.selected,
     required this.enabled,
     required this.onTap,
-    this.taken = false,
+    this.full = false,
   });
 
   final StaffRole role;
   final bool selected;
 
-  /// False while a create is in flight, or when this post is [taken].
+  /// False while a create is in flight, or when this post is [full].
   final bool enabled;
 
-  /// This PG already has an active holder for this role.
-  final bool taken;
+  /// This PG already holds [maxStaffPerRole] active people in this role.
+  final bool full;
 
   final VoidCallback onTap;
 
@@ -440,11 +440,12 @@ class StaffRoleCard extends StatelessWidget {
       button: true,
       selected: selected,
       enabled: enabled,
-      label: taken
-          ? '${role.label}. This PG already has an active ${role.label.toLowerCase()}.'
+      label: full
+          ? '${role.label}. This PG already has $maxStaffPerRole active '
+              '${role.label.toLowerCase()}s.'
           : '${role.label}. ${role.blurb}',
       child: Opacity(
-        // A taken post stays legible — it is information, not clutter — but visibly out of
+        // A full post stays legible — it is information, not clutter — but visibly out of
         // reach. Not a colour of its own: the design ships no "disabled" role.
         opacity: enabled ? 1 : 0.5,
         child: FlatSurface(
@@ -477,8 +478,9 @@ class StaffRoleCard extends StatelessWidget {
               ),
               const SizedBox(height: Space.xxs / 2),
               Text(
-                taken
-                    ? 'This PG already has an active ${role.label.toLowerCase()}.'
+                full
+                    ? 'This PG already has $maxStaffPerRole active '
+                        '${role.label.toLowerCase()}s. Deactivate one to make room.'
                     : role.blurb,
                 style: t.textTheme.bodySmall,
               ),

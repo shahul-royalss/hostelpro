@@ -1,7 +1,7 @@
 # Play technical compliance — independent verification of the release artifact
 
 **Artifact:** `dist/NIVORA-1.0.0.apk` and `dist/NIVORA-1.0.0.aab`
-**Package:** `app.nivora.mobile` · versionCode 1 · versionName 1.0.0
+**Package:** `com.srnivora.app` · versionCode 1 · versionName 1.0.0
 **Verified:** 4 September 2026, on the build workstation, against the artifacts then in `dist/`.
 **Method:** every claim below was read out of the artifact itself with `aapt2`, `apksigner`,
 `unzip` and a direct ELF header parse. Nothing was taken on trust from the build guide.
@@ -37,7 +37,7 @@ the binary, and are listed in §6.
 
 ```
 $ aapt2 dump badging dist/NIVORA-1.0.0.apk | grep -E "package:|targetSdkVersion"
-package: name='app.nivora.mobile' versionCode='1' versionName='1.0.0'
+package: name='com.srnivora.app' versionCode='1' versionName='1.0.0'
          compileSdkVersion='36' compileSdkVersionCodename='16'
 targetSdkVersion:'36'
 ```
@@ -59,7 +59,7 @@ $ aapt2 dump badging dist/NIVORA-1.0.0.apk | grep uses-permission
 android.permission.INTERNET
 android.permission.ACCESS_NETWORK_STATE
 android.permission.NFC
-app.nivora.mobile.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+com.srnivora.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 android.permission.READ_BASIC_PHONE_STATE
 ```
 
@@ -74,7 +74,7 @@ rather than guessed at:
 | `ACCESS_NETWORK_STATE` | normal | **ours** | **Yes.** Lets the app distinguish "you are offline" from "the server is down" — two different messages to a warden standing in a corridor. |
 | `NFC` | normal | `com.razorpay:standard-core:1.7.18` | **Yes, and not ours to remove.** Razorpay Checkout supports contactless card reads. No runtime prompt. |
 | `READ_BASIC_PHONE_STATE` | normal | `com.razorpay:core:1.0.18` | **Yes.** The API-33+ *reduced-scope* replacement for `READ_PHONE_STATE`; Razorpay uses it for carrier detection during UPI and OTP flows. It exposes no device identifier, so it needs **no** Play Console declaration — unlike `READ_PHONE_STATE`, which would. |
-| `app.nivora.mobile.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `signature` | androidx.core | **Yes.** Auto-generated when a non-exported runtime receiver is registered on API 33+. Namespaced to this app, signature-level, grants access to nothing. Not shown to users. |
+| `com.srnivora.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `signature` | androidx.core | **Yes.** Auto-generated when a non-exported runtime receiver is registered on API 33+. Namespaced to this app, signature-level, grants access to nothing. Not shown to users. |
 
 **Specifically absent**, and each absence is load-bearing for the Data safety answers:
 

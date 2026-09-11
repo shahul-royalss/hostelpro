@@ -194,6 +194,31 @@ enum ExpenseCategory implements WireValue {
   static ExpenseCategory? tryParse(String? v) => wireOrNull(ExpenseCategory.values, v);
 }
 
+/// public.expense_kind — WHEN an expense happens, which is a different question from what it
+/// was spent on.
+///
+/// The product owner asked the manager's expense screen for "one time monthly expense" and
+/// "day to day expenses". It is a separate axis from [ExpenseCategory] on purpose: electricity
+/// is a monthly bill in one PG and a daily prepaid top-up in another, and folding the two into
+/// one enum would force every hostel into one of those shapes.
+enum ExpenseKind implements WireValue {
+  /// Paid once for a month — the building's rent, salaries, the electricity bill. Its `date`
+  /// is the first of the month it belongs to, so a month-by-month chart groups it correctly
+  /// whichever day it was actually settled.
+  monthly('monthly', 'Monthly'),
+
+  /// Day-to-day spending: vegetables, gas, a plumber, cleaning supplies.
+  daily('daily', 'Day-to-day');
+
+  const ExpenseKind(this.wire, this.label);
+  @override
+  final String wire;
+  @override
+  final String label;
+
+  static ExpenseKind? tryParse(String? v) => wireOrNull(ExpenseKind.values, v);
+}
+
 /// public.revenue_source
 enum RevenueSource implements WireValue {
   fees('fees', 'Fees'),

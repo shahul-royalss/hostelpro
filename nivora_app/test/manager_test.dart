@@ -386,9 +386,16 @@ void main() {
 
       expect(find.textContaining('Profit'), findsNothing);
       expect(find.textContaining('profit'), findsNothing);
-      // public.fee_payments is unreadable to this role. Saying so is the difference between a
-      // gap and a wrong number.
-      expect(find.textContaining('Rent is collected separately'), findsOneWidget);
+      // public.fee_payments is unreadable to this role, so the difference between money in and
+      // money out is NOT the hostel's profit and must never be labelled as though it were.
+      //
+      // THE SENTENCE THIS USED TO LOOK FOR IS GONE. "September 2026 so far. Rent is collected
+      // separately by the warden and is not counted here." came off the dashboard on
+      // 2026-09-12 at the product owner's request. The claim it protected is unchanged, and
+      // the tile that carries it now is asserted instead — one statement in the place the
+      // figure is, rather than the same disclaimer twice on one screen.
+      expect(find.textContaining('Rent is collected separately'), findsNothing);
+      expect(find.text('Mess and deposits, not rent'), findsOneWidget);
     });
 
     testWidgets('nothing on the screen claims a figure this role cannot read', (tester) async {
@@ -747,7 +754,12 @@ void main() {
       // is uppercased by SectionLabel, because a TextStyle cannot.
       expect(find.text("TODAY'S TASKS"), findsOneWidget);
       expect(find.text('MONEY IN AND OUT'), findsOneWidget);
-      expect(find.text('DO IT NOW'), findsOneWidget);
+      // 'DO IT NOW' was here. The four-button action grid came off on 2026-09-12: every one of
+      // its destinations is a tab on the bar below, and recording money is one tap from the
+      // Expenses tab's own + button. Asserted ABSENT rather than deleted, so putting it back
+      // is a decision somebody makes on purpose.
+      expect(find.text('DO IT NOW'), findsNothing);
+      expect(find.text('NOTICES'), findsNothing);
 
       // The Stitch headings these replaced — sentence case, inside a card, behind a glyph.
       expect(find.text('Task board'), findsNothing);

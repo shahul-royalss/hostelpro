@@ -236,22 +236,25 @@ class _RoleShellState extends ConsumerState<RoleShell> {
             onTap: () => showStaffProfile(context),
             customBorder: const CircleBorder(),
             child: Padding(
-              // Space.xs, not Space.xxs. 32dp disc + 4 + 4 was a 40dp target — 8 under
-              // Material's 48dp floor and under Apple's 44pt — on the control that opens
-              // profile and sign out. `customBorder: CircleBorder()` also clips the hit region
-              // to a circle, so the corners were dead and the real target was smaller than the
-              // 40 it measured. 8 + 32 + 8 is 48. The visible disc does not change.
+              // 8 + 44 + 8 is a 60dp target on the control that opens profile, two-factor
+              // and sign out. `customBorder: CircleBorder()` clips the hit region to a circle,
+              // so the corners are dead and the real target is smaller than its box — which is
+              // why it is generous. The disc grew from 32 on 2026-09-12; see AvatarSize.header.
               padding: const EdgeInsets.all(Space.xs),
               child: AccountAvatar(
                 name: name.isEmpty ? 'Nivora' : name,
-                size: IconSize.xl,
+                size: AvatarSize.header,
               ),
             ),
           ),
         ),
         Expanded(child: Center(child: MastheadBlock(name: name))),
         // The empty twin of the avatar. Sized from the same constants so the two cannot drift.
-        const SizedBox(width: IconSize.xl + Space.xxs * 2),
+        // The avatar block's EXACT twin, so the masthead is centred on the screen.
+        // This said `IconSize.xl + Space.xxs * 2` — 40 — while the block opposite it is a
+        // 44dp disc inside Space.xs of padding, 60. The masthead has been sitting off
+        // centre in all four shells for as long as both lines have existed.
+        const SizedBox(width: AvatarSize.header + Space.xs * 2),
       ],
     );
   }

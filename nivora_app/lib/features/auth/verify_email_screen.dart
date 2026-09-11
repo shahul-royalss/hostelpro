@@ -38,7 +38,7 @@ import 'email_verification_service.dart';
 // to verify".
 //
 // Those turn out to be the same fix. The redirect is now a custom scheme,
-// `app.nivora.mobile://verify-email` ([Env.emailConfirmRedirectUrl]), matched by a VIEW
+// `com.srnivora.app://verify-email` ([Env.emailConfirmRedirectUrl]), matched by a VIEW
 // intent-filter in AndroidManifest.xml. The app pins AuthFlowType.pkce, so it — and only it —
 // holds the verifier for a link it asked for; the link therefore lands in Nivora, Nivora
 // exchanges what GoTrue appends, and the person is SIGNED IN BY THE LINK. That sign-in is the

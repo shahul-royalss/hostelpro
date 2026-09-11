@@ -37,10 +37,10 @@ abstract final class Env {
   /// android/app/src/main/AndroidManifest.xml — because a manifest cannot read a Dart constant.
   /// Change one and you must change the other, and the operator instruction below changes with
   /// them, which is why the instruction is built from these constants rather than typed out.
-  static const emailLinkScheme = 'app.nivora.mobile';
+  static const emailLinkScheme = 'com.srnivora.app';
 
   /// The authority half of the deep link. Pinned in the intent-filter alongside the scheme, so
-  /// the filter cannot be widened by accident into "any app.nivora.mobile:// link".
+  /// the filter cannot be widened by accident into "any com.srnivora.app:// link".
   static const emailLinkHost = 'verify-email';
 
   /// Where the confirmation link in a verification email lands after GoTrue has accepted it.
@@ -73,7 +73,7 @@ abstract final class Env {
   /// dashboard entry. Measured against this project on 2026-09-01 by asking /auth/v1/verify to
   /// redirect a dead token:
   ///
-  ///   app.nivora.mobile://verify-email                      -> https://hostelpro-three.vercel.app
+  ///   com.srnivora.app://verify-email                      -> https://hostelpro-three.vercel.app
   ///   https://hostelpro-three.vercel.app/verify-email/…     -> honoured (same host as Site URL)
   ///   https://definitely-not-allowed.example.org/x          -> https://hostelpro-three.vercel.app
   ///
@@ -81,7 +81,7 @@ abstract final class Env {
   /// Site URL, silently. Paste this exact string into Supabase → Authentication → URL
   /// Configuration → Redirect URLs, and press Save:
   ///
-  ///     app.nivora.mobile://verify-email
+  ///     com.srnivora.app://verify-email
   ///
   /// ═══ AND IF NOBODY EVER PASTES IT, NOTHING BREAKS ═══
   ///

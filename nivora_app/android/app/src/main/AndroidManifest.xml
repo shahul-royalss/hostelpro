@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
       REQUIRED IN main, not just debug/profile. Flutter's template adds INTERNET only to the
@@ -9,9 +10,40 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Lets the app tell "you are offline" apart from "the server is down". -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- ── WHAT IS ASKED FOR AT RUNTIME, AND WHAT IS DELIBERATELY NOT ──────────────────────
+
+         POST_NOTIFICATIONS is a runtime permission from Android 13 (API 33). Without it the app
+         can hold a valid FCM token, the server can send a perfectly good message, and NOTHING
+         APPEARS — silently. Rent reminders, a notice from the owner and "payment received" all
+         arrive through it, so it is asked for in words before the system dialog (see
+         core/notify/) rather than sprung on first launch.
+
+         CAMERA is declared because a warden photographs an ID proof and a resident photographs a
+         complaint. It is the one dangerous permission this app holds, and DECLARING IT IS WHAT
+         MAKES IT MANDATORY: ACTION_IMAGE_CAPTURE throws SecurityException for an app that
+         declares CAMERA without holding it, so data/capture.dart asks first. The uses-feature
+         line keeps the app installable on a device with no camera — a declared permission
+         otherwise implies required hardware and quietly filters the store listing.
+
+         NOT DECLARED, each absence deliberate:
+           READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE — the gallery goes through Android's photo
+             picker, which returns one chosen image and needs no permission at all. Asking for the
+             media library would trigger Play's Photo and Video Permissions declaration for a
+             capability this app does not use.
+           READ_CONTACTS — nothing in Nivora reads a contact. A guardian's phone is typed into a
+             form by the warden.
+           AD_ID — no advertising, no analytics SDK, no ad id. Removed EXPLICITLY rather than
+             merely left out: a dependency's manifest can merge it in, and its presence would
+             contradict the Data safety declaration. tools:node="remove" makes that a fact about
+             the merged manifest instead of a hope. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
     <!-- ── THE SESSION MUST NOT LEAVE THE PHONE ────────────────────────────────────────────
          Android Auto Backup is ON BY DEFAULT. With it on,
-         /data/data/app.nivora.mobile/shared_prefs/FlutterSharedPreferences.xml is uploaded to
+         /data/data/com.srnivora.app/shared_prefs/FlutterSharedPreferences.xml is uploaded to
          the user's Google Drive and restored by Android 12+ device-to-device transfer — and
          that file holds the persisted GoTrue session, including a long-lived refresh token for
          an account that moves other people's rent.
@@ -73,16 +105,16 @@
               A CUSTOM SCHEME, AND NOT http/https, DELIBERATELY.
               An <data android:scheme="https"> filter would offer this app as a handler for
               ordinary web links and, without a verified Digital Asset Link, Android would show
-              a disambiguation sheet on somebody else's URLs. `app.nivora.mobile` is this app's
+              a disambiguation sheet on somebody else's URLs. `com.srnivora.app` is this app's
               own applicationId used as a scheme (see android/app/build.gradle.kts), which is
               the reverse-DNS form Android and RFC 3986 both allow and which nothing else on the
               device can claim. The scheme AND the host are both pinned, so the ONLY Uri this
-              filter accepts is app.nivora.mobile://verify-email[?...]. No http, no https, no
+              filter accepts is com.srnivora.app://verify-email[?...]. No http, no https, no
               bare scheme wildcard.
 
               MUST BE MIRRORED IN THE SUPABASE DASHBOARD or no link ever arrives here: paste
 
-                  app.nivora.mobile://verify-email
+                  com.srnivora.app://verify-email
 
               into Authentication -> URL Configuration -> Redirect URLs. Measured against this
               project on 2026-09-01: GoTrue does not refuse an unlisted redirect, it SILENTLY
@@ -97,7 +129,7 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="app.nivora.mobile" android:host="verify-email"/>
+                <data android:scheme="com.srnivora.app" android:host="verify-email"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

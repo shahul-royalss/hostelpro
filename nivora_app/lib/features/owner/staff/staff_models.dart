@@ -7,10 +7,9 @@ import '../../../data/models/parse.dart';
 ///
 /// WHY THESE LIVE HERE. `public.users` is read by three features already, but never as *staff*:
 /// the manager's directory wants contacts, the session wants an identity, and neither cares
-/// about the one rule that shapes this screen — Hard rule §4.3, ONE active manager and ONE
-/// active warden per hostel, enforced by `app.enforce_role_limits` and the partial unique index
-/// `users_one_active_staff_per_hostel`. Everything below is modelled around that rule. Promote
-/// it into lib/data the moment a second role needs it.
+/// about the rule that shapes this screen — Hard rule §4.3, at most [maxStaffPerRole] active
+/// managers and [maxStaffPerRole] active wardens per hostel. Everything below is modelled
+/// around that rule. Promote it into lib/data the moment a second role needs it.
 ///
 /// Coerced through parse.dart like the rest of the data layer, so a renamed column names itself
 /// instead of turning into a blank field.
@@ -53,6 +52,19 @@ enum StaffRole implements WireValue {
   /// What this person actually does, for the empty state and the add form.
   final String blurb;
 }
+
+/// HOW MANY ACTIVE MANAGERS, AND HOW MANY ACTIVE WARDENS, ONE PG MAY HAVE.
+///
+/// FIVE SINCE 2026-09-12; it was one of each. The product owner: "owner can create upto 5
+/// warden & 5 manager accounts." A second PG needs its own pair, and one building with two
+/// shifts needs two wardens who are both real accounts rather than one login handed around.
+///
+/// THE DATABASE IS THE RULE, NOT THIS. `app.enforce_role_limits` refuses the sixth, taking an
+/// advisory lock on (hostel, role) before it counts so two simultaneous creates cannot both
+/// pass at four — that lock replaced the `users_one_active_staff_per_hostel` unique index,
+/// which could only ever express "at most one". This constant exists so the screen can draw
+/// the limit and disable Add before the round trip; if the two disagree, this one is the bug.
+const maxStaffPerRole = 5;
 
 /// Mirrors `public.user_status`.
 ///
@@ -129,17 +141,20 @@ class StaffMember {
       );
 }
 
-/// The active holder of a role, or null. The rest of the list is history.
+/// Who holds a post right now, and who used to.
 extension StaffRoster on List<StaffMember> {
+  /// Everyone who has ever held this post, active first and newest first within that — the
+  /// order `OwnerStaffRepository.staff()` asks the server for.
   List<StaffMember> inRole(StaffRole role) =>
       where((s) => s.role == role).toList(growable: false);
 
-  StaffMember? activeIn(StaffRole role) {
-    for (final s in this) {
-      if (s.role == role && s.isActive) return s;
-    }
-    return null;
-  }
+  /// The people who hold it TODAY. Up to [maxStaffPerRole] of them.
+  List<StaffMember> activeInRole(StaffRole role) =>
+      where((s) => s.role == role && s.isActive).toList(growable: false);
+
+  /// Whether this PG can take another. Asked before the sheet opens rather than after the
+  /// server refuses, which is the whole reason the count is on the screen.
+  bool isFull(StaffRole role) => activeInRole(role).length >= maxStaffPerRole;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

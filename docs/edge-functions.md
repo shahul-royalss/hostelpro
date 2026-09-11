@@ -28,6 +28,39 @@ Function is a server, not a browser. Every screen completes inside the app.
 
 ---
 
+## push-send — a notification row becomes a banner
+
+**POST** `/functions/v1/push-send` · body `{ "notification_ids": ["uuid", ...] }` · `verify_jwt: true`
+
+Called by `app.notifications_dispatch_push()`, an `AFTER INSERT ... FOR EACH STATEMENT` trigger on
+`public.notifications`, through pg_net. One HTTP call per insert statement (ids batched 200 at a
+time), and only for recipients who have a device registered in `public.push_devices`.
+
+**There is no shared secret, on purpose.** The function CLAIMS its rows first —
+`update notifications set pushed_at = now() where id in (...) and pushed_at is null` — and sends
+only what it claimed, so a replay claims nothing. Rows older than 15 minutes are never sent.
+
+**It is a no-op until Firebase exists.** With `FCM_SERVICE_ACCOUNT` unset it returns
+`{ ok: true, sent: 0, skipped: "not_configured" }` and claims nothing, so nothing is lost: the
+notification rows are still written and still visible in the app's own list.
+
+### What only the account holder can do
+
+1. **Create the Firebase project** — <https://console.firebase.google.com> → Add project. Any name;
+   Google Analytics is not needed and adds an advertising id, which this app declares it does not use.
+2. **Add an Android app** with package name **`com.srnivora.app`** exactly. Download the
+   `google-services.json` it offers and put it at `nivora_app/android/app/google-services.json`.
+   That file is not a secret — it ships inside the APK — but it IS gitignored here, because it
+   belongs to whoever owns the Play listing.
+3. **Generate a service-account key** — Project settings → Service accounts → *Generate new private
+   key*. This one IS a secret: it can send a notification to every device in the project.
+4. **Put it in Supabase, not in the repository** — Dashboard → Edge Functions → Secrets →
+   `FCM_SERVICE_ACCOUNT`, pasting the whole JSON file as the value. Nothing else needs to change;
+   the next notification is pushed.
+
+Until step 4 the app builds, runs and asks for notification permission exactly as it will
+afterwards — the only difference is that nothing arrives while the app is closed.
+
 ## 2. The functions
 
 | Function | Caller must be | What it does | `verify_jwt` |
@@ -350,7 +383,7 @@ read `auth.mfa_amr_claims` and why that table can never gain a row for a PKCE li
    an hour and is not for production; a real SMTP provider belongs in
    Authentication → Emails → SMTP Settings before this ships to a hostel.
 4. **Authentication → URL Configuration → Redirect URLs — ONE ENTRY IS STILL MISSING.** The app
-   asks for `app.nivora.mobile://verify-email`, a custom scheme whose intent filter opens
+   asks for `com.srnivora.app://verify-email`, a custom scheme whose intent filter opens
    Nivora, so that the link signs the person in and that sign-in *is* the proof. GoTrue accepts
    a `redirect_to` only if it is on the allow-list or shares a hostname with the Site URL, and a
    custom scheme shares a hostname with nothing — so it needs the allow-list entry.
@@ -360,7 +393,7 @@ read `auth.mfa_amr_claims` and why that table can never gain a row for a PKCE li
    not need to change again.
 
    Measured 2026-09-01 by asking `/auth/v1/verify` to redirect a dead token and reading the
-   `Location` header: `app.nivora.mobile://verify-email` and a deliberately bogus URL are both
+   `Location` header: `com.srnivora.app://verify-email` and a deliberately bogus URL are both
    **silently substituted** with the Site URL, while a same-host URL is honoured. GoTrue never
    refuses an unlisted redirect out loud, so there is no error for the app to catch and no way
    for this server to detect the condition.

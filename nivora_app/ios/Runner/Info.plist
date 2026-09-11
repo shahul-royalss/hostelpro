@@ -37,7 +37,7 @@
 	     reviewer is looking for is WHICH feature and WHY, which is also what an actual user
 	     deserves to read in the dialog. -->
 	<!-- WITHOUT THIS, EMAIL VERIFICATION IS DEAD ON iOS. GoTrue redirects the confirmation
-	     link to app.nivora.mobile://verify-email?code=..., and with no app claiming the scheme
+	     link to com.srnivora.app://verify-email?code=..., and with no app claiming the scheme
 	     Safari answers "cannot open the page because the address is invalid". The PKCE code
 	     verifier only exists inside the app, so the exchange cannot complete anywhere else —
 	     the link is not merely inconvenient off-device, it is unusable.
@@ -50,10 +50,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>app.nivora.mobile</string>
+			<string>com.srnivora.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>app.nivora.mobile</string>
+				<string>com.srnivora.app</string>
 			</array>
 		</dict>
 	</array>

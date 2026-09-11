@@ -125,8 +125,10 @@ export async function createStaff(input: { role: "manager" | "warden"; fullName:
       .eq("role", parsed.data.role)
       .eq("status", "active")
       .is("deleted_at", null);
-    if ((count ?? 0) >= 1) {
-      return fail(`This hostel already has an active ${parsed.data.role}. Deactivate the current ${parsed.data.role} first.`);
+    // Five each since 2026-09-12, matching app.enforce_role_limits and the mobile app's
+    // owner-create-staff Edge Function. The trigger is the rule; this is the early message.
+    if ((count ?? 0) >= 5) {
+      return fail(`This PG already has 5 active ${parsed.data.role}s. Deactivate one first.`);
     }
 
     const created = await createStaffAccount({

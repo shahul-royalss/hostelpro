@@ -16,7 +16,7 @@ Under **Redirect URLs**, click **Add URL** and paste this, exactly, with no trai
 no `https://` in front of it:
 
 ```
-app.nivora.mobile://verify-email
+com.srnivora.app://verify-email
 ```
 
 Press **Save**. There is no deploy step and no rebuild; it takes effect on the next email sent.
@@ -27,7 +27,7 @@ release does not need it changed. Site URL now only decides where a *browser* la
 cannot open the deep link — the fallback in §4.2 — and where GoTrue sends a redirect it has
 refused. Both are already pointing at a page that loads.
 
-Do **not** add a wildcard (`app.nivora.mobile://**`, or `https://hostelpro-three.vercel.app/**`).
+Do **not** add a wildcard (`com.srnivora.app://**`, or `https://hostelpro-three.vercel.app/**`).
 The allow-list is what stops an emailed one-time token being redirected somewhere an attacker
 chose. One exact entry is all this needs.
 
@@ -72,8 +72,8 @@ So the redirect is a **custom scheme that opens Nivora**:
 
 | Piece | Where | Value |
 |---|---|---|
-| Redirect the app requests | `nivora_app/lib/core/config/env.dart` → `Env.emailConfirmRedirectUrl` | `app.nivora.mobile://verify-email` |
-| Intent filter that catches it | `nivora_app/android/app/src/main/AndroidManifest.xml` | `<data android:scheme="app.nivora.mobile" android:host="verify-email"/>` |
+| Redirect the app requests | `nivora_app/lib/core/config/env.dart` → `Env.emailConfirmRedirectUrl` | `com.srnivora.app://verify-email` |
+| Intent filter that catches it | `nivora_app/android/app/src/main/AndroidManifest.xml` | `<data android:scheme="com.srnivora.app" android:host="verify-email"/>` |
 | Dashboard allow-list entry | Supabase → Authentication → URL Configuration | the same string (§0) |
 
 All three must be the same string. The first two are asserted against each other by
@@ -86,7 +86,7 @@ What happens on the phone, in order:
 
 1. GoTrue matches the emailed token at `/auth/v1/verify` and stamps
    `auth.flow_state.auth_code_issued_at`. **The proof is minted here**, before any redirect.
-2. GoTrue 303s to `app.nivora.mobile://verify-email?code=…`.
+2. GoTrue 303s to `com.srnivora.app://verify-email?code=…`.
 3. Android hands that Uri to Nivora — to the copy already running, because `MainActivity` is
    `launchMode="singleTop"`, or by cold-starting it.
 4. `supabase_flutter`'s deep-link observer sees the `code` parameter, calls
@@ -100,13 +100,13 @@ An `https` intent filter would offer Nivora as a handler for ordinary web URLs. 
 verified Digital Asset Link, Android shows a disambiguation sheet on somebody else's links — and
 on Android 12+ an `autoVerify` filter that fails verification is **never offered to the app at
 all**. `public/.well-known/assetlinks.json` currently delegates `hostelpro-three.vercel.app` to
-`app.nivora.twa`, the old web wrapper, not to `app.nivora.mobile`; adding the Flutter app needs
+`app.nivora.twa`, the old web wrapper, not to `com.srnivora.app`; adding the Flutter app needs
 the Play App Signing SHA-256, which per `docs/PLAY-CRITICAL-assetlinks.md` does not exist until
 after the first upload. So an App Link would ship as a filter that never fires.
 
-`app.nivora.mobile` is this app's own `applicationId` used as a scheme — the reverse-DNS form
+`com.srnivora.app` is this app's own `applicationId` used as a scheme — the reverse-DNS form
 RFC 3986 allows, which nothing else on the device can claim. **Scheme and host are both pinned**,
-so the only Uri the filter accepts is `app.nivora.mobile://verify-email[?…]`. It captures no
+so the only Uri the filter accepts is `com.srnivora.app://verify-email[?…]`. It captures no
 `http`, no `https`, and no bare-scheme wildcard; a test asserts that too.
 
 ### One cost, stated plainly: the super admin re-enters their TOTP
@@ -130,7 +130,7 @@ Measured 2026-09-01 by asking `/auth/v1/verify` to redirect a **dead** token and
 real link:
 
 ```
-redirect_to=app.nivora.mobile://verify-email
+redirect_to=com.srnivora.app://verify-email
   -> 303  Location: https://hostelpro-three.vercel.app#error=…otp_expired…     SUBSTITUTED
 
 redirect_to=https://hostelpro-three.vercel.app/verify-email/confirmed
@@ -372,7 +372,7 @@ click to the next `status` call, which is seconds — but it is why two independ
 
 ## 9. What was NOT measured, said plainly
 
-- **A real click on a link that redirects to `app.nivora.mobile://verify-email`.** Not
+- **A real click on a link that redirects to `com.srnivora.app://verify-email`.** Not
   measured. It cannot be, from here: the allow-list entry in §0 is a dashboard field, GoTrue
   substitutes the Site URL until somebody adds it (§3), and adding it is not something this
   codebase or Claude can do. What *is* measured is the part that carries the risk — that the
@@ -381,7 +381,7 @@ click to the next `status` call, which is seconds — but it is why two independ
 - **The app running on a device.** No APK or Gradle build was run. The manifest was parsed and
   validated as well-formed XML, and the intent filter it registers was read back from the parse
   tree: one `MainActivity`, `exported=true`, `launchMode=singleTop`, and a VIEW/DEFAULT/BROWSABLE
-  filter whose only `<data>` is `scheme=app.nivora.mobile host=verify-email`.
+  filter whose only `<data>` is `scheme=com.srnivora.app host=verify-email`.
 - **`supabase_flutter`'s behaviour was read, not run.** Version 2.17.2:
   `detectSessionInUri` defaults to `true`; the default callback predicate returns true for any
   Uri carrying `code` in the query or fragment; on Android the initial (cold-start) Uri arrives

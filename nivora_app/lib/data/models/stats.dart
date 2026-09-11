@@ -114,6 +114,7 @@ class RoomOccupancy {
     required this.roomNumber,
     required this.capacity,
     required this.occupied,
+    this.floorName,
   });
 
   final String roomId;
@@ -122,6 +123,10 @@ class RoomOccupancy {
   final String roomNumber;
   final int capacity;
   final int occupied;
+
+  /// public.floors.name, carried through rpc_room_occupancy so a grid can head a storey with
+  /// what the PG calls it. Null for a floor nobody has named. See [floorLabel].
+  final String? floorName;
 
   int get free => capacity - occupied;
   bool get isFull => occupied >= capacity;
@@ -136,6 +141,9 @@ class RoomOccupancy {
       roomNumber: reqString(row, src, 'room_number'),
       capacity: reqInt(row, src, 'capacity'),
       occupied: reqInt(row, src, 'occupied'),
+      // optString, not reqString: the column is nullable AND an older client reading a newer
+      // server must not throw on a field it has never heard of.
+      floorName: optString(row, 'floor_name'),
     );
   }
 }

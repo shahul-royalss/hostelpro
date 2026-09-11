@@ -42,7 +42,7 @@ live RLS attack suites. This document does not restate or re-verify those result
   findings against it.
 - `npm run security:all`: exit 0, including 53 webhook-signature cases.
 - Artifacts: both APKs verify (v2; `minSdk 24`, so the absent v1 JAR signature is correct rather
-  than missing), package `app.nivora.mobile`, versionCode 1 on both APKs and on the bundle, four
+  than missing), package `com.srnivora.app`, versionCode 1 on both APKs and on the bundle, four
   arm64 native libraries all aligned ≥ 16 KB, and no secrets in either APK or in any of the
   AAB's three ABIs.
 

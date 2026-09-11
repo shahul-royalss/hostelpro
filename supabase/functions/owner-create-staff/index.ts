@@ -25,10 +25,11 @@
  *
  * ═══ WHAT THE DATABASE STILL DECIDES ═══
  * The service role bypasses RLS but NOT triggers. app.enforce_role_limits fires on the
- * public.users insert and refuses a second active manager or warden for the same hostel
- * (Hard rule §4.3), and the users_one_active_staff_per_hostel unique index settles the race
- * that the trigger's count(*) cannot. The count below is only a friendlier early message; the
- * trigger and the index are the actual rule.
+ * public.users insert and refuses the SIXTH active manager or warden for the same hostel (Hard
+ * rule §4.3, five each since 2026-09-12), taking an advisory lock on (hostel, role) before it
+ * counts so two simultaneous creates cannot both squeeze past four. That lock replaced the
+ * users_one_active_staff_per_hostel unique index, which could only ever express "at most one".
+ * The count below is a friendlier early message; the trigger is the actual rule.
  *
  * ═══ ROLLBACK ═══
  * If the public.users insert loses to that trigger or index, createStaffAccount deletes the
@@ -56,6 +57,17 @@ import { assertWritable, requireOwnedHostel } from "../_shared/tenant.ts";
 import { normalizePhone, Validator } from "../_shared/validate.ts";
 
 const MAX_BODY_BYTES = 32 * 1024;
+
+/**
+ * How many active managers, and how many active wardens, one PG may have.
+ *
+ * MIRRORS app.enforce_role_limits, WHICH IS THE ACTUAL RULE. The count below is a friendlier
+ * early message so the common case reads as a form error instead of a 409 arriving after a
+ * login has been created and rolled back. It was 1 until 2026-09-12; the owner needed staff
+ * for a second PG and shift cover for the first. If these two numbers ever disagree, the
+ * trigger wins and this one is a bug.
+ */
+const MAX_PER_ROLE = 5;
 
 /** Mirrors ROLE_LABEL in lib/roles.ts, so the app shows the same words the browser does. */
 const ROLE_LABEL: Record<"manager" | "warden", string> = { manager: "Manager", warden: "Warden" };
@@ -105,10 +117,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .eq("status", "active")
       .is("deleted_at", null);
     if (countError) throw dbError(countError);
-    if ((count ?? 0) >= 1) {
+    if ((count ?? 0) >= MAX_PER_ROLE) {
       throw new HttpError(
         409,
-        "This hostel already has an active " + input.role + ". Deactivate the current " + input.role + " first.",
+        "This PG already has " + MAX_PER_ROLE + " active " + input.role + "s. Deactivate one first.",
       );
     }
 

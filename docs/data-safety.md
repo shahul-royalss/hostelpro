@@ -74,7 +74,7 @@ component a build error.
 | **App activity › Other user-generated content** | **Yes** | No | No | Optional | App functionality | `complaints.title`/`description`/`resolution_note`, `complaint_events.note`, `leaves.reason`, `announcements.body`, `tasks.description`, `fee_payments.notes`, `expenses.note`, `visitors.relation` |
 | App activity › In-app search history | No | — | — | — | — | Not recorded |
 | App activity › Installed apps | No | — | — | — | — | The manifest cannot see other packages (no `QUERY_ALL_PACKAGES`) |
-| **Device or other IDs** | **Yes** | No | No | **Required** | Fraud prevention, security and compliance | `audit_log.ip`, `audit_log.user_agent`, `security_alerts.ip`, plus Vercel access logs. Razorpay Checkout additionally runs its own device/session telemetry inside its iframe during a payment — §3.4 |
+| **Device or other IDs** | **Yes** | No | No | **Required** | App functionality; fraud prevention, security and compliance | `audit_log.ip`, `audit_log.user_agent`, `security_alerts.ip`, plus Vercel access logs. **`public.push_devices.token` — the FCM registration token — since 2026-09-12; §3.5.** Razorpay Checkout additionally runs its own device/session telemetry inside its iframe during a payment — §3.4 |
 | Location (approximate / precise) | **No** | — | — | — | — | No location permission in the manifest; IP is **never** used for geolocation anywhere in the code |
 | Messages (email / SMS / in-app) | **No** | — | — | — | — | Work-item text, declared under Other user-generated content. Reasoning in the submission pack §2.6 |
 | Health and fitness | **No** | — | — | — | — | No health feature and no health column. Reasoning in the submission pack §2.7 |
@@ -195,6 +195,33 @@ One more bound worth knowing: the Razorpay CSP grants are **scoped to `/student`
 other page in the app — including every screen that renders resident PII — can load Checkout at all.
 
 ---
+
+### 3.5 Notifications — the FCM registration token
+
+Nivora sends push notifications: rent is due, the owner posted a notice, a payment arrived, a task
+was assigned. That needs two things Play asks about.
+
+**The token is a device identifier, and it is declared.** Firebase Cloud Messaging issues each
+install a registration token; `public.push_devices` stores it against the signed-in user's id so
+the server knows which phone to ring. It is collected, not shared, and its purpose is **App
+functionality** — it does nothing else and reaches nobody else. Google's own disclosure guidance
+for FCM says the same (firebase.google.com/docs/android/play-data-disclosure). That is why the
+**Device or other IDs** row in §2 now carries App functionality alongside the security purpose.
+
+**Deleting the account deletes the token.** `push_devices.user_id` is
+`references public.users(id) on delete cascade`, and signing out unregisters the row explicitly.
+A phone that has not checked in for 90 days is pruned by `app.send_rent_reminders()`.
+
+**POST_NOTIFICATIONS is a runtime permission, not a data type.** Play's Data safety form has no box
+for it; the permission is disclosed by the manifest and asked for in words before the system
+dialog. It is not tied to any of the answers above.
+
+**Still no advertising id.** Firebase Cloud Messaging does not pull in
+`play-services-ads-identifier` — Analytics does, and Analytics is deliberately not installed. The
+manifest removes `com.google.android.gms.permission.AD_ID` explicitly with `tools:node="remove"`,
+so a future dependency cannot merge one in silently, and the Advertising ID declaration in Console
+is therefore **No**. Verify that on the BUILT artifact rather than on the source: a permissions
+dump over the AAB must print no AD_ID line.
 
 ## 4. Razorpay: service provider, not third party
 

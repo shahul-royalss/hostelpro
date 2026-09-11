@@ -16,6 +16,7 @@ class Expense {
     required this.amount,
     required this.createdAt,
     required this.updatedAt,
+    this.kind = ExpenseKind.daily,
     this.note,
     this.receiptUrl,
     this.uploadedBy,
@@ -23,7 +24,7 @@ class Expense {
   });
 
   static const columns =
-      'id, hostel_id, date, category, amount, note, receipt_url, uploaded_by, '
+      'id, hostel_id, date, category, kind, amount, note, receipt_url, uploaded_by, '
       'created_at, updated_at, deleted_at';
 
   final String id;
@@ -32,6 +33,12 @@ class Expense {
   /// Plain `date` — the day the money was spent, not the day it was typed in.
   final DateTime date;
   final ExpenseCategory category;
+
+  /// Monthly or day-to-day. DEFAULTS to daily, matching the column's own default: every row
+  /// written before 2026-09-12 has it, and that is a default rather than a classification —
+  /// nothing in those rows says which kind they were, and guessing from the category would put
+  /// invented numbers into the charts this field exists to draw.
+  final ExpenseKind kind;
   final double amount;
   final String? note;
 
@@ -49,6 +56,10 @@ class Expense {
       hostelId: reqString(row, src, 'hostel_id'),
       date: reqDate(row, src, 'date'),
       category: wireOrThrow(ExpenseCategory.values, row['category'], src, 'category'),
+      // tryParse, not wireOrThrow: an older client must keep working against a server that has
+      // learned a new kind, and the column is NOT NULL so the fallback is only ever reached by
+      // a client that predates the value it is reading.
+      kind: ExpenseKind.tryParse(row['kind'] as String?) ?? ExpenseKind.daily,
       amount: reqDouble(row, src, 'amount'),
       note: optString(row, 'note'),
       receiptUrl: optString(row, 'receipt_url'),

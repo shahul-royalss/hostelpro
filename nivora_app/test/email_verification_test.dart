@@ -727,7 +727,7 @@ void main() {
   // possible report of. Measured against this project on 2026-09-01, by asking /auth/v1/verify
   // to redirect a dead token and reading the Location header back:
   //
-  //   app.nivora.mobile://verify-email  ->  https://hostelpro-three.vercel.app   SUBSTITUTED
+  //   com.srnivora.app://verify-email  ->  https://hostelpro-three.vercel.app   SUBSTITUTED
   //
   // GoTrue does not refuse a redirect that is off the allow-list; it silently swaps in the
   // Site URL. A missing dashboard entry therefore looks exactly like a working link that opens
@@ -762,7 +762,7 @@ void main() {
 
       // The literal string an administrator has to paste, not a paraphrase of it. If the
       // scheme ever changes, this fails until the operator instruction changes with it.
-      expect(find.textContaining('app.nivora.mobile://verify-email'), findsOneWidget);
+      expect(find.textContaining('com.srnivora.app://verify-email'), findsOneWidget);
       expect(find.textContaining('URL Configuration'), findsOneWidget);
 
       // Framed as somebody else's job. A resident must never read it as their homework.
@@ -855,7 +855,7 @@ void main() {
         .replaceAll(RegExp(r'<!--.*?-->', dotAll: true), '');
 
     test('the redirect the app asks for is the custom scheme, not a web page', () {
-      expect(Env.emailConfirmRedirectUrl, 'app.nivora.mobile://verify-email');
+      expect(Env.emailConfirmRedirectUrl, 'com.srnivora.app://verify-email');
       expect(Env.emailConfirmRedirectUrl.startsWith('http'), isFalse,
           reason: 'a browser holds no PKCE verifier and can never complete the exchange');
     });

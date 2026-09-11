@@ -189,18 +189,25 @@ final class OwnerStaffRepository extends Repository implements OwnerStaffWrites 
 /// The rule is refused in three places and they do not share a status code, which is why this
 /// matches on the message rather than on the number:
 ///
-///   • the function's friendly pre-count           → 409 "This hostel already has an active
-///                                                    manager. Deactivate the current manager
-///                                                    first."
+///   • the function's friendly pre-count           → 409 "This PG already has 5 active
+///                                                    managers. Deactivate one first."
 ///   • `app.enforce_role_limits` winning the race  → P0001, mapped by dbError to a 400, then
 ///                                                    re-wrapped by rollbackAwareError, which
 ///                                                    hard-codes 400 once the auth user has
 ///                                                    been rolled back
-///   • `users_one_active_staff_per_hostel`         → 23505, dbError's 409 wording, then the
-///                                                    same 400 re-wrap
+///   • dbError's 23505 wording                     → "…already has an active manager or warden
+///                                                    in that role", now unreachable: the
+///                                                    unique index it names was dropped when
+///                                                    the limit became five, and the advisory
+///                                                    lock in the trigger settles the race
+///                                                    instead. Still matched, because a
+///                                                    database that still had the index would
+///                                                    otherwise produce an unrecognised error.
 ///
-/// All three end in the words below, and all three mean exactly one thing to the owner.
-final RegExp _roleTaken = RegExp('already has an active', caseSensitive: false);
+/// All of them mean exactly one thing to the owner, so this matches the SHAPE of the sentence
+/// rather than a count that changed once and can change again.
+final RegExp _roleTaken =
+    RegExp(r'already has (an active|\d+ active)', caseSensitive: false);
 
 /// A rejection the form can act on, or null when this was not about the input at all.
 StaffRejected? staffRejectionFrom(FunctionException error) {

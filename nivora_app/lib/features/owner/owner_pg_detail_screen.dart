@@ -256,8 +256,9 @@ class _FloorBlock extends StatelessWidget {
         children: [
           SectionHeading(
             // Floor numbering is whatever the hostel was scaffolded with — ground floor may be
-            // 0 or 1 — so the number is printed as stored, never as `n + 1`. See Floor.
-            title: 'Floor $floorNumber',
+            // 0 or 1 — so the number is printed as stored, never as `n + 1`. See Floor. The
+            // NAME, when the PG has given the storey one, replaces it outright: see floorLabel.
+            title: floorLabel(floorNumber, rooms.isEmpty ? null : rooms.first.floorName),
             caption: free == 0
                 ? '${countLabel(rooms.length, 'room')} · full'
                 : '${countLabel(rooms.length, 'room')} · ${countLabel(free, 'bed')} free',

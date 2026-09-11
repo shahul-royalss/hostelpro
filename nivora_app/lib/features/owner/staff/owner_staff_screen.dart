@@ -23,13 +23,21 @@ import 'staff_providers.dart';
 /// url_launcher, and no "finish this on the website" — [showAddStaffSheet] posts to an Edge
 /// Function and the account exists.
 ///
-/// ── THE ONE RULE THAT SHAPES THE LAYOUT ──────────────────────────────────────────────────
+/// ── THE RULE THAT SHAPES THE LAYOUT ──────────────────────────────────────────────────────
 ///
-/// Hard rule §4.3: one active manager and one active warden per hostel. That is why this is two
-/// posts with a holder each rather than a list with an Add button — a list implies you can have
-/// several, and finding out otherwise from a 409 after typing somebody's details in is a worse
-/// way to learn it. `app.enforce_role_limits` and the partial unique index
-/// `users_one_active_staff_per_hostel` are what actually enforce it; this screen only draws it.
+/// Hard rule §4.3: up to [maxStaffPerRole] active managers and [maxStaffPerRole] active wardens
+/// per hostel. It was ONE of each until 2026-09-12, which is why this screen used to be two
+/// posts with a single holder drawn into each; the product owner needed staff for a second PG
+/// and shift cover for the first.
+///
+/// So each post is now a LIST with a count on it — "2 of 5" — and Add stays live until the fifth.
+/// The count is on the card rather than only in a refusal, because the question an owner opens
+/// this screen with is "how many wardens do I have", and finding out from a 409 after typing
+/// somebody's details in is the worst possible time to learn it.
+///
+/// `app.enforce_role_limits` is what actually enforces the limit — it takes an advisory lock on
+/// (hostel, role) before it counts, which is what replaced the partial unique index that could
+/// only ever say "at most one". This screen only draws it.
 ///
 /// READS: public.users (via [ownerStaffProvider], under RLS).
 /// WRITES: supabase/functions/owner-create-staff, and a status update on public.users.
@@ -160,8 +168,8 @@ class _StaffBody extends ConsumerWidget {
           padding: const EdgeInsets.all(Space.md),
           children: [
             Text(
-              'One manager and one warden run a PG. Each gets their own login, and each sees '
-              'only their own part of it.',
+              'Up to $maxStaffPerRole managers and $maxStaffPerRole wardens per PG. Each gets '
+              'their own login, and each sees only their own part of it.',
               style: t.textTheme.bodyMedium,
             ),
             const SizedBox(height: Space.lg),
@@ -206,11 +214,11 @@ class _RoleSection extends ConsumerStatefulWidget {
 class _RoleSectionState extends ConsumerState<_RoleSection> {
   bool _busy = false;
 
-  /// Which roles already have an active holder — passed to the sheet so a filled post is drawn
-  /// as filled rather than offered and then refused.
-  Set<StaffRole> get _taken => {
+  /// Which posts have no room left — passed to the sheet so a full post is drawn as full
+  /// rather than offered and then refused.
+  Set<StaffRole> get _full => {
         for (final role in StaffRole.values)
-          if (widget.members.activeIn(role) != null) role,
+          if (widget.members.isFull(role)) role,
       };
 
   Future<void> _add() async {
@@ -219,7 +227,7 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
       hostelId: widget.hostelId,
       hostelName: widget.hostelName,
       initialRole: widget.role,
-      taken: _taken,
+      full: _full,
     );
     if (created == true && mounted) {
       // The sheet already invalidated the list; this is here so the section that opened it is
@@ -247,10 +255,11 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
               // OwnerStaffRepository.setStaffStatus for exactly how much of the session dies
               // and what does not.
               ? '${member.fullName} loses access to this PG immediately: every screen and every '
-                  'record stops loading for them. Their history stays. You can reactivate them, '
-                  'or add a different ${member.role.label.toLowerCase()} once the post is free.'
-              : 'This only works if the ${member.role.label.toLowerCase()} post is free — a PG '
-                  'can have one active ${member.role.label.toLowerCase()} at a time.',
+                  'record stops loading for them. Their history stays — the expenses they '
+                  'entered and the residents they registered are unaffected — and you can '
+                  'reactivate them at any time.'
+              : 'This only works while there is a free place — a PG can have $maxStaffPerRole '
+                  'active ${member.role.label.toLowerCase()}s at once.',
         ),
         actions: [
           TextButton(
@@ -308,37 +317,38 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final role = widget.role;
-    final inRole = widget.members.inRole(role);
-    final active = widget.members.activeIn(role);
-    // No active holder: show the most recent person who did hold it, so "reactivate" is one tap
-    // rather than a search. inRole is already ordered active-first, then newest-first.
-    final primary = active ?? (inRole.isEmpty ? null : inRole.first);
+    // Active first, newest first within that — the order the repository asks the server for.
+    // Everyone who has ever held the post is here: reactivating somebody who worked a season
+    // ago is one tap, and a post that looks empty shows why it is empty.
+    final everyone = widget.members.inRole(role);
+    final active = widget.members.activeInRole(role);
+    final full = active.length >= maxStaffPerRole;
 
-    // The design's staff card, in the order staff-directory.png draws it: the post's own
-    // `label-caps` eyebrow, then the avatar / name / duty-chip header, then an inner block of
-    // the details, then the action row along the foot.
-    //
-    // The mockup's chip says "On Duty" / "Off Duty". This one says Active / Inactive, because
-    // that is what `public.users.status` means: it is whether the account can sign in at all,
-    // not whether somebody is on shift. There is no shift or attendance record for staff in
-    // the schema, and re-labelling an access flag as a duty roster would be a lie the owner
-    // would act on.
     return GlassCard(
       padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // GOLD, which is 4:536's own treatment of a post: on the mockup's staff rows the
-          // role ("Head Warden", "Assistant Manager") is the one thing set in the accent, over
-          // the property in the secondary ink. Here the card's eyebrow IS the post, so the
-          // accent lands on it rather than on a repeat of it beside the name. Measured 8.26:1
-          // on the card. The property is deliberately not repeated — see [_StaffDetails].
-          Text(
-            role.label.toUpperCase(),
-            style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary),
+          Row(
+            children: [
+              Expanded(
+                // GOLD, which is 4:536's own treatment of a post: on the mockup's staff rows
+                // the role is the one thing set in the accent. Measured 8.26:1 on the card.
+                child: Text(
+                  role.label.toUpperCase(),
+                  style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary),
+                ),
+              ),
+              // "2 of 5" — the answer to the question this screen is opened with, before any
+              // scrolling and before any refusal.
+              StatusChip(
+                label: '${active.length} of $maxStaffPerRole',
+                tone: full ? NivoraColors.textMuted : NivoraColors.success,
+              ),
+            ],
           ),
           const SizedBox(height: Space.sm),
-          if (primary == null)
+          if (everyone.isEmpty)
             EmptyNote(
               icon: Icons.person_add_alt_rounded,
               title: 'No ${role.label.toLowerCase()} yet',
@@ -350,29 +360,52 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
               tone: NivoraDomain.people.tone,
             )
           else
-            _StaffDetails(member: primary),
+            for (var i = 0; i < everyone.length; i++) ...[
+              if (i > 0) const Divider(height: Space.lg),
+              _StaffDetails(member: everyone[i]),
+              const SizedBox(height: Space.xs),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: everyone[i].isActive
+                    ? OutlinedButton.icon(
+                        onPressed:
+                            _busy ? null : () => _setStatus(everyone[i], StaffStatus.inactive),
+                        icon: const Icon(Icons.person_off_outlined, size: IconSize.md),
+                        label: const Text('Deactivate'),
+                        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                      )
+                    // Disabled rather than hidden when the post is full: the reason is the
+                    // count above it, and a button that vanishes reads as a lost feature.
+                    : OutlinedButton.icon(
+                        onPressed: _busy || full
+                            ? null
+                            : () => _setStatus(everyone[i], StaffStatus.active),
+                        icon: const Icon(Icons.person_outline_rounded, size: IconSize.md),
+                        label: const Text('Reactivate'),
+                        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                      ),
+              ),
+            ],
           const SizedBox(height: Space.sm),
           Text(role.blurb, style: t.textTheme.bodySmall),
           const SizedBox(height: Space.md),
-          _Actions(
-            role: role,
-            primary: primary,
-            hasActive: active != null,
-            busy: _busy,
-            onAdd: _add,
-            onDeactivate:
-                primary == null ? null : () => _setStatus(primary, StaffStatus.inactive),
-            onReactivate:
-                primary == null ? null : () => _setStatus(primary, StaffStatus.active),
+          // Add is DISABLED, not hidden, at the limit: hiding it would read as a missing
+          // feature, and the sentence under it explains the rule. Disabling here is a drawing
+          // decision — the server refuses the same create with §4.3's own message if this is
+          // ever wrong.
+          FilledButton.icon(
+            onPressed: full || _busy ? null : _add,
+            icon: const Icon(Icons.person_add_alt_rounded, size: IconSize.md),
+            label: Text('Add ${role.label.toLowerCase()}'),
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
           ),
-          if (active != null) ...[
-            const SizedBox(height: Space.xs),
-            Text(
-              'One ${role.label.toLowerCase()} at a time. Deactivate ${active.fullName} to free '
-              'the post.',
-              style: t.textTheme.bodySmall,
-            ),
-          ],
+          const SizedBox(height: Space.xs),
+          Text(
+            full
+                ? '$maxStaffPerRole is the limit. Deactivate one to free a place.'
+                : 'You can add ${maxStaffPerRole - active.length} more.',
+            style: t.textTheme.bodySmall,
+          ),
         ],
       ),
     );
@@ -499,62 +532,6 @@ class _DetailLine extends StatelessWidget {
   }
 }
 
-/// Add / Deactivate / Reactivate.
-///
-/// Add is DISABLED, not hidden, while the post is filled: hiding it would read as a missing
-/// feature, and the sentence under it explains the rule. Disabling here is a drawing decision —
-/// the server refuses the same create with §4.3's own message if this is ever wrong.
-class _Actions extends StatelessWidget {
-  const _Actions({
-    required this.role,
-    required this.primary,
-    required this.hasActive,
-    required this.busy,
-    required this.onAdd,
-    required this.onDeactivate,
-    required this.onReactivate,
-  });
-
-  final StaffRole role;
-  final StaffMember? primary;
-  final bool hasActive;
-  final bool busy;
-  final VoidCallback onAdd;
-  final VoidCallback? onDeactivate;
-  final VoidCallback? onReactivate;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = role.label.toLowerCase();
-    return Wrap(
-      spacing: Space.xs,
-      runSpacing: Space.xs,
-      children: [
-        FilledButton.icon(
-          onPressed: hasActive || busy ? null : onAdd,
-          icon: const Icon(Icons.person_add_alt_rounded, size: IconSize.md),
-          label: Text('Add $label'),
-          style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
-        ),
-        if (primary != null && primary!.isActive)
-          OutlinedButton.icon(
-            onPressed: busy ? null : onDeactivate,
-            icon: const Icon(Icons.person_off_outlined, size: IconSize.md),
-            label: const Text('Deactivate'),
-            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
-          ),
-        if (primary != null && !primary!.isActive)
-          OutlinedButton.icon(
-            onPressed: busy ? null : onReactivate,
-            icon: const Icon(Icons.person_outline_rounded, size: IconSize.md),
-            label: const Text('Reactivate'),
-            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
-          ),
-      ],
-    );
-  }
-}
-
 /// What deactivation does and does not do, said once at the foot of the page.
 ///
 /// Worth the space: an owner who thinks deactivating deletes somebody will not do it, and an
@@ -583,7 +560,7 @@ class _DeactivationNote extends StatelessWidget {
             child: Text(
               'Deactivating keeps the record and the history — the expenses a manager entered '
               'and the residents a warden registered all stay. It only takes away their access, '
-              'and it frees the post so you can add somebody else.',
+              'and it frees a place so you can add somebody else.',
               style: t.textTheme.bodySmall,
             ),
           ),

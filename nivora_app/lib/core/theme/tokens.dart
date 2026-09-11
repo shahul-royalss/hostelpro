@@ -969,6 +969,20 @@ abstract final class IconSize {
   static const xl = 32.0;
 }
 
+/// THE ACCOUNT DISC AT THE TOP-LEFT OF EVERY STAFF SCREEN.
+///
+/// 44, not the 32 it was. The product owner: "in all dashboards, the top left corner profile has
+/// to some big to access and to view perfectly." It is the ONLY way to profile, two-factor and
+/// sign out on four of the five shells, and at 32dp with two initials in it, it read as
+/// decoration rather than as the control it is.
+///
+/// It has its own name rather than another step on [IconSize] because it is not an icon: it is a
+/// person, drawn at the size a person is drawn at, and it must not move when a glyph scale is
+/// retuned. With [Space.xs] either side the tap target is 60dp, past Material's 48 and Apple's 44.
+abstract final class AvatarSize {
+  static const header = 44.0;
+}
+
 /// The generated artwork that replaces the glyph on a first-run empty state.
 ///
 /// ONE SIZE, AND IT IS THE ONLY ONE. 160 is what the art was drawn to be read at, and the

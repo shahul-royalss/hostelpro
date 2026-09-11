@@ -11,9 +11,10 @@ class Floor {
     required this.floorNumber,
     required this.createdAt,
     required this.updatedAt,
+    this.name,
   });
 
-  static const columns = 'id, hostel_id, floor_number, created_at, updated_at';
+  static const columns = 'id, hostel_id, floor_number, name, created_at, updated_at';
 
   final String id;
   final String hostelId;
@@ -21,6 +22,11 @@ class Floor {
   /// Unique per hostel. Ground floor is 0 or 1 depending on how the hostel was scaffolded —
   /// the database does not impose a convention, so never render this as "Floor ${n + 1}".
   final int floorNumber;
+
+  /// What this floor is CALLED, when it is called anything: "Ground floor", "Terrace",
+  /// "Girls' wing". Optional, trimmed, 1–40 characters, and null for the great majority of
+  /// floors — [floorLabel] is what turns the pair into words, so no screen has to decide.
+  final String? name;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -30,10 +36,28 @@ class Floor {
       id: reqString(row, src, 'id'),
       hostelId: reqString(row, src, 'hostel_id'),
       floorNumber: reqInt(row, src, 'floor_number'),
+      name: optString(row, 'name'),
       createdAt: reqTimestamp(row, src, 'created_at'),
       updatedAt: reqTimestamp(row, src, 'updated_at'),
     );
   }
+}
+
+/// WHAT TO CALL A FLOOR.
+///
+/// The number is the identity — ow_set_floor_plan reasons in 1..N and room numbers are derived
+/// from it — and the name is a label on top. Every screen that prints a storey goes through
+/// here, so a PG that calls its ground floor "Ground floor" sees that everywhere, and one that
+/// has never named a floor sees exactly what it always saw.
+///
+/// The name is NOT decorated with the number. "Terrace (Floor 4)" is the kind of thing a
+/// screen adds because it does not trust the person who typed the name; where the number
+/// genuinely matters — the layout editor, which is the place floors are added and removed —
+/// that screen prints both itself.
+String floorLabel(int number, String? name) {
+  final trimmed = name?.trim();
+  if (trimmed == null || trimmed.isEmpty) return 'Floor $number';
+  return trimmed;
 }
 
 /// HOW MANY BEDS A SINGLE ROOM MAY HOLD.

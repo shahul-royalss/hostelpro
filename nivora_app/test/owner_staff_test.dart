@@ -444,10 +444,30 @@ void main() {
       expect(find.text('Add warden'), findsOneWidget);
     });
 
-    testWidgets('§4.3 — Add is disabled while the post is filled, and says why', (tester) async {
+    testWidgets('one manager does NOT fill the post — the limit is five', (tester) async {
+      // THE RULE CHANGED ON 2026-09-12 and this is the test that would have caught a client
+      // still drawing the old one. Until then a single holder disabled Add; a PG with two
+      // shifts, or an owner running a second building, needs more than one of each.
       await _pump(
         tester,
         _overrides(staff: [_member(name: 'Ravi Kulkarni', role: StaffRole.manager)]),
+      );
+
+      final addManager = tester.widget<FilledButton>(
+        find.ancestor(of: find.text('Add manager'), matching: find.byType(FilledButton)),
+      );
+      expect(addManager.onPressed, isNotNull, reason: 'four places are still free');
+      expect(find.text('1 of 5'), findsOneWidget);
+      expect(find.text('You can add 4 more.'), findsOneWidget);
+    });
+
+    testWidgets('§4.3 — Add is disabled once five hold the post, and says why', (tester) async {
+      await _pump(
+        tester,
+        _overrides(staff: [
+          for (var i = 1; i <= 5; i++)
+            _member(id: 'm-$i', name: 'Manager $i', role: StaffRole.manager),
+        ]),
       );
 
       final addManager = tester.widget<FilledButton>(
@@ -457,15 +477,13 @@ void main() {
         find.ancestor(of: find.text('Add warden'), matching: find.byType(FilledButton)),
       );
 
-      expect(addManager.onPressed, isNull, reason: 'the manager post is taken');
-      expect(addWarden.onPressed, isNotNull, reason: 'the warden post is free');
-      expect(
-        find.textContaining('Deactivate Ravi Kulkarni to free the post'),
-        findsOneWidget,
-      );
+      expect(addManager.onPressed, isNull, reason: 'the manager post is full');
+      expect(addWarden.onPressed, isNotNull, reason: 'no warden has been added at all');
+      expect(find.text('5 of 5'), findsOneWidget);
+      expect(find.text('5 is the limit. Deactivate one to free a place.'), findsOneWidget);
     });
 
-    testWidgets('an inactive holder can be reactivated, and the post counts as free',
+    testWidgets('an inactive holder can be reactivated, and does not count against the five',
         (tester) async {
       await _pump(
         tester,
@@ -476,10 +494,36 @@ void main() {
 
       expect(find.text('Reactivate'), findsOneWidget);
       expect(find.text('Deactivate'), findsNothing);
+      // BOTH posts read 0 of 5, and that is the assertion: the manager card because its one
+      // holder is inactive, the warden card because nobody has ever held it. An inactive
+      // account fails every RLS policy in the schema — app.user_role() does not resolve for
+      // one — so it is not a manager in any sense that counts.
+      expect(find.text('0 of 5'), findsNWidgets(2));
       final addManager = tester.widget<FilledButton>(
         find.ancestor(of: find.text('Add manager'), matching: find.byType(FilledButton)),
       );
       expect(addManager.onPressed, isNotNull);
+    });
+
+    testWidgets('a full post cannot be reactivated INTO — the button is dark, not missing',
+        (tester) async {
+      // Five active plus one who left. Reactivating the sixth would put six people in a post
+      // the database allows five in, so the refusal has to be visible before the tap; hiding
+      // the button instead would read as "that person's record is gone".
+      await _pump(
+        tester,
+        _overrides(staff: [
+          for (var i = 1; i <= 5; i++)
+            _member(id: 'm-$i', name: 'Manager $i', role: StaffRole.manager),
+          _member(id: 'm-old', name: 'Former Manager', status: StaffStatus.inactive),
+        ]),
+      );
+
+      final reactivate = tester.widget<OutlinedButton>(
+        find.ancestor(of: find.text('Reactivate'), matching: find.byType(OutlinedButton)),
+      );
+      expect(reactivate.onPressed, isNull);
+      expect(find.text('Former Manager'), findsOneWidget);
     });
 
     testWidgets('a failed load says so instead of showing two empty posts', (tester) async {
@@ -656,10 +700,16 @@ void main() {
       expect(writes.createCalls, 1);
     });
 
-    testWidgets('a taken post is drawn as taken in the role picker', (tester) async {
+    testWidgets('a full post is drawn as full in the role picker', (tester) async {
       await _pump(
         tester,
-        _overrides(staff: [_member(role: StaffRole.manager)], writes: _FakeWrites()),
+        _overrides(
+          staff: [
+            for (var i = 1; i <= 5; i++)
+              _member(id: 'm-$i', name: 'Manager $i', role: StaffRole.manager),
+          ],
+          writes: _FakeWrites(),
+        ),
       );
 
       await tester.tap(find.text('Add warden'));
@@ -667,14 +717,14 @@ void main() {
 
       // The picker is two [StaffRoleCard]s rather than a SegmentedButton — the design draws
       // each role as a card with its own description, so both descriptions are readable while
-      // the choice is being made. Same behaviour under test: the post that already has an
-      // active holder cannot be chosen, and the free one is what the sheet opened on.
+      // the choice is being made. Same behaviour under test: the post that already holds five
+      // active people cannot be chosen, and the one with room is what the sheet opened on.
       StaffRoleCard card(StaffRole role) => tester.widget<StaffRoleCard>(
             find.byWidgetPredicate((w) => w is StaffRoleCard && w.role == role),
           );
 
       expect(card(StaffRole.manager).enabled, isFalse);
-      expect(card(StaffRole.manager).taken, isTrue);
+      expect(card(StaffRole.manager).full, isTrue);
       expect(card(StaffRole.warden).enabled, isTrue);
       expect(card(StaffRole.warden).selected, isTrue);
       expect(card(StaffRole.manager).selected, isFalse);

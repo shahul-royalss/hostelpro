@@ -46,3 +46,9 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Firebase. Not a secret (it ships inside the APK) but it belongs to whoever owns the Play
+# listing, and a checked-in copy is how a fork ends up pushing notifications through somebody
+# else's project. See docs/edge-functions.md → push-send.
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist

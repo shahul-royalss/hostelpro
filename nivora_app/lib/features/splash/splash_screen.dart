@@ -232,24 +232,38 @@ class _Lockup extends StatelessWidget {
   /// a 32dp cap height — the mark stood at more than twice the height of the word, so the eye
   /// read "[badge] IVORA" instead of NIVORA, which is the one thing a lockup must not do.
   ///
-  /// 1.15 rather than 1.0 because this mark is a drawn house with a door and a lit window, not
-  /// a letterform, and a complex shape set at exactly cap height reads smaller than the type it
-  /// stands in. A sixth over is the usual optical correction, and it is the one knob here worth
-  /// turning if this ever needs another look.
+  /// EXACTLY CAP HEIGHT. The mark is the N of NIVORA, so it is as tall as the letters it is a
+  /// letter of — no optical bump, which is what 1.15 was and what the product owner saw:
+  /// "the N letter is longer than compared to other letters I V O R A".
+  ///
+  /// Rendering the lockup and scanning its pixels is what settled it. At 1.15 the mark's ink
+  /// measured 37px against the letters' 34, and it stood 4px proud of the cap line while
+  /// sitting on the same baseline — a mark that pokes above the word rather than belonging to
+  /// it. At 1.0 the two are the same height, top and bottom.
   ///
   /// THIS NUMBER ONLY BECAME HONEST WHEN THE ASSET WAS RE-CUT. brand_mark.png used to carry a
   /// fringe of alpha 1-3 out to its edges — invisible, and 20% of the file's height. Flutter
   /// sizes the image BOX, so `height: 40` drew 32dp of visible mark and this ratio described
   /// something that was not on the screen. See scripts/cut-brand-mark.py.
-  static const double _markToCap = 1.15;
+  static const double _markToCap = 1.0;
 
-  /// The air between the mark and the letters, as a fraction of cap height.
+  /// ── THE GAP IS 1.6dp, AND THAT IS NOT A TYPO ────────────────────────────────────────────
   ///
-  /// It was `Space.xs` — 8dp — plus, by accident, the 13dp of dead alpha inside the mark's own
-  /// box, which came to about 21. Re-cutting the asset removed the accident, so the intended
-  /// number has to be stated: 0.62 of a cap keeps the gap the eye had already been reading,
-  /// and is wide enough that the mark is a mark rather than a ligature.
-  static const double _gapToCap = 0.62;
+  /// "Same gapping, don't give more gap between them." The gap the eye sees is between INK, and
+  /// most of the ink gap here is already spent before this SizedBox contributes anything: Inter
+  /// sets the I with a left side bearing of about 5.4dp at this size, inside its own advance.
+  ///
+  /// Measured off a render of this very screen — mark ink ends at x=469, the I's ink starts at
+  /// 495, and the text box starts at 489.6 — the four gaps BETWEEN the letters came out 8, 5, 9
+  /// and 6 (letter-spacing 6, plus or minus each pair's bearings), a mean of 7. The mark-to-I
+  /// gap was 25.
+  ///
+  /// So the target is the letters' own rhythm, and the arithmetic is: 7 wanted, 5.4 of it
+  /// already provided by the bearing, 1.6 left to add. splash_opening_test.dart asserts the
+  /// rendered result rather than these numbers, so a font change breaks the test rather than
+  /// quietly reopening the gap.
+  static const double _inkGap = 7.0;
+  static const double _firstGlyphBearing = 5.4;
 
   /// The face is the app's own, not the platform default.
   ///
@@ -317,7 +331,7 @@ class _Lockup extends StatelessWidget {
               ),
             ),
           ),
-          SizedBox(width: capHeight * _gapToCap),
+          const SizedBox(width: _inkGap - _firstGlyphBearing),
           ClipRect(
             child: Align(
               alignment: Alignment.centerLeft,

@@ -141,7 +141,10 @@ class _FloorList extends StatelessWidget {
             _BuildingSummary(rooms: rooms),
             for (final entry in floors.entries) ...[
               SectionLabel(
-                label: 'Floor ${entry.key}',
+                // What the PG calls this storey, falling back to "Floor N" for the great
+                // majority that have never been named. rpc_room_occupancy carries the name on
+                // every room of the floor, so the first room's copy is the floor's.
+                label: floorLabel(entry.key, entry.value.first.floorName),
                 trailing: _FloorSummary(rooms: entry.value),
               ),
               Wrap(
