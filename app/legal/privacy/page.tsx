@@ -211,6 +211,11 @@ export default function PrivacyPolicyPage() {
                 "The visitor — a person with no account here — and, by inference, the resident",
               ],
               [
+                "Notification device",
+                "A Firebase registration token identifying the phone, which platform it runs, and when it was first and last seen — written when you sign in on a device and removed when you sign out",
+                "Every person who signs in on a phone — the token is registered whether or not you allow notifications to be shown, so that turning them on later works at once",
+              ],
+              [
                 "Hostel operations",
                 "Notices, staff tasks, mess menus, expense and revenue notes and receipt images, and the in-app notifications that quote them",
                 "Staff, and anyone named on a receipt or in a note",
@@ -252,11 +257,16 @@ export default function PrivacyPolicyPage() {
             </li>
             <li>
               <strong>No location data, no device contacts, no calendar, no biometrics, no
-              advertising identifier.</strong> NIVORA asks for internet access and the ability to
-              tell whether you are online. Razorpay&rsquo;s checkout SDK adds two more permissions
-              to the Android app: NFC, so a payment card can be tapped, and a basic phone-state
-              permission. Those four are the entire list, and NIVORA reads neither of Razorpay&rsquo;s
-              two.
+              advertising identifier.</strong> The Android build declares ten permissions and no
+              others. Four are ours: internet access; the ability to tell whether you are online;
+              the camera, used only when you choose to photograph an identity document, a receipt
+              or a complaint, and never opened on its own; and permission to post notifications.
+              Four more are pulled in by the notification machinery itself &mdash; waking the
+              device, vibrating, receiving the message and an internal, app-scoped receiver
+              permission. The last two come from Razorpay&rsquo;s checkout SDK: NFC, so a payment
+              card can be tapped, and a basic phone-state permission. {APP_NAME} reads neither of
+              Razorpay&rsquo;s two. The advertising-ID permission is stripped from the build
+              explicitly, so that no future dependency can quietly reintroduce it.
             </li>
             <li>
               {/* The Android app bundles Razorpay's native Checkout SDK, which runs its own
@@ -288,8 +298,15 @@ export default function PrivacyPolicyPage() {
               on.
             </li>
             <li>
-              <strong>No push notifications.</strong> Notifications appear inside the app when you
-              open it. The Android build registers no device token with any notification service.
+              <strong>No tracking through notifications.</strong> {APP_NAME} does send push
+              notifications &mdash; rent falling due, a notice from your hostel, a payment
+              confirmed, a task assigned &mdash; and section 2 lists the device token that
+              requires, section 6 names Google as the service that delivers it, and section 7
+              gives how long the token is kept. What is <em>not</em> collected is anything beyond
+              that: no record of whether you opened a notification, no read receipts, no
+              behavioural profile built from what you tapped. Android asks before the first one
+              appears and you may refuse, or withdraw permission later in system settings, without
+              losing anything else in the app.
             </li>
           </ul>
         </Section>
@@ -426,8 +443,8 @@ export default function PrivacyPolicyPage() {
               ],
               [
                 "Google",
-                "Delivering the account emails — a confirmation link, a password reset",
-                "Your email address and the contents of those messages. No marketing email is ever sent",
+                "Two separate jobs: delivering the account emails — a confirmation link, a password reset — and, through Firebase Cloud Messaging, delivering push notifications to the Android app",
+                "For email: your address and the contents of those messages; no marketing email is ever sent. For notifications: your device's registration token, plus the title and body of each notification — which name the hostel and the amount or subject, and so should be read as visible to Google and on your lock screen",
               ],
             ]}
           />
@@ -500,6 +517,10 @@ export default function PrivacyPolicyPage() {
           <DataTable
             head={["Data", "What happens"]}
             rows={[
+              [
+                "A registered phone (notification token)",
+                "Released when you sign out, deleted with your account, and dropped automatically once a handset has not checked in for 90 days",
+              ],
               [
                 "A departed resident's record",
                 "Erased one month after check-out, and with it the photograph and identity document, the complaints, leave requests and visitor entries belonging to that resident, and the login itself. A re-admission before the date arrives cancels it",

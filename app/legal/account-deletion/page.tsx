@@ -60,7 +60,7 @@ export const metadata: Metadata = {
 const SECTIONS = [
   { id: "app", title: "The app this applies to" },
   { id: "accounts", title: "How accounts here are created" },
-  { id: "in-app", title: "Requesting deletion inside the app" },
+  { id: "in-app", title: "Requesting deletion when you can sign in" },
   { id: "email", title: "Requesting deletion without signing in" },
   { id: "timeline", title: "What happens, and when" },
   { id: "deleted", title: "What is deleted" },
@@ -362,16 +362,21 @@ export default async function AccountDeletionPage() {
             private file storage, in Singapore) and Vercel (application hosting). Two others touch
             a narrow slice of it: <strong>Razorpay</strong>, if you ever paid rent inside the app,
             and <strong>Google</strong>, which delivers account emails such as a confirmation link
-            or a password reset. There is no advertising network and no analytics service in the
+            or a password reset, and which also carries push notifications to your phone through
+            Firebase Cloud Messaging. There is no advertising network and no analytics service in the
             picture at all. The{" "}
             <Link href="/legal/privacy">Privacy Policy</Link> lists exactly what each one holds.
           </p>
           <p>
-            <strong>One thing deletion here cannot reach.</strong> Where a rent payment went
+            <strong>Two things deletion here cannot reach.</strong> Where a rent payment went
             through Razorpay, Razorpay keeps its own record of that transaction under its own
             policy and its own legal duties, in the same way a bank keeps a statement. Erasing your
             account in {APP_NAME} does not erase that, and neither {APP_NAME} nor your hostel can
-            make it do so.
+            make it do so. Separately, notifications already delivered to your phone stay in its
+            notification history until you or the device clears them, and Google&rsquo;s own record
+            of having delivered them sits under Google&rsquo;s policy. Deleting your account stops
+            any further notification and removes the device registration held here; it cannot
+            reach back into a message your phone already received.
           </p>
         </Section>
       </DocBody>

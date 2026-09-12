@@ -43,10 +43,10 @@ library;
 ///
 /// One string covers BOTH documents: they are presented together and agreed to together, so
 /// there is no state in which a person is half-agreed.
-const kLegalVersion = '2026-09-04';
+const kLegalVersion = '2026-09-12';
 
 /// Human-readable form of [kLegalVersion], for the "last updated" line.
-const kLegalVersionLabel = '4 September 2026';
+const kLegalVersionLabel = '12 September 2026';
 
 const kTermsUrl = 'https://hostelpro-three.vercel.app/legal/terms';
 const kPrivacyUrl = 'https://hostelpro-three.vercel.app/legal/privacy';
@@ -214,6 +214,14 @@ const kPrivacyPolicy = LegalDocument(
                 'you and their check-in and check-out times.',
           ),
           (
+            term: 'Notification device',
+            detail: 'When you sign in on a phone, a Firebase registration token identifying that '
+                'handset, which platform it runs, and when it was first and last seen. It is '
+                'registered whether or not you allow notifications to be shown, so that turning '
+                'them on later works at once; it is released when you sign out, removed if your '
+                'account is deleted, and dropped automatically after 90 days without use.',
+          ),
+          (
             term: 'Hostel operations',
             detail: 'Notices, staff tasks, mess menus, and expense and revenue records with '
                 'their receipt images — which can name whoever appears on them.',
@@ -271,8 +279,9 @@ const kPrivacyPolicy = LegalDocument(
               'in, read by the server alone.',
           'No SMS, no marketing email and no mailing list. The only emails sent are the ones '
               'that keep the account working — a confirmation link, a password reset.',
-          'No push notifications. Notices appear inside the app when you open it; the app '
-              'registers no device token anywhere.',
+          'No notification content beyond what you already see in the app. Push notifications '
+              'ARE sent — see "What is collected" above for the device registration they '
+              'require, and section 6 for the part Google plays in delivering them.',
         ]),
       ],
     ),

@@ -13,7 +13,8 @@ publishes to the world**), [`../THREAT-MODEL.md`](../THREAT-MODEL.md) §2 (asset
 > **Not legal advice.** The statutory references below are the author's best understanding and must
 > be confirmed with counsel before real residents' data is processed. What *is* authoritative here is
 > the **data inventory in §4** — every column, table and bucket in it was read out of
-> `db/schema.sql` and `lib/storage.ts`.
+> `db/schema.sql`, `db/migrations/2026-09-12-notifications-and-rent-due.sql` and
+> `lib/storage.ts`.
 
 ---
 
@@ -87,7 +88,9 @@ yes/no question. Record whichever is chosen, here, with a date.
 
 ## 4. Data inventory
 
-Every location personal data is stored. Sources: `db/schema.sql`, `lib/storage.ts`.
+Every location personal data is stored. Sources: `db/schema.sql`,
+`db/migrations/2026-09-12-notifications-and-rent-due.sql` (the notification tables, which are not
+in `db/schema.sql`), `lib/storage.ts`.
 Sensitivity: **H** = identity-theft or safety risk if exposed; **M** = privacy or commercial harm;
 **L** = limited.
 
@@ -108,6 +111,7 @@ Sensitivity: **H** = identity-theft or safety risk if exposed; **M** = privacy o
 | `expenses` / `revenues` | `note` (free text), `receipt_url`, `uploaded_by` | Staff + third parties named on receipts | M | Financial record — see §5 |
 | `menus` | `updated_by` | Staff | L | Current only |
 | `notifications` | `user_id`, `title`, `body` — bodies quote task and complaint text, so they carry copies of the above | Everyone | L | 90 days |
+| `push_devices` | `token` — an FCM registration token, a stable identifier for one physical handset — plus `user_id`, `platform`, `created_at`, `last_seen_at`. Created by `db/migrations/2026-09-12-notifications-and-rent-due.sql`, not `db/schema.sql`. The token is shared with Google on every send (§7), and it links a named person to a device | Everyone who signs in on a phone and allows notifications | M | **Released at sign-out** — `push_service.stop()` calls `unregister_push_device()`. Any row not seen for **90 days** is pruned by `app.send_rent_reminders()`, so an uninstalled or sold handset ages out without anyone acting |
 | `hostels` | `address`, `owner_user_id`, `rules` | Owner / business | L | Life of the tenant |
 | `subscriptions` | `owner_user_id`, `amount`, `notes` | Owner | M | 8 years — commercial record (§5) |
 | `audit_log` | `actor_user_id`, `target_id`, **`ip`**, **`user_agent`**, `meta` | Everyone who signs in | M | 365 days; `ip`/`user_agent` nulled at 90 days ([`logging-and-monitoring.md`](./logging-and-monitoring.md) §4) |
@@ -382,8 +386,14 @@ anonymisation quietly fails.**
   from the Supabase dashboard — and record it here.
 - **Erase from vendor platform logs.** Supabase Auth logs and Vercel access logs are outside our
   control; they age out on the vendors' schedules (§7).
-- **Un-send anything.** There is no email or SMS channel, so nothing has left the platform — which is
-  one of the quiet advantages of the in-app-only design.
+- **Un-send a notification, or erase one from a phone.** A push notification's **title and body**
+  are sent to Google's Firebase Cloud Messaging and delivered into the device's notification tray,
+  where a copy sits outside the application and outside this database until the person dismisses
+  it. Deleting the `notifications` row removes it from the in-app list and changes nothing on the
+  lock screen. Account email — a confirmation link, a password reset — leaves by the same kind of
+  route, through Google's mail service. There is still no SMS channel and no marketing message of
+  any kind, but the design is no longer in-app only: write notification titles and bodies on the
+  assumption that they will be read on a locked phone by whoever is holding it.
 
 ---
 
@@ -394,19 +404,25 @@ anonymisation quietly fails.**
 | **Supabase** | Postgres, Auth, private Storage | Everything in §4 | Project `nimxvgzscbanhtvgnjll`. Holds the bcrypt password hashes; the app never does |
 | **Vercel** | Application hosting, edge, runtime and access logs | Requests, IPs, user-agents; the runtime `console.error` output in [`logging-and-monitoring.md`](./logging-and-monitoring.md) §3.4 | Project `dhrishta/hostelpro`. Holds `SUPABASE_SERVICE_ROLE_KEY` as an encrypted env var |
 | **GitHub** | Source and CI | Source code only — no resident data | `.github/workflows/security.yml` runs without secrets |
-
 | **Razorpay** | Online rent payment, only when a resident chooses to pay in the app | The student's own name, email and phone (sent as Checkout prefill), plus the payment credentials they enter on Razorpay's page | We receive back only the amount, the order/payment ids and the method. A resident who pays cash at the warden desk is never sent to Razorpay at all |
+| **Google** | Two separate jobs: **account email** through the SMTP sender behind Supabase Auth, and **push notification delivery** through Firebase Cloud Messaging | For email: the address, and the contents of a confirmation link or a password reset. For FCM: the `push_devices.token` of each target handset, plus the **title and body** of every notification — which name the hostel and quote the amount or the subject | The only sub-processor that receives notification *content*, and the reason §6.5 says a delivered notification cannot be recalled. `supabase/functions/push-send/index.ts` mints a service-account access token and posts one message per device. No marketing email is ever sent |
 
-**That is the complete list.** It is verifiable rather than asserted: there is no messaging
-provider, no analytics vendor, no AI/LLM integration and no second backend, and the production
-dependencies in `package.json` contain **no analytics, telemetry, error-reporting or
-session-replay package** — verified by reading the list.
+**That is the complete list — five.** It is verifiable rather than asserted: Google is the only
+messaging provider, and it carries nothing but account email and notification content; there is no
+analytics vendor, no AI/LLM integration and no second backend; and the production dependencies in
+`package.json` contain **no analytics, telemetry, error-reporting or session-replay package** —
+verified by reading the list.
 
-Two outbound HTTP destinations exist, both from the server and both to a named provider:
-`app/api/health/route.ts` → the Supabase health URL, and `lib/razorpay.ts` → the Razorpay orders
-API. Neither is built from user input. Razorpay's Checkout script additionally runs in the
-browser, and only on `/student` routes — `lib/security-headers.ts` scopes the CSP grant rather
-than widening it for the whole app.
+Six outbound HTTP destinations exist, none of them built from user input. Two are from the Next.js
+server: `app/api/health/route.ts` → the Supabase health URL, and `lib/razorpay.ts` → the Razorpay
+orders API. One is from Postgres and carries no data: the `hostelpro-keepwarm` cron job → our own
+`/api/health` on Vercel. **The remaining three are the notification path, and they are the ones
+that move personal data:** `app.notifications_dispatch_push()` → the `push-send` Edge Function over
+`pg_net`, then, inside that function, → `https://oauth2.googleapis.com/token` for a service-account
+access token and → `https://fcm.googleapis.com/v1/projects/<id>/messages:send` carrying the device
+token together with the notification's title and body. Razorpay's Checkout script additionally runs
+in the browser, and only on `/student` routes — `lib/security-headers.ts` scopes the CSP grant
+rather than widening it for the whole app.
 
 Supabase and Vercel are the trust root: a compromise of either is total, and the mitigations are
 least-privilege keys and the ability to rotate (`THREAT-MODEL.md` §6D).

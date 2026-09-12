@@ -53,19 +53,29 @@ say "Preparing a build tree outside OneDrive"
 # So instead: copy the SOURCE to a plain directory outside the synced tree and build there.
 # Flutter's layout is untouched, build/ is exactly where it expects, and OneDrive has nothing
 # to do with any of it. The repository stays the source of truth; only the compile moves.
-WORK="${NIVORA_WORK_DIR:-/c/nivora-work}"
+# STAGE is the copy root; the app builds one level inside it. The nesting is not cosmetic:
+# test/legal_consent_test.dart cross-checks kLegalVersion against `../lib/legal-config.ts`,
+# which lives in the REPOSITORY ROOT, one level above nivora_app. Copying only the app left
+# that path resolving outside every repository, where a stale legal-config.ts had been sitting
+# since 2026-09-06 — so the gate passed by reading a file nobody maintained, and the web
+# version could have been bumped without the app while this build still went green.
+STAGE="${NIVORA_WORK_DIR:-/c/nivora-work}"
+WORK="$STAGE/app"
 if [[ "$APP_DIR" == *OneDrive* ]]; then
   printf '  repo is inside OneDrive — building in %s\n' "$WORK"
   # Derived directories are deliberately not copied: they are what OneDrive was fighting over,
   # and they regenerate. Done with tar rather than rsync, which Git Bash does not ship.
-  rm -rf "$WORK"
-  mkdir -p "$WORK"
+  rm -rf "$STAGE"
+  mkdir -p "$WORK" "$STAGE/lib"
   ( cd "$APP_DIR" && tar -cf - \
       --exclude='./build' --exclude='./.dart_tool' --exclude='./.gradle' \
       --exclude='./android/.gradle' --exclude='./ios/Pods' \
       --exclude='*.apk' --exclude='*.aab' . ) \
     | ( cd "$WORK" && tar -xf - ) \
     || die "could not copy the project to $WORK"
+  # The sibling the version gate reads. Copied fresh each run so it cannot go stale.
+  cp "$APP_DIR/../lib/legal-config.ts" "$STAGE/lib/legal-config.ts" \
+    || die "could not stage lib/legal-config.ts — the legal version gate needs it"
   cd "$WORK"
 else
   printf '  repo is outside OneDrive — building in place\n'

@@ -77,7 +77,7 @@ export const LEGAL = {
  * refuses a version it has never heard of and at the gate the only thing a user may do is
  * agree.
  */
-export const LEGAL_VERSION = "2026-09-04";
+export const LEGAL_VERSION = "2026-09-12";
 
 /**
  * Android application id, so the deletion page can name the app Play users installed.

@@ -4,9 +4,11 @@
 with the code that justifies each answer.
 
 Every answer here was read out of the source, not assumed. The files that decide it:
-`db/schema.sql`, `db/migrations/2026-08-24-payments.sql`, `lib/storage.ts`,
+`db/schema.sql`, `db/migrations/2026-08-24-payments.sql`,
+`db/migrations/2026-09-12-notifications-and-rent-due.sql`, `lib/storage.ts`,
 `lib/actions/payments.ts`, `lib/razorpay.ts`, `app/api/webhooks/razorpay/route.ts`,
-`components/payments/`, `package.json`.
+`components/payments/`, `supabase/functions/push-send/index.ts`,
+`nivora_app/lib/core/notify/push_service.dart`, `package.json`.
 
 Companions: [`play-submission-pack.md`](./play-submission-pack.md) (the rest of the submission),
 [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) (the full inventory and the
@@ -16,8 +18,9 @@ retention periods), [`payments.md`](./payments.md) (how the money path works).
 > violation: understating collection is a misrepresentation, and overstating it invites a review
 > question you cannot answer from the schema. Read §1 before ticking anything.
 
-**Last derived from the code:** 24 August 2026 — the day `payment_intents` shipped. Re-derive
-whenever the schema, `lib/storage.ts` or the production dependency list changes.
+**Last derived from the code:** 12 September 2026 — the day push notifications shipped and
+`push_devices` appeared (before that, 24 August 2026, the day `payment_intents` shipped). Re-derive
+whenever the schema, `lib/storage.ts`, the push path or the production dependency list changes.
 
 ---
 
@@ -204,9 +207,18 @@ was assigned. That needs two things Play asks about.
 **The token is a device identifier, and it is declared.** Firebase Cloud Messaging issues each
 install a registration token; `public.push_devices` stores it against the signed-in user's id so
 the server knows which phone to ring. It is collected, not shared, and its purpose is **App
-functionality** — it does nothing else and reaches nobody else. Google's own disclosure guidance
-for FCM says the same (firebase.google.com/docs/android/play-data-disclosure). That is why the
-**Device or other IDs** row in §2 now carries App functionality alongside the security purpose.
+functionality** — it serves no other purpose, and the only party it reaches is the one that issued
+it. **Where it goes:** Google mints it on the device, `push_devices` holds it, and
+`supabase/functions/push-send/index.ts` POSTs it straight back to Google at
+`https://fcm.googleapis.com/v1/projects/<id>/messages:send`, carrying the `title` and `body` of the
+notification being delivered. That Edge Function is the only thing in the codebase that reads
+`push_devices.token`, so Google is the only recipient — a **service provider** on §4's test, the
+same as Supabase and Razorpay, which is why `/legal/privacy` names it as a sub-processor for
+notifications rather than putting this row in the Shared column. Note the second consequence:
+notification text leaves the platform with the token and lands in the device tray, where it is
+readable on a lock screen. Google's own disclosure guidance for FCM says the same
+(firebase.google.com/docs/android/play-data-disclosure). That is why the **Device or other IDs**
+row in §2 now carries App functionality alongside the security purpose.
 
 **Deleting the account deletes the token.** `push_devices.user_id` is
 `references public.users(id) on delete cascade`, and signing out unregisters the row explicitly.
@@ -253,7 +265,7 @@ product. Razorpay does not, for this data, and the answer stays No.
 transfers are disclosed in the policy, not in the Shared column. So:
 
 > **Blocking:** `/legal/privacy` must name **Razorpay** as a sub-processor, alongside Supabase and
-> Vercel, and say what it receives. As of this writing it does not — see §8.
+> Vercel, and say what it receives. It does — see §8 row 1.
 
 ### 4.1 One fact to establish before the first live key
 
@@ -382,28 +394,32 @@ deletion page next to them.
 
 ## 8. Cross-checks before you submit
 
-A Data safety form that contradicts the privacy policy is itself a violation. These four are
-**blocking**, and three of them currently **fail**, because the legal pages were written before
-payments shipped.
+A Data safety form that contradicts the privacy policy is itself a violation. These five are
+**blocking**, and all five now **pass** — the legal pages have caught up with payments and with
+push. That is the complete list of blocking cross-checks; re-run every row against the live pages
+before each submission, because the pages move and this table is a snapshot.
 
 | # | Must be true | Status |
 |---|---|---|
-| 1 | `/legal/privacy` names **Razorpay** as a sub-processor and says what it receives | **FAILING** — the page says *"there is no payment processor"* and lists three providers (`app/legal/privacy/page.tsx`) |
-| 2 | `/legal/privacy` does not claim payments are offline-only | **FAILING** — *"Fee payments happen offline"* and *"NIVORA never takes, holds or moves money"*, under "What is never collected" |
-| 3 | `/legal/account-deletion` names the payment record among what is retained, and Razorpay among what cannot be reached | **PARTIAL** — it already covers fee records and the 8-year duty, but repeats *"no payment processor"* |
-| 4 | `/legal/terms` §9 reflects that rent can now be collected in-app | **FAILING** — the section is titled "Payments are recorded, not processed" and states *"NIVORA is not a payment service"* |
+| 1 | `/legal/privacy` names **Razorpay** as a sub-processor and says what it receives | **PASSING** — the sub-processor table lists five providers including Razorpay, against *"Your name, email and phone... plus the payment details you enter on their own checkout"* (`app/legal/privacy/page.tsx`) |
+| 2 | `/legal/privacy` does not claim payments are offline-only | **PASSING** — §3 now reads *"This is still true now that rent can be paid inside the app"*, and says the card and UPI fields are typed into Razorpay's own checkout |
+| 3 | `/legal/account-deletion` names the payment record among what is retained, and Razorpay among what cannot be reached | **PASSING** — the retention table carries *"Fee and payment records"* at 8 years, and that page's own "What deletion cannot reach" section names Razorpay's own record of the transaction |
+| 4 | `/legal/terms` reflects that rent can now be collected in-app | **PASSING** — the payments section is now **§6, "Subscription and payments"**, and states that the payment is taken by Razorpay in Razorpay's own checkout. Note the renumbering: it was §9 |
+| 5 | `/legal/privacy` discloses the **FCM device token** and names **Google** as the notification sub-processor | **PASSING** — the data inventory carries a "Notification device" row, §3 explains the token and the ten-permission list, and the Google row in the sub-processor table covers *"your device's registration token, plus the title and body of each notification"* |
 
-Those four pages are **outside this document's scope** and belong to whoever owns `app/legal/`. Do
-not paste the privacy-policy URL into Console until they are fixed: Google fetches that page, and a
-reviewer comparing it to this form finds the contradiction in under a minute.
+The three pages behind those rows are **outside this document's scope** and belong to whoever owns
+`app/legal/`. They are currently consistent with this form. Re-check them the next time either
+side changes:
+Google fetches the privacy-policy page, and a reviewer comparing it to this form finds a
+contradiction in under a minute.
 
 Two more, non-blocking but worth closing:
 
-5. [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §4.1's inventory does not list
+6. [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §4.1's inventory does not list
    `payment_intents`, and its §7 sub-processor table still says *"That is the complete list"* with
    Razorpay absent. The retention **period** is settled (§7.1 above); the **inventory row** is not
    yet written.
-6. `.env.example` declares `NEXT_PUBLIC_RAZORPAY_KEY_ID`, but `lib/razorpay.ts` reads
+7. `.env.example` declares `NEXT_PUBLIC_RAZORPAY_KEY_ID`, but `lib/razorpay.ts` reads
    `RAZORPAY_KEY_ID` and `docs/payments.md` §1 says explicitly that it must **not** be a
    `NEXT_PUBLIC_` variable. Anyone setting up from `.env.example` gets a permanently dead Pay button
    and the "Online payment isn't set up yet" message.
@@ -415,11 +431,12 @@ Two more, non-blocking but worth closing:
 1. **Data collection and security** — confirm the app collects data; answer the four §7 questions.
 2. **Data types** — work down §2 row by row. Slow down on the four rows payments changed: **Name**,
    **Phone number** and **Email address** (all now also reach Razorpay as prefill), and **Financial
-   info › Purchase history** (now includes `payment_intents`).
+   info › Purchase history** (now includes `payment_intents`). Then on the fifth row push changed:
+   **Device or other IDs** (the FCM registration token in `push_devices` — see §3.5).
 3. **User payment info** — leave it **unticked**. Re-read §3.2 before deciding otherwise.
 4. **Shared** — **No** on every row. Re-read §4 before deciding otherwise.
 5. **Government ID** — three ticks, per §6.
 6. **Deletion URL** — paste `https://hostelpro-three.vercel.app/legal/account-deletion`, but only
-   after §8 rows 1–4 are fixed and deployed.
+   after §8 rows 1–5 are confirmed against the deployed pages.
 7. **Preview the store's Data safety section** before publishing. It is what users read, and it is
    the artefact a policy complaint is measured against.
