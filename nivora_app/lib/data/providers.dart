@@ -16,6 +16,7 @@ import 'repositories/finance_repository.dart';
 import 'repositories/hostel_repository.dart';
 import 'repositories/menu_repository.dart';
 import 'repositories/notice_repository.dart';
+import 'repositories/push_repository.dart';
 import 'repositories/room_repository.dart';
 import 'repositories/student_repository.dart';
 import 'repositories/task_repository.dart';
@@ -70,6 +71,11 @@ final roomRepositoryProvider = Provider<RoomRepository>(
 /// `ownerStaffWritesProvider`.
 final roomLayoutWritesProvider = Provider<RoomLayoutWrites>(
   (ref) => ref.watch(roomRepositoryProvider),
+);
+
+/// Device tokens for push. public.push_devices, through two RPCs.
+final pushRepositoryProvider = Provider<PushRepository>(
+  (ref) => PushRepository(ref.watch(supabaseClientProvider)),
 );
 
 final studentRepositoryProvider = Provider<StudentRepository>(

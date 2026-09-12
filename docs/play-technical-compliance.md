@@ -19,7 +19,7 @@
 | # | Requirement | Status |
 |---|---|---|
 | 1 | Target API level (API 36 required for new submissions from 31 Aug 2026) | **PASS** — `targetSdkVersion 36` |
-| 2 | Permissions minimal and justified | **RE-VERIFY** — 7 entries after 2026-09-12 (POST_NOTIFICATIONS, CAMERA added); the dump in §2 predates them. Every entry is traced to a source; see §2 |
+| 2 | Permissions minimal and justified | **Verified 2026-09-12** on `com.srnivora.app` versionCode 1 — 10 entries, each traced to its originating AAR in the merge-blame report; no AD_ID in any of the three artifacts. See §2 |
 | 3 | Signing key strength | **PASS** — RSA 2048, `CN=HostelPro, O=HostelPro, C=IN` |
 | 4 | Signature schemes | **PASS** — AAB is JAR-signed (`META-INF/HOSTELPR.RSA`), which is what Play requires; APK is v2 |
 | 5 | **16 KB page-size compatibility** (required from 1 Nov 2025) | **PASS** — 4 native libraries, all aligned ≥ 16 KB; see §3 |
@@ -54,16 +54,24 @@ the target level without anyone editing this project**. Re-check this table afte
 
 ## 2. Permissions
 
+Verified against `dist/NIVORA-1.0.0.apk` **as built on 2026-09-12** (package `com.srnivora.app`,
+versionCode 1, targetSdk 36, compileSdk 37) — not against any earlier artifact:
+
 ```
-$ aapt2 dump badging dist/NIVORA-1.0.0.apk | grep uses-permission
+$ aapt2 dump permissions dist/NIVORA-1.0.0.apk
 android.permission.INTERNET
 android.permission.ACCESS_NETWORK_STATE
+android.permission.POST_NOTIFICATIONS
+android.permission.CAMERA
+android.permission.WAKE_LOCK
+android.permission.VIBRATE
 android.permission.NFC
+com.google.android.c2dm.permission.RECEIVE
 com.srnivora.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 android.permission.READ_BASIC_PHONE_STATE
 ```
 
-Five entries. **Only two are declared by this project; the rest arrive through the manifest
+Ten entries. **Only four are declared by this project; the rest arrive through the manifest
 merger from dependencies.** Each was traced to its origin in the merge-blame report
 (`build/app/intermediates/manifest_merge_blame_file/release/processReleaseMainManifest/manifest-merger-blame-release-report.txt`)
 rather than guessed at:
@@ -75,6 +83,11 @@ rather than guessed at:
 | `NFC` | normal | `com.razorpay:standard-core:1.7.18` | **Yes, and not ours to remove.** Razorpay Checkout supports contactless card reads. No runtime prompt. |
 | `READ_BASIC_PHONE_STATE` | normal | `com.razorpay:core:1.0.18` | **Yes.** The API-33+ *reduced-scope* replacement for `READ_PHONE_STATE`; Razorpay uses it for carrier detection during UPI and OTP flows. It exposes no device identifier, so it needs **no** Play Console declaration — unlike `READ_PHONE_STATE`, which would. |
 | `com.srnivora.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `signature` | androidx.core | **Yes.** Auto-generated when a non-exported runtime receiver is registered on API 33+. Namespaced to this app, signature-level, grants access to nothing. Not shown to users. |
+| `POST_NOTIFICATIONS` | dangerous | **ours** | **Yes.** Rent reminders, notices, "payment received", a task assigned. Runtime permission from Android 13: without it the app can hold a valid FCM token, the server can send a perfectly good message, and NOTHING APPEARS — silently. Asked for once a session exists, not on first launch (`lib/core/notify/push_service.dart`). |
+| `CAMERA` | dangerous | **ours** | **Yes.** A warden photographs an ID proof; a resident photographs a complaint. Declaring it is what makes it mandatory — `ACTION_IMAGE_CAPTURE` throws `SecurityException` for an app that declares CAMERA without holding it. `lib/data/capture.dart` requests it first. `<uses-feature android:required="false"/>` keeps the app installable on a device with no camera. |
+| `WAKE_LOCK` | normal | `:firebase_messaging` | **Yes, and not ours to remove.** Wakes the device long enough to hand off an incoming push. No runtime prompt. |
+| `VIBRATE` | normal | `:flutter_local_notifications` | **Yes.** The notification channel is `Importance.high`, which vibrates. No runtime prompt. |
+| `com.google.android.c2dm.permission.RECEIVE` | signature-ish | `com.google.firebase:firebase-messaging:25.1.2` | **Yes.** The permission that lets FCM deliver to this app at all. Google-namespaced, not user-visible. |
 
 **Specifically absent**, and each absence is load-bearing for the Data safety answers:
 
@@ -88,19 +101,33 @@ rather than guessed at:
   2026-09-12 it is removed EXPLICITLY (`tools:node="remove"`) rather than merely left out, because
   a dependency's manifest can merge one in and its presence would contradict the Data safety form
 
-### Added 2026-09-12, and the dump above predates both
-
-| Permission | Why | What makes it mandatory |
-|---|---|---|
-| `POST_NOTIFICATIONS` | Rent reminders, a notice from the owner, "payment received", a task assigned | Runtime permission from Android 13. Without it the app can hold a valid FCM token and the server can send a perfectly good message and NOTHING APPEARS, silently |
-| `CAMERA` | A warden photographs an ID proof; a resident photographs a complaint | Declaring it is what makes it mandatory — `ACTION_IMAGE_CAPTURE` throws `SecurityException` for an app that declares CAMERA without holding it. `lib/data/capture.dart` requests it first. `<uses-feature android:required="false"/>` keeps the app installable on a device with no camera |
-
-**Re-run the dump against the next build before signing anything off.** The listing above is from
-`NIVORA-1.0.0.apk` built under the old package name; the next artifact is `com.srnivora.app` and
-carries the two permissions in this table. The AD_ID assertion in particular must be checked on the
-MERGED manifest — that is the whole point of removing it explicitly rather than trusting its
-absence from source.
 - no `READ_PHONE_STATE` (the full-scope one), no `READ_CONTACTS`, no `QUERY_ALL_PACKAGES`
+
+### How this table was checked, and how to check it again
+
+The AD_ID absence in particular is a claim about the **merged** manifest, not about our source —
+which is the whole reason it is removed with `tools:node="remove"` rather than simply left out. It
+was verified on the built artifacts, all three of them:
+
+```bash
+cd nivora_app && bash scripts/verify-adid.sh
+#   clean: NIVORA-1.0.0-universal.apk
+#   clean: NIVORA-1.0.0.apk
+#   clean: NIVORA-1.0.0.aab
+```
+
+To re-attribute any entry after a dependency changes, read the merge-blame report — it names the
+exact AAR and line that contributed each permission, which is how `NFC` and
+`READ_BASIC_PHONE_STATE` were pinned on Razorpay rather than guessed at:
+
+```bash
+grep -A2 "permission.NFC" \
+  build/app/intermediates/manifest_merge_blame_file/release/processReleaseMainManifest/manifest-merger-blame-release-report.txt
+```
+
+**A permission dump is only ever true of one artifact.** An earlier version of this section was
+carried forward across a package-name change and described a build that no longer existed. If the
+dependency list moves, re-run the dump before signing anything off.
 
 ---
 

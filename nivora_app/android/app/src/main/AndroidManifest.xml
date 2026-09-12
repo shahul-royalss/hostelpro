@@ -16,8 +16,15 @@
          POST_NOTIFICATIONS is a runtime permission from Android 13 (API 33). Without it the app
          can hold a valid FCM token, the server can send a perfectly good message, and NOTHING
          APPEARS — silently. Rent reminders, a notice from the owner and "payment received" all
-         arrive through it, so it is asked for in words before the system dialog (see
-         core/notify/) rather than sprung on first launch.
+         arrive through it.
+
+         WHEN IT IS ASKED FOR: the first time a session appears, not on first launch. The token
+         is registered against a USER, so there is nothing to register before somebody signs in,
+         and asking a stranger on the sign-in screen is asking before the answer can mean
+         anything. There is no in-app rationale screen ahead of the system dialog — the dialog
+         is the ask — and a refusal is not treated as an error: the token is registered anyway,
+         so turning notifications on later in Settings works immediately. See
+         lib/core/notify/push_service.dart.
 
          CAMERA is declared because a warden photographs an ID proof and a resident photographs a
          complaint. It is the one dangerous permission this app holds, and DECLARING IT IS WHAT

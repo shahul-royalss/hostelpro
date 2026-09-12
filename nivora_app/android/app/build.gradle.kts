@@ -58,12 +58,39 @@ val hasReleaseKey = listOf(ksStoreFile, ksKeyAlias, ksStorePassword, ksKeyPasswo
 
 android {
     namespace = "com.srnivora.app"
-    compileSdk = flutter.compileSdkVersion
+    /*
+     * PINNED AHEAD OF flutter.compileSdkVersion, WHICH IS 36.
+     *
+     * permission_handler_android refuses to link against anything below 37:
+     *
+     *     Dependency ':permission_handler_android' requires libraries and applications that
+     *     depend on it to compile against version 37 or later of the Android APIs.
+     *
+     * COMPILING against 37 is not TARGETING 37 — targetSdk below stays on Flutter's value, which
+     * is what Play measures. Compiling against the newest SDK and targeting a tested one is the
+     * normal arrangement, not a compromise.
+     *
+     * Remove this line once flutter.compileSdkVersion reaches 37 on its own.
+     */
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+
+        /*
+         * REQUIRED BY flutter_local_notifications, WHICH DRAWS THE FOREGROUND BANNER.
+         *
+         * That library schedules with java.time, which does not exist on API 24-25. Desugaring
+         * rewrites those calls against a bundled backport at build time. Without this the build
+         * does not merely lose notifications — it FAILS, at :app:checkReleaseAarMetadata, with
+         * "Dependency ':flutter_local_notifications' requires core library desugaring".
+         *
+         * The other half of this is coreLibraryDesugaring() in the dependencies block at the
+         * bottom of this file. Both are needed; either alone is an error.
+         */
+        isCoreLibraryDesugaringEnabled = true
     }
 
     signingConfigs {
@@ -153,6 +180,13 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // The backport that isCoreLibraryDesugaringEnabled above rewrites java.time calls against.
+    // Pinned, not ranged: a floating version here is a build that can break on a machine that
+    // has never seen this project, on a day nobody touched it.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 
 /*

@@ -6,22 +6,35 @@ Play counts the characters *inside* the tags, not the tags themselves.
 
 ---
 
-## v1.0.0 (versionCode 2) — first release
+## v1.0.0 (versionCode 1) — first release
+
+`pubspec.yaml` says `version: 1.0.0+1`, and the built artifact reports `versionCode='1'`. That is
+correct for a first upload: no bundle has ever been *accepted* on this listing, so there is nothing
+for versionCode 1 to collide with. The earlier attempt was rejected before acceptance, and under a
+different package name. Every upload after this one must raise the `+N`.
 
 ```
 <en-US>
 Nivora runs a PG or hostel end to end.
 
-• Owners: every property in one place, staff logins (up to 5 managers and 5 wardens each), rent and payment history, expense charts month by month, and tasks you assign to a manager.
+• Owners: every property in one place, staff logins (5 managers and 5 wardens each), rent and payment history, monthly expense charts, and tasks for your manager.
 • Wardens: rooms and beds, resident registration, fees at the desk, complaints and leave.
-• Managers: daily and monthly expenses, the mess menu, and the jobs assigned to you.
+• Managers: daily and monthly expenses, the mess menu, and your assigned jobs.
 • Residents: rent, receipts, UPI payment, complaints, leave and notices.
 
-Reminders arrive as notifications when rent is due.
+Rent reminders arrive as notifications.
 </en-US>
 ```
 
-That is 486 characters including the newlines, inside the tags.
+**485 characters** inside the tags, against Play's limit of 500.
+
+An earlier draft of this block ran to 523 and would have been refused on paste. If you edit it,
+count it rather than eyeing it — and count the worst case, because a paste that converts each
+line break to CRLF adds one character per line (492 here, still inside):
+
+```bash
+python3 -c "import re,sys;print([len(m) for m in re.findall(r'<en-US>\n(.*?)\n</en-US>', open('docs/play-release-notes.md',encoding='utf-8').read(), re.S)])"
+```
 
 ### A shorter one, if the listing prefers it
 

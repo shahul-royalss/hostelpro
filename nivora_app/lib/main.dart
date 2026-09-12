@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -10,6 +12,7 @@ import 'core/boot/retry_policy.dart';
 import 'core/boot/startup.dart';
 import 'core/auth/auth_controller.dart';
 import 'core/config/env.dart';
+import 'core/notify/push_service.dart';
 import 'core/router/router.dart';
 import 'core/theme/theme.dart';
 import 'core/theme/tokens.dart';
@@ -218,8 +221,25 @@ class _NivoraAppState extends ConsumerState<NivoraApp> {
     // Listening rather than reading in initState because a session is not resolved yet when
     // this widget is first built. The guard inside runOnceOnStartup makes it once per process.
     ref.listen(authControllerProvider, (previous, next) {
-      if (next.value is AuthSignedIn) {
+      final phase = next.value;
+      if (phase is AuthSignedIn) {
         ref.read(emailVerificationRecheckProvider).runOnceOnStartup();
+        // PUSH STARTS WITH THE SESSION, NOT WITH THE APP, and that ordering is the point.
+        //
+        // An FCM token is registered AGAINST A USER (public.push_devices.user_id), so there is
+        // nothing to register before somebody has signed in — and asking for the notification
+        // permission on a launch that ends at the sign-in screen would be asking a stranger.
+        // The dialog therefore appears once the person is inside, where "we will tell you when
+        // rent is due" is a sentence that means something.
+        //
+        // Fire and forget: every step inside start() is wrapped, and a phone that cannot
+        // register is a phone that does not buzz — never one that cannot run the PG.
+        unawaited(ref.read(pushServiceProvider).start());
+      } else if (phase is AuthSignedOut) {
+        // The token goes back, so the next person to hold this handset does not receive the
+        // last person's rent reminders. One phone genuinely does pass between a warden and
+        // their replacement.
+        unawaited(ref.read(pushServiceProvider).stop());
       }
     });
 
