@@ -74,9 +74,26 @@ If that ever prints a line, the declaration in Console is wrong and must change 
 
 > This release will not be available to any users because you haven't specified any testers.
 
-Play Console → **Testing → Internal testing → Testers** → create an email list → add the addresses
-that should get it (your own Google account first) → Save. Then share the opt-in link Console
-gives you; a tester has to accept it once before the app appears for them.
+This is a **warning, not an error** — the release will roll out. It will simply reach nobody, and
+the track will look broken when it is actually empty.
+
+Play Console → **Testing → Internal testing → Testers** tab:
+
+1. **Create email list** → name it `Nivora internal testers`.
+2. Add `codewithshahul@gmail.com` — the account that owns this Play Console. It is allowed to be
+   its own tester, and it should be the first one.
+3. **Tick the checkbox next to the list.** This is the step that clears the warning, and it is the
+   one people miss: *creating* a list does not *assign* it to the track. An unticked list leaves
+   the warning in place looking exactly as if nothing had been added.
+4. **Save.**
+
+Then **Copy link** (it goes live on this tab once the release is rolled out), open it in a browser
+signed in as that account, and accept the invitation. Only after accepting does Nivora appear in
+the Play Store — and the phone must be signed into the Play Store with the *same* account. Give it
+a few minutes to propagate before concluding it has failed.
+
+Every tester must be a **Google account**. A non-Google address can be added to the list and can
+never join, with no error shown.
 
 **If this developer account is a personal (individual) account**, Google additionally requires
 **12 testers opted in for 14 continuous days on closed testing** before you can apply for
