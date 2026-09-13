@@ -137,14 +137,15 @@ class _Body extends ConsumerWidget {
             },
           ),
 
-          const SectionLabel(label: 'Quick actions'),
+          // The band below is the heading. A SectionLabel('Quick actions') used to sit here
+          // too, so the screen printed two headings for one group — visible in a Play Store
+          // screenshot. DashboardBand is what owner, manager and resident all use.
           const DashboardBand(label: 'Tools'),
           _QuickActions(hostelId: hostelId),
 
           const SectionLabel(label: 'Notices'),
           _Notices(hostelId: hostelId),
 
-          const SectionLabel(label: 'The building'),
           const DashboardBand(label: 'Occupancy'),
           _Occupancy(hostelId: hostelId),
         ],

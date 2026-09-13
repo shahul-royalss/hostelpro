@@ -119,7 +119,9 @@ class ManagerHomeScreen extends ConsumerWidget {
             const DashboardBand(label: 'Essentials'),
             _KpiGrid(hostelId: hostelId, load: load, finance: finance),
             const SizedBox(height: Space.md),
-            const DashboardBand(label: 'Today'),
+            // No band here: _TodaysTasks is a Section that already heads itself "Today's tasks".
+            // A DashboardBand('Today') used to sit above it, so the screen read "TODAY" and then
+            // "TODAY'S TASKS" one line apart. The band is the redundant one — it says less.
             _TodaysTasks(hostelId: hostelId),
             const SizedBox(height: Space.md),
             _MoneySection(hostelId: hostelId, finance: finance),

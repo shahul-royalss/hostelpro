@@ -512,7 +512,11 @@ class _NeedsYou extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SectionLabel(label: 'Needs you'),
+        // NO LABEL HERE. The caller draws `DashboardBand(label: 'Needs you')` immediately above
+        // this widget, exactly as it does for Essentials above _KpiGrid — which carries no label
+        // of its own for the same reason. This used to render a second heading, so the dashboard
+        // printed "NEEDS YOU" twice, one grey band above one bold label. Caught in a Play Store
+        // screenshot, where it was the first thing the eye went to.
         // Explicit children, not an itemBuilder: the state that remembers "already arrived"
         // has to survive, and a lazily-built row re-enters every time it is scrolled back to.
         for (var i = 0; i < items.length; i++) ...[
