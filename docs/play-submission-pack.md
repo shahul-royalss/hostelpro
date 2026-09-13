@@ -690,12 +690,23 @@ reason. NIVORA issues no credit, holds no balance, offers no account, and moves 
 people. What it does is create an order for what a resident owes, hand it to Razorpay, and record
 what Razorpay reports.
 
-**The one thing that could change this answer**, and it is worth settling before a live key is
-issued: there is a single `RAZORPAY_KEY_ID` for the whole application, so every hostel's rent is
-collected into **one merchant account**. There is no Razorpay Route, no `transfers`, no split
-settlement and no payout logic anywhere in the code — verified by grep across
-`lib/actions/payments.ts`, `lib/razorpay.ts`, `app/api/webhooks/razorpay/route.ts` and
-`components/payments/`.
+**Settled 2026-09-06, and the answer is the good one.** Razorpay Route is implemented: every
+hostel carries its own linked account (`hostels.razorpay_account_id`, an `acc_...`), and the order
+created for a resident's rent carries `transfers: [{ account: <that hostel's account>, amount: <the
+whole sum>, on_hold: false }]` — see `supabase/functions/_shared/razorpay.ts`. NIVORA takes nothing
+out of rent; its own revenue is a subscription the owner pays, recorded separately and never
+through this gateway. `on_hold: false` means NIVORA never decides when somebody else's rent is
+released. A hostel with no linked account cannot take an online payment at all: both
+`rz_open_intent` and the Edge Function refuse it, from opposite sides.
+
+So NIVORA does not hold, pool or move residents' money, and the Payment Aggregator question that
+the earlier text below raised is answered: it does not arise.
+
+> This paragraph previously ran the other way — one merchant account, no Route, no transfers,
+> "verified by grep" — and warned that if the money settled into NIVORA's account it would be
+> Payment Aggregator territory. That was true when written and stopped being true on 2026-09-06.
+> It was found on 2026-09-13 while answering a Play enforcement demanding an organization
+> account, which is exactly the question it would have answered wrongly.
 
 If that account belongs to the **hostel operator**, NIVORA is software and nothing more, and this
 declaration is correct. If it belongs to **NIVORA**, and NIVORA then pays the hostels, NIVORA is

@@ -306,22 +306,37 @@ transfers are disclosed in the policy, not in the Shared column. So:
 > **Blocking:** `/legal/privacy` must name **Razorpay** as a sub-processor, alongside Supabase and
 > Vercel, and say what it receives. It does — see §8 row 1.
 
-### 4.1 One fact to establish before the first live key
+### 4.1 Whose account the rent settles into — settled 2026-09-06
 
-There is exactly **one** `RAZORPAY_KEY_ID` for the whole application, so every hostel's rent is
-collected into **one merchant account**. There is no Razorpay Route, no `transfers`, no split
-settlement and no payout logic anywhere in the code — verified by grep across
-`lib/actions/payments.ts`, `lib/razorpay.ts`, `app/api/webhooks/razorpay/route.ts` and
-`components/payments/`.
+**The rent settles into the hostel owner's own Razorpay account, and NIVORA never holds it.**
+Razorpay Route is implemented: each hostel carries its own linked account
+(`hostels.razorpay_account_id`, shaped `acc_...`), and the order created for a resident carries
 
-**Whose merchant account it is decides a compliance question of which Play is not even the hardest
-part.** If the money settles into the *hostel operator's* own Razorpay account, NIVORA is software
-and nothing more. If it settles into *NIVORA's* account and NIVORA then pays the hostels, NIVORA is
-handling other people's money — Payment Aggregator territory under the RBI's PA/PG directions, and a
-different product with a different licence.
+```json
+"transfers": [{ "account": "<that hostel's account>", "amount": <the whole rent>, "on_hold": false }]
+```
 
-**This is not a Data safety answer.** It is the thing to settle before the first live key is issued,
-and it is why the Financial features wording in §5 is hedged the way it is.
+— see `supabase/functions/_shared/razorpay.ts` and `supabase/functions/razorpay-order/index.ts`.
+Three things follow, and each is enforced rather than intended:
+
+- **NIVORA takes nothing out of rent.** The transfer is the full sum; NIVORA's own revenue is a
+  subscription the owner pays, recorded separately and never through this gateway.
+- **NIVORA does not decide when the money moves.** `on_hold: false` settles on Razorpay's normal
+  cycle.
+- **A hostel with no linked account cannot take an online payment at all.** `rz_open_intent`
+  refuses the intent and the Edge Function refuses the order — the same failure guarded from both
+  sides, because rent landing somewhere it cannot lawfully be released from is unrecoverable.
+
+**So the Payment Aggregator question does not arise.** NIVORA is software: it creates an order for
+what a resident owes and Razorpay, an RBI-licensed aggregator, settles it to the owner. This is
+why the Financial features answer in §5 is "none" — and it is now a statement about the code
+rather than a hedge.
+
+> This section previously said the opposite — one merchant account, no Route, no transfers,
+> "verified by grep". That was true when written and stopped being true on 2026-09-06. It was
+> found on 2026-09-13 while answering a Play enforcement that demanded an organization account,
+> where the difference between the two versions is the difference between "software" and
+> "handling other people's money".
 
 ---
 
