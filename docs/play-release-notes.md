@@ -6,12 +6,15 @@ Play counts the characters *inside* the tags, not the tags themselves.
 
 ---
 
-## v1.0.0 (versionCode 1) — first release
+## v1.0.0 (versionCode 2) — first release
 
-`pubspec.yaml` says `version: 1.0.0+1`, and the built artifact reports `versionCode='1'`. That is
-correct for a first upload: no bundle has ever been *accepted* on this listing, so there is nothing
-for versionCode 1 to collide with. The earlier attempt was rejected before acceptance, and under a
-different package name. Every upload after this one must raise the `+N`.
+`pubspec.yaml` says `version: 1.0.0+2`, and the artifact built on 2026-09-13 reports
+`versionCode='2'`. It was raised from 1 before this upload on purpose: Play refuses a versionCode
+that has *ever* been uploaded to a listing's bundle library, even when the release it sat in was
+discarded, and a versionCode-1 bundle was built and handed over on 2026-09-12. Whether or not that
+one reached Console, 2 cannot collide with it. Every upload after this one must raise the `+N`.
+
+**Release name** (a Console field, never shown to users, 50 characters max): `1.0.0 (2)`
 
 ```
 <en-US>

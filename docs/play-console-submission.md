@@ -126,11 +126,18 @@ Under **App access**, choose *All or some functionality is restricted*, add an i
 per account, and put the passwords in Console's own password fields. Paste the block below into
 **"Any other information required to access your app"**.
 
-Verified against the live database on 2026-09-12: all three accounts exist, are `active`, have
-`must_change_password = false` and a verified email, and hold no TOTP factor. `demo.owner` owns
+Verified against the live database on 2026-09-13: all three accounts exist, are `active`, have
+`must_change_password = false`, a verified email and a password set, and hold no TOTP factor. `demo.owner` owns
 `Demo PG (Play review)` through `hostels.owner_user_id`, so its null `users.hostel_id` is normal
 for an owner and its dashboard is populated. None of the three has accepted legal version
 `2026-09-12`, which is why the consent screen is described below rather than omitted.
+
+The demo property was seeded on 2026-09-13 so a reviewer lands on populated screens: four months of
+expenses, a week's menu, notices, a pending and an approved leave, and visitors
+(`db/migrations/2026-09-13-demo-pg-play-review-seed.sql`). It has **no manager account** — create
+one in Demo PG and add it as a fourth entry, or the owner's task screens have nobody to assign to.
+It also has **no Razorpay account linked**, deliberately, so a reviewer cannot move real money; the
+text below says so, so the payment refusal reads as intended rather than broken.
 
 **The passwords are deliberately not in this repository.** Set or confirm them before submitting,
 and type them into Console yourself.
@@ -156,7 +163,7 @@ complaints, leave requests, visitor log and the mess menu.
 Username: 9000000001
 Residents sign in with their 10-digit phone number. The app maps it to an internal address for
 you; do not type an email for this account, as that will fail.
-Covers: rent due and paid, receipts, UPI payment, raising a complaint, leave and notices.
+Covers: rent due and paid, receipts, the payment screen, raising a complaint, leave and notices.
 
 --- 3. OWNER — requires 2-step verification, see below ---
 Username: demo.owner@nivora.app
@@ -182,6 +189,13 @@ because both documents were updated on 12 September 2026. Tap Accept to continue
 It appears once per account and cannot be skipped, as consent is recorded.
 
 === OTHER THINGS WORTH KNOWING ===
+- Online payment is switched off on the demo property on purpose, so nobody can move real money
+  during review. Tapping Pay on the resident account shows "Online payment is not set up for this
+  hostel yet. Please pay your warden directly." That is what a real resident sees in the same
+  situation; it is not an error.
+- Account deletion: residents open the Profile tab, staff tap their picture at the top left, then
+  Delete my account and data. It files a request for the hostel to act on. If it already shows
+  "Request sent", an earlier review filed one; that is the 30-day de-duplication working.
 - On first launch the app shows a short intro carousel. Tap Skip to reach the sign-in screen.
 - Sign-in is rate limited to 8 attempts per account per 15 minutes. A password typed wrongly
   several times produces a "please wait" message rather than a password error. Wait the stated

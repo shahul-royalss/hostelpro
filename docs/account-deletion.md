@@ -47,6 +47,8 @@ delete their own row:
 | In-app | Student → **More → My details**, below "Change password" | `app/student/profile/page.tsx` → `components/account/delete-account-card.tsx` |
 | Public web URL | `https://hostelpro-three.vercel.app/legal/account-deletion` | `app/legal/account-deletion/page.tsx` |
 | Server action | `requestAccountDeletion()` / `getMyDeletionRequest()` | `lib/actions/account.ts` |
+| App RPCs | `request_account_deletion()` / `my_account_deletion_request()` | `db/migrations/2026-09-13-account-deletion-request-rpc.sql` |
+| App screen | "Delete my account and data" — resident Profile tab; staff profile sheet | `nivora_app/lib/features/legal/account_deletion.dart` |
 
 The public page sits inside the shared legal shell (`app/legal/layout.tsx`) alongside the Privacy
 Policy and Terms, and uses that shell's `DocHeader` / `Section` / `DataTable` / `Callout`
@@ -55,13 +57,17 @@ primitives so the three documents read as one set.
 `/legal` is in `PUBLIC_PATHS` in `lib/supabase/middleware.ts`, so the page renders with no session;
 nothing in it reads a cookie, a session or the database. It reads `headers()` to force dynamic
 rendering — a statically prerendered page carries no CSP nonce and `strict-dynamic` would block
-every script on it (the reason `app/not-found.tsx` does the same). The sibling legal pages opt into
-`force-static` instead; this one is the URL Google actually loads, so it takes the per-request
-nonce.
+every script on it (the reason `app/not-found.tsx` does the same). The sibling legal pages get the same
+per-request rendering by exporting `dynamic = "force-dynamic"`; this page reads `headers()`
+instead, which has the same effect.
 
-**Only the student profile carries the in-app control today.** The action itself accepts `student`,
-`warden`, `manager` and `owner`, so the same card can be dropped into a staff profile screen when
-one exists. The Super Admin is excluded: they have no hostel context and would use the email route.
+**Where the in-app control lives.** In the **Android app**, every hostel role has it: residents in
+the Profile tab's Account card, and owners, managers and wardens in the profile sheet behind their
+avatar. On the **website**, only the resident profile carries the card, so a staff member without
+the app uses the email route. Both surfaces write the same `audit_log` row
+(`account.deletion.requested`), so a request filed on one shows as sent on the other, and both
+de-duplicate over the same 30 days. The Super Admin is excluded on both: they have no hostel
+context and use the email route.
 
 ### 2.1 Before the Play listing goes live
 
