@@ -48,10 +48,21 @@ notification rows are still written and still visible in the app's own list.
 
 1. **Create the Firebase project** — <https://console.firebase.google.com> → Add project. Any name;
    Google Analytics is not needed and adds an advertising id, which this app declares it does not use.
-2. **Add an Android app** with package name **`com.srnivora.app`** exactly. Download the
-   `google-services.json` it offers and put it at `nivora_app/android/app/google-services.json`.
-   That file is not a secret — it ships inside the APK — but it IS gitignored here, because it
-   belongs to whoever owns the Play listing.
+2. **Add an Android app** with package name **`com.srnivora.app`** exactly — check it letter by
+   letter. On 2026-09-13 the first registration in `nivorapg` went in as `com.nivorasr.app`, and a
+   `google-services.json` for the wrong package fails the build ("No matching client found").
+   Editing the package name inside the file is not a fix: the app id beside it belongs to the other
+   registration, so tokens would never register. Prefer the CLI, which is what fixed it:
+
+   ```bash
+   npx -y firebase-tools@latest apps:create ANDROID "Nivora Android" --package-name com.srnivora.app --project nivorapg
+   npx -y firebase-tools@latest apps:sdkconfig ANDROID <APP_ID> --project nivorapg -o nivora_app/android/app/google-services.json
+   ```
+
+   The file lists every Android app in the project, so a leftover registration appearing in it is
+   expected and harmless — the Google Services plugin picks the client matching the build's
+   applicationId. It is not a secret — it ships inside the APK — but it IS gitignored here, because
+   it belongs to whoever owns the Play listing.
 3. **Generate a service-account key** — Project settings → Service accounts → *Generate new private
    key*. This one IS a secret: it can send a notification to every device in the project.
 4. **Put it in Supabase, not in the repository** — Dashboard → Edge Functions → Secrets →
