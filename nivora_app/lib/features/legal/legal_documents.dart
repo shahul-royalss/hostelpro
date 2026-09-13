@@ -43,10 +43,10 @@ library;
 ///
 /// One string covers BOTH documents: they are presented together and agreed to together, so
 /// there is no state in which a person is half-agreed.
-const kLegalVersion = '2026-09-12';
+const kLegalVersion = '2026-09-13';
 
 /// Human-readable form of [kLegalVersion], for the "last updated" line.
-const kLegalVersionLabel = '12 September 2026';
+const kLegalVersionLabel = '13 September 2026';
 
 const kTermsUrl = 'https://hostelpro-three.vercel.app/legal/terms';
 const kPrivacyUrl = 'https://hostelpro-three.vercel.app/legal/privacy';
@@ -145,11 +145,9 @@ const kLegalDocuments = <LegalDocument>[kPrivacyPolicy, kTermsOfUse];
 // traced to code it was removed rather than reworded, which is why the twelve-month visitor-log
 // and leave-request periods that nothing enforced are gone.
 //
-// The app gained an in-app "Delete my account and data" control on 2026-09-13
-// (features/legal/account_deletion.dart). This text still names only the website route and the
-// public page, deliberately: both are still true, and adding a pointer would change the wording of
-// a version people have already accepted, which bumps the version and asks everyone again. Add it
-// the next time this text changes for a reason of its own.
+// The in-app "Delete my account and data" control (features/legal/account_deletion.dart, added
+// 2026-09-13) is named below from version 2026-09-13, which changed this text anyway to correct
+// the permission list and to describe what Razorpay's in-app checkout handles.
 
 const kPrivacyPolicy = LegalDocument(
   id: 'privacy',
@@ -256,14 +254,19 @@ const kPrivacyPolicy = LegalDocument(
       blocks: [
         Bullets([
           'No date of birth and no age. The system has no such field.',
-          'No card number, UPI ID, CVV or bank account. Where rent is paid online those details '
-              'are typed into Razorpay\'s own checkout and never reach NIVORA at all. What comes '
-              'back is a reference saying a payment of a stated amount succeeded.',
-          'No location, contacts, calendar, microphone or biometrics. NIVORA asks for internet '
-              'access and the ability to tell whether you are online. The Razorpay checkout adds '
-              'two more that its own SDK declares: NFC, so a payment card can be tapped, and a '
-              'basic phone-state permission. Those four are the whole list, and NIVORA reads '
-              'neither of the two Razorpay adds.',
+          'No card number, UPI ID, CVV or bank account is ever received or stored by NIVORA. '
+              'Where rent is paid online those details are typed into Razorpay\'s checkout, which '
+              'on Android runs inside this app, and go to Razorpay (see Razorpay below). What '
+              'comes back is a reference saying a payment of a stated amount succeeded.',
+          'No location, contacts, calendar, microphone or biometrics. The Android app declares '
+              'ten permissions and no others. Four are NIVORA\'s own: internet access; the ability '
+              'to tell whether you are online; the camera, used only when you choose to take a '
+              'photo of an identity document, a resident or a receipt; and permission to show '
+              'notifications. Four more are added by the libraries that deliver notifications and '
+              'run the app: waking the device, vibrating, receiving a message, and an internal '
+              'permission only this app can hold. The last two come from Razorpay\'s checkout: '
+              'NFC, so a payment card can be tapped, and a basic phone-state permission; NIVORA '
+              'reads neither. The advertising-ID permission is removed from the app explicitly.',
           'No advertising, no advertising identifier and no profiling. Nothing here is used to '
               'build a picture of you or to make an automated decision about you.',
           // NOT "there is no third-party tracking code in the app". That sentence was true of the
@@ -383,14 +386,18 @@ const kPrivacyPolicy = LegalDocument(
           (
             term: 'Razorpay',
             detail: 'Only where you choose to pay rent in the app. Receives your name, email, '
-                'phone and the amount; the card, UPI or netbanking details are entered in '
-                'Razorpay\'s own checkout and never reach us. We get back the amount, the '
-                'identifiers and the method. Razorpay keeps its own record under its own policy.',
+                'phone and the amount. Its checkout runs inside this app on Android: while a '
+                'payment is open it takes the card, UPI or netbanking details you type, and checks '
+                'which UPI apps are installed so it can offer them. Those details go to Razorpay '
+                'and never reach us. We get back the amount, the identifiers and the method. '
+                'Razorpay keeps its own record under its own policy.',
           ),
           (
             term: 'Google',
-            detail: 'Delivers the few account emails — a confirmation link, a password reset. '
-                'Sees your email address and the message.',
+            detail: 'Two jobs. It delivers the few account emails — a confirmation link, a '
+                'password reset — and sees your email address and the message. Through Firebase '
+                'Cloud Messaging it also delivers push notifications to your phone, and receives '
+                'the phone\'s registration token and each notification\'s title and body.',
           ),
         ]),
         Para(
@@ -502,8 +509,10 @@ const kPrivacyPolicy = LegalDocument(
           'omission: it is tied to a bed you may still be in and to a ledger the hostel must '
           'keep, and an erasure accepted instantly in someone else\'s name would be a way to '
           'attack them. So a deletion is a request, confirmed with you, and then carried out. '
-          'A resident signed in on the website can file one from Profile, then Delete my '
-          'account and data. Anyone can file one from the public page at:',
+          'In this app, open your profile — residents on the Profile tab, staff by tapping '
+          'their picture at the top left — and choose Delete my account and data. Residents '
+          'signed in on the website can file one from Profile. Anyone can file one from the '
+          'public page at:',
         ),
         Para(kDeletionUrl),
         Para(

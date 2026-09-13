@@ -18,17 +18,20 @@
          APPEARS — silently. Rent reminders, a notice from the owner and "payment received" all
          arrive through it.
 
-         WHEN IT IS ASKED FOR: the first time a session appears, not on first launch. The token
-         is registered against a USER, so there is nothing to register before somebody signs in,
-         and asking a stranger on the sign-in screen is asking before the answer can mean
-         anything. There is no in-app rationale screen ahead of the system dialog — the dialog
+         WHEN IT IS ASKED FOR: once the signed-in person has agreed to the Terms of Use and
+         Privacy Policy at the consent gate — not on first launch, and not merely at sign-in. The
+         token is registered against a USER, and registering it is processing the Privacy Policy
+         describes, so nothing starts before that agreement (lib/features/legal/consent_gate.dart,
+         initState). There is no in-app rationale screen ahead of the system dialog — the dialog
          is the ask — and a refusal is not treated as an error: the token is registered anyway,
          so turning notifications on later in Settings works immediately. See
          lib/core/notify/push_service.dart.
 
-         CAMERA is declared because a warden photographs an ID proof and a resident photographs a
-         complaint. It is the one dangerous permission this app holds, and DECLARING IT IS WHAT
-         MAKES IT MANDATORY: ACTION_IMAGE_CAPTURE throws SecurityException for an app that
+         CAMERA is declared because a warden photographs a new resident and their ID proof at
+         registration (register_student_sheet.dart); residents cannot attach a photo to a
+         complaint in this app. It is the only runtime permission besides POST_NOTIFICATIONS, and
+         DECLARING IT IS WHAT MAKES IT MANDATORY: ACTION_IMAGE_CAPTURE throws SecurityException
+         for an app that
          declares CAMERA without holding it, so data/capture.dart asks first. The uses-feature
          line keeps the app installable on a device with no camera — a declared permission
          otherwise implies required hardware and quietly filters the store listing.

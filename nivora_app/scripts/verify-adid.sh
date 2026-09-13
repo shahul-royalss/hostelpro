@@ -15,6 +15,19 @@
 # tools:node="remove" wins over anything merged in — but "wins" is a claim about a build, and this
 # is how the claim gets checked against the artifact that is actually going to Google.
 #
+# ── THIS SCRIPT USED TO PASS ON NOTHING ──────────────────────────────────────────────────────
+#
+# It searched for the permission as UTF-8 bytes only. An AAB's protobuf manifest stores strings as
+# UTF-8, but an APK's compiled binary XML stores them as UTF-16, so on every APK the search could
+# never match and "clean" was printed whatever the manifest said. Found by an audit on 2026-09-13
+# with a positive control: android.permission.CAMERA, which aapt2 lists as present, was invisible
+# to the old search in both APKs. AD_ID was genuinely absent, but the old output was not evidence
+# of that.
+#
+# So it now searches both encodings, and it refuses to say "clean" unless it can also see
+# android.permission.INTERNET — which every build of this app declares — in the same file. A check
+# that cannot read the manifest now fails loudly instead of passing.
+#
 # Usage:  bash scripts/verify-adid.sh [path-to-apk-or-aab ...]
 #         (defaults to everything in dist/)
 
@@ -38,35 +51,50 @@ fi
 fail=0
 for artifact in "${targets[@]}"; do
   [ -f "$artifact" ] || continue
-  # The permission name appears verbatim in the string pool of a compiled manifest, in both the
-  # APK's binary XML and the AAB's protobuf, so one byte-level search covers both formats without
-  # needing aapt2 (which cannot read an AAB's manifest anyway).
   found="$(python3 - "$artifact" <<'PY'
 import sys, zipfile
-needle = b"com.google.android.gms.permission.AD_ID"
-hits = []
+
+AD_ID = "com.google.android.gms.permission.AD_ID"
+CONTROL = "android.permission.INTERNET"
+
+def present(blob, text):
+    # AAB protobuf manifests hold UTF-8; APK binary-XML manifests hold UTF-16. Check both.
+    return text.encode("utf-8") in blob or text.encode("utf-16-le") in blob
+
+hits, control_seen = [], False
 with zipfile.ZipFile(sys.argv[1]) as z:
     for name in z.namelist():
         if name.endswith("AndroidManifest.xml") or name.endswith(".pb"):
-            if needle in z.read(name):
+            blob = z.read(name)
+            if present(blob, CONTROL):
+                control_seen = True
+            if present(blob, AD_ID):
                 hits.append(name)
+
+if not control_seen:
+    print("CONTROL_MISSING")
 print("\n".join(hits))
 PY
 )"
-  if [ -n "$found" ]; then
-    printf '\033[31mAD_ID PRESENT\033[0m in %s:\n%s\n' "$(basename "$artifact")" "$found" >&2
+  name="$(basename "$artifact")"
+  if printf '%s' "$found" | grep -q "CONTROL_MISSING"; then
+    printf '\033[31mCANNOT READ\033[0m %s: android.permission.INTERNET not found either, so this check proves nothing\n' "$name" >&2
+    fail=1
+  elif [ -n "$found" ]; then
+    printf '\033[31mAD_ID PRESENT\033[0m in %s:\n%s\n' "$name" "$found" >&2
     fail=1
   else
-    printf 'clean: %s\n' "$(basename "$artifact")"
+    printf 'clean: %s (manifest readable: INTERNET found, AD_ID not found)\n' "$name"
   fi
 done
 
 if [ "$fail" -ne 0 ]; then
   cat >&2 <<'EOF'
 
-The Advertising ID declaration in Play Console says NO. This artifact disagrees with it.
+Either the manifest could not be read, or the Advertising ID declaration in Play Console (which
+says NO) is contradicted by this artifact.
 
-Find which dependency merged it in:
+If AD_ID is present, find which dependency merged it in:
   ./gradlew :app:processReleaseManifest  and read app/build/outputs/logs/manifest-merger-*.txt
 
 Then either drop that dependency, or change the Console declaration to Yes and update

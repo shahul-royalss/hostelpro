@@ -83,13 +83,19 @@ class PushService {
     importance: Importance.high,
   );
 
-  /// Called when a session appears. Safe to call repeatedly; only the first does anything.
+  /// Called by the consent gate once the signed-in person has agreed to the Terms of Use and
+  /// Privacy Policy — never at sign-in. Safe to call repeatedly; only the first does anything.
   Future<void> start() async {
     if (_started) return;
     _started = true;
 
-    // Not on a phone, no push. This is also what keeps every widget test out of the whole path
-    // — there is no platform channel under one, and Firebase would throw on the first call.
+    // Not on a phone, no push.
+    //
+    // THIS DOES NOT KEEP WIDGET TESTS OUT, although it was once said to. Under flutter_test,
+    // defaultTargetPlatform reports android (foundation/_platform_io.dart does so whenever
+    // FLUTTER_TEST is set). A test that reaches start() gets as far as Firebase.initializeApp(),
+    // which fails for want of a platform channel and lands in the catch below, switching the
+    // service off. A test that needs to know whether push started overrides pushServiceProvider.
     if (defaultTargetPlatform != TargetPlatform.android &&
         defaultTargetPlatform != TargetPlatform.iOS) {
       return;
@@ -235,5 +241,5 @@ class PushService {
   void _onTapped(NotificationResponse response) {}
 }
 
-/// One per app, created lazily the first time a session appears.
+/// One per app, created lazily the first time the consent gate lets somebody through.
 final pushServiceProvider = Provider<PushService>((ref) => PushService(ref));

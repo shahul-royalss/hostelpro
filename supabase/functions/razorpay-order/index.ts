@@ -203,12 +203,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!orderId) {
       // ── 4b. WHERE THIS MONEY SETTLES ───────────────────────────────────────
       //
-      // The hostel's Razorpay Route linked account — the OWNER's, not the platform's. Read
-      // here and passed into the order so Razorpay settles to them directly.
+      // Two ways, and only two. ROUTE: the hostel's Razorpay Route linked account — the
+      // OWNER's, not the platform's — is read here and passed into the order as a transfer, so
+      // Razorpay settles to them directly. DIRECT: the hostel is approved to take rent straight
+      // into the merchant account (razorpay_direct_for_owner), honoured only while that
+      // approval names the hostel's CURRENT owner.
       //
-      // rz_open_intent refuses an intent for a hostel with no linked account, so by the time
-      // execution reaches here one should exist. This checks anyway and refuses if it does
-      // not: the database guard and this one protect the same thing from opposite sides, and
+      // rz_open_intent refuses a hostel with neither, but it runs at step 6, after a Razorpay
+      // order would already exist. So this refuses first, with a 409, before any order is
+      // created: the database guard and this one protect the same thing from opposite sides, and
       // the failure they prevent — rent landing in an account that cannot lawfully release it
       // — is not one to leave resting on a single check.
       const { data: payoutRow, error: payoutError } = await supabase

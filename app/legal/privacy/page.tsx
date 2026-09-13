@@ -250,7 +250,7 @@ export default function PrivacyPolicyPage() {
             <li>
               <strong>No card number, bank account, UPI ID or CVV.</strong> This is still true now
               that rent can be paid inside the app: those details are typed into{" "}
-              <strong>Razorpay&rsquo;s own checkout</strong> and never reach {APP_NAME} at all. What
+              <strong>Razorpay&rsquo;s own checkout</strong> — which on Android runs inside the app — and go to Razorpay, never to {APP_NAME}. What
               comes back is a reference saying that a payment of a stated amount succeeded. Rent
               paid at the desk in cash is recorded by your warden as a cash entry. {APP_NAME} never
               holds your money in either case — see section 6.
@@ -439,7 +439,7 @@ export default function PrivacyPolicyPage() {
               [
                 "Razorpay",
                 "Processing an online rent payment, only when you choose to pay in the app",
-                "Your name, email and phone, so the payment can be attributed to you, plus the payment details you enter on their own checkout. We receive back only the amount, the identifiers and the method, and Razorpay keeps its own record under its own policy",
+                "Your name, email and phone, so the payment can be attributed to you. On Android its checkout runs inside the app: while a payment is open it takes the card, UPI or netbanking details you type and checks which UPI apps are installed so it can offer them, and those details go to Razorpay, never to us. We receive back only the amount, the identifiers and the method, and Razorpay keeps its own record under its own policy",
               ],
               [
                 "Google",
@@ -615,7 +615,7 @@ export default function PrivacyPolicyPage() {
             it is tied to a bed you may still be occupying and to a fee ledger the hostel is
             required to keep, and an erasure accepted instantly in someone else&rsquo;s name would
             be a way to attack them. So a deletion is a request, confirmed with you, and then
-            carried out — a resident signed in on the website can file one from{" "}
+            carried out — in the Android app, open your profile (residents: the Profile tab; staff: tap your picture at the top left) and choose Delete my account and data; a resident signed in on the website can file one from{" "}
             <strong>Profile → Delete my account and data</strong>. We acknowledge requests within{" "}
             <strong>72 hours</strong> and aim to complete them within <strong>30 days</strong>.
             Requests are free. We will verify your identity before acting — for a current resident,

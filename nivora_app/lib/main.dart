@@ -224,17 +224,11 @@ class _NivoraAppState extends ConsumerState<NivoraApp> {
       final phase = next.value;
       if (phase is AuthSignedIn) {
         ref.read(emailVerificationRecheckProvider).runOnceOnStartup();
-        // PUSH STARTS WITH THE SESSION, NOT WITH THE APP, and that ordering is the point.
-        //
-        // An FCM token is registered AGAINST A USER (public.push_devices.user_id), so there is
-        // nothing to register before somebody has signed in — and asking for the notification
-        // permission on a launch that ends at the sign-in screen would be asking a stranger.
-        // The dialog therefore appears once the person is inside, where "we will tell you when
-        // rent is due" is a sentence that means something.
-        //
-        // Fire and forget: every step inside start() is wrapped, and a phone that cannot
-        // register is a phone that does not buzz — never one that cannot run the PG.
-        unawaited(ref.read(pushServiceProvider).start());
+        // PUSH DOES NOT START HERE. A session is not an agreement: registering this handset's
+        // token and asking for the notification permission are both processing the Privacy
+        // Policy describes, so push starts behind the consent gate instead — see initState in
+        // features/legal/consent_gate.dart. Stopping it stays here, below, because signing out
+        // must hand the token back whatever state the gate was in.
       } else if (phase is AuthSignedOut) {
         // The token goes back, so the next person to hold this handset does not receive the
         // last person's rent reminders. One phone genuinely does pass between a warden and

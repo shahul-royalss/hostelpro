@@ -317,7 +317,7 @@ export default async function AccountDeletionPage() {
             rows={[
               [
                 "Fee and payment records",
-                "As long as the hostel's accounting duty requires — 8 years unless its accountant sets a different period.",
+                "Kept indefinitely, as the privacy policy says — the hostel's accounting duty runs for years and is not ours to shorten. Nothing deletes these automatically.",
                 "Indian tax and company-law record keeping outlives any privacy schedule, and a business cannot lawfully delete its books on request. Your name, phone, address and ID proof are removed from the record instead, so the ledger survives without you being identifiable in it.",
               ],
               [

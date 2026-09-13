@@ -29,6 +29,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
+import 'package:mobile/core/notify/push_service.dart';
 import 'package:mobile/core/theme/theme.dart';
 import 'package:mobile/data/models/models.dart';
 import 'package:mobile/features/legal/consent_gate.dart';
@@ -45,6 +46,17 @@ class _StubAuth extends AuthController {
   Future<AuthPhase> build() async => _phase;
 }
 
+/// Counts start() calls instead of reaching Firebase. Under flutter_test the platform reports
+/// android, so the real service would get as far as Firebase.initializeApp().
+class _RecordingPush extends PushService {
+  _RecordingPush(super.ref);
+  int starts = 0;
+  @override
+  Future<void> start() async {
+    starts++;
+  }
+}
+
 const _session = NivoraSession(
   userId: 'user-1',
   role: UserRole.student,
@@ -58,12 +70,19 @@ const _session = NivoraSession(
 const _behindTheGate = 'THE PRODUCT';
 
 void main() {
+  /// The push service the last pumped gate created. The provider is lazy, so null means push
+  /// was never asked to start at all.
+  _RecordingPush? push;
+  int pushStarts() => push?.starts ?? 0;
+
   Future<void> pumpGate(WidgetTester tester, FakeConsentStore store) async {
+    push = null;
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           authControllerProvider.overrideWith(() => _StubAuth(const AuthSignedIn(_session))),
           legalConsentStoreProvider.overrideWithValue(store),
+          pushServiceProvider.overrideWith((ref) => push = _RecordingPush(ref)),
         ],
         child: MaterialApp(
           theme: NivoraTheme.light(),
@@ -236,6 +255,61 @@ void main() {
       expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse,
           reason: 'somebody who declined and came back is deciding again, and should not find '
               'the decision already made and one stray tap from being final');
+    });
+  });
+
+  // ═════════════════════════════════════════════════════════════════════════════════════════
+  //
+  // Starting push sends the handset's token to Nivora and puts Android's notification dialog on
+  // screen. Both are processing the Privacy Policy describes, so both wait for the agreement.
+  // Push used to start the moment a session appeared, which asked for the permission over the
+  // top of documents the person had not yet agreed to.
+  group('push waits for the agreement', () {
+    testWidgets('nothing starts while the gate is up', (tester) async {
+      await pumpGate(tester, FakeConsentStore.notAccepted());
+
+      expect(find.text('Please read and agree'), findsOneWidget);
+      expect(pushStarts(), 0,
+          reason: 'a token sent, or a permission asked for, before agreement is processing '
+              'the person has not agreed to');
+    });
+
+    testWidgets('declining starts nothing', (tester) async {
+      await pumpGate(tester, FakeConsentStore.notAccepted());
+      await tester.tap(find.text('I do not agree'));
+      await tester.pump();
+
+      expect(find.text('NIVORA cannot be used without agreeing'), findsOneWidget);
+      expect(pushStarts(), 0);
+    });
+
+    testWidgets('a check that failed starts nothing', (tester) async {
+      await pumpGate(
+        tester,
+        FakeConsentStore.failing(const OfflineFailure('Cannot reach Nivora.')),
+      );
+
+      expect(find.text('Cannot check your agreement'), findsOneWidget);
+      expect(pushStarts(), 0,
+          reason: 'failing closed covers push too — not knowing is not an agreement');
+    });
+
+    testWidgets('agreeing starts it', (tester) async {
+      await pumpGate(tester, FakeConsentStore.notAccepted());
+      expect(pushStarts(), 0);
+
+      await agree(tester);
+
+      expect(find.text(_behindTheGate), findsOneWidget);
+      expect(pushStarts(), isPositive);
+    });
+
+    testWidgets('somebody who agreed on an earlier launch starts it on arrival', (tester) async {
+      await pumpGate(tester, FakeConsentStore.accepted());
+
+      expect(find.text(_behindTheGate), findsOneWidget);
+      expect(pushStarts(), isPositive,
+          reason: 'without this, push would only ever work on the day somebody first agreed');
     });
   });
 

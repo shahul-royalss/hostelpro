@@ -17,9 +17,10 @@
 
 # ── Generic and annotation metadata ──────────────────────────────────────────
 # Kept for every library that reflects over types at runtime. This line arrived with Razorpay's
-# checkout SDK and stays now that the SDK is gone: Signature and InnerClasses are what let any
-# library recover a generic type after minification, and dropping them is the kind of change
-# that only fails in a release build.
+# checkout SDK, which is back in the app (razorpay_flutter; see the Razorpay block below), and it
+# would stay even without it: Signature and InnerClasses are what let any library recover a
+# generic type after minification, and dropping them is the kind of change that only fails in a
+# release build.
 #
 -keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod
 

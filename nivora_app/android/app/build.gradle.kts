@@ -34,7 +34,7 @@ if (file("google-services.json").exists()) {
  * Release signing.
  *
  * Resolution order, deliberately: environment variables first so GitHub Actions can inject
- * secrets, then ~/.nivora-keys/keystore.properties for local builds. The keystore itself lives
+ * secrets, then ~/.hostelpro-keys/keystore.properties for local builds. The keystore itself lives
  * OUTSIDE the repository and is never committed — losing it means Play will not accept another
  * update to this listing, and committing it means anyone with repo access can publish as you.
  *

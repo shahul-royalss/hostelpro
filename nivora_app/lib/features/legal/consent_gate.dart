@@ -1,9 +1,12 @@
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/notify/push_service.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/failure.dart';
 import '../../shared/glass/glass.dart';
@@ -73,6 +76,30 @@ class _ConsentGateState extends ConsumerState<ConsentGate> {
   AppFailure? _writeError;
 
   @override
+  void initState() {
+    super.initState();
+    // ═══ PUSH STARTS BEHIND THIS GATE, NOT AT SIGN-IN ═══
+    //
+    // Starting push sends this handset's FCM token to Nivora and, on Android 13 and later, puts
+    // the system notification dialog on screen. Both are processing the Privacy Policy
+    // describes, so neither may happen before the person has agreed to it — and a permission
+    // dialog drawn over documents they have not yet read asks the question in the wrong order.
+    // Push used to start from main.dart the moment a session appeared; the Play compliance
+    // audit of 2026-09-13 moved it here.
+    //
+    // `fireImmediately` covers somebody who agreed on an earlier launch, and [_accept] covers
+    // somebody agreeing now. start() does nothing after its first call, so a gate that mounts
+    // again cannot register twice. Signing out still hands the token back, from main.dart.
+    ref.listenManual(legalConsentProvider, (previous, next) {
+      if (next.hasValue && next.value != null) _startPush();
+    }, fireImmediately: true);
+  }
+
+  /// Fire and forget: a phone that cannot register is a phone that does not buzz, never one
+  /// that cannot get past this screen.
+  void _startPush() => unawaited(ref.read(pushServiceProvider).start());
+
+  @override
   Widget build(BuildContext context) {
     if (_acceptedNow) return widget.child;
 
@@ -134,6 +161,9 @@ class _ConsentGateState extends ConsumerState<ConsentGate> {
       // Order matters: mark accepted BEFORE invalidating, so the rebuild the invalidation
       // triggers already knows the answer and never flashes the gate again.
       setState(() => _acceptedNow = true);
+      // Started here as well as from the listener, because the re-read the invalidation below
+      // triggers can itself fail — and the agreement it would confirm has already been recorded.
+      _startPush();
       ref.invalidate(legalConsentProvider);
     } catch (error) {
       if (!mounted) return;
