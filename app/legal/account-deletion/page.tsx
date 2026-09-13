@@ -110,9 +110,10 @@ export default async function AccountDeletionPage() {
         <Callout title="The short version">
           <ul>
             <li>
-              Signed in <strong>on the website</strong>? Profile →{" "}
-              <strong>Delete my account and data.</strong> One tap files the request. In the
-              Android app, use the email route below.
+              In the <strong>Android app</strong>: your profile →{" "}
+              <strong>Delete my account and data</strong> — residents on the Profile tab, staff by
+              tapping their picture at the top left. On the <strong>website</strong>, residents
+              find the same control under Profile. One tap files the request.
             </li>
             <li>
               Cannot sign in? Email <strong>{CONTACT.email}</strong>. Never email photographs of
@@ -182,22 +183,22 @@ export default async function AccountDeletionPage() {
 
         <Section id="in-app" title="3. Requesting deletion when you can sign in">
           <p>
-            There is a one-tap control for this, and it is on the <strong>website</strong>. The
-            Android app does not carry it yet. If you are in the app, use the email route in
-            section 4 or ask your warden — both file the same request against the same record,
-            and neither is slower to act on.
+            There is a one-tap control for this in the <strong>Android app</strong> for every
+            account, and on the <strong>website</strong> for residents. Both file the same request
+            against the same record, so a request made in one shows as sent in the other. The email
+            route in section 4 and asking your warden file it too, and neither is slower to act on.
           </p>
           <ol>
             <li>
-              Open {APP_NAME} in a browser and sign in — residents with their phone number, staff
-              with their email address.
+              Sign in — residents with their phone number, staff with their email address.
             </li>
             <li>
-              Residents: open the <strong>Profile</strong> tab. That is your
-              profile screen.
+              Open your profile. <strong>In the app</strong>, residents use the{" "}
+              <strong>Profile</strong> tab and staff tap their picture at the top left.{" "}
+              <strong>On the website</strong>, residents open <strong>Profile</strong>.
             </li>
             <li>
-              Scroll to <strong>Delete my account and data</strong>, read what it tells you, and
+              Choose <strong>Delete my account and data</strong>, read what it tells you, and
               confirm. You can add a reason, but you do not have to give one.
             </li>
           </ol>
@@ -207,8 +208,9 @@ export default async function AccountDeletionPage() {
             can check it was received.
           </p>
           <p>
-            Staff accounts (manager, warden, owner) do not have this control on their own profile
-            screen even on the website — use the email route in section 4 instead.
+            Staff accounts (manager, warden, owner) file theirs from the Android app. The website
+            does not show the control on a staff profile, so a staff member without the app should
+            use the email route in section 4 instead.
           </p>
         </Section>
 

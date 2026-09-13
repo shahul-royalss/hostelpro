@@ -8,6 +8,7 @@ import '../../core/router/router.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../legal/account_deletion.dart';
 import '../settings/security_screen.dart';
 import 'student_providers.dart';
 import 'widgets/common.dart';
@@ -150,6 +151,16 @@ class _Profile extends ConsumerWidget {
                   label: 'Two-factor authentication',
                   caption: 'Add a second step when you sign in on a new phone.',
                   onTap: () => openSecurity(context),
+                ),
+                Divider(color: t.colorScheme.outlineVariant, height: Space.lg),
+                // Google Play requires an in-app path to request account deletion; see
+                // features/legal/account_deletion.dart for why it files a request.
+                _AccountAction(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Delete my account and data',
+                  caption: 'Ask your hostel to erase your account and personal details.',
+                  danger: true,
+                  onTap: () => openAccountDeletion(context),
                 ),
                 Divider(color: t.colorScheme.outlineVariant, height: Space.lg),
                 _AccountAction(

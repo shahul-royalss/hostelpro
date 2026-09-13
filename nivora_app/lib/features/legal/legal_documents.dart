@@ -143,8 +143,13 @@ const kLegalDocuments = <LegalDocument>[kPrivacyPolicy, kTermsOfUse];
 // SHORTER IS NOT VAGUER. This document was cut from eighteen sections to ten by merging and by
 // deleting repetition — not by softening a claim. Where a period or a promise could not be
 // traced to code it was removed rather than reworded, which is why the twelve-month visitor-log
-// and leave-request periods that nothing enforced are gone, and why nothing here points at an
-// in-app "delete my account" button the app does not have.
+// and leave-request periods that nothing enforced are gone.
+//
+// The app gained an in-app "Delete my account and data" control on 2026-09-13
+// (features/legal/account_deletion.dart). This text still names only the website route and the
+// public page, deliberately: both are still true, and adding a pointer would change the wording of
+// a version people have already accepted, which bumps the version and asks everyone again. Add it
+// the next time this text changes for a reason of its own.
 
 const kPrivacyPolicy = LegalDocument(
   id: 'privacy',

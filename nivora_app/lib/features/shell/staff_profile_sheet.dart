@@ -5,6 +5,7 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/router/router.dart';
 import '../../core/theme/tokens.dart';
 import '../../shared/glass/glass.dart';
+import '../legal/account_deletion.dart';
 import '../settings/security_screen.dart';
 
 /// Who you are signed in as, and the two things you can do about it.
@@ -128,6 +129,19 @@ class _StaffProfileSheet extends ConsumerWidget {
                     onTap: () {
                       Navigator.of(context).pop();
                       Navigator.of(context).pushNamed(changePasswordRoute);
+                    },
+                  ),
+                  Divider(color: t.colorScheme.outlineVariant, height: Space.lg),
+                  // Google Play requires an in-app path to request account deletion; see
+                  // features/legal/account_deletion.dart for why it files a request.
+                  _Action(
+                    icon: Icons.delete_outline_rounded,
+                    label: 'Delete my account and data',
+                    caption: 'Ask for this account and your personal data to be erased.',
+                    danger: true,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      openAccountDeletion(context);
                     },
                   ),
                   Divider(color: t.colorScheme.outlineVariant, height: Space.lg),
