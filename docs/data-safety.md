@@ -5,6 +5,7 @@ with the code that justifies each answer.
 
 Every answer here was read out of the source, not assumed. The files that decide it:
 `db/schema.sql`, `db/migrations/2026-08-24-payments.sql`,
+`db/migrations/2026-09-02-payment-refunds.sql`,
 `db/migrations/2026-09-12-notifications-and-rent-due.sql`, `lib/storage.ts`,
 `lib/actions/payments.ts`, `lib/razorpay.ts`, `app/api/webhooks/razorpay/route.ts`,
 `components/payments/`, `supabase/functions/push-send/index.ts`,
@@ -31,8 +32,10 @@ anything a user types or uploads is collected. There is no on-device-only data t
 
 **"Shared"** = transferred to a **third party** who uses it for their own purposes. Play explicitly
 **excludes transfers to a service provider** processing on your behalf, on your instructions.
-Supabase, Vercel **and Razorpay** are service providers. The answer to "Is this data shared?" is
-**No** on every row — see §4 for the Razorpay reasoning, which is the one a reviewer may probe.
+Supabase, Vercel, **Razorpay and Google** are service providers — Google because Firebase Cloud
+Messaging receives the device token and the notification text in order to deliver a notification
+NIVORA asked it to deliver. The answer to "Is this data shared?" is **No** on every row — see §4
+for the Razorpay reasoning, which is the one a reviewer may probe, and §3.5 for Google's.
 
 **"Processed ephemerally"** = held in memory for the request and never written down. **Nothing here
 is ephemeral** — this is a record-keeping product; persistence is the point. Answer **No**
@@ -66,14 +69,14 @@ component a build error.
 | Personal info › Race and ethnicity | No | — | — | — | — | No such column exists |
 | Personal info › Political or religious beliefs | No | — | — | — | — | No such column exists |
 | Personal info › Sexual orientation | No | — | — | — | — | No such column exists |
-| **Financial info › Purchase history** | **Yes** | No | No | **Required** | App functionality, **Fraud prevention, security and compliance** | `fee_payments` (`amount_due`, `amount_paid`, `status`, `paid_on`, `mode`, `notes`), `students.monthly_fee`, and **all of `public.payment_intents`** — see §3.1. Fraud prevention is a genuine second purpose here: `razorpay_payment_id` is stored under a unique index precisely so the same payment can never credit twice |
+| **Financial info › Purchase history** | **Yes** | No | No | **Required** | App functionality, **Fraud prevention, security and compliance** | `fee_payments` (`amount_due`, `amount_paid`, `status`, `paid_on`, `mode`, `notes`), `students.monthly_fee`, and **all of `public.payment_intents` and `public.payment_refunds`** — see §3.1. Fraud prevention is a genuine second purpose here: `razorpay_payment_id` is stored under a unique index precisely so the same payment can never credit twice, and `razorpay_refund_id` under another so the same refund can never reverse the ledger twice |
 | **Financial info › User payment info** | **No** | — | — | — | — | **Do not tick.** No payment instrument reaches this server or this database. See §3.2 — the single most consequential answer on the form |
 | Financial info › Credit score | No | — | — | — | — | No such column exists |
 | Financial info › Other financial info | No | — | — | — | — | Play defines this as salary, debts and similar. An outstanding rent balance is a transaction record and is disclosed under Purchase history |
 | **Photos and videos › Photos** | **Yes** | No | No | Optional | App functionality | `students.photo_url`, `students.id_proof_url`, `complaints.photo_url`, `fee_payments`/`expenses` receipts. Buckets `student-docs`, `complaint-photos`, `receipts` — all **private** |
 | Photos and videos › Videos | No | — | — | — | — | `lib/storage.ts` `ALLOWED` permits only `image/jpeg`, `image/png`, `image/webp`, `application/pdf`. No video type is accepted |
 | **Files and docs** | **Yes** | No | No | Optional | App functionality | Same buckets: `application/pdf` is accepted for `student-docs` and `receipts`, so an ID proof or a receipt uploaded as a PDF is a document, not a photo. See §6 |
-| **App activity › App interactions** | **Yes** | No | No | **Required** | Fraud prevention, security and compliance | `audit_log` (`action`, `target_type`, `target_id`, `actor_user_id`, `at`), `security_alerts`. Now includes six payment events — `payment.order.created`, `payment.captured`, `payment.credited`, `payment.failed`, `payment.webhook.rejected`, `payment.reconcile.required` (`lib/audit.ts`) |
+| **App activity › App interactions** | **Yes** | No | No | **Required** | Fraud prevention, security and compliance | `audit_log` (`action`, `target_type`, `target_id`, `actor_user_id`, `at`), `security_alerts`. Now includes ten payment events — `payment.order.created`, `payment.captured`, `payment.credited`, `payment.failed`, `payment.webhook.rejected`, `payment.reconcile.required`, and the four refund events `payment.refund.pending`, `payment.refund.processed`, `payment.refund.failed`, `payment.refund.reversed` (`lib/audit.ts`) |
 | **App activity › Other user-generated content** | **Yes** | No | No | Optional | App functionality | `complaints.title`/`description`/`resolution_note`, `complaint_events.note`, `leaves.reason`, `announcements.body`, `tasks.description`, `fee_payments.notes`, `expenses.note`, `visitors.relation` |
 | App activity › In-app search history | No | — | — | — | — | Not recorded |
 | App activity › Installed apps | No | — | — | — | — | The manifest cannot see other packages (no `QUERY_ALL_PACKAGES`) |
@@ -95,9 +98,10 @@ component a build error.
 The app now takes money. That changes four rows above and none of the others, and being imprecise
 here in **either** direction is what causes a strike.
 
-### 3.1 What `public.payment_intents` actually stores
+### 3.1 What `public.payment_intents` and `public.payment_refunds` actually store
 
-The complete column list, from `db/migrations/2026-08-24-payments.sql` §2:
+Take `payment_intents` first. Its complete column list, from
+`db/migrations/2026-08-24-payments.sql` §2:
 
 ```
 id                  uuid
@@ -127,10 +131,13 @@ no code path that would have one to write.
 
 Two independent facts back this up, and both are worth quoting to a reviewer:
 
-1. **Nothing else is even parsed.** `app/api/webhooks/razorpay/route.ts` reads exactly seven fields
-   off a verified delivery — `event`, and from `payload.payment.entity`: `id`, `order_id`, `amount`,
-   `currency`, `method`, `error_description`, `error_reason`. Every other field Razorpay sends is
-   discarded with the rest of the parsed object.
+1. **Nothing else is even parsed.** `app/api/webhooks/razorpay/route.ts` reads the event name and
+   fields off two entities, and nothing else. From `payload.payment.entity`, **seven**: `id`,
+   `order_id`, `amount`, `currency`, `method`, `error_description`, `error_reason`. From
+   `payload.refund.entity`, on the refund events only, **six**: `id`, `payment_id`, `amount`,
+   `currency`, `error_description`, `speed_processed`. `status` is declared on both interfaces and
+   read from neither — a refund's state is taken from the event name, not from the body. Every
+   other field Razorpay sends is discarded with the rest of the parsed object.
 2. **Nothing can write the table from outside.** `payment_intents` has RLS on with a **SELECT policy
    only**, plus `revoke insert, update, delete on public.payment_intents from anon, authenticated`.
    Every write goes through a `security definer` function, and the three settlement ones re-check
@@ -139,6 +146,38 @@ Two independent facts back this up, and both are worth quoting to a reviewer:
 `failure_reason` is the one free-text column. It holds Razorpay's own `error_description` or
 `error_reason`, truncated to 200 characters — provider-generated text such as "Payment failed due to
 insufficient funds", not anything a user typed.
+
+**The second financial table.** A refunded payment has to stop counting as paid, so
+`db/migrations/2026-09-02-payment-refunds.sql` §2 adds a child row per refund. Its complete column
+list:
+
+```
+id                  uuid
+intent_id           uuid  -> payment_intents(id) on delete cascade
+hostel_id           uuid  -> hostels(id)         on delete cascade
+student_id          uuid  -> students(id)        on delete cascade
+period_month        text  'YYYY-MM'
+razorpay_refund_id  text  'rfnd_' + base62, unique index — the idempotency constraint
+razorpay_payment_id text  'pay_'  + base62, the payment being refunded
+amount_paise        bigint           Razorpay's figure, capped at what the payment captured
+currency            text  check (currency = 'INR')
+status              enum  'pending' | 'processed' | 'failed'
+speed               text  'normal' | 'optimum' | 'instant'   display only
+failure_reason      text  provider-generated, left(..., 200)
+processed_at        timestamptz
+reversed_at         timestamptz      null until fee_payments actually came down
+reversed_amount     numeric(10,2)
+created_at          timestamptz
+updated_at          timestamptz
+```
+
+The same answer as above, for the same reason: an amount, a currency, two Razorpay reference ids, a
+speed label and dates. **No card number, no expiry, no CVV, no cardholder name, no UPI VPA, no bank
+account or IFSC, no token, no vault reference** — there is no column for any of them, and the
+webhook does not parse one to write. It carries the same two guards as `payment_intents`: RLS with a
+**SELECT policy only** plus `revoke insert, update, delete on public.payment_refunds from anon,
+authenticated`, and both writing functions re-check `app.is_service_role()` in their own bodies. It
+is **Purchase history**, exactly as `payment_intents` is.
 
 ### 3.2 "User payment info" — answer No, and know why
 
@@ -366,19 +405,25 @@ does not deliver it. Say the following, and make sure `/legal/account-deletion` 
 **Deleted with the resident.** `students`, `users`, and everything that cascades from them.
 `payment_intents.student_id` is `references public.students(id) on delete cascade`, so **if the
 student row is deleted, their payment intents go with it** — exactly like `fee_payments`.
+`payment_refunds.student_id` carries the same clause, and `payment_refunds.intent_id` is
+`references public.payment_intents(id) on delete cascade`, so a refund row leaves with the student
+by either route.
 
 **Retained, with the person taken out of it.** When the accounting duty means the ledger must
 survive, the resolution is [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §6.4:
-**anonymise instead of delete.** Here `payment_intents` behaves unusually well — go back to the
-column list in §3.1 and notice what is absent. There is **no name, no phone, no email and no address
-in the table at all.** It is UUIDs, money, dates, two Razorpay reference ids and a method label.
-Once `students` and `users` are anonymised per §6.4, the payment rows carry nothing that identifies
-a person.
+**anonymise instead of delete.** Both financial tables behave unusually well — go back to the two
+column lists in §3.1 and notice what is absent from each. There is **no name, no phone, no email
+and no address in either table at all.** Each is UUIDs, money, dates, two Razorpay reference ids
+and one display-only label — `method` on the intent, `speed` on the refund. Once `students` and
+`users` are anonymised per §6.4, neither the payment rows nor the refund rows carry anything that
+identifies a person.
 
 **For how long.** The same period as the rest of the fee ledger: **the tenant's statutory accounting
 duty, default 8 years** ([`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §5.2).
-Do not invent a shorter one for `payment_intents` — it is part of the same financial record as the
-`fee_payments` row it credited, and splitting them would leave a credit with no evidence behind it.
+Do not invent a shorter one for `payment_intents` or `payment_refunds` — the intent is part of the
+same financial record as the `fee_payments` row it credited, and the refund is part of the same
+record as the intent it reverses. Splitting them would leave a credit with no evidence behind it,
+or a reversal with nothing on the ledger to show what it undid.
 
 **Abandoned attempts are marked, not removed.** `rz_expire_stale_intents()` moves a `created` row
 that never went anywhere to `expired` after a day (`docs/payments.md` §7). It **marks**; it does not
@@ -409,17 +454,12 @@ before each submission, because the pages move and this table is a snapshot.
 
 The three pages behind those rows are **outside this document's scope** and belong to whoever owns
 `app/legal/`. They are currently consistent with this form. Re-check them the next time either
-side changes:
-Google fetches the privacy-policy page, and a reviewer comparing it to this form finds a
-contradiction in under a minute.
+side changes, because Google fetches the privacy-policy page, and a reviewer comparing it to this
+form finds a contradiction in under a minute.
 
-Two more, non-blocking but worth closing:
+One more, non-blocking but worth closing:
 
-6. [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §4.1's inventory does not list
-   `payment_intents`, and its §7 sub-processor table still says *"That is the complete list"* with
-   Razorpay absent. The retention **period** is settled (§7.1 above); the **inventory row** is not
-   yet written.
-7. `.env.example` declares `NEXT_PUBLIC_RAZORPAY_KEY_ID`, but `lib/razorpay.ts` reads
+6. `.env.example` declares `NEXT_PUBLIC_RAZORPAY_KEY_ID`, but `lib/razorpay.ts` reads
    `RAZORPAY_KEY_ID` and `docs/payments.md` §1 says explicitly that it must **not** be a
    `NEXT_PUBLIC_` variable. Anyone setting up from `.env.example` gets a permanently dead Pay button
    and the "Online payment isn't set up yet" message.
@@ -431,8 +471,9 @@ Two more, non-blocking but worth closing:
 1. **Data collection and security** — confirm the app collects data; answer the four §7 questions.
 2. **Data types** — work down §2 row by row. Slow down on the four rows payments changed: **Name**,
    **Phone number** and **Email address** (all now also reach Razorpay as prefill), and **Financial
-   info › Purchase history** (now includes `payment_intents`). Then on the fifth row push changed:
-   **Device or other IDs** (the FCM registration token in `push_devices` — see §3.5).
+   info › Purchase history** (now includes `payment_intents` and `payment_refunds`). Then on the
+   fifth row push changed: **Device or other IDs** (the FCM registration token in `push_devices` —
+   see §3.5).
 3. **User payment info** — leave it **unticked**. Re-read §3.2 before deciding otherwise.
 4. **Shared** — **No** on every row. Re-read §4 before deciding otherwise.
 5. **Government ID** — three ticks, per §6.

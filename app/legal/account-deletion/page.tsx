@@ -72,9 +72,11 @@ const SECTIONS = [
 export default async function AccountDeletionPage() {
   // Forces dynamic rendering. A statically prerendered page carries no CSP nonce, and the
   // 'strict-dynamic' policy in lib/security-headers.ts would then block every script on it —
-  // the same reason app/not-found.tsx reads headers(). The sibling legal pages opt into
-  // force-static instead; this one is the URL Google Play actually loads, so it gets the
-  // per-request nonce and hydrates cleanly.
+  // the same reason app/not-found.tsx reads headers(). The three sibling legal pages are
+  // rendered per-request for that same reason; they just say so with
+  // `export const dynamic = "force-dynamic"` at the top of the file. The two are equivalent,
+  // and this one follows app/not-found.tsx: the opt-out sits inside the component that needs
+  // the nonce, so it cannot be dropped by deleting a route-segment export above it.
   await headers();
 
   return (

@@ -20,17 +20,21 @@ publishes to the world**), [`../THREAT-MODEL.md`](../THREAT-MODEL.md) §2 (asset
 
 ## 1. Why this document exists now
 
-`SECURITY.md` §5 carries two open items that this document is the first half of:
+This document was started to answer two open items in `SECURITY.md` §5. Neither is in §5 any more,
+and this is where each of them went:
 
 - *"No GDPR/DPDP erasure path — `students_delete` is service-role only and there is no tooling behind
-  it. **Build an erasure runbook before real personal data.**"* → §6.
-- *"No retention policy for `audit_log` IP/user-agent."* →
-  [`logging-and-monitoring.md`](./logging-and-monitoring.md) §4.
+  it."* Closed. `students_delete` is still service-role only (`db/rls-policies.sql`), but the erasure
+  path no longer runs through a hard delete: a warden schedules a deferred erasure from the app and
+  `app.erase_student()` carries it out — §6.3.
+- *"No retention policy for `audit_log` IP/user-agent."* Closed as `SECURITY.md` §3.10 item 29.
+  `app.apply_retention()` pseudonymises at 90 days and deletes at 365
+  ([`logging-and-monitoring.md`](./logging-and-monitoring.md) §4).
 
-`THREAT-MODEL.md` §8 also lists "data-subject deletion tooling (soft-delete only today)" as an
-explicit non-goal at this stage. This document does not change that: it documents the manual path and
-the decisions, so that the gap is a known, bounded, operable one rather than a surprise on the day
-someone asks.
+`THREAT-MODEL.md` §8 still lists "data-subject deletion tooling (soft-delete only today)" as an
+explicit non-goal at this stage. That line is out of date — the tooling shipped, and §6.3 describes
+it. What this document adds is the part no code can carry: the lawful basis, what the job
+deliberately does not touch, and what a person still has to do by hand around it.
 
 ---
 
@@ -98,26 +102,26 @@ Sensitivity: **H** = identity-theft or safety risk if exposed; **M** = privacy o
 
 | Table | Personal data | Subject | Sens. | Retention (§5) |
 |---|---|---|---|---|
-| `students` | `full_name`, `phone`, `email`, `photo_url`, `guardian_name`, `guardian_phone`, `permanent_address`, `id_proof_type`, `id_proof_url`, `date_of_joining`, `monthly_fee`, `room_id`/`bed_id`, `status`, `vacated_at` | Resident + **guardian** (a third party who never uses the app) | **H** | 12 months after `vacated_at`, then erase (§6) |
+| `students` | `full_name`, `phone`, `email`, `photo_url`, `guardian_name`, `guardian_phone`, `permanent_address`, `id_proof_type`, `id_proof_url`, `date_of_joining`, `monthly_fee`, `room_id`/`bed_id`, `status`, `vacated_at` | Resident + **guardian** (a third party who never uses the app) | **H** | 1 month after check-out, then erased (§6) |
 | `users` | `full_name`, `email`, `phone`, `role`, `hostel_id`, `status`, timestamps. One row per human, residents included | Everyone | M | With the account; erase with the linked student |
 | `fee_payments` | `student_id`, `period_month`, amounts, `mode`, `paid_on`, free-text `notes`, `recorded_by` | Resident | M | Financial record — see §5 |
-| `complaints` | `student_id`, `title`, `description` (free text, may name other residents or staff), `photo_url`, `resolution_note`, `updated_by` | Resident + whoever is named | M | 12 months after resolution |
+| `complaints` | `student_id`, `title`, `description` (free text, may name other residents or staff), `photo_url`, `resolution_note`, `updated_by` | Resident + whoever is named | M | 2 months after it is raised, resolved or not |
 | `complaint_events` | `actor_user_id`, `note`, status timeline | Resident + staff | M | With the complaint |
-| `leaves` | `student_id`, dates, `reason` (free text — may reveal health or family circumstances), `decided_by`, `decision_note` | Resident | **H** — free-text reasons routinely contain sensitive context | 12 months |
-| `visitors` | `visitor_name`, `visitor_phone`, `relation`, `check_in_at`/`check_out_at`, `student_id`, `logged_by` | **The visitor** — a third party with no account, no notice and no relationship with NIVORA — and, by inference, the resident's social contacts | **H** | 12 months (§5) |
+| `leaves` | `student_id`, dates, `reason` (free text — may reveal health or family circumstances), `decided_by`, `decision_note` | Resident | **H** — free-text reasons routinely contain sensitive context | With the resident record |
+| `visitors` | `visitor_name`, `visitor_phone`, `relation`, `check_in_at`/`check_out_at`, `student_id`, `logged_by` | **The visitor** — a third party with no account, no notice and no relationship with NIVORA — and, by inference, the resident's social contacts | **H** | With the resident record (§5) |
 | `beds` | `student_id` — occupancy, i.e. where a named person sleeps | Resident | M | With the student |
-| `announcements` | `author_user_id`, `title`, `body` (free text, may name people) | Staff + anyone named | L | 24 months |
-| `tasks` | `assigned_to`, `created_by`, `title`, `description` | Staff | L | 24 months |
+| `announcements` | `author_user_id`, `title`, `body` (free text, may name people) | Staff + anyone named | L | 2 months |
+| `tasks` | `assigned_to`, `created_by`, `title`, `description` | Staff | L | Life of the tenant |
 | `expenses` / `revenues` | `note` (free text), `receipt_url`, `uploaded_by` | Staff + third parties named on receipts | M | Financial record — see §5 |
 | `menus` | `updated_by` | Staff | L | Current only |
-| `notifications` | `user_id`, `title`, `body` — bodies quote task and complaint text, so they carry copies of the above | Everyone | L | 90 days |
+| `notifications` | `user_id`, `title`, `body` — bodies quote task and complaint text, so they carry copies of the above | Everyone | L | 90 days, once read |
 | `push_devices` | `token` — an FCM registration token, a stable identifier for one physical handset — plus `user_id`, `platform`, `created_at`, `last_seen_at`. Created by `db/migrations/2026-09-12-notifications-and-rent-due.sql`, not `db/schema.sql`. The token is shared with Google on every send (§7), and it links a named person to a device | Everyone who signs in on a phone and allows notifications | M | **Released at sign-out** — `push_service.stop()` calls `unregister_push_device()`. Any row not seen for **90 days** is pruned by `app.send_rent_reminders()`, so an uninstalled or sold handset ages out without anyone acting |
 | `hostels` | `address`, `owner_user_id`, `rules` | Owner / business | L | Life of the tenant |
-| `subscriptions` | `owner_user_id`, `amount`, `notes` | Owner | M | 8 years — commercial record (§5) |
+| `subscriptions` | `owner_user_id`, `amount`, `notes` | Owner | M | Kept indefinitely — commercial record (§5) |
 | `audit_log` | `actor_user_id`, `target_id`, **`ip`**, **`user_agent`**, `meta` | Everyone who signs in | M | 365 days; `ip`/`user_agent` nulled at 90 days ([`logging-and-monitoring.md`](./logging-and-monitoring.md) §4) |
-| `app.rate_limits` | SHA-256 hashed keys only — never a clear IP or identifier (`lib/rate-limit.ts`) | Pseudonymous | L | Hours |
+| `app.rate_limits` | SHA-256 hashed keys only — never a clear IP or identifier (`lib/rate-limit.ts`) | Pseudonymous | L | 24 hours |
 | `security_alerts` | `actor_user_id`, **`ip`**, `summary`, `details` — a detection references the person it fired on | Everyone who signs in | M | Acknowledged: 365 days. **Unacknowledged: retained indefinitely** — an open alert is an open investigation |
-| `payment_intents` | `student_id`, `amount_paise`, `currency`, `razorpay_order_id`, `razorpay_payment_id`, `method` — a record that a payment happened. **No card number, UPI ID, CVV or bank account**: those are collected by Razorpay on Razorpay's own page and never reach this server | Residents who pay online | M | 8 years — it evidences a rent payment, so it follows the accounting retention in §5.2 rather than the shorter operational periods |
+| `payment_intents` | `student_id`, `amount_paise`, `currency`, `razorpay_order_id`, `razorpay_payment_id`, `method` — a record that a payment happened. **No card number, UPI ID, CVV or bank account**: those are collected by Razorpay on Razorpay's own page and never reach this server | Residents who pay online | M | Kept indefinitely — it evidences a rent payment, so it follows the accounting retention in §5.2 rather than the shorter operational periods |
 | `legal_acceptances` | `user_id`, `version`, `accepted_at`, `surface`, `app_version` — who agreed to which published version of the Terms + Privacy pair, and when. **Deliberately no `ip` and no `user_agent`** | Everyone who signs in | L | **With the account.** `on delete cascade` from `users`, so erasing a person erases their consent in the same statement. **Must not be swept on a time basis** — it is the lawful basis for everything else in this table ([`legal-consent.md`](./legal-consent.md) §2.2) |
 | `legal_versions` | None — published document text and URLs | n/a | — | Permanent. Target of a foreign key from every acceptance |
 | `floors` | None — structural only (`hostel_id`, floor number) | n/a | — | Life of the tenant |
@@ -188,25 +192,30 @@ is:
 
 ### 5.2 Retention periods
 
-> ⚠️ **UNRESOLVED CONFLICT — read before changing either side (2026-09-02).**
+> **RESOLVED 2026-09-04 — the table below, the code and the published policy now agree.**
 >
-> The published privacy policy at `/legal/privacy` §7 now states **shorter** periods than the table
-> below, on instruction from the product owner:
+> Four rows used to diverge from the published privacy policy at `/legal/privacy` §7. They were
+> settled in the code's direction: `app.apply_retention()` was written to the shorter periods, the
+> policy page was rewritten to publish exactly those, and this table was brought to the same numbers.
 >
-> | Data | This table | What the policy now publishes |
+> | Data | What this table used to say | What the code enforces and the policy publishes |
 > |---|---|---|
-> | Vacated resident record (+ photo and ID scan) | 12 months | **1 month after departure** |
-> | Complaints + `complaint_events` | 12 months after resolution | **2 months after resolution** |
+> | Vacated resident record (+ photo and ID scan) | 12 months | **1 month after check-out**, deferred and cancellable |
+> | Complaints + `complaint_events` | 12 months after resolution | **2 months after they are raised**, resolved or not |
 > | `announcements` | 24 months | **2 months** |
 > | `fee_payments` and the other financial records | 8 years | **Kept indefinitely** |
 >
-> **The policy is the promise the world can read, so it is the one that binds.** Whoever owns
-> `app.apply_retention()` must either implement these periods or get the policy changed — a
-> published policy that overstates what is deleted is precisely the violation
-> [`play-submission-pack.md`](./play-submission-pack.md) §7.1 warns about. Until the job enforces
-> them, the policy is honest only because those rows sit under *"Applied by the hostel operator"*
-> with a note that automation is being extended. That framing is load-bearing; do not remove it
-> while the gap is open. Background in [`legal-consent.md`](./legal-consent.md) §7.1.
+> Complaints age from `created_at` and not from `resolved_at` deliberately: ageing from resolution
+> would let a hostel defeat the policy by never pressing "Resolved", and the rows a resident most
+> wants gone are exactly the ones nobody closed. The comment above `app.apply_retention()` in
+> `db/schema.sql` says so in those terms.
+>
+> **The policy is the promise the world can read, so it is the one that binds**, and a published
+> policy that overstates what is deleted is precisely the violation
+> [`play-submission-pack.md`](./play-submission-pack.md) §7.1 warns about. That is why the rule from
+> here is symmetrical: anything added to the job must be added to the policy page in the same change,
+> and anything the page promises must be in the job. Background in
+> [`legal-consent.md`](./legal-consent.md) §7 item 1.
 
 Storage limitation means keeping data no longer than the purpose needs. These are defaults; a tenant's
 own statutory duties override them upward, never downward.
@@ -214,24 +223,48 @@ own statutory duties override them upward, never downward.
 | Data | Default | Reasoning |
 |---|---|---|
 | Active resident record | Life of the residency | Purpose is live |
-| Vacated resident (`students` + linked `users` + child rows) | **12 months after `vacated_at`**, then erase (§6) | Covers a deposit dispute, a re-admission and one audit cycle. Beyond that the hostel has no purpose for a former resident's guardian phone and permanent address |
-| **ID-proof scan and photo** (`student-docs`) | **Delete at vacate**, ahead of the record itself | Highest consequence, lowest ongoing purpose. Verification happened at registration; the scan earns nothing after departure |
-| `visitors` | 12 months | Safety and dispute purpose is short-lived. This is a movement log about third parties — the least defensible thing here to keep indefinitely |
-| `leaves` | 12 months | Free-text reasons carry sensitive context |
-| `complaints` + `complaint_events` | 12 months after resolution | Pattern detection and dispute |
-| `fee_payments`, `expenses`, `revenues`, `subscriptions` | **Per the tenant's statutory accounting duty; default 8 years** | Indian tax and company-law record-keeping periods differ by entity type and are longer than any privacy-driven period. **Confirm the applicable period with the tenant's accountant and record it per tenant** — do not delete financial records on a privacy schedule |
-| `notifications` | 90 days | Transient UI state that quotes other records |
-| `announcements`, `tasks` | 24 months | Operational history |
+| Vacated resident (`students` + linked `users` + child rows) | **1 month after check-out**, then erased by `app.erase_student()` (§6) | Check-out sets `erasure_due_at` to a month out. That month covers a deposit dispute and the ordinary case of a resident who comes back; a re-admission inside it cancels the erasure |
+| **ID-proof scan and photo** (`student-docs`) | Retired with the record, at the same one-month mark | Highest consequence, lowest ongoing purpose. `app.erase_student()` enqueues both keys in `app.storage_erasures` *before* it empties the row, because dropping the row first loses the key |
+| `visitors` | With the resident record — 1 month after check-out | Safety and dispute purpose is short-lived, and it is a movement log about third parties. It runs on no clock of its own: `app.erase_student()` deletes it |
+| `leaves` | With the resident record — 1 month after check-out | Free-text reasons carry sensitive context. Deleted by `app.erase_student()` alongside that resident's complaints and visitors |
+| `complaints` + `complaint_events` | **2 months after they are raised**, resolved or not | Pattern detection and dispute. Ageing from resolution would let an unclosed complaint outlive the policy |
+| `fee_payments`, `expenses`, `revenues`, `subscriptions` | **Kept indefinitely** | Indian tax and company-law record-keeping periods differ by entity type and are longer than any privacy-driven period. `fee_payments` is deliberately absent from `app.apply_retention()`. **Do not delete financial records on a privacy schedule** — where a former resident must be removed, anonymise the student and leave the ledger (§6.4) |
+| `notifications` | 90 days, once read | Transient UI state that quotes other records. An unread notification is not swept — it has not done its job yet |
+| `announcements` | 2 months | "Notices", in the owner's words. Soft-deleted ones go too: `deleted_at` was a retraction from the feed, not an erasure |
+| `tasks`, `menus` | Life of the tenant | Deliberately not aged. A task names the staff member it was assigned to, and deleting it while that person still works there erases the hostel's own operating history |
+| `app.rate_limits` | 24 hours | Hashed counters with no identifier in them; they stop being useful the moment their window closes |
 | `audit_log` | 365 days; `ip`/`user_agent` nulled at 90 days | [`logging-and-monitoring.md`](./logging-and-monitoring.md) §4 — and note the CERT-In 180-day floor discussed there |
 
-**None of these are automated today** except the `audit_log` job (see its status note). Vacated
-resident records accumulate until someone runs §6. That is a real, current gap: write the quarterly
-purge into the ops calendar or it will not happen.
+**These are automated.** `app.apply_retention()` (`db/schema.sql`) is scheduled as the pg_cron job
+`hostelpro-retention` and runs nightly at **03:15 UTC**. One pass does all of it: pseudonymises
+`audit_log` rows older than 90 days and deletes them at 365; deletes acknowledged `security_alerts`
+at 365 days; sweeps `app.rate_limits` at 24 hours; deletes read `notifications` at 90 days; queues
+complaint photos and then deletes `complaint_events`, `complaints` and `announcements` at 2 months
+from creation; and erases every departed resident whose `erasure_due_at` has passed, up to 500 a
+night, by calling `app.erase_student()`. It returns one row per step with a count, so a run is
+readable rather than silent.
 
-**A conflict you will hit:** a former resident's fee ledger must survive for the accounting period,
-while their guardian's phone and permanent address should not. `fee_payments` references
-`student_id` with `on delete cascade`, so deleting the student **deletes the fee history too**. The
-resolution is §6.4 — anonymise rather than delete when a financial record must survive.
+**What is not automatic is the files.** Supabase installs `storage.protect_delete()` as a trigger on
+`storage.objects`, so SQL cannot delete an object at all — Postgres can only record the obligation.
+Every key the job or an erasure retires is enqueued in `app.storage_erasures`, and the job's last
+step reports the undrained depth instead of deleting anything. Draining needs the service role, which
+is why it lives in the `storage-erasure` Edge Function
+(`supabase/functions/storage-erasure/index.ts`) rather than in the database: a permanently readable
+service-role key sitting where any `security definer` function can reach it would be a worse privacy
+problem than the one it solves. **Nothing in this repository schedules that function.**
+[`razorpay-money-path.md`](./razorpay-money-path.md) records a `nivora-drain-storage-erasures` job on
+the live `cron.job` table, which is not the same thing as a job in version control. Confirm it is
+running, and watch the queue-depth number: a count that climbs every night means erasures are half
+done — the records gone and the ID scans still in the bucket.
+
+**A conflict you will hit, but only on the hard-delete fallback:** a former resident's fee ledger
+must survive for the accounting period, while their guardian's phone and permanent address should
+not. `fee_payments` references `student_id` with `on delete cascade`, so deleting the student
+**deletes the fee history too**. That is the `delete from public.students` in §6.3 step 4, not the
+shipped warden-initiated path: `app.erase_student()` empties the `students` row and stamps
+`erased_at` rather than deleting it, precisely so the ledger keeps hanging off the id. Where a row
+really must be deleted and a financial record must survive, the resolution is §6.4 — anonymise
+rather than delete.
 
 ---
 
@@ -291,18 +324,54 @@ guards fire, and it is audited. A direct `update` leaves no trail and bypasses
 
 ### 6.3 Erasure — the runbook
 
-> **Status: written, not executed.** This procedure has **not** been run against the production
-> database. Dry-run it on a Supabase branch or a seeded copy and record the result here before using
-> it on a real person's data. `students_delete` is service-role only (`db/rls-policies.sql`), so it
-> cannot be done from the app — that is by design (`CLAUDE_2.md` §4.10, no hard deletes) and it is why
-> this runbook exists.
+> **Status: erasure ships in the app. The SQL below is the fallback, and it has never been run.**
+>
+> **The shipped path.** A warden or owner schedules an erasure from the Flutter app, not by SQL.
+> `public.wd_request_student_erasure(uuid)` and `public.wd_cancel_student_erasure(uuid)` are
+> `security definer`, gated on `app.has_role_in(hostel, 'warden', 'owner')`, and granted to
+> `authenticated` (`db/schema.sql`); `WardenRepository.requestErasure` and `.cancelErasure`
+> (`nivora_app/lib/features/warden/data/warden_repository.dart`) call them. In the ordinary case
+> nobody has to remember: `public.wd_vacate_student()` raises the request in the same statement as
+> the check-out, so checking a resident out schedules their erasure.
+>
+> **One month, and cancellable.** Two functions can put the date there: `wd_vacate_student()`
+> does it as part of checking somebody out, and `wd_request_student_erasure()` is the way to do
+> it on its own afterwards. Both write
+> `erasure_requested_at`, `erasure_due_at` — `now() + interval '1 month'` — and
+> `erasure_requested_by` through a `coalesce()`, so a second call leaves a clock that is already
+> running alone and returns the date the row already carries rather than pushing the deadline out.
+> `wd_request_student_erasure()` additionally refuses a resident who is not yet `'vacated'` — the
+> other one is what vacates them — and both refuse a row that has already been erased.
+> `wd_cancel_student_erasure()` does the opposite: it withdraws a pending request, nulling all three
+> of those columns, and refuses if nothing is scheduled or the record has already been erased.
+> Both write an `audit_log` row. Re-admitting the resident inside that month withdraws the request
+> automatically — the `app.students_erasure_guard` trigger clears those columns when a vacated
+> row moves off `'vacated'` — which is the case the deferral exists for. Once `erased_at` is set
+> the same guard refuses to bring the row back into service at all. The nightly job then calls
+> `app.erase_student()` on whatever has come due (§5.2), which deletes that resident's complaints,
+> leaves and visitors, queues their photo and ID scan for erasure from storage, empties the
+> `students` row rather than deleting it, and deletes the login.
+>
+> **When the SQL below is still the answer.** `students_delete` is service-role only
+> (`db/rls-policies.sql`), so a hard delete cannot be done from the app — by design (`CLAUDE_2.md`
+> §4.10, no hard deletes). Reach for these steps only where the shipped path cannot: a request that
+> must be honoured before the month is up; a hostel whose subscription has lapsed, since
+> `wd_request_student_erasure` is gated on `app.hostel_writable()` and the cancel deliberately is
+> not; or a staff or owner account, which the resident path does not cover. This procedure has
+> **not** been run against the production database — dry-run it on a Supabase branch or a seeded copy
+> and record the result here before using it on a real person's data.
 
 **Step 0 — decide erase vs. anonymise.** If any financial record must survive its statutory period
 (§5.2), go to §6.4 instead. Deleting the student cascades the fee ledger with it.
 
 **Step 1 — vacate through the app first.** Warden → Vacate. This sets `students.status = 'vacated'`,
-deactivates the linked account, and frees the bed correctly through the `students_bed_guard` /
-`students_bed_sync` triggers. Doing it by SQL risks leaving `beds` inconsistent.
+deactivates the linked account, frees the bed correctly through the `students_bed_guard` /
+`students_bed_sync` triggers, and — in the same `update` — raises the erasure request:
+`wd_vacate_student()` writes `erasure_requested_at`, `erasure_due_at` a month out and
+`erasure_requested_by` through a `coalesce()`, so a second check-out does not reset a clock that is
+already running, and a row already carrying `erased_at` is left alone. A deletion is therefore
+scheduled from this point on whether or not you go on with the steps below. Doing it by SQL risks
+leaving `beds` inconsistent.
 
 **Step 2 — capture the storage paths before the rows are gone.**
 
@@ -381,9 +450,10 @@ anonymisation quietly fails.**
 - **Delete from backups.** Backups are point-in-time snapshots and are not selectively editable. The
   honest position, which should be in the tenant notice: erased data disappears from backups when
   those backups age out; it is not restored into live systems; and **any restore must be followed by
-  re-running the erasure**, because a restore resurrects deleted rows. Take the backup retention
-  period from [`backup-and-dr.md`](./backup-and-dr.md) — if that document is not yet in place, get it
-  from the Supabase dashboard — and record it here.
+  re-running the erasure**, because a restore resurrects deleted rows. **The retention period is 90
+  days**: the nightly encrypted dump is kept as a GitHub Actions artifact for 90 days
+  ([`backup-and-dr.md`](./backup-and-dr.md)), and 90 days is what the published privacy policy
+  already tells residents (`app/legal/privacy/page.tsx`, and the account-deletion page).
 - **Erase from vendor platform logs.** Supabase Auth logs and Vercel access logs are outside our
   control; they age out on the vendors' schedules (§7).
 - **Un-send a notification, or erase one from a phone.** A push notification's **title and body**
@@ -427,26 +497,33 @@ rather than widening it for the whole app.
 Supabase and Vercel are the trust root: a compromise of either is total, and the mitigations are
 least-privilege keys and the ability to rotate (`THREAT-MODEL.md` §6D).
 
-### 7.1 Data location — open, and it needs answering
+### 7.1 Data location — Supabase answered, Vercel still open
 
-**Where the Supabase project and the Vercel functions physically run is not recorded anywhere in this
-repository, and this document will not guess it.** Find out and write it here:
+**Supabase runs in `ap-southeast-1` — Singapore.** [`server-health.md`](./server-health.md) records
+it for project `nimxvgzscbanhtvgnjll`, and it is already published to the world: the privacy policy's
+sub-processor table names the region (`app/legal/privacy/page.tsx` §6). So the database, Auth and all
+three private buckets — every resident record, every ID-proof scan, every password hash — sit in
+Singapore, outside India.
+
+**Where the Vercel functions run is still unrecorded**, and it is the only half of this question left
+open. Find it out and write it here:
 
 ```
-Supabase Dashboard -> Project Settings -> General -> Region:  ____________
-Vercel Dashboard   -> Project Settings -> Functions -> Region: ____________
+Vercel Dashboard -> Project Settings -> Functions -> Region: ____________
 ```
 
 It matters for two separate reasons:
 
 1. **CERT-In** directions require ICT system logs to be maintained within Indian jurisdiction for a
-   rolling 180 days ([`incident-response.md`](./incident-response.md) §6.4). Whether they bind an
-   operation of this size, and whether the region satisfies them, needs legal input.
-2. **Tenant expectation.** Indian hostel operators will ask where residents' ID proofs are stored,
-   and the answer must be a fact, not a reassurance.
+   rolling 180 days ([`incident-response.md`](./incident-response.md) §6.4). The logs that carry IP
+   and user-agent are in both places — `audit_log` in Singapore, request logs wherever Vercel runs —
+   so neither answer on its own settles it. Whether the directions bind an operation of this size,
+   and whether Singapore satisfies them, needs legal input.
+2. **Tenant expectation.** Indian hostel operators will ask where residents' ID proofs are stored.
+   That one now has a fact for an answer: Singapore.
 
 DPDP permits cross-border transfer except to countries the Central Government restricts. Check the
-current restricted list against the answer above.
+current restricted list against Singapore, and against the Vercel region once it is filled in.
 
 ---
 
@@ -462,7 +539,7 @@ Worth recording, because these are the decisions that reduce how much §6 ever h
 | The Manager cannot read resident data at all | `db/rls-policies.sql` ([`access-control.md`](./access-control.md) §3.1) | An entire role removed from the resident-PII blast radius |
 | Login identifiers hashed in logs and rate-limit keys | `hashIdentifier()`, `hashKey()` | Emails and phones are not stored in security telemetry |
 | Password hashes never touch the application | Supabase Auth | Database compromise does not yield credentials (`THREAT-MODEL.md` §6C) |
-| No analytics, telemetry or error reporter | `package.json` — verified | Nothing leaves the two sub-processors |
+| No analytics, telemetry or error reporter | `package.json` — verified | Nothing leaves the five sub-processors in §7 |
 | Private buckets + short-lived signed URLs | `lib/storage.ts` | No durable public link to an ID proof can exist |
 
 **Known counter-example, recorded honestly:** `select("*")` is used in roughly 20 queries. All are
@@ -481,13 +558,17 @@ A checklist, not a wish list. Each item has a home in this document or a compani
    the log point (§5.1). Blocking.
 3. **Children decision** taken and recorded (§3).
 4. **ID-proof policy** decided — store the scan, or type + last four only (§4.4).
-5. **Data location** established and written into §7.1, with the CERT-In question answered.
+5. **Vercel function region** established and written into §7.1 — Supabase is already recorded there
+   as `ap-southeast-1`, Singapore — with the CERT-In question answered.
 6. **`audit_log` retention job** verified as running
    ([`logging-and-monitoring.md`](./logging-and-monitoring.md) §4).
 7. **Erasure runbook dry-run** on a branch, and §6.3 updated with the result.
-8. **Quarterly vacated-record purge** on the ops calendar (§5.2), with a named owner.
-9. **Service-role key rotated** (`SECURITY.md` §5, and
-   [`incident-response.md`](./incident-response.md) §4.5 — read the login-outage warning first).
+8. **`app.storage_erasures` drain** confirmed to be running and its queue depth on somebody's screen
+   (§5.2), with a named owner. The nightly job schedules the records; nothing in this repository
+   deletes the files.
+9. **Service-role key rotated** ([`incident-response.md`](./incident-response.md) §4.5, which
+   carries both the procedure and the reason this is on the list — the key has been used from a
+   developer workstation throughout the build. Read the login-outage warning first).
 10. **Leaked-password protection enabled** and `MFA_REQUIRED_ROLES` set
     ([`access-control.md`](./access-control.md) §5.2).
 11. **Incident contact table filled in** ([`incident-response.md`](./incident-response.md) §2).

@@ -120,6 +120,82 @@ These are not warnings yet because you have not reached them. Each one blocks a 
 | Health | No | — |
 | Data deletion | The in-app route and the web route both exist | [account-deletion.md](account-deletion.md) |
 
+### App access — the text to paste into Console
+
+Under **App access**, choose *All or some functionality is restricted*, add an instruction entry
+per account, and put the passwords in Console's own password fields. Paste the block below into
+**"Any other information required to access your app"**.
+
+Verified against the live database on 2026-09-12: all three accounts exist, are `active`, have
+`must_change_password = false` and a verified email, and hold no TOTP factor. `demo.owner` owns
+`Demo PG (Play review)` through `hostels.owner_user_id`, so its null `users.hostel_id` is normal
+for an owner and its dashboard is populated. None of the three has accepted legal version
+`2026-09-12`, which is why the consent screen is described below rather than omitted.
+
+**The passwords are deliberately not in this repository.** Set or confirm them before submitting,
+and type them into Console yourself.
+
+```text
+Nivora is a private, invitation-only tool for PG and hostel operators in India. There is
+no public sign-up — accounts are created by an administrator — so the app cannot be reviewed
+without the credentials below.
+
+The sign-in screen has ONE field labelled "Email or phone number". Staff type an email address;
+residents type a phone number. There is no role selector: the role is determined by the account.
+
+All three accounts belong to one demo property, "Demo PG (Play review)" (6 rooms, 1 resident).
+Every resident, payment and complaint in it is fabricated. No real person's data appears.
+
+--- 1. WARDEN — the fullest view, no 2-step verification ---
+Username: demo.warden@nivora.app
+Type the email address exactly as shown.
+Covers: resident registration, room and bed allocation, rent collected at the desk and receipts,
+complaints, leave requests, visitor log and the mess menu.
+
+--- 2. RESIDENT — type the PHONE NUMBER, not an email ---
+Username: 9000000001
+Residents sign in with their 10-digit phone number. The app maps it to an internal address for
+you; do not type an email for this account, as that will fail.
+Covers: rent due and paid, receipts, UPI payment, raising a complaint, leave and notices.
+
+--- 3. OWNER — requires 2-step verification, see below ---
+Username: demo.owner@nivora.app
+Covers: the property summary, staff accounts, expense statistics and tasks.
+
+=== TWO-STEP VERIFICATION (this is the restricted access) ===
+The Owner and Super Admin roles require TOTP two-factor authentication. Warden and Resident do
+not, and can be reviewed with a password alone.
+
+The owner account has no authenticator enrolled yet, so after the password it goes to a setup
+screen showing a QR code and the same secret as text. Scan either with any authenticator app
+(Google Authenticator, Authy, 1Password), tick "I have saved this", then enter the 6-digit code.
+That account will ask for a code at each sign-in afterwards.
+
+There is no bypass and no backdoor code: this is the same flow a real owner goes through, and
+weakening it for review would misrepresent the app. If you prefer not to enrol an authenticator,
+the Warden and Resident accounts above need no second factor and between them reach every screen
+except the four Owner-only ones named above.
+
+=== FIRST SCREEN AFTER SIGNING IN: ACCEPT THE TERMS ===
+Each account shows a one-time "Terms of Use and Privacy Policy" screen on its first sign-in,
+because both documents were updated on 12 September 2026. Tap Accept to continue into the app.
+It appears once per account and cannot be skipped, as consent is recorded.
+
+=== OTHER THINGS WORTH KNOWING ===
+- On first launch the app shows a short intro carousel. Tap Skip to reach the sign-in screen.
+- Sign-in is rate limited to 8 attempts per account per 15 minutes. A password typed wrongly
+  several times produces a "please wait" message rather than a password error. Wait the stated
+  time; the credentials are still correct.
+- There is no biometric login, no QR-code entry, no location restriction and no membership or
+  paid tier gating any screen.
+- The app is India-specific: amounts are in Indian rupees and dates follow the Asia/Kolkata day.
+```
+
+**Do not hand Play a Super Admin account.** It is 2FA-gated like Owner and reaches every tenant on
+the platform, including real hostels with real residents. Nothing in the review requires it.
+
+---
+
 ### App access — give the reviewer a working login
 
 Under **App access**, choose *All or some functionality is restricted* and add an instruction for
