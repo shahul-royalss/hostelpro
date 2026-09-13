@@ -5,14 +5,22 @@ answer. **Every answer here was derived from the code**, not assumed: `db/schema
 `db/migrations/2026-08-24-payments.sql`, `lib/storage.ts`, `package.json`, `app/`, and the verified
 artifact report in [`play-technical-compliance.md`](./play-technical-compliance.md).
 
-Where an existing document disagrees with this one, this one was checked more recently — see §10 for
-the specific corrections.
+Where another document disagrees with this one, check which was derived more recently. For the Data
+safety answers that is [`data-safety.md`](./data-safety.md) (§2). §10 records corrections to older
+documents.
 
 > **Revised 24 August 2026: the app now takes payments.** Student rent can be paid in-app through
 > Razorpay (`db/migrations/2026-08-24-payments.sql`, [`payments.md`](./payments.md)). That changes
 > the store listing (§1), four Data safety rows (§2), one content-rating answer (§3) and the
-> reasoning behind the Financial features declaration (§5). It also **contradicts what the live
-> legal pages currently say** — see §7.1, which is now the top blocker.
+> reasoning behind the Financial features declaration (§5). The legal pages that contradicted it
+> were corrected on 2026-09-02 (§7.1).
+>
+> **Revised 2026-09-13: the legal text those answers need is live on the web.** The Data safety
+> answers changed on 2026-09-13 (§2.4) rely on legal version 2026-09-13, which is recorded in
+> production's `public.legal_versions`. Commit `4fd41ef` reached `origin/main` at 20:44 IST that
+> day, and at 20:53 IST the live privacy and account-deletion pages both carried version
+> 2026-09-13. The in-app copy reaches users with versionCode 4, so submit those answers together
+> with versionCode 4. See §7.1 and §9 step 1.
 
 > **Not legal advice.** The Data safety form is a legal declaration by the developer. Read §2 before
 > ticking anything; a wrong answer there is a policy violation, not a typo.
@@ -31,6 +39,60 @@ lives.
 
 ## 1. Store listing copy
 
+### 1.1 The listing to upload now
+
+**Revised 2026-09-13.** The listing for `com.srnivora.app` does not use the copy or the images this
+section used to carry. Those were written for the web-app wrapper (a TWA, package `app.nivora.twa`),
+which is retired. They are kept in §1.2 as a record of what the older answers in this file were
+reasoning about. Do not paste from §1.2.
+
+| What | Where | Checked 2026-09-13 |
+|---|---|---|
+| App name | `Nivora`, as the app exists in Console ([`play-console-submission.md`](./play-console-submission.md)) | Same as `app_name` in `nivora_app/android/app/src/main/res/values/strings.xml` |
+| Short description | `dist/store-listing/short-description.txt` | 77 / 80 characters |
+| Full description | `dist/store-listing/full-description.txt` | 3,827 / 4,000 characters. Has a NOTIFICATIONS section, so do not paste it until a push notification has been seen arriving on a real phone |
+| Full description without push | `dist/store-listing/full-description-without-push.txt` | 3,572 / 4,000 characters. The same text with the NOTIFICATIONS section removed. **Paste this one for now**: push delivery to a real phone has not been proven yet |
+
+The same three text files are tracked in git under `docs/store-listing/`, and matched the
+`dist/store-listing/` copies byte for byte on 2026-09-13. `dist/` itself is ignored by git, so the
+images below exist only on the build machine, except the icon, `public/store/icon-512.png`, which is
+tracked. Counts were taken with the command in §1.2.
+
+#### Listing assets
+
+| Asset | Spec | Status |
+|---|---|---|
+| App icon | 512×512 PNG, 32-bit | `public/store/icon-512.png` ✔ 512×512, RGBA |
+| Feature graphic | 1024×500 PNG, no alpha | `dist/NIVORA-feature-graphic.png` ✔ 1024×500, RGB (a byte-identical copy, same SHA-256, sits in `dist/store-listing/`) |
+| Phone screenshots | min 2, 320–3840 px per side, max 2:1 | `dist/store-listing/phone-{resident,warden,manager,owner}.png` — 4 at 1080×1920, RGB ✔ |
+| 10-inch tablet screenshots | 1080–7680 px per side, 16:9 or 9:16 | `dist/store-listing/tablet10-{resident,warden,manager,owner}.png` — 4 at 1440×2560, RGB ✔ |
+
+Dimensions and colour type were read from each file's PNG header on 2026-09-13.
+`node scripts/store-assets.mjs --check` still verifies the icon (`scripts/store-assets.mjs:1455`), but
+it does not look at `dist/`; the feature graphic and screenshots it checks in `public/store/` belong
+to the retired listing ([`store-assets.md`](./store-assets.md)).
+
+**Phone and 10-inch tablet screenshots both exist, so fill in both slots.** This section used to say
+tablet screenshots were not present and that the listing should not claim tablet support. That was
+true of the TWA's image set, not of this one.
+
+**Check any listing edit against what the Android app actually does.** Residents have no leave
+feature and cannot attach a photo to a complaint; wardens cannot edit the mess menu (only managers
+can); and managers do not see notices. The retired copy in §1.2 claims some of these.
+
+Also required in the listing form: an **app category** (Business, or Productivity — Business is the
+better fit for a property-management tool), a **support email address**, and optionally a website
+and phone number. The support email is public once the listing is live, so use a real, monitored
+address, not a personal one.
+
+### 1.2 Retired: the web-app (TWA) listing
+
+> **Retired 2026-09-13. Do not paste anything from this subsection.** It was written for the TWA,
+> package `app.nivora.twa`, under the title `NIVORA: PG & Hostel Manager`, and went with the
+> `public/store/` screenshots. It offers residents leave requests and complaint photos, which the
+> Android app does not have, and its ABOUT ONLINE PAYMENT paragraph predates the 2026-09-13
+> correction to User payment info in §2.4.
+
 Character counts below were **re-measured** on 24 August 2026 by counting the actual strings with
 `String.prototype.length`, not estimated. All three are pure ASCII, so nothing double-counts against
 a UTF-16 limit.
@@ -42,7 +104,7 @@ a UTF-16 limit.
 > after any rename.** A stale count is harmless in the direction it happened to fall this time and
 > a rejected paste in the other.
 
-### App name — limit 30
+#### App name — limit 30
 
 ```
 NIVORA: PG & Hostel Manager
@@ -60,7 +122,7 @@ The bare `NIVORA` (6 characters) is also available, but it wastes the strongest 
 the whole listing — nobody searches for "NIVORA"; they search for "hostel management app" and
 "PG management".
 
-### Short description — limit 80
+#### Short description — limit 80
 
 Now that residents can pay from the app, the short description should say so: it is the single
 strongest differentiator against every other PG-management listing, and it is the line a store
@@ -83,7 +145,7 @@ Run your PG: beds, fees, complaints, mess menus - and rent paid online.
 Note the ASCII hyphen rather than an en dash. Play accepts Unicode, but the short description is
 rendered in a lot of surfaces at a lot of font sizes and a plain hyphen never surprises anyone.
 
-### Full description — limit 4000
+#### Full description — limit 4000
 
 **3,837 / 4,000 characters.** 163 characters of headroom. Re-count before pasting if anything is
 edited:
@@ -182,32 +244,28 @@ The reassurance the old paragraph was really there to give survives, one section
 AND RENT PAYMENT list still says wardens record cash, UPI and bank transfers taken at the desk, so
 nobody reads "online payment" as "you must now pay through an app".
 
-### Listing assets
-
-| Asset | Spec | Status |
-|---|---|---|
-| App icon | 512×512 PNG, 32-bit | `public/store/icon-512.png` ✔ |
-| Feature graphic | 1024×500 PNG, no alpha | `public/store/feature-graphic-1024x500.png` ✔ |
-| Phone screenshots | min 2, 320–3840 px per side, max 2:1 | `public/store/screenshots/` — 4 at 1080×1920 ✔ |
-| Tablet screenshots | Only if tablet support is listed | Not present — do not claim tablet support |
-
-Regenerate with `node scripts/store-assets.mjs`; verify with `--check`.
-
-Also required in the listing form: an **app category** (Business, or Productivity — Business is the
-better fit for a property-management tool), a **support email address**, and optionally a website
-and phone number. The support email is public once the listing is live, so use a real, monitored
-address, not a personal one.
+The listing assets table and the category and support-email note that used to close this section
+now live in §1.1, with the current files.
 
 ---
 
 ## 2. Data safety form
 
 The highest-risk section in the entire submission. Everything below was read out of `db/schema.sql`,
-`db/migrations/2026-08-24-payments.sql` and `lib/storage.ts`.
+`db/migrations/2026-08-24-payments.sql` and `lib/storage.ts`, and for the Android app out of
+`nivora_app/` (its `pubspec.yaml`, manifest, payment screen and push service).
 
-> **The answer sheet in Console order is [`data-safety.md`](./data-safety.md).** It is the one to
-> have open while ticking. This section is the reasoning behind it, and the two must not drift —
-> if you change an answer, change it in both.
+> **The answer sheet in Console order is [`data-safety.md`](./data-safety.md), and where the two
+> disagree, it wins.** It is the one to have open while ticking. It was last re-derived from the
+> code on 2026-09-13, and it reasons in full about rows this section only summarises, such as the
+> refund table and push notifications (its §3.5). This section is the reasoning behind the payment
+> and ID answers. If you change an answer, change it in both.
+>
+> **Three answers changed on 2026-09-13:** User payment info and Installed apps are now Yes, and App
+> interactions gains App functionality as a purpose (§2.4). They rely on legal version 2026-09-13,
+> which was live on the web by 20:53 IST on 2026-09-13 and reaches the app with versionCode 4, so
+> submit them together with versionCode 4, after re-checking that the live policy still carries
+> that text (§7.1).
 
 ### 2.1 First, the three definitions that decide every answer
 
@@ -216,16 +274,24 @@ Get these wrong and every row is wrong.
 **"Collected"** means transmitted off the user's device. All of this app's data lives on a server, so
 anything a user types or uploads is collected. There is no on-device-only data to exclude.
 
+That includes data an SDK inside the app sends to its own vendor.
+[Play's Data safety guidance](https://support.google.com/googleplay/android-developer/answer/10787469)
+counts user data "transmitted off device from your app by libraries and/or SDKs used in your app" as
+collected, whether it goes to the developer or to a third-party server. This is why the Razorpay SDK
+in the Android app changes three rows (§2.4).
+
 **"Shared" does NOT mean "leaves your building."** Play defines sharing as transferring data to a
 **third party** — someone who uses it for their own purposes. It explicitly **excludes transfers to a
 service provider** that processes data on your behalf, on your instructions.
 
-> **Supabase, Vercel and Razorpay are service providers, not third parties.** Supabase and Vercel
-> host the database, the auth system, the private storage buckets and the application. Razorpay
-> collects a rent payment against an order NIVORA created, and reports the result back. All three
-> process data solely to run NIVORA, under NIVORA's instructions. Per Play's definition this is
-> **not sharing**, and the answer to "Is this data shared?" is **No** for every single row in the
-> table below.
+> **Supabase, Vercel, Razorpay and Google are service providers, not third parties.** Supabase and
+> Vercel host the database, the auth system, the private storage buckets and the application.
+> Razorpay collects a rent payment against an order NIVORA created, and reports the result back.
+> Google, through Firebase Cloud Messaging, receives each phone's registration token and each
+> notification's title and body in order to deliver it
+> (`supabase/functions/push-send/index.ts:169-176`). All four process data solely to run NIVORA,
+> under NIVORA's instructions. Per Play's definition this is **not sharing**, and the answer to "Is
+> this data shared?" is **No** for every single row in the table below.
 
 This trips people up because it feels dishonest to answer "not shared" when the data plainly sits on
 Supabase's servers. It is not dishonest — it is the answer the form is asking for. Ticking "shared"
@@ -240,7 +306,13 @@ including the counter-argument that Razorpay is a regulated entity with statutor
 own — is in [`data-safety.md`](./data-safety.md) §4. The short version: a service provider having
 its own legal obligations does not make it a third party; the Play question is about a recipient
 using the data for **its own commercial purposes**, which Razorpay does not. Answering "No" is only
-safe because the privacy policy names it — and **the policy does not name it yet** (§7.1).
+safe because the privacy policy names it, which it has done since 2026-09-02 (§7.1). The sentences
+about what its checkout handles inside the Android app are in legal version 2026-09-13, live on the
+web since 2026-09-13 and in the app from versionCode 4 (§7.1).
+
+Collected and shared are separate questions. What the Android app's Razorpay SDK sends to Razorpay
+is collected (see "Collected" above), and it is still not shared, for the same service-provider
+reason.
 
 GitHub holds source code only and never resident data, so it is not a recipient at all.
 
@@ -252,15 +324,44 @@ everywhere, including for `audit_log.ip`. Nulling IP at 90 days is retention, no
 
 Purposes use Play's own vocabulary: *App functionality*, *Account management*, *Fraud prevention,
 security and compliance*. **Analytics, Advertising or marketing, Personalization and Developer
-communications are never selected** — verified: `package.json` has **34** production dependencies
-and contains no analytics, telemetry, error-reporting, session-replay or ad SDK, and the merged
-manifest requests no advertising ID (see the technical report §4).
+communications are never selected** — verified on both clients. The web app's `package.json` has
+**34** production dependencies and contains no analytics, telemetry, error-reporting,
+session-replay or ad SDK. The Android app, which is what the form describes, declares no analytics,
+crash-reporting or ad package in `nivora_app/pubspec.yaml` (its Firebase packages are `firebase_core`
+and `firebase_messaging`, lines 85-86), and `nivora_app/pubspec.lock` resolves none. Its manifest
+removes the advertising-ID permission explicitly
+(`nivora_app/android/app/src/main/AndroidManifest.xml:53`), and the permission dump and AD_ID check
+of the versionCode 4 artifacts, which are the upload, found no AD_ID (technical report §2). Any
+rebuild needs them run again.
 
-The count moved from 31 to 34 with the payment feature. The one that matters, `razorpay`, is a
-**server-side API client**: `lib/razorpay.ts` opens with `import "server-only"`, so importing it
-from a client component is a build error and it can never reach the browser. Razorpay Checkout —
-the part that does run in a browser — is not a dependency at all; it is fetched from
+The count moved from 31 to 34 with the payment feature. In the web app, the one that matters,
+`razorpay`, is a **server-side API client**: `lib/razorpay.ts` opens with `import "server-only"`, so
+importing it from a client component is a build error and it can never reach the browser. Razorpay
+Checkout — the part that does run in a browser — is not a dependency at all; it is fetched from
 `checkout.razorpay.com` on the tap that starts a payment, and only on `/student` (§2.9).
+
+**The Android app is different, and on 2026-09-13 that changed three rows.** It bundles Razorpay's
+native Android Checkout SDK (`razorpay_flutter` at `nivora_app/pubspec.yaml:67`; the versionCode 4
+AAB's dex holds `com/razorpay` classes and its manifest declares `com.razorpay.CheckoutActivity`) and
+opens it in-process from
+`nivora_app/lib/features/payments/pay_rent.dart`. It is not a web iframe. While a payment is open,
+that SDK handles the card or UPI details the payer types and detects which UPI apps are installed.
+Under the definition in §2.1 that data is collected by the app, even though none of it reaches
+NIVORA's servers. The SDK is a payment SDK, not an analytics one, so the purposes excluded above stay
+excluded.
+
+**Push notifications, added 2026-09-12, changed one more row.** The app registers the phone's
+Firebase Cloud Messaging token in `public.push_devices`
+(`nivora_app/lib/core/notify/push_service.dart:195-200`), and `supabase/functions/push-send/index.ts`
+sends it to Google with each notification's title and body. The token is a device identifier held
+to deliver notifications, so **Device or other IDs** gains **App functionality** as a purpose
+([`data-safety.md`](./data-safety.md) §3.5). Push starts only behind the consent gate, once the
+person has agreed to the Terms and Privacy Policy: on launch for someone who agreed earlier, or the
+moment someone agrees (`nivora_app/lib/features/legal/consent_gate.dart:93-95` and `:166`). That is
+when Android 13 and later shows the system notification-permission dialog, and a refusal still
+registers the token: `start()` calls `_askPermission()` and then `_registerToken()` whatever the
+answer (`push_service.dart:117-118`; the reason is in the comment at `:180-182`). Delivery to a
+real phone has not been proven yet.
 
 | Play data type | Collected | Shared | Ephemeral | Required / optional | Purpose | Where it lives in the code |
 |---|---|---|---|---|---|---|
@@ -273,18 +374,18 @@ the part that does run in a browser — is not a dependency at all; it is fetche
 | Personal info › Race and ethnicity | No | — | — | — | — | No such column exists |
 | Personal info › Political or religious beliefs | No | — | — | — | — | No such column exists |
 | Personal info › Sexual orientation | No | — | — | — | — | No such column exists |
-| **Financial info › Purchase history** | **Yes** | No | No | **Required** | App functionality, **Fraud prevention, security and compliance** | `fee_payments` (`amount_due`, `amount_paid`, `status`, `paid_on`, `mode`, `notes`), `students.monthly_fee`, and **every column of `public.payment_intents`** (§2.4). Fraud prevention is a genuine second purpose: `razorpay_payment_id` is held under a unique index precisely so one payment can never credit twice |
-| **Financial info › User payment info** | **No** | — | — | — | — | **Do not tick — and this is now a considered answer, not an obvious one.** See §2.4 |
+| **Financial info › Purchase history** | **Yes** | No | No | **Required** | App functionality, **Fraud prevention, security and compliance** | `fee_payments` (`amount_due`, `amount_paid`, `status`, `paid_on`, `mode`, `notes`), `students.monthly_fee`, **every column of `public.payment_intents`** (§2.4) and every column of `public.payment_refunds` (`db/migrations/2026-09-02-payment-refunds.sql`, listed in [`data-safety.md`](./data-safety.md) §3.1). Fraud prevention is a genuine second purpose: `razorpay_payment_id` is held under a unique index precisely so one payment can never credit twice |
+| **Financial info › User payment info** | **Yes** | No | No | Optional | App functionality, Fraud prevention, security and compliance | **Changed 2026-09-13; this row used to say "Do not tick".** On Android, Razorpay's Checkout SDK runs inside the app and handles the card and UPI details the payer types, and Play counts what an SDK sends off the device as collected (§2.1). Optional because paying online is optional. NIVORA stores none of it. See §2.4 |
 | Financial info › Credit score | No | — | — | — | — | No such column exists |
 | Financial info › Other financial info | No | — | — | — | — | Outstanding balances are disclosed under Purchase history |
-| **Photos and videos › Photos** | **Yes** | No | No | Optional | App functionality | `students.photo_url`, `students.id_proof_url`, `complaints.photo_url`, `fee_payments`/`expenses` receipts. Buckets `student-docs`, `complaint-photos`, `receipts` — all **private** |
+| **Photos and videos › Photos** | **Yes** | No | No | Optional | App functionality | `students.photo_url`, `students.id_proof_url` — in the Android app a warden adds a new resident's photo and ID proof at registration, from the camera or the photo picker (`nivora_app/lib/features/warden/actions/register_student_sheet.dart:116-117`, `:324-339`). `fee_payments`/`expenses` receipts. `complaints.photo_url` (web only: the Android resident app has no photo field, `nivora_app/lib/features/student/raise_complaint_sheet.dart:28-30`) is written only by the web app (`lib/actions/student.ts:63`): the Android resident app has no complaint photo field (`nivora_app/lib/features/student/raise_complaint_sheet.dart:28-30`) and files a complaint without one (`:78-84`). Buckets `student-docs`, `complaint-photos`, `receipts` — all **private** |
 | Photos and videos › Videos | No | — | — | — | — | `lib/storage.ts` `ALLOWED` permits only `image/jpeg`, `image/png`, `image/webp`, `application/pdf`. No video type is accepted |
 | **Files and docs** | **Yes** | No | No | Optional | App functionality | Same buckets: `application/pdf` is accepted for `student-docs` and `receipts`, so an ID proof or a receipt uploaded as a PDF is a document, not a photo. See §2.3 |
-| **App activity › App interactions** | **Yes** | No | No | **Required** | Fraud prevention, security and compliance | `audit_log` (`action`, `target_type`, `target_id`, `actor_user_id`, `at`), `security_alerts`. Now includes six payment events — `payment.order.created`, `payment.captured`, `payment.credited`, `payment.failed`, `payment.webhook.rejected`, `payment.reconcile.required` (`lib/audit.ts`) |
-| **App activity › Other user-generated content** | **Yes** | No | No | Optional | App functionality | `complaints.title`/`description`/`resolution_note`, `complaint_events.note`, `leaves.reason`, `announcements.body`, `tasks.description`, `fee_payments.notes`, `expenses.note`, `visitors.relation` |
+| **App activity › App interactions** | **Yes** | No | No | **Required** | App functionality, Fraud prevention, security and compliance | `audit_log` (`action`, `target_type`, `target_id`, `actor_user_id`, `at`), `security_alerts`. Now includes ten payment events — `payment.order.created`, `payment.captured`, `payment.credited`, `payment.failed`, `payment.webhook.rejected`, `payment.reconcile.required`, and the four refund events `payment.refund.pending`, `payment.refund.processed`, `payment.refund.failed`, `payment.refund.reversed` (`lib/audit.ts:38-49`). **App functionality added 2026-09-13**, alongside the existing purpose, for the checkout interactions the in-app Razorpay SDK handles to complete a payment (§2.4) |
+| **App activity › Other user-generated content** | **Yes** | No | No | Optional | App functionality | `complaints.title`/`description`/`resolution_note`, `complaint_events.note`, `leaves.decision_note` (a warden's approve or reject note, written from the Android warden app, `nivora_app/lib/features/warden/data/warden_repository.dart:484-491`), `announcements.body`, `tasks.description`, `fee_payments.notes`, `expenses.note`, `visitors.relation`. `leaves.reason` (web only: residents cannot file leave in the Android app, where wardens read and decide it, `nivora_app/lib/features/warden/data/warden_repository.dart:452-499`) is typed only on the web, where residents file leave (`app/student/leave/page.tsx`, `lib/actions/student.ts:86`); the Android app has no resident leave feature, and its only `leaves` access is the warden's list and decision (`warden_repository.dart:452-499`) |
 | App activity › In-app search history | No | — | — | — | — | Not recorded |
-| App activity › Installed apps | No | — | — | — | — | The manifest cannot see other packages (no `QUERY_ALL_PACKAGES`) |
-| **Device or other IDs** | **Yes** | No | No | **Required** | Fraud prevention, security and compliance | `audit_log.ip`, `audit_log.user_agent`, `security_alerts.ip`, plus Vercel access logs. Razorpay Checkout also runs its own device/session telemetry inside its iframe during a payment (§2.9). See §2.5 |
+| **App activity › Installed apps** | **Yes** | No | No | Optional | App functionality | **Changed 2026-09-13; this row used to say No** on the grounds that the manifest has no `QUERY_ALL_PACKAGES`, which is still true. Razorpay's SDK detects installed UPI apps to offer them at checkout, through the `upi` intent declared in `<queries>` in `nivora_app/android/app/src/main/AndroidManifest.xml`. See §2.4 |
+| **Device or other IDs** | **Yes** | No | No | **Required** | App functionality, Fraud prevention, security and compliance | **`public.push_devices.token`, the Firebase Cloud Messaging registration token, since 2026-09-12** (App functionality; see the push paragraph above). `audit_log.ip`, `audit_log.user_agent`, `security_alerts.ip`, plus Vercel access logs (Fraud prevention). In the web app, Razorpay Checkout runs its own device/session telemetry inside its iframe; on Android the SDK runs in-process, so any device data it sends during a payment is collected by the app and belongs on this row (§2.9). See §2.5 |
 | Location (approximate / precise) | **No** | — | — | — | — | No location permission in the manifest; IP is **never** used for geolocation anywhere in the code. See §2.5 |
 | Messages (email / SMS / in-app) | **No** | — | — | — | — | See §2.6 |
 | Health and fitness | **No** | — | — | — | — | See §2.7 |
@@ -325,11 +426,14 @@ of which requires a schema change:
 
 ### 2.4 Financial info — the answer that matters most, now that money moves
 
-**This section was rewritten on 24 August 2026.** It previously said there was "no payment gateway,
-no PSP integration and no webhook anywhere in the codebase". **There now is all three**, and the
-answer it reached is still correct — but only because of a distinction that has to be stated
-precisely rather than assumed. Getting it wrong in either direction is bad: claiming you store card
-data invites scrutiny you do not need, and understating collection is a violation.
+**This section was rewritten on 24 August 2026, and corrected again on 2026-09-13.** Before 24 August
+it said there was "no payment gateway, no PSP integration and no webhook anywhere in the codebase".
+**There now is all three.** The 24 August rewrite still answered User payment info **No**, because
+Razorpay's card form ran in a web iframe the app could not see. That is true of the web app and not
+of the Android app, where the form is Razorpay's native SDK running inside the app, so the answer is
+now **Yes**. The storage facts below did not change. What changed is that not storing payment data
+no longer means not collecting it. Getting it wrong in either direction is bad: claiming you store
+card data invites scrutiny you do not need, and understating collection is a violation.
 
 #### What is actually stored
 
@@ -365,10 +469,13 @@ create type public.payment_mode as enum ('cash','upi','bank');
 VPA, no bank account or IFSC, no token, no vault reference. There is no column for any of them and
 no code path that would have one to write. Two facts make that verifiable rather than asserted:
 
-1. **Nothing else is even parsed.** `app/api/webhooks/razorpay/route.ts` reads exactly seven fields
-   off a signature-verified delivery — `event`, and from `payload.payment.entity`: `id`,
-   `order_id`, `amount`, `currency`, `method`, `error_description`, `error_reason`. Everything else
-   Razorpay sends is discarded with the rest of the parsed object.
+1. **Nothing else is even parsed.** `app/api/webhooks/razorpay/route.ts` reads, off a
+   signature-verified delivery, the `event` name and seven fields from `payload.payment.entity`:
+   `id`, `order_id`, `amount`, `currency`, `method`, `error_description`, `error_reason`. On refund
+   events it also reads six from `payload.refund.entity`, none of them an instrument (`id`,
+   `payment_id`, `amount`, `currency`, `error_description`, `speed_processed`; read at
+   `route.ts:265-285`, and [`data-safety.md`](./data-safety.md) §3.1). Everything else Razorpay sends is
+   discarded with the rest of the parsed object.
 2. **Nothing can write the table from outside.** RLS is on with a **SELECT policy only**, plus
    `revoke insert, update, delete on public.payment_intents from anon, authenticated`. Every write
    goes through a `security definer` function, and the three settlement ones re-check
@@ -377,19 +484,33 @@ no code path that would have one to write. Two facts make that verifiable rather
 `failure_reason` is the only free-text column, and the text is Razorpay's own, capped at 200
 characters — "Payment failed due to insufficient funds", not anything a user typed.
 
-#### The two answers
+#### The answers
 
-**Financial info › User payment info → No. Still do not tick it.**
+**Financial info › User payment info → Yes. Collected, not shared, optional; purposes App
+functionality and Fraud prevention, security and compliance.**
 
-Play's "User payment info" means payment *instruments*. The card and UPI fields belong to
-**Razorpay's document, not ours**: Checkout renders its form in an iframe on
-`checkout.razorpay.com`, which is precisely why `lib/security-headers.ts` grants `frame-src` for
-that origin and says so in its comment — keeping PCI scope off this application only works if the
-card fields are Razorpay's. Our origin never sees a keystroke of it. **You cannot collect, and
-therefore cannot declare, data your code has no access to.**
+> **This used to say "No. Still do not tick it."** The reasoning was that the card and UPI fields
+> belonged to Razorpay's document, rendered in an iframe on `checkout.razorpay.com` (hence the
+> `frame-src` grant in `lib/security-headers.ts`), so the app never saw a keystroke and could not
+> collect what it could not access. That describes the web app. The Android app opens Razorpay's
+> native Checkout SDK in its own process (`nivora_app/lib/features/payments/pay_rent.dart`; the
+> versionCode 4 AAB declares `com.razorpay.CheckoutActivity`), and Play counts data an SDK in the app sends off the device
+> as collected by the app, whoever receives it (§2.1). Corrected 2026-09-13.
 
-Do not tick it "to be safe" either. Ticking it states that the app stores payment instruments, which
-triggers scrutiny that cannot be satisfied from the schema, because there is nothing there to show.
+Play's "User payment info" is information about a user's financial accounts, such as a card number.
+While a payment is open, the SDK handles exactly that: the card or UPI details the payer types, which
+it sends to Razorpay. So:
+
+- **Collected: Yes.** An SDK inside the app transmits it off the device.
+- **Shared: No.** Razorpay is a service provider completing a payment NIVORA started (§2.1).
+- **Optional.** A resident can pay the warden at the desk instead, and most hostels cannot take
+  online payment at all (§5).
+- **Purposes: App functionality** (taking the payment) **and Fraud prevention, security and
+  compliance** (the checks a payment goes through).
+
+**What did not change: NIVORA stores none of it.** The column list above has no field for a card, a
+UPI ID or a bank account. That is worth saying in the privacy policy, but it is a storage fact, and
+the Data safety question is about collection.
 
 **Financial info › Purchase history → Yes, and it now covers more than the fee ledger.** A record of
 transactions that occurred is exactly what `fee_payments` + `payment_intents` are. Add *Fraud
@@ -399,12 +520,24 @@ unique partial index specifically so the same payment can never credit twice.
 **Other financial info stays No.** Play defines it as salary, debts and similar. An outstanding rent
 balance is a transaction record, disclosed under Purchase history.
 
-#### When "User payment info" flips to Yes
+#### The other two rows the SDK changed
 
-The day any card, UPI or bank field is rendered by **our** form, or a saved-card, token, mandate or
-auto-debit flow is added. None exists today: there is no `customer`, `token`, `subscription` or
-`mandate` call anywhere in `lib/`, and the only Razorpay API call in the entire codebase is
-`razorpayClient().orders.create(...)` in `lib/actions/payments.ts`.
+**App activity › Installed apps → Yes. Collected, not shared, optional; purpose App
+functionality.** The SDK builds its list of UPI apps (GPay, PhonePe, Paytm) by resolving the `upi`
+intent that `nivora_app/android/app/src/main/AndroidManifest.xml` declares in `<queries>`. The
+earlier answer, No because there is no `QUERY_ALL_PACKAGES`, looked only at the app's own code and
+missed the SDK. Optional for the same reason as above.
+
+**App activity › App interactions → add App functionality** alongside the existing Fraud prevention
+purpose, for the checkout interactions the SDK handles to complete a payment. The audit-log
+reasoning for the existing purpose is unchanged.
+
+#### When these answers change again
+
+This heading used to read *When "User payment info" flips to Yes*, and named the trigger as a card,
+UPI or bank field rendered by our own form. The trigger turned out to be an SDK inside the app, which
+the Android build already had. These three answers now follow that SDK. If the Android app ever stops
+bundling it, check them against whatever replaces it rather than flipping them back by default.
 
 ### 2.5 IP address and user agent
 
@@ -412,6 +545,8 @@ auto-debit flow is added. None exists today: there is no `customer`, `token`, `s
 every detection. Both are persisted, not ephemeral, and Vercel keeps its own access logs.
 
 **Declare this under "Device or other IDs", purpose "Fraud prevention, security and compliance."**
+The same row carries the FCM registration token for **App functionality** (§2.2), so the row
+declares both purposes.
 Google's guidance is that identifiers should be declared according to how they are actually used, and
 an IP plus user-agent pair retained for 90 days is a device-linked identifier held for security. It
 is required rather than optional, because a user cannot switch it off.
@@ -459,18 +594,24 @@ Incidental free-text content is a data-minimisation problem, not a Data safety d
 
 | Question | Answer | Evidence |
 |---|---|---|
-| Is all user data encrypted in transit? | **Yes** | TLS to Vercel and to Supabase throughout; HSTS and a nonce-based CSP set in `middleware.ts`; the manifest sets no `usesCleartextTraffic`, so cleartext HTTP is blocked by the API-28+ default (technical report §4.1) |
-| Do you provide a way for users to request that their data be deleted? | **Yes** | The deletion request URL in §7, backed by the erasure runbook in [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §6.3. Be aware of what you are claiming — see the caveat below |
+| Is all user data encrypted in transit? | **Yes** | TLS to Vercel and to Supabase throughout; HSTS and a nonce-based CSP set in `middleware.ts`; `nivora_app/android/app/src/main/AndroidManifest.xml` sets neither `usesCleartextTraffic` nor a `networkSecurityConfig`, so cleartext HTTP is blocked by the API-28+ default |
+| Do you provide a way for users to request that their data be deleted? | **Yes** | The in-app "Delete my account and data" request and the deletion request URL in §7, backed by the erasure runbook in [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §6.3. Be aware of what you are claiming — see the caveat below |
 | Has your app been independently reviewed against a global security standard? | **No** | `SECURITY.md` is a thorough internal review. It is not a third-party audit, and claiming otherwise in Console is a misrepresentation |
 | Committed to follow the Play Families Policy? | **No** | Not a children's app — see §4 |
 
-**The deletion caveat, stated plainly.** There is no self-service delete button in the app. Deletion
-is a *request*: the resident asks the hostel operator, the operator asks NIVORA, and an
-administrator runs the runbook. Play's requirement is that users can **request** deletion, and a
-functional web request path satisfies it. Two things must be true before ticking Yes:
+**The deletion caveat, stated plainly.** Deletion is a *request*, confirmed and then carried out,
+not an instant erase ([`account-deletion.md`](./account-deletion.md) §1 explains why). There are two
+ways to file one, and Play asks for both. **In the Android app**, "Delete my account and data" files
+it: residents open it from the Profile tab (`nivora_app/lib/features/student/profile_screen.dart:160`),
+staff by tapping their picture at the top left
+(`nivora_app/lib/features/shell/staff_profile_sheet.dart:139`). A second tap within 30 days returns
+the request already on file and files nothing new
+(`nivora_app/lib/features/legal/account_deletion.dart:83-84`). **On the web**, anyone can ask through
+`/legal/account-deletion`. Three things must be true before ticking Yes:
 
 1. `/legal/account-deletion` is live, loads without error, names the app, and gives a working way to
-   ask (a form or a monitored email address).
+   ask (a form or a monitored email address). Since legal version 2026-09-13 went live on
+   2026-09-13, the page also describes the in-app route (§7.1).
 2. Someone actually answers. The runbook at §6.3 of the retention document is marked
    **"written, not executed"** — it has never been run against production. Dry-run it on a Supabase
    branch before the first real request arrives, not after.
@@ -490,10 +631,15 @@ More than nothing, so answer it honestly if asked.
 
 So Razorpay receives the payer's name, email and phone. Under Play's definitions that is a transfer
 to a **service provider** (§2.1) — it is **not** "shared" — and the place it gets disclosed is the
-**privacy policy**, which does not name Razorpay yet (§7.1).
+**privacy policy**, which names Razorpay as a sub-processor (§7.1).
 
-**Razorpay Checkout's own telemetry**, since a reviewer may notice it. Checkout runs device and
-session telemetry to `lumberjack.razorpay.com` during a payment. Two bounds:
+That table is the web app's order. On Android, `supabase/functions/razorpay-order` sends the same
+amount, receipt and notes (with `channel: "mobile"` added, `index.ts:281-291`), and for a hostel on
+Route it adds a `transfers` entry. The web's `orders.create()` never sends `transfers`
+(`lib/actions/payments.ts:128-138`); §5 explains why that is latent rather than live.
+
+**Razorpay Checkout's own telemetry**, since a reviewer may notice it. In the **web app**, Checkout
+runs device and session telemetry to `lumberjack.razorpay.com` during a payment. Two bounds:
 
 - **It is not granted `connect-src` in our document.** `lib/security-headers.ts` allows only
   `https://api.razorpay.com`, with the comment "lumberjack telemetry deliberately NOT granted", so
@@ -502,10 +648,19 @@ session telemetry to `lumberjack.razorpay.com` during a payment. Two bounds:
   That telemetry is Razorpay's, serving the payment's own fraud and operational purposes, and
   **NIVORA receives none of it.**
 
-Declaration consequence: **no new row, and do not add Analytics as a purpose.** It sits under the
-existing *Device or other IDs / Fraud prevention, security and compliance* row.
+**Neither bound exists in the Android app.** There the order is created by
+`supabase/functions/razorpay-order`, the same name, email and phone are passed as `prefill` by
+`_openSheet` in `nivora_app/lib/features/payments/pay_rent.dart`, and Razorpay's native SDK runs
+in-process: no CSP and no cross-origin frame. What it handles or sends while a payment is open is
+collected by the app under Play's definition (§2.1), even though NIVORA receives none of it.
 
-One more bound worth knowing: the Razorpay CSP grants are **scoped to `/student`** —
+Declaration consequence, **corrected 2026-09-13**. This used to read "no new row", which was the web
+app's answer. For the Android app the SDK accounts for **User payment info** and **Installed apps**
+(both Yes) and for the added **App functionality** purpose on App interactions (§2.4). Device and
+session data it sends stays under the existing *Device or other IDs* row. It is still **not shared**,
+and **Analytics is still not a purpose**.
+
+One more web-app bound worth knowing: the Razorpay CSP grants are **scoped to `/student`** —
 `needsRazorpay()` in `lib/security-headers.ts` returns true only for `/student` and below. No other
 page in the app, including every screen that renders resident PII, can load Checkout at all.
 
@@ -526,8 +681,9 @@ column list in §2.4 and note what is absent. **No name, no phone, no email, no 
 money, dates, two Razorpay reference ids and a method label. Once `students` and `users` are
 anonymised, the payment rows identify nobody.
 
-**For how long: the same period as the rest of the fee ledger — the tenant's statutory accounting
-duty, default 8 years** ([`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §5.2).
+**For how long: the same period as the rest of the fee ledger, which is kept indefinitely** — the
+period the published policy states and [`data-retention-and-privacy.md`](./data-retention-and-privacy.md)
+§5.2 records. The hostel's statutory accounting duty is why it is kept, and NIVORA does not shorten it.
 Do not invent a shorter period for `payment_intents`; it is part of the same financial record as the
 `fee_payments` row it credited, and splitting them leaves a credit with no evidence behind it.
 
@@ -557,11 +713,11 @@ honestly — an inaccurate rating is grounds for removal.
 | Controlled substances — drugs, alcohol, tobacco | No | None |
 | Gambling, real or simulated | No | None |
 | Horror or fear themes | No | None |
-| **Do users interact or exchange content or information?** | **Yes** | Complaints, resolution notes, announcements, tasks and leave requests flow between residents and staff. Answer yes even though the content never leaves the tenant — the question is about capability, not reach |
+| **Do users interact or exchange content or information?** | **Yes** | Complaints, resolution notes, notices and tasks flow between residents and staff, and wardens decide leave requests. Answer yes even though the content never leaves the tenant — the question is about capability, not reach |
 | Can users share their current location with other users? | No | No location capability of any kind |
-| Is unrestricted internet access provided (an open browser)? | No | The TWA is welded to `hostelpro-three.vercel.app` by the `autoVerify` intent filter; there is no address bar and no arbitrary browsing |
+| Is unrestricted internet access provided (an open browser)? | No | The Android app is a Flutter build with no browser and no address bar. `nivora_app/pubspec.yaml` declares no WebView or `url_launcher` dependency, but `supabase_flutter` depends on `url_launcher`, so it is resolved transitively (`nivora_app/pubspec.lock:1191-1206`), and `url_launcher_android` 6.3.32 declares a non-exported `io.flutter.plugins.urllauncher.WebViewActivity` in its plugin manifest, which is merged into the app's. Nothing in `nivora_app/lib` calls `launchUrl`, so nothing opens it, and the answer stays No. This used to cite the TWA's `autoVerify` binding to `hostelpro-three.vercel.app`; the TWA is retired |
 | **Can users purchase digital goods?** | **No** | Rent is a **real-world service** — a bed in a physical building for a calendar month — not a digital good. There is no Play Billing library and no digital product of any kind. If the questionnaire also asks about **real-world** purchases, that one is **Yes**: a resident can pay rent from the app. See §5, which explains why Play requires this to sit outside Play Billing |
-| Does the app share personal information with third parties? | No | Service providers only — Supabase, Vercel and now Razorpay. See §2.1 for why a payment processor is not a third party under this question |
+| Does the app share personal information with third parties? | No | Service providers only — Supabase, Vercel, Razorpay and Google (Firebase Cloud Messaging). See §2.1 for why a payment processor is not a third party under this question |
 | Is this a news app? | No | — |
 
 **Expected outcome: Everyone / PEGI 3 / IARC "3+"**, most likely with a mild social-interaction note
@@ -610,8 +766,9 @@ What the honest position does require:
    parental consent before processing a child's data, and prohibits tracking, behavioural monitoring
    and targeted advertising directed at children. The **prohibitions are satisfied by construction**:
    no ads, no ad ID, no analytics, no tracking SDK, no behavioural profiling — verified in
-   `package.json` and in the merged manifest. The **consent duty** cannot be discharged by the
-   product, because the product cannot tell who it applies to. It must be a written obligation in the
+   `package.json`, `nivora_app/pubspec.lock` and the Android manifest (§2.2). The **consent duty**
+   cannot be discharged by the product, because the product cannot tell who it applies to. It must
+   be a written obligation in the
    tenant contract, handled in the hostel's own registration paperwork.
 4. **Record the decision.** §3 of the retention document asks for a dated choice between "keep age
    out of the system and handle consent out of band" and "add a minor flag". The current de facto
@@ -628,8 +785,8 @@ All of these live under **App content** in Play Console.
 
 | Declaration | Answer | Evidence |
 |---|---|---|
-| **Ads** — does your app contain ads? | **No** | No ad SDK in `package.json`; no `com.google.android.gms.permission.AD_ID` in the merged manifest (technical report §4). The "Contains ads" badge will not appear on the listing |
-| **In-app purchases** | **No** | The label describes **Google Play Billing** products. There is no Play Billing library in the bundle's dependency metadata and no Play product to sell. Rent is an external, real-world payment, which that badge does not describe — see below |
+| **Ads** — does your app contain ads? | **No** | No ad SDK in `package.json` or `nivora_app/pubspec.lock`; the Android manifest removes `com.google.android.gms.permission.AD_ID` (§2.2), and the versionCode 4 permission dump and AD_ID check found none (technical report §2). The "Contains ads" badge will not appear on the listing |
+| **In-app purchases** | **No** | The label describes **Google Play Billing** products. There is no Play Billing library (`nivora_app/pubspec.lock` resolves no billing or `in_app_purchase` package) and no Play product to sell. Rent is an external, real-world payment, which that badge does not describe — see below |
 | **Government app** | **No** | A private commercial product. Not developed by or on behalf of any government |
 | **Financial features** | **"My app doesn't provide any financial features."** | Still the right answer now that the app takes payments — but for a reason, not by default. See below; this is the one a reviewer probes |
 | **Health** | **No health features** | No health data collection, no medical device integration, no health claims. The `leaves.reason` free-text caveat in §2.7 is a minimisation note, not a health feature |
@@ -690,30 +847,60 @@ reason. NIVORA issues no credit, holds no balance, offers no account, and moves 
 people. What it does is create an order for what a resident owes, hand it to Razorpay, and record
 what Razorpay reports.
 
-**Settled 2026-09-06, and the answer is the good one.** Razorpay Route is implemented: every
-hostel carries its own linked account (`hostels.razorpay_account_id`, an `acc_...`), and the order
-created for a resident's rent carries `transfers: [{ account: <that hostel's account>, amount: <the
-whole sum>, on_hold: false }]` — see `supabase/functions/_shared/razorpay.ts`. NIVORA takes nothing
-out of rent; its own revenue is a subscription the owner pays, recorded separately and never
-through this gateway. `on_hold: false` means NIVORA never decides when somebody else's rent is
-released. A hostel with no linked account cannot take an online payment at all: both
-`rz_open_intent` and the Edge Function refuse it, from opposite sides.
+**Where the rent settles today, verified 2026-09-13.** Two settlement paths exist in code, and the
+database decides which one a hostel gets. `rz_open_intent` and the `razorpay-order` Edge Function
+read the same three columns but not in the same order, so they disagree in one state, a linked
+account plus an out-of-date DIRECT approval; `docs/data-safety.md` §4.1 has the exact conditions. In
+outline:
 
-So NIVORA does not hold, pool or move residents' money, and the Payment Aggregator question that
-the earlier text below raised is answered: it does not arise.
+- **Route.** A hostel with a linked account (`hostels.razorpay_account_id`, an `acc_...`) gets an
+  order carrying `transfers: [{ account: <that account>, amount: <the whole sum>, on_hold: false }]`
+  (`supabase/functions/_shared/razorpay.ts`). **No hostel has a linked account:** read-only SQL on
+  2026-09-13 found `razorpay_account_id` null on all four hostels.
+- **Direct.** A hostel whose `razorpay_direct_for_owner` equals its current `owner_user_id` gets an
+  order with no `transfers`, so the rent settles to the merchant account whose API keys the app
+  uses. **Exactly one hostel, Kushi Hostels, is approved.** The operator confirmed on 2026-09-13 that
+  this merchant account is KYC'd to Kushi Hostels' owner. The approval names the owner, not the
+  hostel: if the hostel changes hands, online payment stops rather than paying the previous owner.
+  On Android the resident sees the "not set up" refusal below, because `razorpay-order` treats an
+  approval naming a previous owner as no approval and refuses with HTTP 409
+  (`supabase/functions/razorpay-order/index.ts:233-243`) before `rz_open_intent` is called (`:307`).
+  `rz_open_intent`'s own message, "Online payment is paused for this hostel while its ownership
+  change is reviewed", is what the web path shows. The same owner's other hostel is not approved.
+- **Neither.** Every other hostel, including the demo PG a reviewer signs into, cannot take online
+  payment at all. On Android, `razorpay-order` refuses with HTTP 409 and "Online payment is not set
+  up for this hostel yet. Please pay your warden directly." before any Razorpay order is created
+  (`index.ts:238-242`). The web's `createRentOrder` refuses too, with the same message from
+  `rz_open_intent`, but only after it has already created a Razorpay order
+  (`lib/actions/payments.ts:128`, then `rz_open_intent` at `:146`).
 
-> This paragraph previously ran the other way — one merchant account, no Route, no transfers,
-> "verified by grep" — and warned that if the money settled into NIVORA's account it would be
-> Payment Aggregator territory. That was true when written and stopped being true on 2026-09-06.
-> It was found on 2026-09-13 while answering a Play enforcement demanding an organization
-> account, which is exactly the question it would have answered wrongly.
+So the only rent that moves online today goes from Kushi Hostels' residents to an account KYC'd to
+Kushi Hostels' owner. NIVORA takes no commission out of rent and holds no balance; its own revenue
+is a subscription the owner pays, recorded separately and never through this gateway. The Payment
+Aggregator question the earlier text raised does not arise as things stand.
 
-If that account belongs to the **hostel operator**, NIVORA is software and nothing more, and this
-declaration is correct. If it belongs to **NIVORA**, and NIVORA then pays the hostels, NIVORA is
-handling other people's money — Payment Aggregator territory under the RBI's PA/PG directions,
-which is a different product with a different licence, and a Financial features answer that would
-have to be revisited alongside it. **Play is not the hardest part of that question; settle it
-anyway.**
+**A latent defect in the web order path, not fixed.** `createRentOrder` creates the Razorpay order
+before `rz_open_intent` checks the hostel, and its `orders.create()` never sends `transfers`
+(`lib/actions/payments.ts:128-146`). With no hostel on Route, the only effect today is an unpaid
+order left behind whenever it runs for a hostel that cannot take online payment. If a hostel were
+given a linked account, a web payment would settle to the merchant account instead of that linked
+account. It is tracked as a separate code fix, and must be fixed before any hostel goes on Route.
+
+> **On 2026-09-13 (commit `2bad96b`) this paragraph was rewritten to say that "every hostel carries
+> its own linked account"**, under a heading dated 2026-09-06. That described the code, not the data:
+> Route is implemented (its migration arrived in `01b87cf` on 2026-09-06), but no hostel has a linked
+> account, and the one hostel taking online payment does so through the direct path. Corrected the same
+> day. The text before it, from `327b8e2` (2026-08-24), ran the other way (one merchant account, no
+> Route, no transfers, "verified by grep") and warned that settling into NIVORA's account would be
+> Payment Aggregator territory; it went stale when Route shipped on 2026-09-06.
+
+**Answer one question before a second hostel takes online payment.** Route transfers leave the
+merchant account whose keys the app uses, and today that account is KYC'd to Kushi Hostels' owner,
+not to NIVORA. Giving another owner's hostel a linked account would therefore pass that owner's rent
+through Kushi Hostels' owner's account on its way. Settle whose account the parent should be first.
+If it becomes NIVORA's, and NIVORA then pays hostels, that is Payment Aggregator territory under the
+RBI's PA/PG directions: a different product with a different licence, and a Financial features
+answer that would have to be revisited alongside it.
 
 **Revised 24 August 2026.** The previous version of this section said there was "no gateway, no PSP,
 no webhook, no card vault, and exactly one outbound HTTP call in the entire codebase". That is no
@@ -734,66 +921,68 @@ it is entirely avoidable.
 
 Provide, in Console:
 
-1. **A demo account for each role a reviewer needs to see.** At minimum an **Owner** and a
-   **Student**, because they show two completely different apps. Adding a **Warden** is worth it —
-   registration, fees, complaints, leaves and visitors all live there, and it is the most feature-rich
-   view.
-2. **Instructions in English**, covering the thing a reviewer will not guess: **students sign in with
-   a phone number, not an email address.** Say so explicitly, with the exact phone number to type.
+1. **One instruction set per demo account, four in all:** **Warden**, **Resident**, **Manager** and
+   **Owner** (Console allows up to five). They show different apps. The warden set covers
+   registration, rooms, fees taken at the desk, complaints, leave requests and visitors; the resident
+   set is the only place a reviewer sees rent and the payment screen (every set can reach "Delete my
+   account and data": residents from Profile, staff by tapping their picture);
+   the manager set covers expenses and the mess menu; the owner set covers the property dashboard and
+   staff.
+2. **Instructions in English**, covering the thing a reviewer will not guess: **residents sign in
+   with a phone number, not an email address.** Say so explicitly, with the exact phone number to
+   type.
 3. **Credentials that keep working.** Play requires them to be valid at all times and reusable, and
    specifically requires that a reviewer is not blocked by a one-time code. Two consequences for this
    app:
    - The demo accounts must have `must_change_password = false`, or the reviewer hits the forced
      password-change screen and stops.
-   - **Owner is different, and cannot be exempted without a new build.** `mfaRequiredRoles` at
-     `nivora_app/lib/core/auth/auth_controller.dart:122` is a compile-time `const {superAdmin,
-     owner}` with no runtime source, so changing `MFA_REQUIRED_ROLES` on Vercel or
-     `app.mfa_required_roles()` in Postgres does **not** let an owner in. What works instead: leave
-     the demo owner with **no enrolled factor**. `mfaGate` then returns `enrolmentOwed`, the router
-     sends the session to `/mfa-setup`, and the reviewer enrols their own authenticator there and
-     continues — a one-time step they control, rather than a code only we could produce. Say so in
-     the instructions. Do not hand anyone a TOTP seed.
+   - **Owner always needs two-step verification, and cannot be exempted without a new build.**
+     `mfaRequiredRoles` at `nivora_app/lib/core/auth/auth_controller.dart:122` is a compile-time
+     `const {superAdmin, owner}` with no runtime source, so changing `MFA_REQUIRED_ROLES` on Vercel
+     or `app.mfa_required_roles()` in Postgres does **not** let an owner in without a code. Once a
+     factor is enrolled, every sign-in asks for its code (`mfaGate` returns `codeOwed`,
+     `auth_controller.dart:164`). So, **for the demo owner only**, the operator enrols the
+     authenticator before submitting and pastes its **SETUP KEY** into the owner's instruction set;
+     every reviewer adds that same key to their own authenticator app and can sign in again and
+     again. The steps are Set 4 in
+     [`play-console-submission.md`](./play-console-submission.md#app-access--what-to-enter-in-console).
+     This was decided on 2026-09-13. It replaces the earlier advice to leave the demo owner with no
+     factor for the reviewer to enrol, which would have locked out every reviewer after the first.
+     The key protects only fabricated data. **For a real owner the rule stays: never hand over a
+     TOTP seed.**
 4. **A demo tenant with realistic data.** An empty hostel looks like a broken app.
 
 ### 6.1 The demo tenant that now exists
 
 Built 2026-09-04 in the live project, deliberately as a **separate hostel** so a reviewer never sees
-a real resident's name, phone, guardian details or ID proof:
+a real resident's name, phone, guardian details or ID proof. Re-read with read-only SQL on
+2026-09-13:
 
 | Role | Signs in with | Notes |
 |---|---|---|
-| Owner | `demo.owner@nivora.app` | No MFA factor — first sign-in lands on `/mfa-setup`, reviewer enrols their own authenticator |
-| Warden | `demo.warden@nivora.app` | Straight into the warden shell; no MFA for this role |
+| Warden | `demo.warden@nivora.app` | No two-step verification for this role: after the intro screens and **Agree and continue**, the warden shell |
 | Resident | phone `9000000001` | **A phone number, not an email** — the app maps it to a synthetic address internally |
+| Manager | `demo.manager@nivora.app` | **Not created yet.** Demo PG has no manager account today; the operator creates this one before submitting (Set 3) |
+| Owner | `demo.owner@nivora.app` | Owns Demo PG. No factor enrolled yet; the operator enrols one before submitting and gives reviewers its setup key (§6 item 3, Set 4) |
 
-Hostel **"Demo PG (Play review)"**: 2 floors, 6 rooms, 18 beds, 1 resident in room 101, last month
-paid and this month outstanding, one open complaint and one resolved, and a notice. All three
-accounts have `must_change_password = false` and were verified to sign in successfully.
+Hostel **"Demo PG (Play review)"**: one resident, one open and one resolved complaint, and, from the
+2026-09-13 seed (`db/migrations/2026-09-13-demo-pg-play-review-seed.sql`), four months of expenses,
+a week's mess menu (28 meals), three notices in all, a pending and an approved leave, and two
+visitors. **No Razorpay account is linked to it, on purpose.** The warden, resident and owner
+accounts have `must_change_password = false`. None of them has signed in since 6 September, so sign
+in to each one on a phone before submitting.
 
 **The passwords are not in this file, and must not be** — see the rule below. They were handed over
 separately and belong in the Console form and the team's private ops record.
 
 ### 6.2 The instructions to paste into the App access form
 
-```
-NIVORA has no public sign-up: hostels create accounts for their staff and residents.
-Three demo accounts are provided below, all in a demo hostel that contains no real
-personal data.
-
-RESIDENT - sign in with a PHONE NUMBER, not an email address.
-  Phone: 9000000001
-  Password: (see the password field)
-
-WARDEN - sign in with an email address.
-  Email: demo.warden@nivora.app
-
-OWNER - sign in with an email address.
-  Email: demo.owner@nivora.app
-  The owner role requires two-factor authentication. On first sign-in the app shows a
-  setup screen with a QR code. Scan it with any authenticator app (Google Authenticator,
-  Authy) and enter the 6-digit code. This is a one-time step and then the owner
-  dashboard opens normally.
-```
+Use the four per-account instruction sets under
+[App access — what to enter in Console](./play-console-submission.md#app-access--what-to-enter-in-console)
+in `play-console-submission.md`: Set 1 Warden, Set 2 Resident, Set 3 Manager (once that account
+exists) and Set 4 Owner, with the demo owner's setup key pasted in place of `SETUP KEY`. Add each as
+its own instruction set in Console, with the username and password in Console's own fields and the
+matching block in "Any other information". That file holds the only copy of the text.
 
 **Do not put these credentials in this file, in the repository, or in any screenshot.** They go into
 the Play Console App access form and into whatever private ops record the team keeps. Rotate them
@@ -803,11 +992,11 @@ after the review completes.
 
 ## 7. Required URLs
 
-| Where | URL | Live status, re-checked 24 Aug 2026 |
+| Where | URL | Status |
 |---|---|---|
-| Store listing → Privacy policy | `https://hostelpro-three.vercel.app/legal/privacy` | **HTTP 200 ✔** — reachability fixed; **content is not** (§7.1) |
-| App content → Data safety → data deletion | `https://hostelpro-three.vercel.app/legal/account-deletion` | **HTTP 200 ✔** — reachability fixed; content partly stale (§7.1) |
-| Digital Asset Links (not entered in Console; must simply be reachable) | `https://hostelpro-three.vercel.app/.well-known/assetlinks.json` | HTTP 200 ✔, and `"linked": true` from Google's resolver ✔ |
+| Store listing → Privacy policy | `https://hostelpro-three.vercel.app/legal/privacy` | **HTTP 200 ✔** since 24 Aug 2026. At 20:53 IST on 2026-09-13 it carried legal version 2026-09-13, the text the Data safety answers rely on, and no longer mentioned 2026-09-12 (§7.1) |
+| App content → Data safety → data deletion | `https://hostelpro-three.vercel.app/legal/account-deletion` | **HTTP 200 ✔** since 24 Aug 2026. At 20:53 IST on 2026-09-13 it carried version 2026-09-13, including the in-app deletion route (§7.1) |
+| ~~Digital Asset Links~~ | `https://hostelpro-three.vercel.app/.well-known/assetlinks.json` | **Retired with the TWA.** The file still names `app.nivora.twa`, and `com.srnivora.app` declares no `autoVerify` link, so nothing in this submission depends on it (§9 step 12) |
 
 The 307-to-`/login` blocker recorded here on 21 August is **resolved**: `PUBLIC_PATHS` in
 `lib/supabase/middleware.ts` now includes `/legal`, `app/legal/` exists with `privacy`,
@@ -821,16 +1010,34 @@ done
 
 ### 7.1 RESOLVED (2026-09-02) — the legal pages predated payments
 
-> **Status: fixed and verified rendering locally.** All four contradictions in the table below have
-> been corrected, and the pages additionally gained the consent record, the Google (email)
+> **2026-09-13: a new gate, which the table below does not cover, now met on the web.** Legal
+> version **2026-09-13** is in production's `public.legal_versions`, effective 2026-09-12 18:30 UTC.
+> It says that on Android Razorpay's checkout runs inside the app and, while a payment is open, takes
+> the card, UPI or netbanking details typed and checks which UPI apps are installed, and that card
+> and UPI details go to Razorpay, never to NIVORA. It lists ten Android permissions, says Google
+> receives the registration token and each notification's title and body through Firebase Cloud
+> Messaging, and describes the in-app deletion route (`app/legal/privacy/page.tsx:215`, `:253`,
+> `:260`, `:442`, `:447`, `:618`). The web pages carry it (`lib/legal-config.ts:80`) and are live:
+> commit `4fd41ef`, which moved `LEGAL_VERSION` from 2026-09-12 to 2026-09-13, reached `origin/main`
+> at 20:44 IST on 2026-09-13, and at 20:53 IST the deployed `/legal/privacy` said "currently
+> 2026-09-13", carried the in-app checkout and UPI-app sentences, the ten permissions and the
+> notification title-and-body row, and nowhere mentioned 2026-09-12. The in-app copy
+> (`nivora_app/lib/features/legal/legal_documents.dart:46`) reaches users with versionCode 4.
+> **Submit the User payment info, Installed apps and App interactions answers in §2 together with
+> versionCode 4, and on that day check that the live policy still carries that text.** Before the
+> deploy the live policy did not describe what those answers declare, which is exactly the
+> contradiction this section warns about.
+>
+> **Status of the 2026-09-02 fixes: fixed and verified rendering locally.** All four
+> contradictions in the table below have been corrected, and the pages additionally gained the
+> consent record, the Google (email)
 > sub-processor, the Singapore hosting region and the current retention periods. See
 > [`legal-consent.md`](./legal-consent.md) for what was built and, in its §6, the list of operator
 > details that still must be confirmed before the URL goes into Console.
 >
-> **One dependency remains before pasting the URL** — not on this table, but on the retention job:
-> the policy now publishes 1 month after departure / 2 months for complaints and notices, and
-> `app.apply_retention()` does not enforce those yet. See [`legal-consent.md`](./legal-consent.md)
-> §7.1.
+> The retention dependency once noted here is closed: `app.apply_retention()` removes complaints and
+> notices at 2 months, as the policy publishes ([`legal-consent.md`](./legal-consent.md) §7 item 1,
+> resolved 2026-09-04).
 >
 > The original finding is kept below because it is the reasoning, and because it is the check to
 > re-run whenever a feature changes what the app does with data.
@@ -845,7 +1052,7 @@ because they were written before `payment_intents` shipped:
 |---|---|---|
 | `/legal/privacy` | *"there is no payment processor, no messaging provider, no analytics vendor…"*, above a three-row sub-processor table | Razorpay is a fourth sub-processor and receives the payer's name, email and phone (§2.9) |
 | `/legal/privacy` | Under **"What is never collected"**: *"No card, bank account or UPI handle. Fee payments happen offline… NIVORA never takes, holds or moves money."* | Payments no longer happen only offline. The card/UPI half is still true and worth keeping — the *reason* has changed from "we don't take payments" to "Razorpay's form collects them, not ours" |
-| `/legal/account-deletion` | *"There is no advertising network, no analytics service, no payment processor and no email or SMS provider in the picture."* | Same. Its fee-retention table (8 years, name removed) is **already correct** and covers `payment_intents` by extension — but Razorpay's own retained record is not mentioned (§2.10) |
+| `/legal/account-deletion` | *"There is no advertising network, no analytics service, no payment processor and no email or SMS provider in the picture."* | Same. Its fee-retention table (name removed; the period read 8 years then, and has read "kept indefinitely", matching the privacy policy, since 2026-09-13) covers `payment_intents` by extension — but Razorpay's own retained record is not mentioned (§2.10) |
 | `/legal/terms` §9 | Titled *"Payments are recorded, not processed"*; *"NIVORA is not a payment service."* | Rent can now be collected in-app |
 
 **All four are now corrected** (2026-09-02) — see the status note at the head of this section. The
@@ -869,13 +1076,19 @@ items marked:
 
 - The data in the §2 table, in plain words, including **identity documents** (§2.3).
 - That the hostel operator is the data fiduciary and NIVORA is the processor (retention doc §2).
-- **Supabase, Vercel and Razorpay named as sub-processors**, with what each does (retention doc §7 —
-  **which does not list Razorpay yet either**, and still says "That is the complete list").
-- **NEW:** what Razorpay receives (name, email, phone, amount, order id — §2.9) and what it does
-  not send back. And the honest converse: **the card and UPI details go to Razorpay directly and
-  never reach NIVORA at all**, which is a stronger privacy statement than the page makes today.
+- **Supabase, Vercel, Razorpay and Google named as sub-processors**, with what each does (retention
+  doc §7, which now lists Razorpay and Google).
+- What Razorpay receives (name, email, phone, amount, order id — §2.9) and what it does not send
+  back. **On Android, say both halves together:** Razorpay's checkout runs inside the app and, while
+  a payment is open, takes the card, UPI or netbanking details typed and checks which UPI apps are
+  installed; and those details go to Razorpay, never to NIVORA. "Never reach NIVORA" on its own is
+  true of NIVORA's servers but reads as a denial of the User payment info and Installed apps answers
+  in §2.4. Legal version 2026-09-13 says both (§7.1).
+- Google, through Firebase Cloud Messaging, receiving the registration token and each
+  notification's title and body, and the ten Android permissions the app declares. Also in legal
+  version 2026-09-13.
 - Retention periods (retention doc §5.2), including the 90-day nulling of IP and user agent, and
-  **the payment record on the same 8-year accounting clock as the fee ledger** (§2.10).
+  **the payment record kept as long as the fee ledger, which is indefinitely** (§2.10).
 - How to request access, correction and erasure, and that the request goes to the hostel operator.
 - That erased data disappears from backups when those backups age out rather than immediately
   (retention doc §6.5) — an honest limitation most policies quietly omit — and **NEW:** that
@@ -885,7 +1098,9 @@ items marked:
 The account-deletion page must **load without error, name the app, and give a working way to ask** —
 a form or a monitored email address. It already explains what is deleted and what is retained
 (financial records survive for the statutory accounting period; the audit trail is held on a
-separate legal basis), which is exactly right; it needs the two payment additions above. A page that
+separate legal basis), which is exactly right, and it names Razorpay's own record among what
+deletion cannot reach ([`data-safety.md`](./data-safety.md) §8 row 3). In legal version 2026-09-13,
+live since 2026-09-13 (§7.1), it also describes the in-app route. A page that
 promises total erasure and then does not deliver is worse than one that is honest about the
 boundary.
 
@@ -898,11 +1113,9 @@ boundary.
 **Yes, if the Play developer account is a personal account created on or after 13 November 2023** —
 which any account registered for this app now will be.
 
-Requirement:
-
-> Run a **closed test with at least 12 testers, opted in continuously for at least 14 days**, before
-> you may apply for production access.
-> ([Play Console Help](https://support.google.com/googleplay/android-developer/answer/14151465))
+Requirement, in summary: run a **closed test with at least 12 testers, opted in continuously for at
+least 14 days**, before you may apply for production access
+([Play Console Help](https://support.google.com/googleplay/android-developer/answer/14151465)).
 
 **It does not apply to organisation accounts.** Registering as an organisation requires a D-U-N-S
 number and its own verification, which takes its own time — so this is a choice between two delays,
@@ -936,14 +1149,18 @@ Two traps specific to the 14 days:
 **Twelve testers need twelve working accounts, and this app has no sign-up.** A tester who installs
 it sees a login screen and nothing else. Before the test starts:
 
-1. Create a **demo hostel** with `db/seed.ts` and provision accounts across roles — a handful of
-   students, a warden, a manager, an owner — so testers see a real product rather than an empty one.
-2. Give every tester their sign-in details along with the opt-in link, and tell students explicitly
+1. Provision demo accounts across roles — a handful of residents, a warden, a manager, an owner — in
+   a fabricated hostel, so testers see a real product rather than an empty one. **Demo PG (Play
+   review)** (§6.1) is seeded for this, but it holds one resident and, until
+   `demo.manager@nivora.app` is created, no manager, so twelve testers need more accounts than it
+   has today.
+2. Give every tester their sign-in details along with the opt-in link, and tell residents explicitly
    that they log in with a **phone number**.
-3. Set `must_change_password = false` on the demo accounts, and keep the demo roles out of
-   `MFA_REQUIRED_ROLES`. A tester who cannot get past a forced password change or a TOTP prompt is a
-   tester who stops using the app, and the production-access application asks about tester
-   engagement.
+3. Set `must_change_password = false` on the demo accounts. **Owners always need two-step
+   verification on Android, and `MFA_REQUIRED_ROLES` cannot change that** (§6 item 3). A tester who
+   is given the demo owner gets its setup key, exactly as in Set 4; no real owner's key is ever
+   handed out. A tester who cannot get past a forced password change or a code prompt is a tester
+   who stops using the app, and the production-access application asks about tester engagement.
 4. The application form asks how you recruited testers and what feedback you got. Keep notes as the
    test runs; reconstructing them 14 days later produces the vague answer that gets the application
    sent back.
@@ -956,25 +1173,33 @@ In order. Each step assumes the previous one is done.
 
 **Before Play Console**
 
-1. **Bring the legal pages in line with the payment feature (§7.1).** ~~Fix the two failing URLs~~ —
-   done: both return **HTTP 200** signed out, verified 24 Aug 2026. What remains is their
-   **content**: `/legal/privacy` and `/legal/account-deletion` still say there is *"no payment
-   processor"*, and `/legal/terms` §9 still says *"NIVORA is not a payment service."* **This is now
-   the top blocker**, because a privacy policy that contradicts the Data safety form is a violation
-   on its own. Owner: whoever owns `app/legal/`.
+1. **Confirm legal version 2026-09-13 is live (§7.1).** Done on the web: `main` reached
+   `origin/main` at 20:44 IST on 2026-09-13, and at 20:53 IST both URLs returned HTTP 200 signed out
+   and carried version 2026-09-13. The privacy page had the in-app Razorpay checkout and UPI-app
+   detection, the ten Android permissions and Google's part in push; the deletion page had the
+   in-app deletion route. The in-app copy arrives with versionCode 4 (step 11). Re-check the live
+   pages on the day you submit: the Data safety answers in step 16 declare what that text
+   describes, and a privacy policy that contradicts the form is a violation on its own. Owner:
+   whoever owns `app/legal/`.
 2. **Back up the upload keystore.** Copy `C:\Users\shahu\.hostelpro-keys\` — the `.p12` *and*
-   `keystore.properties` — somewhere durable and private. It is outside the repository, so nothing
-   else is backing it up.
-3. **Decide the `applicationId` permanently.** `app.nivora.twa` is what the artifact carries. To
-   change it to `app.hostelpro`, do it now, in `android/app/build.gradle.kts` (`namespace` *and*
-   `applicationId`) and in `package_name` in `public/.well-known/assetlinks.json`, then rebuild.
-   After the first upload it can never change.
-4. **Install the APK on a real phone and launch it.** `adb install app-release.apk`. Confirm there is
-   **no address bar**, the splash screen and launcher icon look right, and login works. The TWA has
-   never been executed on a device — this is the one check no static analysis can replace.
-5. **Build the demo tenant** (`db/seed.ts`) and provision the demo accounts for §6 and §8, with
-   `must_change_password = false` and no MFA requirement on those roles.
-6. **Confirm the listing assets exist** — `node scripts/store-assets.mjs --check`.
+   `keystore.properties`, which `nivora_app/android/app/build.gradle.kts:45` reads for local release
+   builds — somewhere durable and private. It is outside the repository, so nothing else is backing
+   it up.
+3. ~~**Decide the `applicationId` permanently.**~~ Decided: `com.srnivora.app`, and it is final.
+   This step was written about `app.nivora.twa`, the retired web-app (TWA) wrapper, which is not the
+   app on this listing.
+4. **Install the versionCode 4 release build on a real phone and launch it.** Confirm the splash
+   screen and launcher icon look right, that sign-in works, and whether a push notification actually
+   arrives. Until one does, the listing uses `full-description-without-push.txt` (§1.1). The "no
+   address bar" check that used to be part of this step applied only to the retired TWA.
+5. **Finish the demo tenant (§6.1).** Demo PG exists and is seeded. Create `demo.manager@nivora.app`
+   in it (active, email confirmed, `must_change_password = false`), enrol the demo owner's
+   authenticator and keep its setup key for Set 4 (§6 item 3), then sign in to all four accounts on
+   a phone with the passwords you will type into Console. Provision extra tester accounts for §8.
+6. **Confirm the listing assets exist** — `public/store/icon-512.png`,
+   `dist/NIVORA-feature-graphic.png`, and in `dist/store-listing/` four phone screenshots, four
+   10-inch tablet screenshots and the description text (§1.1).
+   `node scripts/store-assets.mjs --check` covers only the icon and the retired `public/store/` set.
 
 **Play Console — account**
 
@@ -988,36 +1213,48 @@ In order. Each step assumes the previous one is done.
 9. **Create the app.** Name, default language, app-or-game (app), free-or-paid (free — and note that
    free→paid cannot be reversed later).
 10. **Accept Play App Signing.** Mandatory for new apps; do not opt for uploading your own app signing
-    key.
-11. **Upload `app-release.aab`** to a **closed testing** track. Not production — production access is
-    exactly what the closed test earns.
-12. **THE STEP EVERYONE FORGETS:** go to **Test and release → Setup → App integrity → App signing**,
-    copy the **app signing key SHA-256 fingerprint**, add it as a **second** entry in
-    `public/.well-known/assetlinks.json` alongside the existing upload-key fingerprint, and **deploy
-    the site**. Then re-verify:
-
-    ```sh
-    curl -sS "https://digitalassetlinks.googleapis.com/v1/assetlinks:check?source.web.site=https://hostelpro-three.vercel.app&relation=delegate_permission/common.handle_all_urls&target.android_app.package_name=app.nivora.twa&target.android_app.certificate.sha256_fingerprint=<the-new-one>"
-    ```
-
-    Expect `"linked": true`. Skip this and every Play-installed copy of the app runs with a visible
-    address bar — and a TWA that cannot prove it owns its site is the thing Play's spam policy bans.
-    Full explanation in [`play-technical-compliance.md`](./play-technical-compliance.md) §8.2.
+    key. The app signing key is then shown under Protected with Play → Play Store distribution → Go to
+    Play app signing → App signing key section
+    ([Play Console Help](https://support.google.com/googleplay/android-developer/answer/9842756)).
+    The upload key is a different key: its SHA-256 starts `24:23:97` and ends `FB:64:65`
+    ([`play-technical-compliance.md`](./play-technical-compliance.md) §4; read from the versionCode 4
+    AAB with `keytool -printcert -jarfile` on 2026-09-13).
+11. **Upload the versionCode 4 AAB** (`dist/NIVORA-1.0.0.aab`, which `nivora_app/scripts/release.sh`
+    writes at line 422) to a **closed testing** track. Not production — production access is exactly what the
+    closed test earns. The file built at 20:21 IST on 2026-09-13 has SHA-256
+    `a85e26c1469c09f5d41a1913343ef9834afe3f44f1776439c379e67507a975ba` and passed every artifact
+    check in [`play-technical-compliance.md`](./play-technical-compliance.md): badging, permissions,
+    AD_ID, 16 KB alignment, sizes and signing. **If `dist/` has been rebuilt since, those numbers no
+    longer apply: run the checks on the new files first.**
+12. ~~**Add the app signing key fingerprint to `assetlinks.json`.**~~ **Retired with the TWA.** This
+    step let the TWA prove it owned `hostelpro-three.vercel.app`, so it would open without an address
+    bar. `com.srnivora.app` is a native build and its manifest declares no `autoVerify` link, so it
+    has nothing to prove there. `public/.well-known/assetlinks.json` still names `app.nivora.twa`.
 
 **Play Console — store listing and content**
 
-13. **Store listing:** paste the copy from §1, upload the icon, feature graphic and screenshots, set
-    the category (Business) and a monitored support email.
-14. **Privacy policy URL:** paste `https://hostelpro-three.vercel.app/legal/privacy` — only after
-    step 1, i.e. only once the page **names Razorpay and stops saying payments are offline-only**.
-    A 200 is necessary and no longer sufficient.
-15. **App access (§6):** provide demo credentials for Owner, Warden and Student, plus English
-    instructions saying students sign in by **phone number**. If the demo tenant has Razorpay test
-    keys configured, say so and give a test card — a reviewer who taps Pay and hits "Online payment
-    isn't set up yet" has found a dead end you could have explained in one line.
-16. **Data safety (§2):** work from [`data-safety.md`](./data-safety.md), row by row. Take the extra
-    minute on "shared" (§2.1 and §2.9), **Financial info** (§2.4 — Purchase history yes, User
-    payment info no) and the government-ID rows (§2.3). Paste the deletion URL.
+13. **Store listing:** paste the text from `dist/store-listing/` (also tracked in
+    `docs/store-listing/`), using `full-description-without-push.txt` until push is confirmed on a
+    phone (step 4); upload `public/store/icon-512.png`, `dist/NIVORA-feature-graphic.png`, the four
+    phone screenshots and the four 10-inch tablet screenshots (§1.1); and set the category (Business)
+    and a monitored support email.
+14. **Privacy policy URL:** paste `https://hostelpro-three.vercel.app/legal/privacy` after the step 1
+    check confirms the deployed page still carries legal version 2026-09-13 and says that Razorpay's
+    checkout runs inside the Android app, takes the card or UPI details typed and checks which UPI
+    apps are installed. A 200 is necessary and not sufficient.
+15. **App access (§6):** add the four per-account instruction sets from
+    [App access — what to enter in Console](./play-console-submission.md#app-access--what-to-enter-in-console):
+    Set 1 Warden, Set 2 Resident, Set 3 Manager (only once that account exists) and Set 4 Owner, with
+    the demo owner's setup key in place of `SETUP KEY`. Type each username and password into
+    Console's own fields. This step used to suggest giving a test card; the demo PG has no Razorpay
+    settlement on purpose, and Set 2 explains the refusal a reviewer sees on tapping Pay. Never give
+    a Super Admin account, and leave the pre-launch report's test credentials empty.
+16. **Data safety (§2):** work from [`data-safety.md`](./data-safety.md), row by row, and submit it
+    in the same release as versionCode 4, after the step 1 check. Take the extra minute on
+    "shared" (§2.1 and §2.9), **Financial info** (§2.4 — Purchase history yes, **User payment info
+    yes**, changed on 2026-09-13 from no), **Installed apps** (yes, for the same reason), **Device or
+    other IDs** (the FCM registration token, App functionality) and the government-ID rows (§2.3).
+    Where `data-safety.md` and §2 disagree, `data-safety.md` is the newer. Paste the deletion URL.
 17. **Content rating (§3):** complete the IARC questionnaire. Answer **yes** to users interacting,
     and **no** to purchasing digital goods — rent is a real-world service (§5).
 18. **Target audience and content (§4):** 18 and over; not appealing to children.
@@ -1040,24 +1277,38 @@ In order. Each step assumes the previous one is done.
 
 24. **Apply for production access** on day 15 or later. Answer the three sections from the notes in
     step 23. Review takes up to seven days.
-25. **Create the production release.** Bump `versionCode` in `android/app/build.gradle.kts` if the
-    bundle is rebuilt for any reason — Play rejects a re-upload of the same `versionCode`, and a
-    number that has already been uploaded is burned even if that submission was rejected.
+25. **Create the production release by promoting the tested one.** In the closed-testing track, open
+    the versionCode 4 release ("1.0.0 (4)") and use **Promote release → Production**; nothing is
+    uploaded again. Upload a new bundle only if the code changed during the test, and raise the number
+    after `+` in `nivora_app/pubspec.yaml` first (5 or higher) — Play rejects a re-upload of the same
+    `versionCode`, and a number that has already been uploaded is burned even if that submission was
+    rejected. This step
+    used to point at `android/app/build.gradle.kts`, which is the retired TWA's build.
 26. **Roll out at a staged percentage** — 20% is a sensible first step — and watch Android Vitals and
     crash reports before going to 100%.
-27. **After rollout, re-run the verification block** in
-    [`play-technical-compliance.md`](./play-technical-compliance.md) §10 against a Play-installed
-    build, on a real device, and confirm there is still no address bar.
+27. **After rollout, install the Play-delivered build on a real device** and sign in with each role.
+    If push notifications arrive, switch the listing to `full-description.txt`. This step used to
+    point at a §10 verification block in
+    [`play-technical-compliance.md`](./play-technical-compliance.md), which has no §10, and ended
+    with a "no address bar" check that was retired with the TWA.
 
 **Standing**
 
-28. **Every August, Play raises the target API floor.** Bump `compileSdk`/`targetSdk`, rebuild,
-    re-upload — or the listing stops accepting updates. The current floor is API 36 from
-    31 August 2026; assume API 37 from around August 2027.
+28. **Every August, Play raises the target API floor.** Raise `targetSdk`, rebuild, re-upload — or
+    the listing stops accepting updates. In `nivora_app/android/app/build.gradle.kts`, `targetSdk`
+    follows `flutter.targetSdkVersion` (line 113) and `compileSdk` is pinned to 37 (line 75). The
+    current floor is API 36 from 31 August 2026; assume API 37 from around August 2027.
 
 ---
 
 ## 10. Corrections to `docs/play-store.md`
+
+> **Historical: TWA era.** `play-store.md` is the build guide for the retired Trusted Web Activity,
+> package `app.nivora.twa`, and the table below corrects that document. Its TWA sections do not
+> describe `com.srnivora.app` (its Console-obligations section is kept current for it); for the
+> current build, see
+> [`play-technical-compliance.md`](./play-technical-compliance.md) and
+> [`play-console-submission.md`](./play-console-submission.md). §10.1 is not TWA-era.
 
 That document is a good build guide, and its Data safety table has errors. Recorded here rather than
 edited there, because it is another author's file.
@@ -1082,10 +1333,11 @@ mechanics, the middleware trap — was independently re-verified and holds up.
 Recorded here because they are other authors' files, and because a submission answer derived from a
 stale document is how a wrong declaration gets made confidently.
 
+Re-checked 2026-09-13. Four of the five rows this table used to carry are closed and were removed:
+[`data-retention-and-privacy.md`](./data-retention-and-privacy.md) now has a `payment_intents` row
+in §4.1 and lists Razorpay and Google among its §7 sub-processors; the legal pages were corrected on
+2026-09-02 (§7.1); and `THREAT-MODEL.md` no longer claims a single outbound call. One remains:
+
 | Document | What is now stale | Where the right answer is |
 |---|---|---|
-| [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §4.1 | The data inventory has no `payment_intents` row | §2.4 here lists every column; §2.10 gives the retention period (the fee ledger's own, default 8 years, per that document's §5.2 — so the **period** is settled, only the **inventory row** is missing) |
-| [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §7 | Sub-processor table lists three, and asserts *"That is the complete list"* on the strength of "no payment provider, no webhooks" in `THREAT-MODEL.md` §1/§6D | Razorpay is a fourth. §2.9 here records exactly what it receives |
-| `app/legal/privacy`, `app/legal/terms`, `app/legal/account-deletion` | Say there is no payment processor and that NIVORA never moves money | §7.1 — **blocking**, with the exact strings |
-| `THREAT-MODEL.md` §1, §6D | *"Exactly one outbound HTTP call in the entire application"* | There are now three outbound destinations: the Supabase health URL, `api.razorpay.com` (order creation), and Razorpay's inbound webhook. [`payments.md`](./payments.md) §6 is the current perimeter description |
-| `.env.example` | Declares `NEXT_PUBLIC_RAZORPAY_KEY_ID` | `lib/razorpay.ts` reads **`RAZORPAY_KEY_ID`**, and [`payments.md`](./payments.md) §1 says explicitly that it must *not* be a `NEXT_PUBLIC_` variable. Following `.env.example` produces a permanently dead Pay button. Not a submission blocker; a setup trap |
+| `.env.example` | Declares `NEXT_PUBLIC_RAZORPAY_KEY_ID` (line 30) | `lib/razorpay.ts` reads **`RAZORPAY_KEY_ID`**, and [`payments.md`](./payments.md) §1 says explicitly that it must *not* be a `NEXT_PUBLIC_` variable. Following `.env.example` produces a permanently dead Pay button. Not a submission blocker; a setup trap |

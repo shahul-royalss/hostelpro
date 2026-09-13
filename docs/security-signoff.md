@@ -33,6 +33,9 @@ live RLS attack suites. This document does not restate or re-verify those result
   `nimxvgzscbanhtvgnjll` and their secrets are set. `razorpay-webhook` is the only one with
   `verify_jwt: false`, which is correct: Razorpay cannot present a Supabase JWT, so it
   authenticates by HMAC over the raw body instead. Rent has been paid end to end with live keys.
+  *(2026-09-13: the project now lists eleven ACTIVE functions, `push-send` having been deployed on
+  2026-09-11, and `razorpay-webhook` is still the only one with `verify_jwt: false`. This pass did
+  not review `push-send`.)*
 
 **Live checks run for this pass, with results:**
 
@@ -44,7 +47,13 @@ live RLS attack suites. This document does not restate or re-verify those result
 - Artifacts: both APKs verify (v2; `minSdk 24`, so the absent v1 JAR signature is correct rather
   than missing), package `com.srnivora.app`, versionCode 1 on both APKs and on the bundle, four
   arm64 native libraries all aligned ≥ 16 KB, and no secrets in either APK or in any of the
-  AAB's three ABIs.
+  AAB's three ABIs. *(Those were the 2026-09-04 artifacts. The upload now going to Play is
+  versionCode 4, release name `1.0.0 (4)`, and this pass attests to none of its artifacts. On
+  2026-09-13 all twelve libraries across `arm64-v8a`, `armeabi-v7a` and `x86_64` were measured at
+  ≥ 16 KB alignment, first in the versionCode 3 bundle and then again in the versionCode 4 bundle,
+  which is the upload; see `docs/play-technical-compliance.md` §3. `libapp.so` holds the compiled
+  Dart code (next paragraph), so those figures belong to the bundle they were read from and are
+  measured again on any rebuild.)*
 
 **One control was found not to work, and repairing it is why this round exists.** The release
 script's secret gate scanned only `assets/flutter_assets` — a directory that cannot contain a
@@ -61,14 +70,15 @@ are clean — but until today it held by luck rather than by test.
 - *Leaked-password protection is disabled* (Supabase advisor, WARN). Dashboard-only toggle; owner:
   the project owner. Not a code defect and not a release blocker, but it should be on before real
   residents choose passwords.
-- *Production web is stale.* `hostelpro-three.vercel.app` still serves `2559b6b`: three pushes
-  have produced zero deployments, so the corrected legal pages — including the account-deletion
-  URL a Play reviewer opens — are not live. **This blocks submission**, not as a vulnerability
-  but because that URL would describe the wrong app. Owner: the project owner (`vercel --prod`,
-  then reconnect the Git integration so pushes deploy again).
+- *Legal version 2026-09-13 on production web* — **closed 2026-09-13.** It was open while the
+  deployed pages still showed version 2026-09-12. Commit `4fd41ef` was pushed at 20:44 IST, and
+  signed-out GETs of `/legal/privacy`, `/legal/account-deletion` and `/legal/terms` then returned
+  200 and showed version 2026-09-13, which production's `public.legal_versions` already held
+  (effective 2026-09-12 18:30 UTC). The in-app copy reaches users with versionCode 4, so the Data
+  safety answers that declare what that text describes go in together with versionCode 4.
 
 Sign-off holds **for the source at `af71ea6` and the artifacts staged from it**, conditional on
-the two open items above.
+the open item above.
 
 ---
 
@@ -141,29 +151,34 @@ green; it still exits 1, and will until the fixture strings are allowlisted or r
 - **No Razorpay key SECRET anywhere.** `git grep` for `RAZORPAY_KEY_SECRET=<value>` patterns
   over tracked files: no hits. Full-history search (`git log -p --all -S "RAZORPAY_KEY_SECRET="`
   filtered to real-looking values): no hits. The only `rzp_…` string in the repo is the
-  **key id** `rzp_test_TTZjgz6pssJVJs` (see §3.2). `nivora_app/scripts/release.sh:186` itself
-  greps `lib/` for `RAZORPAY_KEY_SECRET` and aborts the build if found.
+  **key id** `rzp_test_TTZjgz6pssJVJs` (see §3.2). `nivora_app/scripts/release.sh:403` itself
+  greps `lib/` for `RAZORPAY_KEY_SECRET` and aborts the build if found (the line was `:186` on
+  2026-08-29).
 - **Every `eyJ…` literal decoded — none is service_role.** A repo-wide sweep of `nivora_app/`
   (all text files, excluding `build/`, `.dart_tool/`, `.git/`) finds JWT-shaped literals in
-  exactly one file: `nivora_app/lib/core/config/env.dart:24`. Its payload base64-decodes to:
+  exactly one file: `nivora_app/lib/core/config/env.dart:29` (`:24` on 2026-08-29). Its payload base64-decodes to:
   `{"iss":"supabase","ref":"nimxvgzscbanhtvgnjll","role":"anon","iat":1785574366,"exp":2101150366}`
   — **`role":"anon"`**, the publishable anon key, safe in a client by design (RLS is the
   boundary). No other JWT literal exists in the app source.
 - **No WebView, no url_launcher in app code.** Neither appears in `nivora_app/pubspec.yaml` as a
   direct dependency and neither is imported anywhere in `lib/` (the only grep hits are comments
-  asserting their absence, e.g. `lib/features/student/pay_rent_sheet.dart:35-37`). Caveat:
+  asserting their absence, e.g. `lib/core/version/update_banner.dart:36` and
+  `lib/features/payments/receipt_export.dart:11-12`). This used to cite
+  `lib/features/student/pay_rent_sheet.dart:35-37`, which no longer exists: the payment code is now
+  `lib/features/payments/pay_rent.dart`, which opens Razorpay's native Checkout SDK
+  (`razorpay.open`, `:168`) and carries no such comment. Caveat:
   `url_launcher` **is present transitively** in `pubspec.lock` (pulled in by a plugin's
   dependency tree, not by app code); the plugin is compiled in but nothing calls it. Recorded as
   an open Low item (§3.3).
 - **No secrets in `android/` gradle files.** Tracked files under `nivora_app/android/` include
   no keystore and no `key.properties` (`git ls-files` shows only `gradle.properties` — JVM args
-  and two Flutter template flags — and the gradle wrapper). `android/app/build.gradle.kts:31-33`
-  reads signing material from `NIVORA_KEYSTORE_*`/`NIVORA_KEY_*` environment variables or
+  and two Flutter template flags — and the gradle wrapper). `android/app/build.gradle.kts:44-55`
+  (`:31-33` on 2026-08-29) reads signing material from `NIVORA_KEYSTORE_*`/`NIVORA_KEY_*` environment variables or
   `~/.hostelpro-keys/keystore.properties`, both outside the repo.
 - **No secret in `--dart-define` scripts.** The only build script is
   `nivora_app/scripts/release.sh`; it contains no key/secret values (and enforces the
-  no-secret-in-lib rule itself, see above). `MIGRATION.md:118` shows `--dart-define` usage with
-  placeholder `...` values only.
+  no-secret-in-lib rule itself, see above). `nivora_app/MIGRATION.md:127` (`:118` on 2026-08-29) shows
+  `--dart-define` usage with placeholder `...` values only.
 
 ### 2.3 Server-side spot-check (source review — READ only, nothing deployed)
 
@@ -229,15 +244,18 @@ server-side per-creation and never stored in plaintext.
 `rzp_test_TTZjgz6pssJVJs` appears in `docs/razorpay-in-app.md:128`,
 `nivora_app/test/payment_test.dart:35`, `nivora_app/test/receipt_test.dart:44`, and git history.
 Two facts bound the risk: (a) a Razorpay **key id** is the publishable merchant identifier —
-it is shipped inside every client that opens Checkout, by design (`lib/core/config/env.dart:27`,
-`lib/data/models/payment.dart:172`); (b) this one is **test mode** (`rzp_test_`), which can move
+it is handed to every client that opens Checkout, by design. It is no longer compiled into the app:
+`razorpay-order` returns it with each order (`supabase/functions/razorpay-order/index.ts:318`), and
+the app reads it (`nivora_app/lib/data/models/checkout.dart:79`) and passes it to Checkout
+(`nivora_app/lib/features/payments/pay_rent.dart:169`); (b) this one is **test mode** (`rzp_test_`), which can move
 no real money. The corresponding **key secret** — the credential that actually matters — was
 verified absent from all tracked files and from full git history (§2.2).
 
 - **Owner:** product owner (holds the Razorpay dashboard). **Mitigation:** go-live uses a
-  **live-mode** key pair that has never been in this repo, supplied via
-  `--dart-define=RAZORPAY_KEY_ID=…` at build time and `supabase secrets set` server-side;
-  optionally regenerate the test key at that point. No code change required.
+  **live-mode** key pair that has never been in this repo, set only server-side with
+  `supabase secrets set`. Nothing is passed at build time: the app receives the key id from
+  `razorpay-order` with each order, as (a) above describes. Optionally regenerate the test key at
+  that point. No code change required.
 
 ### 3.3 Transitive `url_launcher` in the dependency tree — **Low** (found by this sweep, not the scanner)
 
@@ -256,7 +274,8 @@ corrections it produced are applied above; recorded here so the document's own h
 honest:
 
 - The signing fallback path was misnamed `~/.nivora-keys/`; the gradle file actually reads
-  `~/.hostelpro-keys/keystore.properties` (nivora_app/android/app/build.gradle.kts:22). The
+  `~/.hostelpro-keys/keystore.properties` (nivora_app/android/app/build.gradle.kts:45; `:22` when
+  this erratum was written). The
   load-bearing claim — no keystore or key.properties tracked in the repo — was verified true.
 - A scanner output quoted in §6 was produced one commit earlier than the HEAD it was attributed
   to (634 vs 635 tracked files). The verifier re-ran the scanner at the true HEAD: still
@@ -305,17 +324,18 @@ noise without dulling the blade.
 
 **4.4 Deploy flags the verdict depends on** (from the functions' own headers): deploy
 `razorpay-webhook` with `--no-verify-jwt` (its HMAC is the perimeter; Razorpay sends no JWT);
-deploy the other four **with** `verify_jwt` left ON as the outer gate.
+deploy every other function **with** `verify_jwt` left ON as the outer gate — ten of the eleven
+ACTIVE on 2026-09-13 (§5 item 1).
 
 ---
 
 ## 5. What is NOT verified — read this before relying on §1
 
-1. **The five edge functions are not deployed.** Everything in §2.3 is source review of the code
-   in this repo. Whether the live project runs this code, with `RAZORPAY_KEY_ID`,
-   `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` set and the §4.4 verify_jwt flags
-   correct, is **unverified**. **Owner action:** product owner deploys and confirms; until then
-   the payment path does not exist in production.
+1. **Deployed code is not compared with this repo.** Everything in §2.3 is source review of the
+   code in this repo. On 2026-08-29 the functions were not deployed; §1 records them deployed
+   since, and on 2026-09-13 the project lists eleven ACTIVE, with `razorpay-webhook` the only one
+   that has `verify_jwt: false`, as §4.4 requires. Whether each deployed function runs exactly this
+   source is still not verified.
 2. **No live on-device round-trip has been possible from this machine.** Norton intercepts TLS
    on this workstation, so no end-to-end login/payment/webhook exchange against the live
    Supabase project was exercised in this pass. The webhook's refusal behavior, the platform
@@ -328,9 +348,10 @@ deploy the other four **with** `verify_jwt` left ON as the outer gate.
 4. **The Next.js web app is out of scope here.** Its sign-off is `SECURITY.md`. Note that
    `SECURITY.md` predates the mobile Razorpay work (it says "no payment provider"); the payment
    surface is covered by this document's §2.3, not by that file.
-5. **Play-side device checks** (assetlinks in production, actual APK contents of a store build)
-   were not exercised; the no-secrets claims are about source and tracked files, backed by
-   `release.sh`'s own build-time grep.
+5. **Play-side device checks** (the APKs Play actually delivers from a store build) were not
+   exercised; the no-secrets claims are about source and tracked files, backed by `release.sh`'s
+   own build-time grep. Digital Asset Links is not among these checks: `com.srnivora.app` declares
+   no `autoVerify` link (`nivora_app/android/app/src/main/AndroidManifest.xml`).
 
 A sign-off that overclaims is worse than none. §1's verdict is exactly as strong as §2's
 evidence and no stronger; the §5 items belong to their owners before this release is real.
@@ -357,7 +378,8 @@ trusted:
   refinement (allowlist the two fixture strings, exempt the key-id shape) was the correct fix
   rather than a whitewash.
 - **JWT sweep re-done:** one JWT-shaped literal in all of `nivora_app/` (excluding
-  `build/`, `.dart_tool/`) — `lib/core/config/env.dart:24`; payload re-decoded today:
+  `build/`, `.dart_tool/`) — `lib/core/config/env.dart:24` (`:29` as of 2026-09-13, same payload);
+  payload re-decoded today:
   `{"iss":"supabase","ref":"nimxvgzscbanhtvgnjll","role":"anon",...}` — anon, as §2.2 states.
 - **WebView / url_launcher re-checked:** zero matches in `pubspec.yaml`; the only `lib/`
   matches are the four comments asserting their absence; `url_launcher` remains

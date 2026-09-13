@@ -1,0 +1,67 @@
+Nivora runs a paying-guest accommodation or hostel end to end — the rooms, the residents, the rent, the complaints and the day-to-day money — from one app, on the phone already in your pocket.
+
+It is built for how a PG in India is actually staffed. The owner, the manager, the warden at the desk and the resident in the room each sign in to the same app and each see a different thing, so nobody is handed a tool meant for somebody else's job.
+
+
+FOR THE OWNER
+
+See every property you run in one place: how many beds are filled, what rent has come in this month, and what it cost you to get there.
+
+• Set up the floors, rooms and beds of each property
+• Create staff logins — up to five managers and five wardens for each property
+• Follow rent and payment history without ringing anyone
+• Read expenses month by month, with charts that compare this month against the ones before it
+• Send a task straight to a manager and see when it is done
+• Post a notice to your wardens, your residents, or both
+
+
+FOR THE WARDEN
+
+The desk job, on a phone.
+
+• Register a new resident in one pass — details, photograph, ID proof, room and bed
+• Edit the floor plan: name your floors, set how many rooms each has, and how many beds are in each room
+• See at a glance which beds are free and which are taken
+• Record rent paid at the desk in cash and hand over a receipt
+• Work through complaints and leave requests, with a history of what was done
+• Keep the visitor log
+
+
+FOR THE MANAGER
+
+The money that is not rent.
+
+• Record the fixed monthly costs — rent on the building, salaries, internet, the things that arrive every month
+• Record the day-to-day spending — vegetables, gas, repairs, whatever today needed
+• Watch both add up into charts the owner sees too, so there is one set of numbers and no reconciling
+• Keep the mess menu current
+• Pick up the tasks the owner sends you
+
+
+FOR THE RESIDENT
+
+Everything you would otherwise have to ask somebody for.
+
+• What rent is due, what you have paid, and when
+• Pay online by UPI, card or netbanking where your hostel accepts it, and keep the receipt
+• Raise a complaint and follow it until it is resolved
+• Read the notices from your hostel
+• Check what is on the mess menu today
+
+
+PAYMENTS
+
+Rent can be paid inside the app through Razorpay — UPI, card or netbanking — at hostels that have set up online payment. Card numbers and UPI IDs are typed into Razorpay's own checkout and never reach Nivora. Cash collected at the desk is recorded by the warden as a cash entry, so both halves of the ledger live in the same place.
+
+
+PRIVACY, PLAINLY
+
+Nivora holds real information about real people — names, phone numbers, photographs, identity documents — so it is worth saying what it does not do. There is no advertising and no advertising identifier. There is no analytics vendor, no crash reporter and no session replay. Nothing you type is used to build a profile of you, and nothing is sold. The full privacy policy is linked below, and the app shows it to you before you agree to it.
+
+
+HOW ACCOUNTS WORK
+
+Nobody signs themselves up. An owner's account is created for them, the owner creates the manager and warden accounts, and a warden registers each resident. Residents sign in with their phone number; staff sign in with an email address. If you are a resident and cannot sign in, your hostel's warden is the person who can help — not us. You can ask for your account and data to be deleted from your profile at any time.
+
+
+Nivora is made in India, for Indian PGs and hostels. Amounts are in rupees and dates follow the Indian day.

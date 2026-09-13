@@ -1,8 +1,20 @@
 # Play Store graphic assets
 
 Google Play will not let you publish a listing without an icon, a feature graphic and at
-least two phone screenshots. All of them live in `public/store/` and are **generated**, by
-one script, from files that are already in this repository:
+least two phone screenshots.
+
+**What to upload for `com.srnivora.app` is in §2.** The icon is `public/store/icon-512.png`. The
+feature graphic is `dist/NIVORA-feature-graphic.png` (a byte-identical copy sits in
+`dist/store-listing/`), and the phone and 10-inch tablet screenshots and the listing text are in
+`dist/store-listing/`. `scripts/store-assets.mjs` neither produces nor checks any of the `dist/`
+files; of the upload set it produces and checks only the icon (below). The
+feature graphic is written into `dist/` by `nivora_app/scripts/make-feature-graphic.py` (lines
+16-17), and `nivora_app/test/_storeshot.dart` defines the phone and `tablet10` canvases the
+screenshots are rendered at (lines 77-86). Neither asserts Play's spec, so the dimensions in §1
+were read from the PNG headers.
+
+The script below generates the icon, and also the feature graphic and screenshots of the
+**retired** web-app (TWA) listing, all into `public/store/`:
 
 ```sh
 node scripts/store-assets.mjs            # regenerate everything into public/store/
@@ -10,12 +22,26 @@ node scripts/store-assets.mjs --svg      # also dump the SVG sources to public/s
 node scripts/store-assets.mjs --check    # verify what is on disk, generate nothing
 ```
 
-The script exits non-zero if any asset fails its Play spec, so it doubles as the release
-check. `docs/play-store.md` §5 lists this as a blocker; this file is the answer to it.
+The script exits non-zero if any file in `public/store/` fails its Play spec. For the current
+listing that makes it a check of the icon only. It is not a release check for the upload.
 
 ---
 
 ## 1. What exists
+
+> **Retired for upload on 2026-09-13, except the icon.** The feature graphic and six screenshots in
+> this table were made for the retired web-app (TWA) listing, package `app.nivora.twa`. The listing
+> for `com.srnivora.app` uploads these instead: `dist/NIVORA-feature-graphic.png` (1024 × 500, a
+> different file from the one below; a byte-identical copy is in `dist/store-listing/`), and from
+> `dist/store-listing/` four phone screenshots `phone-{resident,warden,manager,owner}.png` at
+> 1080 × 1920 and four 10-inch tablet screenshots `tablet10-{resident,warden,manager,owner}.png` at
+> 1440 × 2560. All nine are 24-bit RGB with no alpha, according to their PNG headers on 2026-09-13.
+> The listing text is in `dist/store-listing/` too, and tracked in git under `docs/store-listing/`.
+> `public/store/icon-512.png` is still the icon to upload.
+>
+> This script neither produces nor checks anything in `dist/`, and `dist/` is ignored by git. The
+> table below and §3–§5 document the retired set and how it was built; **§2 is the current upload
+> guide**.
 
 | File | Play slot | Actual |
 |---|---|---|
@@ -37,18 +63,18 @@ renamed or retired panel cannot linger next to the ones you are about to upload.
 flow leads. Screens 1–3 are one continuous story about one resident and one figure:
 Priyanka Singh owes ₹6,500 for Aug 2026, pays it, gets the receipt.
 
-### "32-bit PNG with alpha" vs "no alpha" — the one genuinely confusing line
+### Alpha on the icon, no alpha anywhere else — the one genuinely confusing line
 
 [Play's spec](https://support.google.com/googleplay/android-developer/answer/9866151) asks
-for three different things and it is easy to apply the wrong one to the wrong slot:
+for different things per slot, and it is easy to apply the wrong one to the wrong slot:
 
-| Slot | Play's wording | What this repo writes |
+| Slot | What Play asks for | What this repo writes |
 |---|---|---|
 | App icon | *32-bit PNG **with** alpha*, ≤ 1024 KB | RGBA, alpha = 255 on every pixel |
-| Feature graphic | *JPEG or 24-bit PNG (**no** alpha)* | RGB, no alpha channel at all |
-| Screenshots | *JPEG or 24-bit PNG (**no** alpha)* | RGB, no alpha channel at all |
+| Feature graphic | A JPEG, or a PNG with 24-bit colour and **no** alpha channel | RGB, no alpha channel at all |
+| Screenshots | The same format rule as the feature graphic | RGB, no alpha channel at all |
 
-"32-bit" **means** RGBA — 8 bits × 4 channels — so the icon must carry an alpha channel.
+32-bit **means** RGBA — 8 bits × 4 channels — so the icon must carry an alpha channel.
 But Play separately rejects icons that are actually transparent, because it composites its
 own shape and shadow behind the artwork. Exactly one file satisfies both: RGBA whose alpha
 channel is 255 everywhere. That is what gets written, and the verifier asserts *both*
@@ -65,26 +91,39 @@ Upload `public/store/icon-512.png` to Play, not that one.
 
 ## 2. Where each one goes in Play Console
 
-All of these are under **Grow → Store presence → Main store listing** for the app
-`app.nivora.twa`.
+All of these go on the **Main store listing** page for the app `com.srnivora.app`, under **Store
+presence** in Play Console's menu. Console renames its menu groups from time to time; if the page is
+not there, search Console for "Main store listing".
 
 1. **App icon** — *Graphics → App icon*. Upload `public/store/icon-512.png`.
 2. **Feature graphic** — *Graphics → Feature graphic*. Upload
-   `public/store/feature-graphic-1024x500.png`. This is the banner Play shows at the top of
-   the listing and in promotional slots; some of those placements crop it, so nothing that
-   matters sits outside an 11 % inset (x 112–912, y 130–375 of the 1024 × 500 canvas).
-3. **Phone screenshots** — *Graphics → Phone screenshots*. Upload all six in filename
-   order; the numeric prefixes are the order they should appear in the listing.
+   `dist/NIVORA-feature-graphic.png`. This is the banner Play shows at the top
+   of the listing and in promotional slots, and some of those placements crop it.
+3. **Phone screenshots** — *Graphics → Phone screenshots*. Upload the four
+   `dist/store-listing/phone-*.png` files. Their names carry no order, so set it in Console.
+4. **10-inch tablet screenshots** — *Graphics → 10-inch tablet screenshots*. Upload the four
+   `dist/store-listing/tablet10-*.png` files.
 
-Tablet screenshots are a separate slot and are **not** generated here. Only fill them in if
-you declare tablet support — an empty tablet slot is fine, a wrong-sized one is a rejection.
+> This section used to name the app `app.nivora.twa`, point at the `public/store/` feature
+> graphic and six screenshots, and say that tablet screenshots were not generated and the
+> tablet slot should stay empty. All of that described the retired web-app listing. Tablet
+> screenshots now exist.
 
 The short description (≤ 80 chars) and full description (≤ 4000 chars) are text fields in
-the same form and are not part of this script.
+the same form. Paste the short description from `dist/store-listing/short-description.txt`.
+For the full description, paste `dist/store-listing/full-description-without-push.txt` until a
+push notification has been seen arriving on a real phone. `full-description.txt` is the same
+text plus a NOTIFICATIONS section; switch to it only then. Tracked copies of all three files
+are in `docs/store-listing/`.
 
 ---
 
 ## 3. How they are built
+
+> **Historical: the retired TWA listing.** §3, §4 and §5 describe how `scripts/store-assets.mjs`
+> builds the `public/store/` set for the retired web-app (TWA) listing, package `app.nivora.twa`.
+> Of that set only `public/store/icon-512.png` is uploaded for `com.srnivora.app`. For the current
+> upload, see §2 and [`play-submission-pack.md`](./play-submission-pack.md) §1.1.
 
 `scripts/store-assets.mjs` composes SVG and rasterises it with **sharp** (already a Next.js
 dependency — sharp 0.35.3 / libvips 8.18.3). Nothing is drawn by hand, so re-running the
@@ -200,6 +239,10 @@ locally before regenerating if you want an exact match to the app.
 
 ## 4. Verification
 
+> **Historical, like §3:** this verifies the `public/store/` set only. It does not verify the
+> `dist/` files the current listing uploads (§2); their dimensions and colour types were read from
+> the PNG headers on 2026-09-13.
+
 Every run re-opens each file with sharp and asserts the real metadata, then prints it:
 
 ```
@@ -249,6 +292,8 @@ checklist.
 
 ## 5. Notes and gaps
 
+> **Historical, like §3 and §4:** these notes are about the retired `public/store/` set.
+
 - **These files are served publicly.** Anything in `public/` is served from the site root,
   so the assets are reachable at e.g. `https://hostelpro-three.vercel.app/store/icon-512.png`.
   That is harmless (they are marketing material) and convenient if Console ever wants a
@@ -258,8 +303,8 @@ checklist.
   `public/store` to `.vercelignore` — the Play upload does not need the site.
 - **Nothing here is wired into CI.** `.github/workflows/security.yml` does not run this
   script. `--check` is the hook to add if you want the assets gated on every push.
-- **No tablet screenshots**, no TV/Wear assets, no promo video. Add them only if you list
-  those form factors.
+- **No tablet screenshots in this set**, and no TV/Wear assets or promo video. The current
+  listing does have tablet screenshots: four 10-inch ones in `dist/store-listing/` (§2).
 - **Not localised.** Play lets you upload a different graphic set per language; there is one
   set, in English.
 - **The screenshots are compositions, not captures.** They are honest — real layouts, real

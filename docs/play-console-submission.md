@@ -27,10 +27,16 @@ custom scheme.
 
 **Do this:**
 
-1. Play Console → your app → **Testing → Internal testing** (or the track you are releasing to) →
-   **Create new release**.
-2. Upload `dist/NIVORA-1.0.0.aab`. Wait for it to finish processing — the errors clear as soon as
-   Console has parsed it, not when the upload bar fills.
+1. Play Console → your app → **Test and release → Testing → Closed testing** → create a track, or
+   open the one you have → **Create new release**. Use **closed** testing, not internal: a personal
+   developer account needs 12 testers opted in for 14 continuous days **on a closed test** before it
+   can apply for production, and internal testing does not count toward that (Warning 2). If you also
+   want the quickest install on your own phone, create an Internal testing release afterwards and
+   pick the same bundle with **Add from library**; do not upload it a second time.
+2. Upload `dist/NIVORA-1.0.0.aab` — versionCode 4, SHA-256
+   `a85e26c1469c09f5d41a1913343ef9834afe3f44f1776439c379e67507a975ba` (check it first; see "Verifying the artifact before you upload it" below). Wait for it to
+   finish processing — the errors clear as soon as Console has parsed it, not when the upload bar
+   fills.
 3. Paste the release notes from [play-release-notes.md](play-release-notes.md).
 4. **Save**, then **Review release**.
 
@@ -77,11 +83,14 @@ If that ever prints a line, the declaration in Console is wrong and must change 
 This is a **warning, not an error** — the release will roll out. It will simply reach nobody, and
 the track will look broken when it is actually empty.
 
-Play Console → **Testing → Internal testing → Testers** tab:
+Play Console → **Test and release → Testing → Closed testing** → your track → **Testers** tab. The
+same steps work on Internal testing if you use that track as well:
 
-1. **Create email list** → name it `Nivora internal testers`.
+1. Select the email list you already created — email lists belong to the developer account and can
+   be ticked on any track — or **Create email list** → name it `Nivora testers`.
 2. Add `codewithshahul@gmail.com` — the account that owns this Play Console. It is allowed to be
-   its own tester, and it should be the first one.
+   its own tester, and it should be the first one. On a personal account, add at least 11 more
+   Google accounts: 12 have to opt in and stay opted in for the 14 days.
 3. **Tick the checkbox next to the list.** This is the step that clears the warning, and it is the
    one people miss: *creating* a list does not *assign* it to the track. An unticked list leaves
    the warning in place looking exactly as if nothing had been added.
@@ -115,7 +124,7 @@ These are not warnings yet because you have not reached them. Each one blocks a 
 | Content rating | Fill in the questionnaire (it is free and instant) | — |
 | Target audience | 18+; this is an operational tool for PG owners and residents | — |
 | News app | No | — |
-| Financial features | Nivora takes rent through Razorpay for a **physical service** (accommodation), not digital goods — so Play's billing requirement does not apply | [data-safety.md §5](data-safety.md) |
+| Financial features | **"My app doesn't provide any financial features."** Rent for accommodation is paid to the hostel through Razorpay; Nivora offers no loans, banking, investment, crypto or money transfer, and holds no balance. Separately, because rent pays for a **physical service**, Play's billing requirement does not apply | [data-safety.md §5](data-safety.md) |
 | Government apps | No | — |
 | Health | No | — |
 | Data deletion | The in-app route and the web route both exist | [account-deletion.md](account-deletion.md) |
@@ -262,28 +271,43 @@ missing entry does not look broken: the email arrives, the link works, and it op
 instead of the app. Measured on this project on 2026-09-01; see
 [email-verification.md](email-verification.md).
 
-### 2. Firebase, if notifications are to actually arrive
+### 2. Push notifications: set up, not yet seen on a phone
 
-Everything on both sides is built and deployed — the triggers, the daily rent-reminder job, the
-`push-send` function, the device registry, the client. The only missing piece is the project
-itself, which belongs to whoever owns this listing. Four steps, in
-[edge-functions.md → push-send](edge-functions.md).
+Firebase is set up for push only; the backend stays Supabase. Project `nivorapg` holds the Android
+app `com.srnivora.app`. Its `google-services.json` sits in `nivora_app/android/app/` on the build
+machine and is gitignored. The `FCM_SERVICE_ACCOUNT` secret is set in Supabase: a `push-send` probe on
+2026-09-13 answered `claimed: 0`, not `not_configured`. versionCode 4 carries the matching
+`google_app_id`. Details are in [edge-functions.md → push-send](edge-functions.md). **Do not create
+another Firebase project**, and never use the `com.nivorasr.app` registration in the same project;
+it was a typo.
 
-Until then the app builds, runs and asks for notification permission exactly as it will afterwards;
-notifications are written and visible in the database, they simply do not reach a phone.
+What is not proven is delivery: nobody has yet seen a notification arrive on a real phone. Install
+the build from the testing track, tap **Agree and continue**, allow notifications, then trigger one
+(a notice to residents is the quickest). Until that works, keep the store listing on
+`full-description-without-push.txt`.
 
 ---
 
 ## Verifying the artifact before you upload it
 
-`scripts/release.sh` refuses to produce anything that fails these, but the numbers are worth
-reading with your own eyes once:
+**Do not run `scripts/release.sh` for this.** It rebuilds, and it overwrites
+`dist/NIVORA-1.0.0.aab` with a new, unmeasured file that still says versionCode 4. Check the file
+that is already there:
 
 ```bash
-cd nivora_app && bash scripts/release.sh
+sha256sum dist/NIVORA-1.0.0.aab
+# must print a85e26c1469c09f5d41a1913343ef9834afe3f44f1776439c379e67507a975ba
+cd nivora_app && bash scripts/verify-adid.sh
 ```
 
-It checks the upload key (`CN=HostelPro`, not a debug fallback), the launcher label (`Nivora` — it
-once shipped as "mobile", the Flutter project name), that every ABI directory carries
-`libflutter.so`, that the versionCode matches `pubspec.yaml`, and that no service-role key or
-Razorpay secret is anywhere in the bundle, in either of the two encodings a Dart snapshot uses.
+A matching hash means this is the exact bundle measured in
+[play-technical-compliance.md](play-technical-compliance.md) on 2026-09-13: versionCode 4, ten
+permissions, no AD_ID, 16 KB alignment, signed with the upload key. A different hash means `dist/`
+was rebuilt, and every one of those checks has to be run again before upload.
+
+When a rebuild *is* wanted — any code change, which also means raising the `+N` in
+`nivora_app/pubspec.yaml` — `scripts/release.sh` refuses to stage anything that fails its own gates:
+the upload key (`CN=HostelPro`, not a debug fallback), the launcher label (`Nivora` — it once
+shipped as "mobile", the Flutter project name), `libflutter.so` in every ABI directory, a versionCode
+matching `pubspec.yaml`, and no service-role key or Razorpay secret anywhere in the bundle, in
+either of the two encodings a Dart snapshot uses.

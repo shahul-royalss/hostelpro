@@ -1,5 +1,25 @@
 # Shipping NIVORA to Google Play
 
+> **Mostly historical. Read this first (2026-09-13).** This file was written for the Trusted Web
+> Activity build (`app.nivora.twa`, the root `android/` project, `public/.well-known/assetlinks.json`).
+> That build is retired and is not the Play submission. The upload is the native Flutter app
+> `com.srnivora.app` in `nivora_app/`, versionCode 4, release name `1.0.0 (4)`. Its manifest declares
+> no `autoVerify` link, so nothing in it depends on Digital Asset Links.
+>
+> - **The introduction below, §1–§4 and §6 are historical.** They describe only the TWA and are
+>   kept as a record.
+> - **§5 is kept current** where it names Play Console obligations: account, privacy policy, Data
+>   safety, security practices and the other declarations.
+>
+> For the submission itself, use:
+>
+> - [`docs/play-submission-pack.md`](./play-submission-pack.md), the full submission pack
+> - [`docs/data-safety.md`](./data-safety.md), the Data safety answers
+> - [`docs/play-console-submission.md`](./play-console-submission.md), what to enter in each Console
+>   field, including App access
+> - [`docs/play-technical-compliance.md`](./play-technical-compliance.md), the checks on the built
+>   artifact
+
 NIVORA is a PWA. To put it on Play it is wrapped in a **Trusted Web Activity** (TWA):
 a native Android shell whose only job is to launch Chrome full-screen, with no URL bar,
 pointed at `https://hostelpro-three.vercel.app/`. There is no second codebase — every
@@ -14,6 +34,10 @@ to the same file.
 ---
 
 ## 1. What is in the repository
+
+> **Historical: TWA only.** This section describes the retired `app.nivora.twa` build. For the
+> current app, `com.srnivora.app`, see [`docs/play-submission-pack.md`](./play-submission-pack.md)
+> and [`docs/play-technical-compliance.md`](./play-technical-compliance.md).
 
 ```
 android/                                the Gradle project
@@ -34,7 +58,7 @@ public/.well-known/assetlinks.json      the site half of the app<->site proof
 | | |
 |---|---|
 | applicationId | `app.nivora.twa` |
-| versionCode / versionName | `1` / `1.0.0` |
+| versionCode / versionName | `1` / `1.0.0` for this TWA build. The native app that replaced it (`com.srnivora.app`) uploads as versionCode `4`, versionName `1.0.0`, release name `1.0.0 (4)` |
 | minSdk | 23 (Android 6.0) |
 | targetSdk / compileSdk | 36 (Android 16) |
 | TWA library | `com.google.androidbrowserhelper:androidbrowserhelper:2.7.3` (wraps `androidx.browser.trusted`) |
@@ -63,6 +87,12 @@ sandbox, on the origin you already control.
 ---
 
 ## 2. Building it again
+
+> **Historical: TWA only.** These build steps are for the retired root `android/` project. The
+> current app is built by `nivora_app/scripts/release.sh`; see
+> [`docs/play-submission-pack.md`](./play-submission-pack.md) and
+> [`docs/play-technical-compliance.md`](./play-technical-compliance.md). The versionCode paragraph
+> below is the one part that already describes the current app.
 
 **Prerequisites on this workstation** (all already in place):
 
@@ -109,9 +139,12 @@ cd android
 Play takes the **`.aab`**. The `.apk` is only for testing on a device you can reach with
 `adb install`.
 
-**Every upload needs a higher `versionCode`.** Play rejects a re-upload of the same one.
-Bump `versionCode` (and usually `versionName`) in `android/app/build.gradle.kts` for each
-release.
+**Every upload needs a higher `versionCode`.** Play rejects any versionCode that has ever been
+uploaded to the listing, even in a release that was discarded. For the TWA that meant bumping
+`versionCode` in `android/app/build.gradle.kts`. The native app does not set it in Gradle:
+`nivora_app/android/app/build.gradle.kts` reads `flutter.versionCode`, which is the `+N` in
+`nivora_app/pubspec.yaml`. The next upload is `version: 1.0.0+4`, release name `1.0.0 (4)`;
+raise the `+N` for every upload after it.
 
 ### Verifying a build
 
@@ -145,6 +178,13 @@ good build until Play rejects it hours later.
 ---
 
 ## 3. The signing key
+
+> **Historical: TWA only.** Written for the retired `app.nivora.twa` build, and every
+> `assetlinks.json` consequence below applied only to it. The key path still matters:
+> `nivora_app/android/app/build.gradle.kts:45` reads `~/.hostelpro-keys/keystore.properties`, and
+> the upload certificate's SHA-256 (starting 24:23:97 and ending FB:64:65) is recorded in
+> [`docs/play-technical-compliance.md`](./play-technical-compliance.md) §4. For the current
+> submission see [`docs/play-submission-pack.md`](./play-submission-pack.md).
 
 ```
 C:\Users\shahu\.hostelpro-keys\
@@ -207,6 +247,12 @@ change it to your registered entity name if you prefer.
 
 ## 4. Digital Asset Links
 
+> **Historical: TWA only.** Digital Asset Links was what the retired `app.nivora.twa` build needed.
+> `com.srnivora.app` declares no `autoVerify` link in
+> `nivora_app/android/app/src/main/AndroidManifest.xml`, so none of this applies to the current
+> submission. The Console path to the App signing key in step 1 below still matches Google's help
+> page. For the current app see [`docs/play-submission-pack.md`](./play-submission-pack.md).
+
 `public/.well-known/assetlinks.json` exists and carries the real fingerprint of the key
 above:
 
@@ -267,8 +313,12 @@ covers builds you install yourself over `adb`.
 
 So, immediately after the first successful upload:
 
-1. Play Console → your app → **Test and release → Setup → App integrity → App signing**.
-2. Copy the **"App signing key certificate" SHA-256 certificate fingerprint**.
+1. Play Console → your app → **Protected with Play → Play Store distribution → Go to Play app
+   signing**. That is the path Google's help page
+   (`support.google.com/googleplay/android-developer/answer/9842756`) gives as of 2026-09-13;
+   this step used to say *Test and release → Setup → App integrity → App signing*, which no
+   longer matches it.
+2. In the **App signing key** section, copy the **SHA-256** fingerprint.
 3. Add it as a second entry in the `sha256_cert_fingerprints` array — keep the upload-key
    one, so sideloaded test builds keep verifying too.
 4. Redeploy the site *before* promoting the release to any track real users can install
@@ -289,53 +339,77 @@ So, immediately after the first successful upload:
   before you may apply for production access. Plan the calendar around it. Verify the
   current rule in Console before you commit — Google changes it.
 
-### Privacy policy — a hard blocker today
+### Privacy policy
 
 Play requires a privacy policy URL for every app, publicly reachable, **not behind a
-login**. This repo has no `/privacy` route at all, so one has to be written and shipped.
+login**. The policy is `/legal/privacy` (`app/legal/privacy/page.tsx`), and the account deletion
+page is `/legal/account-deletion` (`app/legal/account-deletion/page.tsx`). Both are public because
+`/legal` is in `PUBLIC_PATHS` (`lib/supabase/middleware.ts:9-11`). This section used to say the repo
+had no `/privacy` route at all.
 
-Note the same trap as `assetlinks.json`: a new `app/privacy/page.tsx` would be redirected
-to `/login` by middleware unless `/privacy` is added to `PUBLIC_PATHS` in
-`lib/supabase/middleware.ts`. Test the URL with `curl` from a signed-out client before
-pasting it into Console.
+**Version 2026-09-13 is live.** It is in production's `public.legal_versions` (effective
+2026-09-12 18:30 UTC) and is `LEGAL_VERSION` in `lib/legal-config.ts:80`. Commit `4fd41ef` was
+pushed at 20:44 IST on 2026-09-13, and signed-out GETs of both pages then returned 200 and showed
+version 2026-09-13. The in-app copy (`nivora_app/lib/features/legal/legal_documents.dart`,
+`kLegalVersion` at `:46`) reaches users with versionCode 4. Test both URLs with `curl` from a
+signed-out client again before pasting them into Console.
 
-The policy has to name what §5 below declares: names, phone numbers, addresses, ID-proof
-images, photographs and payment records of residents; that they are stored in Supabase
-(Postgres + private object storage) and served from Vercel; that hostel staff of the same
-tenant can see them; retention; and how a person asks for deletion.
+The policy has to name what the Data safety form declares:
+
+- names, phone numbers, addresses, ID-proof images, photographs and payment records of residents;
+  that they are stored in Supabase (Postgres + private object storage) and served from Vercel; that
+  hostel staff of the same tenant can see them; and retention
+- **Razorpay**: on Android its checkout runs inside the app. While a payment is open it takes the
+  card, UPI or netbanking details typed and checks which UPI apps are installed. Card and UPI details
+  go to Razorpay, never to NIVORA (`app/legal/privacy/page.tsx:251-253` and `:440-442`)
+- **Google**, through Firebase Cloud Messaging, which delivers push: it receives the device's
+  registration token and each notification's title and body (`:444-447`)
+- the ten Android permissions (`:259-269`)
+- how a person asks for deletion, including the in-app route (`:618-619`)
+
+Two sentences on that page still disagree with the Android app as of 2026-09-13. Fixing them is a
+job for whoever owns `app/legal/`. `:262-263` says the camera photographs "an identity document, a
+receipt or a complaint". On Android only a warden uses it, to photograph a new resident and their ID
+proof (`docs/play-technical-compliance.md` §2). `:215` says the push token is written when you sign
+in, but push now starts behind the consent gate
+(`nivora_app/lib/features/legal/consent_gate.dart:93-95` and `:166`).
 
 ### Data safety form
 
-Answer it from the schema, not from memory. `db/schema.sql` is the source of truth. For
-every row below: **collected = yes, shared with third parties = no** (Supabase and Vercel
-are processors, not recipients), **processed ephemerally = no**, **required = yes**,
-**purpose = App functionality** (add *Account management* for the identity rows).
+**This section no longer keeps its own table.** The copy that used to be here had drifted from
+both the schema and the Android app: it marked every row required, and it had no rows for Device or
+other IDs, Installed apps or App interactions. Answer the form from
+[`docs/data-safety.md`](./data-safety.md) instead:
 
-| Play category | Data type | Where it comes from |
-|---|---|---|
-| Personal info | Name | `students.name`, `students.guardian_name`, `users.name` |
-| Personal info | Email address | login identity in Supabase Auth |
-| Personal info | Phone number | `students.phone`, `students.guardian_phone` |
-| Personal info | Address | `students.address` |
-| Personal info | User IDs | Supabase auth uid, role, hostel id |
-| Photos and videos | Photos | `students.photo_url`, `students.id_proof_url`, `fee_payments.receipt_url` — resident photographs, **ID-proof scans** and payment receipts, in a private bucket |
-| Financial info | Purchase history | `fee_payments` — amount, date, and a `cash`/`upi`/`bank` mode label |
-| App activity | Other user-generated content | complaint text, complaint events, leave requests, notices |
+- **§2** is the data-type table: collected, shared, ephemeral, required or optional, purposes, and
+  the code behind each row. It includes **Device or other IDs**, which covers the FCM registration
+  token in `public.push_devices.token`. It also includes **App activity › App interactions**, whose
+  existing purpose is Fraud prevention, security and compliance and which gains App functionality.
+- **§3.2** explains why **Financial info › User payment info** is Yes: collected, not shared,
+  optional, with App functionality and Fraud prevention, security and compliance as purposes.
+- **§3.4** covers Razorpay Checkout running inside the app on Android. It is the reasoning for
+  **App activity › Installed apps** = Yes (the SDK detects UPI apps through the manifest's `upi:`
+  `<queries>` intent) and for the App functionality purpose on App interactions.
+- **§3.5** covers the FCM registration token.
 
-**Do not tick "User payment info."** That type means card or bank account numbers, and the
-app stores none: `payment_mode` is a three-value enum recording how an offline payment was
-made. Ticking it invites a review question you cannot answer with the schema.
+The 2026-09-13 privacy text is live; submit the answers that rely on it together with
+versionCode 4.
 
 Security practices section:
 
-- *Data is encrypted in transit* — **Yes**. TLS to Vercel, TLS to Supabase, HSTS and a
-  nonce-based CSP set in middleware.
-- *Users can request that their data be deleted* — answer honestly. There is currently **no
-  self-service deletion path** in the app; deletion happens when a hostel owner deletes the
-  record. Play separately requires apps with accounts to publish a **web URL where a user
-  can request account and data deletion**. NIVORA has no public sign-up (accounts are
-  provisioned by an owner or manager), which is a mitigating argument, but you will still
-  need that URL and a stated process. Build it into the privacy policy page.
+- *Data is encrypted in transit* — **Yes**. TLS to Vercel and to Supabase; HSTS and a
+  nonce-based CSP set in middleware for the web; the Android manifest sets no
+  `usesCleartextTraffic`. Evidence in `docs/data-safety.md` §7.
+- *Users can request that their data be deleted* — **Yes**, by two routes. This used to say there
+  was no self-service deletion path in the app; commit `a3511d4` added one.
+  - **In the app:** "Delete my account and data". Residents open it from the Profile tab
+    (`nivora_app/lib/features/student/profile_screen.dart:160-163`). Staff open it by tapping their
+    picture at the top left (`nivora_app/lib/features/shell/staff_profile_sheet.dart:139-144`). It
+    files a request and deletes nothing itself, and a second request within 30 days returns the
+    first one instead of filing another (`nivora_app/lib/features/legal/account_deletion.dart:34-37`).
+  - **On the web:** `/legal/account-deletion`, the URL Play requires.
+
+  `docs/data-safety.md` §7.1 says what deletion does to payment records.
 - *Independent security review* — No. (`SECURITY.md` is an internal review, not a
   third-party audit; claiming otherwise in Console is a misrepresentation.)
 - *Committed to Play Families Policy* — No. This is not a children's app.
@@ -344,30 +418,55 @@ Security practices section:
 
 - **Content rating**: complete the IARC questionnaire. NIVORA is a business/utility app
   with no violence, no gambling, no sexual content — expect Everyone / PEGI 3. Answer
-  "yes" where it asks whether users can exchange content or communicate: complaints,
-  notices and leave requests move between residents and staff, even though they never leave
-  the tenant.
+  "yes" where it asks whether users can exchange content or communicate: complaints and
+  notices move between residents and staff, even though they never leave the tenant. Residents
+  have no leave feature in the Android app; wardens handle leave requests
+  (`nivora_app/lib/features/warden/home/warden_home_screen.dart:208-212`).
 - **Ads**: no. There is no ad SDK and no advertising ID.
-- **Financial features**: no. The app records payments that happened elsewhere; it does not
-  take, hold or move money.
+- **Financial features**: no; the reasoning is in `docs/data-safety.md` §5. This used to say the
+  app only records payments that happened elsewhere, which stopped being true when residents began
+  paying rent in the app through Razorpay. Nivora takes no commission and holds no balance. The live
+  database has four hostels and none has a `razorpay_account_id`. Only Kushi Hostels is approved
+  for direct settlement (`razorpay_direct_for_owner` equals its `owner_user_id`), into a Razorpay
+  merchant account owned by that hostel's owner.
+  - **Android:** `razorpay-order` refuses every other hostel with a 409, "Online payment is not set
+    up for this hostel yet. Please pay your warden directly.", before any Razorpay order is created
+    (`supabase/functions/razorpay-order/index.ts:233-241`). That includes Demo PG, the hostel Play
+    reviewers sign into.
+  - **Web:** the order path (`lib/actions/payments.ts`, `createRentOrder`) makes no such check. It
+    creates the Razorpay order (`:128`) before calling `rz_open_intent` (`:146`) and never sends
+    transfers. That is a latent defect, flagged as a separate code task and not fixed.
 - **Target API level**: `targetSdk = 36` satisfies the current requirement. Play raises the
   floor every August — expect to bump `compileSdk`/`targetSdk` and re-upload each year, or
   the listing stops accepting updates and eventually stops being served to new devices.
-- **Store listing assets** — none of these exist yet and Play will not let you publish
-  without them:
-  - app icon, 512×512 PNG with alpha → `public/icons/icon-512.png` is exactly this
-  - feature graphic, 1024×500 → must be designed
+- **Store listing assets** — Play will not let you publish without them. This list used to say
+  none of them existed; they do now:
+  - app icon, 512×512 PNG with alpha → `public/store/icon-512.png` (512×512, RGBA). This used
+    to point at `public/icons/icon-512.png`; the store icon is the one under `public/store/`
+  - feature graphic, 1024×500 → `dist/NIVORA-feature-graphic.png`, also copied into
+    `dist/store-listing/`
   - at least 2 phone screenshots (16:9 or 9:16, 320–3840 px on each side); tablet
-    screenshots too if you list tablet support
-  - short description ≤ 80 characters, full description ≤ 4000
+    screenshots too if you list tablet support → four phone screenshots at 1080×1920,
+    `dist/store-listing/phone-*.png` (owner, warden, manager, resident), and four 10-inch tablet
+    screenshots at 1440×2560, `dist/store-listing/tablet10-*.png`
+  - short description ≤ 80 characters, full description ≤ 4000 → `dist/store-listing/`, with
+    the text also tracked in `docs/store-listing/`. There are two full descriptions:
+    `full-description.txt` mentions push and `full-description-without-push.txt` does not. **Use
+    the without-push one** until push has been confirmed on a real phone
 - **Minimum functionality / spam policy**: Play rejects apps that are bare webview
-  wrappers. A TWA is the sanctioned exception *because* it proves ownership of the site
-  through Digital Asset Links and runs in a real browser. Which is another reason §4 is not
-  optional — an unverified TWA looks to a reviewer exactly like the thing the policy bans.
+  wrappers. The submitted app is a native Flutter client: `nivora_app/pubspec.yaml` has no
+  WebView or `url_launcher` dependency. The argument that used to be here, that a TWA is the
+  sanctioned exception because Digital Asset Links proves site ownership, applied only to the
+  retired TWA build.
 
 ---
 
 ## 6. Known gaps
+
+> **Historical: TWA only.** These were the gaps of the retired `app.nivora.twa` build. The
+> current app's open items are in the release checklist,
+> [`docs/play-submission-pack.md`](./play-submission-pack.md) §9, and in
+> [`docs/play-technical-compliance.md`](./play-technical-compliance.md) §6.
 
 Things this setup does **not** do, so nobody discovers them at review time:
 
