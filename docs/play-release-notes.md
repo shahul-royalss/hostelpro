@@ -6,17 +6,22 @@ Play counts the characters *inside* the tags, not the tags themselves.
 
 ---
 
-## v1.0.0 (versionCode 4) — first release
+## v1.0.0 (versionCode 5) — first release
 
-`pubspec.yaml` says `version: 1.0.0+4`, and the bundle for this upload was built from it at 20:21 IST
-on 2026-09-13 (`dist/NIVORA-1.0.0.aab`, which reports `versionCode='4'`). The number sits above
-every bundle already built: a versionCode-1 bundle was built and handed over on 2026-09-12, and
-versionCode 2 and then 3 were built on 2026-09-13. Play refuses a versionCode that has *ever* been
-uploaded to a listing's bundle library, even when the release it sat in was discarded, so whichever
-of those reached Console, 4 cannot collide with it. This section used to name versionCode 2; it
-names 4 because 2 and 3 have both been built since. Every upload after this one must raise the `+N`.
+`nivora_app/pubspec.yaml:19` says `version: 1.0.0+5`. The bundle for this upload is
+`dist/NIVORA-1.0.0.aab`, built from it at 15:47 IST on 2026-09-14, SHA-256 `ec552f06eb45d1f52daeeffdb2f69cfaa087bfab70c34a4f3acee90d491f186f`. Check the
+hash before uploading; the steps are in [play-console-submission.md](play-console-submission.md).
 
-**Release name** (a Console field, never shown to users, 50 characters max): `1.0.0 (4)`
+This is the first bundle for the **new** Play Console app, package `com.nivorasr.app`. That app's
+bundle library is empty, so any versionCode would be accepted. It gets 5 so that no two different
+bundles share a number in these docs. versionCodes 1 to 4 were all built for the abandoned
+`com.srnivora.app` listing: 1 on 2026-09-12, and 2, 3 and 4 on 2026-09-13. Nothing was ever released
+from that listing. Until 2026-09-13 this section named versionCode 4, for that listing.
+
+Play refuses a versionCode that has *ever* been uploaded to an app's bundle library, even when the
+release it sat in was discarded. So every upload after this one must raise the `+N`.
+
+**Release name** (a Console field, never shown to users, 50 characters max): `1.0.0 (5)`
 
 ```
 <en-US>
@@ -29,7 +34,8 @@ Nivora runs a PG or hostel end to end.
 </en-US>
 ```
 
-**437 characters** inside the tags, against Play's limit of 500 (counted in Python on 2026-09-13).
+**437 characters** inside the tags, against Play's limit of 500 (counted in Python on 2026-09-14).
+The text is unchanged from the versionCode 4 draft; nothing in it names the package.
 
 Two lines changed from the previous version of this block, and a reader who remembers it should
 know why:

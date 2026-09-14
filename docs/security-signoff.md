@@ -45,13 +45,15 @@ live RLS attack suites. This document does not restate or re-verify those result
   findings against it.
 - `npm run security:all`: exit 0, including 53 webhook-signature cases.
 - Artifacts: both APKs verify (v2; `minSdk 24`, so the absent v1 JAR signature is correct rather
-  than missing), package `com.srnivora.app`, versionCode 1 on both APKs and on the bundle, four
+  than missing), package `app.nivora.mobile` (the applicationId at `af71ea6`), versionCode 1 on both APKs and on the bundle, four
   arm64 native libraries all aligned ≥ 16 KB, and no secrets in either APK or in any of the
-  AAB's three ABIs. *(Those were the 2026-09-04 artifacts. The upload now going to Play is
-  versionCode 4, release name `1.0.0 (4)`, and this pass attests to none of its artifacts. On
+  AAB's three ABIs. *(Those were the 2026-09-04 artifacts, under the package the app had then. The
+  upload now going to Play is package `com.nivorasr.app`, versionCode 5, release name `1.0.0 (5)`,
+  for a new Play Console app; until 2026-09-13 it was versionCode 4 of `com.srnivora.app`, a listing
+  abandoned with nothing released. This pass attests to none of their artifacts. On
   2026-09-13 all twelve libraries across `arm64-v8a`, `armeabi-v7a` and `x86_64` were measured at
-  ≥ 16 KB alignment, first in the versionCode 3 bundle and then again in the versionCode 4 bundle,
-  which is the upload; see `docs/play-technical-compliance.md` §3. `libapp.so` holds the compiled
+  ≥ 16 KB alignment, first in the versionCode 3 bundle and then again in the `com.srnivora.app`
+  versionCode 4 bundle, and on 2026-09-14 in the `com.nivorasr.app` versionCode 5 bundle; see `docs/play-technical-compliance.md` §3. `libapp.so` holds the compiled
   Dart code (next paragraph), so those figures belong to the bundle they were read from and are
   measured again on any rebuild.)*
 
@@ -74,8 +76,10 @@ are clean — but until today it held by luck rather than by test.
   deployed pages still showed version 2026-09-12. Commit `4fd41ef` was pushed at 20:44 IST, and
   signed-out GETs of `/legal/privacy`, `/legal/account-deletion` and `/legal/terms` then returned
   200 and showed version 2026-09-13, which production's `public.legal_versions` already held
-  (effective 2026-09-12 18:30 UTC). The in-app copy reaches users with versionCode 4, so the Data
-  safety answers that declare what that text describes go in together with versionCode 4.
+  (effective 2026-09-12 18:30 UTC). The in-app copy reaches users with versionCode 5, so the Data
+  safety answers that declare what that text describes go in together with versionCode 5, on the
+  new `com.nivorasr.app` app. (Until 2026-09-13 this said versionCode 4, the abandoned
+  `com.srnivora.app` build.)
 
 Sign-off holds **for the source at `af71ea6` and the artifacts staged from it**, conditional on
 the open item above.
@@ -350,7 +354,7 @@ ACTIVE on 2026-09-13 (§5 item 1).
    surface is covered by this document's §2.3, not by that file.
 5. **Play-side device checks** (the APKs Play actually delivers from a store build) were not
    exercised; the no-secrets claims are about source and tracked files, backed by `release.sh`'s
-   own build-time grep. Digital Asset Links is not among these checks: `com.srnivora.app` declares
+   own build-time grep. Digital Asset Links is not among these checks: `com.nivorasr.app` declares
    no `autoVerify` link (`nivora_app/android/app/src/main/AndroidManifest.xml`).
 
 A sign-off that overclaims is worse than none. §1's verdict is exactly as strong as §2's

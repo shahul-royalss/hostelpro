@@ -1,10 +1,14 @@
 # Shipping NIVORA to Google Play
 
-> **Mostly historical. Read this first (2026-09-13).** This file was written for the Trusted Web
+> **Mostly historical. Read this first (2026-09-14).** This file was written for the Trusted Web
 > Activity build (`app.nivora.twa`, the root `android/` project, `public/.well-known/assetlinks.json`).
 > That build is retired and is not the Play submission. The upload is the native Flutter app
-> `com.srnivora.app` in `nivora_app/`, versionCode 4, release name `1.0.0 (4)`. Its manifest declares
+> `com.nivorasr.app` in `nivora_app/`, versionCode 5, release name `1.0.0 (5)`. Its manifest declares
 > no `autoVerify` link, so nothing in it depends on Digital Asset Links.
+>
+> **It goes up as a new app in Play Console.** Until 2026-09-13 the native app was
+> `com.srnivora.app`, on a Console listing that is now abandoned. Nothing was ever released from it,
+> and nothing entered there carries over (§5).
 >
 > - **The introduction below, §1–§4 and §6 are historical.** They describe only the TWA and are
 >   kept as a record.
@@ -36,7 +40,7 @@ to the same file.
 ## 1. What is in the repository
 
 > **Historical: TWA only.** This section describes the retired `app.nivora.twa` build. For the
-> current app, `com.srnivora.app`, see [`docs/play-submission-pack.md`](./play-submission-pack.md)
+> current app, `com.nivorasr.app`, see [`docs/play-submission-pack.md`](./play-submission-pack.md)
 > and [`docs/play-technical-compliance.md`](./play-technical-compliance.md).
 
 ```
@@ -58,7 +62,7 @@ public/.well-known/assetlinks.json      the site half of the app<->site proof
 | | |
 |---|---|
 | applicationId | `app.nivora.twa` |
-| versionCode / versionName | `1` / `1.0.0` for this TWA build. The native app that replaced it (`com.srnivora.app`) uploads as versionCode `4`, versionName `1.0.0`, release name `1.0.0 (4)` |
+| versionCode / versionName | `1` / `1.0.0` for this TWA build. The native app that replaced it (`com.nivorasr.app`) uploads as versionCode `5`, versionName `1.0.0`, release name `1.0.0 (5)` |
 | minSdk | 23 (Android 6.0) |
 | targetSdk / compileSdk | 36 (Android 16) |
 | TWA library | `com.google.androidbrowserhelper:androidbrowserhelper:2.7.3` (wraps `androidx.browser.trusted`) |
@@ -140,11 +144,13 @@ Play takes the **`.aab`**. The `.apk` is only for testing on a device you can re
 `adb install`.
 
 **Every upload needs a higher `versionCode`.** Play rejects any versionCode that has ever been
-uploaded to the listing, even in a release that was discarded. For the TWA that meant bumping
+uploaded to the app, even in a release that was discarded. For the TWA that meant bumping
 `versionCode` in `android/app/build.gradle.kts`. The native app does not set it in Gradle:
-`nivora_app/android/app/build.gradle.kts` reads `flutter.versionCode`, which is the `+N` in
-`nivora_app/pubspec.yaml`. The next upload is `version: 1.0.0+4`, release name `1.0.0 (4)`;
-raise the `+N` for every upload after it.
+`nivora_app/android/app/build.gradle.kts:118` reads `flutter.versionCode`, which is the `+N` in
+`nivora_app/pubspec.yaml`. The upload is `version: 1.0.0+5` (`pubspec.yaml:19`), release name
+`1.0.0 (5)`, the first bundle for the new `com.nivorasr.app` app; raise the `+N` for every upload
+after it. Until 2026-09-13 this paragraph named `1.0.0+4`, which was built for the abandoned
+`com.srnivora.app` listing.
 
 ### Verifying a build
 
@@ -183,8 +189,9 @@ good build until Play rejects it hours later.
 > `assetlinks.json` consequence below applied only to it. The key path still matters:
 > `nivora_app/android/app/build.gradle.kts:45` reads `~/.hostelpro-keys/keystore.properties`, and
 > the upload certificate's SHA-256 (starting 24:23:97 and ending FB:64:65) is recorded in
-> [`docs/play-technical-compliance.md`](./play-technical-compliance.md) §4. For the current
-> submission see [`docs/play-submission-pack.md`](./play-submission-pack.md).
+> [`docs/play-technical-compliance.md`](./play-technical-compliance.md) §4. The same upload key is
+> used for the new `com.nivorasr.app` app; Play App Signing creates a new app signing key for that
+> app. For the current submission see [`docs/play-submission-pack.md`](./play-submission-pack.md).
 
 ```
 C:\Users\shahu\.hostelpro-keys\
@@ -248,7 +255,7 @@ change it to your registered entity name if you prefer.
 ## 4. Digital Asset Links
 
 > **Historical: TWA only.** Digital Asset Links was what the retired `app.nivora.twa` build needed.
-> `com.srnivora.app` declares no `autoVerify` link in
+> `com.nivorasr.app` declares no `autoVerify` link in
 > `nivora_app/android/app/src/main/AndroidManifest.xml`, so none of this applies to the current
 > submission. The Console path to the App signing key in step 1 below still matches Google's help
 > page. For the current app see [`docs/play-submission-pack.md`](./play-submission-pack.md).
@@ -328,16 +335,22 @@ So, immediately after the first successful upload:
 
 ## 5. What only you can do, in Play Console
 
+Since 2026-09-13 Nivora is a **new app** in Play Console, package `com.nivorasr.app`
+(`nivora_app/android/app/build.gradle.kts:60` and `:109`). The earlier listing, locked to
+`com.srnivora.app`, is abandoned; nothing was released from it and nothing entered there carries
+over. The store listing, App content, Data safety, App access, content rating, testers and the
+closed test are all entered again on the new app. The answers themselves do not change.
+
 ### Account
 
 - **US$25, one time, non-refundable**, to register a Google Play developer account. It is
   per Google account, not per app.
 - Identity verification (a government ID and, for organisation accounts, a D-U-N-S number)
   now happens up front and can take days. Start it early.
-- If you register as an **individual** rather than an organisation, Google additionally
+- This developer account is a **personal** (individual) account, so Google additionally
   requires a **closed test with at least 12 testers opted in continuously for 14 days**
-  before you may apply for production access. Plan the calendar around it. Verify the
-  current rule in Console before you commit — Google changes it.
+  before you may apply for production access. The new app needs its own closed test. Plan the
+  calendar around it. Verify the current rule in Console before you commit — Google changes it.
 
 ### Privacy policy
 
@@ -347,11 +360,17 @@ page is `/legal/account-deletion` (`app/legal/account-deletion/page.tsx`). Both 
 `/legal` is in `PUBLIC_PATHS` (`lib/supabase/middleware.ts:9-11`). This section used to say the repo
 had no `/privacy` route at all.
 
+The deletion page prints the Android package (`app/legal/account-deletion/page.tsx:142`) from
+`ANDROID_PACKAGE`, which is `com.nivorasr.app` (`lib/legal-config.ts:96`). The live site changes only
+when the website is pushed, so check that the page shows `com.nivorasr.app` before pasting its URL
+into Console. The legal version did not change with the package, because neither the privacy policy
+nor the terms names it.
+
 **Version 2026-09-13 is live.** It is in production's `public.legal_versions` (effective
 2026-09-12 18:30 UTC) and is `LEGAL_VERSION` in `lib/legal-config.ts:80`. Commit `4fd41ef` was
 pushed at 20:44 IST on 2026-09-13, and signed-out GETs of both pages then returned 200 and showed
 version 2026-09-13. The in-app copy (`nivora_app/lib/features/legal/legal_documents.dart`,
-`kLegalVersion` at `:46`) reaches users with versionCode 4. Test both URLs with `curl` from a
+`kLegalVersion` at `:46`) reaches users with versionCode 5. Test both URLs with `curl` from a
 signed-out client again before pasting them into Console.
 
 The policy has to name what the Data safety form declares:
@@ -393,7 +412,7 @@ other IDs, Installed apps or App interactions. Answer the form from
 - **§3.5** covers the FCM registration token.
 
 The 2026-09-13 privacy text is live; submit the answers that rely on it together with
-versionCode 4.
+versionCode 5, on the new app.
 
 Security practices section:
 

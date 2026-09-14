@@ -76,14 +76,14 @@ import '../../core/config/env.dart';
 // and the page they landed on said "Page not found — That link doesn't exist, or you don't have
 // access to it" (measured 2026-09-01: the route is untracked in git and was never deployed).
 //
-// The redirect is now a custom scheme — [Env.emailConfirmRedirectUrl], `com.srnivora.app://
+// The redirect is now a custom scheme — [Env.emailConfirmRedirectUrl], `com.nivorasr.app://
 // verify-email` — matched by a VIEW intent-filter in AndroidManifest.xml. That is not a
 // cosmetic swap. `main.dart` pins AuthFlowType.pkce, so the code verifier for a link THIS APP
 // asked for is in THIS APP'S keystore. When the link lands on the phone:
 //
 //   1. GoTrue has already matched the single-use token at /auth/v1/verify — this is where the
 //      proof is minted, before any redirect happens;
-//   2. Android hands com.srnivora.app://verify-email?code=… to Nivora;
+//   2. Android hands com.nivorasr.app://verify-email?code=… to Nivora;
 //   3. supabase_flutter's deep-link observer recognises the `code` parameter, calls
 //      getSessionFromUrl -> exchangeCodeForSession, and a session exists;
 //   4. that emits AuthChangeEvent.signedIn with a NEW access token, which AuthController's
@@ -253,6 +253,7 @@ class SupabaseEmailVerificationService implements EmailVerificationService {
     // a real link:
     //
     //   com.srnivora.app://verify-email                  -> https://hostelpro-three.vercel.app
+    //   (probed under the scheme the app had until 2026-09-14; the rule is the same for any scheme)
     //   https://hostelpro-three.vercel.app/verify-email/…  -> honoured (same host as Site URL)
     //   https://definitely-not-allowed.example.org/x       -> https://hostelpro-three.vercel.app
     //

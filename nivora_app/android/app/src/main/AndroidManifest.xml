@@ -53,7 +53,7 @@
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
     <!-- ── THE SESSION MUST NOT LEAVE THE PHONE ────────────────────────────────────────────
          Android Auto Backup is ON BY DEFAULT. With it on,
-         /data/data/com.srnivora.app/shared_prefs/FlutterSharedPreferences.xml is uploaded to
+         /data/data/com.nivorasr.app/shared_prefs/FlutterSharedPreferences.xml is uploaded to
          the user's Google Drive and restored by Android 12+ device-to-device transfer — and
          that file holds the persisted GoTrue session, including a long-lived refresh token for
          an account that moves other people's rent.
@@ -115,16 +115,16 @@
               A CUSTOM SCHEME, AND NOT http/https, DELIBERATELY.
               An <data android:scheme="https"> filter would offer this app as a handler for
               ordinary web links and, without a verified Digital Asset Link, Android would show
-              a disambiguation sheet on somebody else's URLs. `com.srnivora.app` is this app's
+              a disambiguation sheet on somebody else's URLs. `com.nivorasr.app` is this app's
               own applicationId used as a scheme (see android/app/build.gradle.kts), which is
               the reverse-DNS form Android and RFC 3986 both allow and which nothing else on the
               device can claim. The scheme AND the host are both pinned, so the ONLY Uri this
-              filter accepts is com.srnivora.app://verify-email[?...]. No http, no https, no
+              filter accepts is com.nivorasr.app://verify-email[?...]. No http, no https, no
               bare scheme wildcard.
 
               MUST BE MIRRORED IN THE SUPABASE DASHBOARD or no link ever arrives here: paste
 
-                  com.srnivora.app://verify-email
+                  com.nivorasr.app://verify-email
 
               into Authentication -> URL Configuration -> Redirect URLs. Measured against this
               project on 2026-09-01: GoTrue does not refuse an unlisted redirect, it SILENTLY
@@ -139,7 +139,7 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="com.srnivora.app" android:host="verify-email"/>
+                <data android:scheme="com.nivorasr.app" android:host="verify-email"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

@@ -29,7 +29,10 @@ Razorpay's native Android Checkout SDK, which runs inside the app's own process,
 facts in §4.1 were re-read from the production database, and push moved behind the consent gate
 (before that, 12 September 2026, the day push notifications shipped and `push_devices` appeared;
 and 24 August 2026, the day `payment_intents` shipped). Re-derive whenever the schema, `lib/storage.ts`, the push path, the
-payment SDK, the production dependency list or any hostel's payout columns change.
+payment SDK, the production dependency list or any hostel's payout columns change. On 14 September
+2026 the package and build references were updated for the new Play Console app, `com.nivorasr.app`,
+whose upload is versionCode 5 (until 2026-09-13 the listing was `com.srnivora.app`). No answer
+changed.
 
 ---
 
@@ -65,8 +68,10 @@ Purposes use Play's own vocabulary. **Analytics, Advertising or marketing, Perso
 Developer communications are never selected** — `package.json` has **34** production dependencies
 and contains no analytics, telemetry, error-reporting, session-replay or ad SDK, and the Android
 manifest removes the advertising-ID permission explicitly. That removal was checked on the versionCode 4
-build artifacts, which are the upload, by a check that also requires `INTERNET` as a positive control
-(`docs/play-technical-compliance.md` §2).
+build artifacts by a check that also requires `INTERNET` as a positive control
+(`docs/play-technical-compliance.md` §2). Those artifacts were built for the abandoned
+`com.srnivora.app` listing. The upload is now versionCode 5 of `com.nivorasr.app`, and the check has
+to be run on it.
 
 `razorpay` (added with the payment feature) is a **server-side API client**. It never reaches the
 browser: `lib/razorpay.ts` opens with `import "server-only"`, which makes importing it from a client
@@ -380,8 +385,8 @@ is therefore **No**. Verify that on the BUILT artifact rather than on the source
 finds a permission that is certainly there, so the script refuses to report clean unless it also
 sees `android.permission.INTERNET` (`verify-adid.sh:27-29`, `:74-87`); its earlier version passed on
 APK manifests it could not read (`verify-adid.sh:18-25`). On 2026-09-13 it reported all three
-versionCode 4 artifacts clean, with `INTERNET` found. Run it again on any rebuild; a result from one
-build does not carry over to the next.
+versionCode 4 artifacts clean, with `INTERNET` found. Run it again on any rebuild, the versionCode 5
+upload included. A result from one build does not carry over to the next.
 
 ## 4. Razorpay: service provider, not third party
 
@@ -650,8 +655,9 @@ A Data safety form that contradicts the privacy policy is itself a violation. Th
 **blocking**, and **all six pass** against the pages deployed on 2026-09-13 from commit `4fd41ef`
 (pushed 20:44 IST), which show legal version 2026-09-13. Row 6 was added that day, when §2 started
 declaring User payment info and Installed apps. The version that says the same thing is in
-production's `public.legal_versions` (effective 2026-09-12 18:30 UTC), is live on the web, and reaches
-the app's own copy with versionCode 4. **Submit this form together with versionCode 4**, and re-run
+production's `public.legal_versions` (effective 2026-09-12 18:30 UTC), is live on the web, was first
+built into the app's own copy in versionCode 4 (never released), and reaches users with versionCode 5.
+**Submit this form together with versionCode 5**, and re-run
 every row against the live pages immediately before submitting. That is the complete list of
 blocking cross-checks.
 
@@ -662,7 +668,7 @@ blocking cross-checks.
 | 3 | `/legal/account-deletion` names the payment record among what is retained, and Razorpay among what cannot be reached | **PASSING** — the retention table carries *"Fee and payment records"* as kept indefinitely (since 2026-09-13; it said 8 years before, which contradicted the privacy policy), and that page's own "What deletion cannot reach" section names Razorpay's own record of the transaction |
 | 4 | `/legal/terms` reflects that rent can now be collected in-app | **PASSING** — the payments section is now **§6, "Subscription and payments"**, and states that the payment is taken by Razorpay in Razorpay's own checkout. Note the renumbering: it was §9 |
 | 5 | `/legal/privacy` discloses the **FCM device token** and names **Google** as the notification sub-processor | **PASSING** — the data inventory carries a "Notification device" row, §3 explains the token and the ten-permission list, and the Google row in the sub-processor table covers *"your device's registration token, plus the title and body of each notification"*. One timing phrase is out of date, though it is not a Data safety answer. The inventory row says the token is *"written when you sign in on a device"* (live, `app/legal/privacy/page.tsx:215`). The in-app copy says *"When you sign in on a phone"* (`nivora_app/lib/features/legal/legal_documents.dart:221`). Push actually starts only after agreement at the consent gate (§3.5). See the note under this table |
-| 6 | `/legal/privacy` (and the in-app copy in `nivora_app/lib/features/legal/legal_documents.dart`) says that on Android **the Razorpay checkout runs inside the app**, **handles the card or UPI details the resident types** while a payment is open, and **checks which UPI apps are installed** so it can offer them — while NIVORA still never receives those details. This is what the §2 **User payment info** and **Installed apps** rows declare. The live sentence that the details "never reach NIVORA at all" (on deploy it becomes "go to Razorpay, never to NIVORA") stays true of NIVORA's servers, but it must sit next to the in-app handling, or it reads as a denial of what the form declares | **PASSING — both halves.** Legal version **2026-09-13** in `public.legal_versions` records this change for both documents. *Web half:* `app/legal/privacy/page.tsx:251-253` and `:442` carry it, and it has been live since commit `4fd41ef` was deployed on 2026-09-13; a signed-out GET found "which on Android runs inside the app" and "On Android its checkout runs inside the app". *In-app half:* `nivora_app/lib/features/legal/legal_documents.dart:257-260` and `:386-394` carry it, and the versionCode 4 `libapp.so` was checked on 2026-09-13 to contain "runs inside this app" and "which UPI apps are installed". Builds people already have do not contain it, so the build uploaded with this form must be versionCode 4 |
+| 6 | `/legal/privacy` (and the in-app copy in `nivora_app/lib/features/legal/legal_documents.dart`) says that on Android **the Razorpay checkout runs inside the app**, **handles the card or UPI details the resident types** while a payment is open, and **checks which UPI apps are installed** so it can offer them — while NIVORA still never receives those details. This is what the §2 **User payment info** and **Installed apps** rows declare. The live sentence that the details "never reach NIVORA at all" (on deploy it becomes "go to Razorpay, never to NIVORA") stays true of NIVORA's servers, but it must sit next to the in-app handling, or it reads as a denial of what the form declares | **PASSING — both halves.** Legal version **2026-09-13** in `public.legal_versions` records this change for both documents. *Web half:* `app/legal/privacy/page.tsx:251-253` and `:442` carry it, and it has been live since commit `4fd41ef` was deployed on 2026-09-13; a signed-out GET found "which on Android runs inside the app" and "On Android its checkout runs inside the app". *In-app half:* `nivora_app/lib/features/legal/legal_documents.dart:257-260` and `:386-394` carry it, and the versionCode 4 `libapp.so` was checked on 2026-09-13 to contain "runs inside this app" and "which UPI apps are installed". The versionCode 5 `libapp.so` has not had that check yet, so repeat it before upload. Older builds do not contain the text, so the build uploaded with this form must be versionCode 5 |
 
 The three pages behind those rows are **outside this document's scope** and belong to whoever owns
 `app/legal/`. They agree with every answer on this form. Two sentences in the
@@ -713,7 +719,10 @@ One more, non-blocking but worth closing:
      (§3.4).
 4. **Shared** — **No** on every row, the four above included. Re-read §4 before deciding otherwise.
 5. **Government ID** — three ticks, per §6.
-6. **Deletion URL** — paste `https://hostelpro-three.vercel.app/legal/account-deletion`. Submit the
-   form together with versionCode 4, after re-confirming §8 rows 1–6 against the live pages.
+6. **Deletion URL** — paste `https://hostelpro-three.vercel.app/legal/account-deletion`. First
+   confirm that the live page names Android package `com.nivorasr.app`: it prints `ANDROID_PACKAGE`
+   (`lib/legal-config.ts:96`). On 2026-09-14 the live page still showed `com.srnivora.app`, because
+   the change had not been deployed. Submit the form together with versionCode 5, after re-confirming
+   §8 rows 1–6 against the live pages.
 7. **Preview the store's Data safety section** before publishing. It is what users read, and it is
    the artefact a policy complaint is measured against.

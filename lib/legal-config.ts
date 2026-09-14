@@ -84,7 +84,7 @@ export const LEGAL_VERSION = "2026-09-13";
  *
  * THIS IS THE FLUTTER APP, which is the artifact that goes to Play Console: the AAB built by
  * nivora_app/scripts/release.sh from nivora_app/android/app/build.gradle.kts, where
- * `applicationId = "com.srnivora.app"`.
+ * `applicationId = "com.nivorasr.app"`.
  *
  * Two other ids exist in this repository and NEITHER belongs here. `app.nivora.twa` is the
  * Trusted Web Activity — the browser wrapper that public/.well-known/assetlinks.json still
@@ -93,7 +93,7 @@ export const LEGAL_VERSION = "2026-09-13";
  * which meant the data-deletion URL a Play reviewer opens named an app that is not the one under
  * review. Import this constant; do not re-declare it next to the text that prints it.
  */
-export const ANDROID_PACKAGE = "com.srnivora.app";
+export const ANDROID_PACKAGE = "com.nivorasr.app";
 
 /**
  * True only when every placeholder has been replaced. The legal pages use this to decide whether

@@ -19,8 +19,16 @@ documents.
 > answers changed on 2026-09-13 (§2.4) rely on legal version 2026-09-13, which is recorded in
 > production's `public.legal_versions`. Commit `4fd41ef` reached `origin/main` at 20:44 IST that
 > day, and at 20:53 IST the live privacy and account-deletion pages both carried version
-> 2026-09-13. The in-app copy reaches users with versionCode 4, so submit those answers together
-> with versionCode 4. See §7.1 and §9 step 1.
+> 2026-09-13. The in-app copy reaches users with versionCode 5, so submit those answers together
+> with versionCode 5. See §7.1 and §9 step 1.
+>
+> **Revised 2026-09-14: a new Play Console app, package `com.nivorasr.app`.** Until 2026-09-13 this
+> pack was written for a Console app locked to `com.srnivora.app`. That listing is abandoned.
+> Nothing was ever released from it, and the builds made for it (versionCodes 1–4, the last verified
+> one being versionCode 4) will not be uploaded. The code now builds `com.nivorasr.app`
+> (`nivora_app/android/app/build.gradle.kts:60`, `:109`) at `1.0.0+5` (`nivora_app/pubspec.yaml:19`),
+> so the upload is versionCode 5, release name "1.0.0 (5)". Every Console task is done again on the
+> new app (§9). The answers themselves do not change.
 
 > **Not legal advice.** The Data safety form is a legal declaration by the developer. Read §2 before
 > ticking anything; a wrong answer there is a policy violation, not a typo.
@@ -41,14 +49,14 @@ lives.
 
 ### 1.1 The listing to upload now
 
-**Revised 2026-09-13.** The listing for `com.srnivora.app` does not use the copy or the images this
+**Revised 2026-09-13.** The listing for `com.nivorasr.app` (until 2026-09-13, `com.srnivora.app`) does not use the copy or the images this
 section used to carry. Those were written for the web-app wrapper (a TWA, package `app.nivora.twa`),
 which is retired. They are kept in §1.2 as a record of what the older answers in this file were
 reasoning about. Do not paste from §1.2.
 
 | What | Where | Checked 2026-09-13 |
 |---|---|---|
-| App name | `Nivora`, as the app exists in Console ([`play-console-submission.md`](./play-console-submission.md)) | Same as `app_name` in `nivora_app/android/app/src/main/res/values/strings.xml` |
+| App name | `Nivora`, typed when the new app is created in Console (§9 step 11; [`play-console-submission.md`](./play-console-submission.md)) | Same as `app_name` in `nivora_app/android/app/src/main/res/values/strings.xml` |
 | Short description | `dist/store-listing/short-description.txt` | 77 / 80 characters |
 | Full description | `dist/store-listing/full-description.txt` | 3,827 / 4,000 characters. Has a NOTIFICATIONS section, so do not paste it until a push notification has been seen arriving on a real phone |
 | Full description without push | `dist/store-listing/full-description-without-push.txt` | 3,572 / 4,000 characters. The same text with the NOTIFICATIONS section removed. **Paste this one for now**: push delivery to a real phone has not been proven yet |
@@ -263,8 +271,8 @@ The highest-risk section in the entire submission. Everything below was read out
 >
 > **Three answers changed on 2026-09-13:** User payment info and Installed apps are now Yes, and App
 > interactions gains App functionality as a purpose (§2.4). They rely on legal version 2026-09-13,
-> which was live on the web by 20:53 IST on 2026-09-13 and reaches the app with versionCode 4, so
-> submit them together with versionCode 4, after re-checking that the live policy still carries
+> which was live on the web by 20:53 IST on 2026-09-13 and reaches the app with versionCode 5, so
+> submit them together with versionCode 5, after re-checking that the live policy still carries
 > that text (§7.1).
 
 ### 2.1 First, the three definitions that decide every answer
@@ -307,8 +315,8 @@ own — is in [`data-safety.md`](./data-safety.md) §4. The short version: a ser
 its own legal obligations does not make it a third party; the Play question is about a recipient
 using the data for **its own commercial purposes**, which Razorpay does not. Answering "No" is only
 safe because the privacy policy names it, which it has done since 2026-09-02 (§7.1). The sentences
-about what its checkout handles inside the Android app are in legal version 2026-09-13, live on the
-web since 2026-09-13 and in the app from versionCode 4 (§7.1).
+about what its checkout handles inside the Android app are in legal version 2026-09-13. They have
+been live on the web since 2026-09-13 and reach the app with versionCode 5 (§7.1).
 
 Collected and shared are separate questions. What the Android app's Razorpay SDK sends to Razorpay
 is collected (see "Collected" above), and it is still not shared, for the same service-provider
@@ -331,8 +339,9 @@ crash-reporting or ad package in `nivora_app/pubspec.yaml` (its Firebase package
 and `firebase_messaging`, lines 85-86), and `nivora_app/pubspec.lock` resolves none. Its manifest
 removes the advertising-ID permission explicitly
 (`nivora_app/android/app/src/main/AndroidManifest.xml:53`), and the permission dump and AD_ID check
-of the versionCode 4 artifacts, which are the upload, found no AD_ID (technical report §2). Any
-rebuild needs them run again.
+of the versionCode 4 artifacts found no AD_ID (technical report §2). Those artifacts were built for
+the abandoned `com.srnivora.app` listing. The upload is now versionCode 5, and both checks have to be
+run on it. Any rebuild needs them run again.
 
 The count moved from 31 to 34 with the payment feature. In the web app, the one that matters,
 `razorpay`, is a **server-side API client**: `lib/razorpay.ts` opens with `import "server-only"`, so
@@ -785,7 +794,7 @@ All of these live under **App content** in Play Console.
 
 | Declaration | Answer | Evidence |
 |---|---|---|
-| **Ads** — does your app contain ads? | **No** | No ad SDK in `package.json` or `nivora_app/pubspec.lock`; the Android manifest removes `com.google.android.gms.permission.AD_ID` (§2.2), and the versionCode 4 permission dump and AD_ID check found none (technical report §2). The "Contains ads" badge will not appear on the listing |
+| **Ads** — does your app contain ads? | **No** | No ad SDK in `package.json` or `nivora_app/pubspec.lock`; the Android manifest removes `com.google.android.gms.permission.AD_ID` (§2.2), and the versionCode 4 permission dump and AD_ID check found none (technical report §2). Run both again on the versionCode 5 upload. The "Contains ads" badge will not appear on the listing |
 | **In-app purchases** | **No** | The label describes **Google Play Billing** products. There is no Play Billing library (`nivora_app/pubspec.lock` resolves no billing or `in_app_purchase` package) and no Play product to sell. Rent is an external, real-world payment, which that badge does not describe — see below |
 | **Government app** | **No** | A private commercial product. Not developed by or on behalf of any government |
 | **Financial features** | **"My app doesn't provide any financial features."** | Still the right answer now that the app takes payments — but for a reason, not by default. See below; this is the one a reviewer probes |
@@ -962,7 +971,7 @@ a real resident's name, phone, guardian details or ID proof. Re-read with read-o
 |---|---|---|
 | Warden | `demo.warden@nivora.app` | No two-step verification for this role: after the intro screens and **Agree and continue**, the warden shell |
 | Resident | phone `9000000001` | **A phone number, not an email** — the app maps it to a synthetic address internally |
-| Manager | `demo.manager@nivora.app` | **Not created yet.** Demo PG has no manager account today; the operator creates this one before submitting (Set 3) |
+| Manager | `demo.manager@nivora.app` | **Not created yet** (re-read 2026-09-14). The operator creates it from the demo owner's staff screen before submitting (Set 3; §9 step 7). The temporary trigger below spares it the email proof |
 | Owner | `demo.owner@nivora.app` | Owns Demo PG. No factor enrolled yet; the operator enrols one before submitting and gives reviewers its setup key (§6 item 3, Set 4) |
 
 Hostel **"Demo PG (Play review)"**: one resident, one open and one resolved complaint, and, from the
@@ -971,6 +980,33 @@ a week's mess menu (28 meals), three notices in all, a pending and an approved l
 visitors. **No Razorpay account is linked to it, on purpose.** The warden, resident and owner
 accounts have `must_change_password = false`. None of them has signed in since 6 September, so sign
 in to each one on a phone before submitting.
+
+**A temporary exception for demo addresses, applied to production on 2026-09-13.** A new staff
+account changes its temporary password on first sign-in. After that change, an account without a
+proved email address is sent to a verify-email screen that cannot be dismissed
+(`nivora_app/lib/features/auth/change_password_screen.dart:190-191`). The Edge Functions that create
+accounts also refuse an unverified caller (`requireVerifiedEmail()`,
+`supabase/functions/_shared/verification.ts:108`). Nobody reads mail sent to `demo.*@nivora.app`.
+`db/migrations/2026-09-13-demo-review-skip-email-verification.sql` therefore adds the trigger
+`users_zz_demo_review_email_verified`. Before insert, or on update of the email, it stamps
+`public.users.email_verified_at` only when all of these hold:
+
+- the row is in Demo PG (`d3300000-0000-4000-8000-000000000001`);
+- the address is `demo.<name>@nivora.app`;
+- the row is not already stamped;
+- on an update, the address itself changed.
+
+These conditions are in the migration at lines 21-25 and 42-55. It fires after `users_update_guard`
+(lines 29-31; the trigger was present in production on a read-only check on 2026-09-14). A
+rolled-back probe confirmed each case. The owner, warden and resident were verified on 2026-09-04.
+The account it exists for is `demo.manager@nivora.app`, so that account neither hits the
+verify-email screen nor is refused if it ever creates accounts. Every real hostel still owes the
+proof. **It is temporary. Remove it after review** (§9 step 30):
+
+```sql
+drop trigger if exists users_zz_demo_review_email_verified on public.users;
+drop function if exists app.demo_review_email_verified();
+```
 
 **The passwords are not in this file, and must not be** — see the rule below. They were handed over
 separately and belong in the Console form and the team's private ops record.
@@ -995,8 +1031,8 @@ after the review completes.
 | Where | URL | Status |
 |---|---|---|
 | Store listing → Privacy policy | `https://hostelpro-three.vercel.app/legal/privacy` | **HTTP 200 ✔** since 24 Aug 2026. At 20:53 IST on 2026-09-13 it carried legal version 2026-09-13, the text the Data safety answers rely on, and no longer mentioned 2026-09-12 (§7.1) |
-| App content → Data safety → data deletion | `https://hostelpro-three.vercel.app/legal/account-deletion` | **HTTP 200 ✔** since 24 Aug 2026. At 20:53 IST on 2026-09-13 it carried version 2026-09-13, including the in-app deletion route (§7.1) |
-| ~~Digital Asset Links~~ | `https://hostelpro-three.vercel.app/.well-known/assetlinks.json` | **Retired with the TWA.** The file still names `app.nivora.twa`, and `com.srnivora.app` declares no `autoVerify` link, so nothing in this submission depends on it (§9 step 12) |
+| App content → Data safety → data deletion | `https://hostelpro-three.vercel.app/legal/account-deletion` | **HTTP 200 ✔** since 24 Aug 2026. At 20:53 IST on 2026-09-13 it carried version 2026-09-13, including the in-app deletion route (§7.1). **The package it names is not live yet.** The page prints `ANDROID_PACKAGE` (`app/legal/account-deletion/page.tsx:142`), which the code sets to `com.nivorasr.app` (`lib/legal-config.ts:96`), but a signed-out GET on 2026-09-14 still found `com.srnivora.app`. Push the change and re-check before §9 step 18 |
+| ~~Digital Asset Links~~ | `https://hostelpro-three.vercel.app/.well-known/assetlinks.json` | **Retired with the TWA.** The file still names `app.nivora.twa`, and `com.nivorasr.app` declares no `autoVerify` link, so nothing in this submission depends on it (§9 step 14) |
 
 The 307-to-`/login` blocker recorded here on 21 August is **resolved**: `PUBLIC_PATHS` in
 `lib/supabase/middleware.ts` now includes `/legal`, `app/legal/` exists with `privacy`,
@@ -1022,9 +1058,9 @@ done
 > at 20:44 IST on 2026-09-13, and at 20:53 IST the deployed `/legal/privacy` said "currently
 > 2026-09-13", carried the in-app checkout and UPI-app sentences, the ten permissions and the
 > notification title-and-body row, and nowhere mentioned 2026-09-12. The in-app copy
-> (`nivora_app/lib/features/legal/legal_documents.dart:46`) reaches users with versionCode 4.
+> (`nivora_app/lib/features/legal/legal_documents.dart:46`) reaches users with versionCode 5.
 > **Submit the User payment info, Installed apps and App interactions answers in §2 together with
-> versionCode 4, and on that day check that the live policy still carries that text.** Before the
+> versionCode 5, and on that day check that the live policy still carries that text.** Before the
 > deploy the live policy did not describe what those answers declare, which is exactly the
 > contradiction this section warns about.
 >
@@ -1113,6 +1149,10 @@ boundary.
 **Yes, if the Play developer account is a personal account created on or after 13 November 2023** —
 which any account registered for this app now will be.
 
+**It runs on the new app.** Since 2026-09-14 the app is `com.nivorasr.app` (§9 step 11). The closed
+test, its opted-in testers and its 14 days all belong to that app's closed testing track, on the
+operator's personal account.
+
 Requirement, in summary: run a **closed test with at least 12 testers, opted in continuously for at
 least 14 days**, before you may apply for production access
 ([Play Console Help](https://support.google.com/googleplay/android-developer/answer/14151465)).
@@ -1128,7 +1168,7 @@ The 14 days is a floor, not the schedule. A realistic timeline:
 
 | Stage | Realistic duration |
 |---|---|
-| Account registration + identity verification | 2–7 days (can be longer; start it first) |
+| Account registration + identity verification | 2–7 days (can be longer; start it first). Once per account, so none if the account is already verified |
 | Console setup, listing, all declarations | 1–2 days |
 | Recruit 12 testers and get all 12 opted in | 1–7 days — this is the step that actually slips |
 | **Closed test running, all 12 continuously opted in** | **14 days minimum** |
@@ -1169,132 +1209,193 @@ it sees a login screen and nothing else. Before the test starts:
 
 ## 9. Release checklist
 
-In order. Each step assumes the previous one is done.
+In order. Each step assumes the previous one is done, with one exception: the upload (step 13) and
+the store listing, app content and testers (steps 15–23) can be done in either order —
+[play-console-submission.md](play-console-submission.md) does the app content first. Console will not
+roll the closed test out until all of them are complete.
 
 **Before Play Console**
 
-1. **Confirm legal version 2026-09-13 is live (§7.1).** Done on the web: `main` reached
-   `origin/main` at 20:44 IST on 2026-09-13, and at 20:53 IST both URLs returned HTTP 200 signed out
-   and carried version 2026-09-13. The privacy page had the in-app Razorpay checkout and UPI-app
-   detection, the ten Android permissions and Google's part in push; the deletion page had the
-   in-app deletion route. The in-app copy arrives with versionCode 4 (step 11). Re-check the live
-   pages on the day you submit: the Data safety answers in step 16 declare what that text
-   describes, and a privacy policy that contradicts the form is a violation on its own. Owner:
-   whoever owns `app/legal/`.
+1. **Confirm legal version 2026-09-13 is live (§7.1), and that the deletion page names the new
+   package.** Done on the web: `main` reached `origin/main` at 20:44 IST on 2026-09-13, and at
+   20:53 IST both URLs returned HTTP 200 signed out and carried version 2026-09-13. The privacy page
+   had the in-app Razorpay checkout and UPI-app detection, the ten Android permissions and Google's
+   part in push. The deletion page had the in-app deletion route. The in-app copy arrives with
+   versionCode 5 (step 13). **Not done yet: the package.** `/legal/account-deletion` prints
+   `ANDROID_PACKAGE` (`app/legal/account-deletion/page.tsx:142`), which the code now sets to
+   `com.nivorasr.app` (`lib/legal-config.ts:96`). A signed-out GET on 2026-09-14 still found
+   `com.srnivora.app` on the live page. Push that change, then confirm the page names
+   `com.nivorasr.app`. The legal version stays 2026-09-13, because neither the privacy policy nor the
+   terms names the package. Re-check the live pages on the day you submit. The Data safety answers in
+   step 18 declare what that text describes, and a privacy policy that contradicts the form is a
+   violation on its own. Owner: whoever owns `app/legal/`.
 2. **Back up the upload keystore.** Copy `C:\Users\shahu\.hostelpro-keys\` — the `.p12` *and*
    `keystore.properties`, which `nivora_app/android/app/build.gradle.kts:45` reads for local release
    builds — somewhere durable and private. It is outside the repository, so nothing else is backing
    it up.
-3. ~~**Decide the `applicationId` permanently.**~~ Decided: `com.srnivora.app`, and it is final.
-   This step was written about `app.nivora.twa`, the retired web-app (TWA) wrapper, which is not the
-   app on this listing.
-4. **Install the versionCode 4 release build on a real phone and launch it.** Confirm the splash
+3. ~~**Decide the `applicationId` permanently.**~~ Decided: `com.nivorasr.app`, the `namespace` and
+   `applicationId` at `nivora_app/android/app/build.gradle.kts:60` and `:109`. The same string is the
+   email-link scheme (`nivora_app/android/app/src/main/AndroidManifest.xml:142`,
+   `nivora_app/lib/core/config/env.dart:40`) and the iOS bundle id
+   (`nivora_app/ios/Runner.xcodeproj/project.pbxproj:386`). It becomes permanent for the new app the
+   moment its first bundle is uploaded (step 13). Until 2026-09-13 this step said `com.srnivora.app`,
+   the package of a Console app that is now abandoned. Nothing was released from that app, and
+   nothing more goes to it. Before that, this step was about `app.nivora.twa`, the retired web-app
+   (TWA) wrapper.
+4. **Add the new email-link redirect in Supabase.** Under Supabase → Authentication → URL
+   Configuration → Redirect URLs, add exactly `com.nivorasr.app://verify-email` and save. GoTrue does
+   not refuse a redirect missing from that list. It silently sends the link to the Site URL instead
+   (`nivora_app/lib/core/config/env.dart:73-84`), so without this entry a confirmation link never
+   returns to the app. The old `com.srnivora.app://verify-email` entry can be removed.
+5. **Check Firebase, and delete nothing of the new app's.** Firebase project `nivorapg` holds two
+   Android apps. `com.nivorasr.app` is the app. `com.srnivora.app` is left over from the abandoned
+   listing and may be deleted later. `nivora_app/android/app/google-services.json` (gitignored,
+   `nivora_app/.gitignore:53`) has a client for each (`com.nivorasr.app` at line 12,
+   `com.srnivora.app` at line 31), and the Google Services plugin uses the one matching the
+   `applicationId`. `FCM_SERVICE_ACCOUNT` is project-level and needs no change.
+6. **Install the versionCode 5 release build on a real phone and launch it.** `release.sh` stages
+   `dist/NIVORA-1.0.0.apk` (arm64, 25,306,793 bytes) and `dist/NIVORA-1.0.0-universal.apk`
+   (68,586,719 bytes) next to the AAB (`nivora_app/scripts/release.sh:420-422`). A
+   different package installs as a separate app. On a phone that still has a `com.srnivora.app`
+   build, uninstall that build first so you know which app you are testing. Confirm the splash
    screen and launcher icon look right, that sign-in works, and whether a push notification actually
-   arrives. Until one does, the listing uses `full-description-without-push.txt` (§1.1). The "no
-   address bar" check that used to be part of this step applied only to the retired TWA.
-5. **Finish the demo tenant (§6.1).** Demo PG exists and is seeded. Create `demo.manager@nivora.app`
-   in it (active, email confirmed, `must_change_password = false`), enrol the demo owner's
-   authenticator and keep its setup key for Set 4 (§6 item 3), then sign in to all four accounts on
-   a phone with the passwords you will type into Console. Provision extra tester accounts for §8.
-6. **Confirm the listing assets exist** — `public/store/icon-512.png`,
+   arrives. Delivery to a real phone is still unproven. Until a notification arrives, the listing
+   uses `full-description-without-push.txt` (§1.1). The "no address bar" check that used to be part
+   of this step applied only to the retired TWA.
+7. **Finish the demo tenant (§6.1).** Demo PG exists and is seeded. Signed in as the demo owner,
+   create `demo.manager@nivora.app` from the staff screen, then sign in to it once and set its
+   password. A new staff account starts with `must_change_password = true`
+   (`nivora_app/lib/features/auth/change_password_screen.dart:23`). After the change, an account
+   without a proved email address is sent to a verify-email screen that cannot be dismissed
+   (`:190-191`). The temporary trigger in §6.1 is what spares this one. Any other tester staff
+   account escapes that screen only if it, too, is a `demo.<name>@nivora.app` address in Demo PG.
+   Enrol the demo owner's authenticator and keep its setup key for Set 4 (§6 item 3). Then sign in
+   to all four accounts on a phone with the passwords you will type into Console. Provision extra
+   tester accounts for §8.
+8. **Confirm the listing assets exist** — `public/store/icon-512.png`,
    `dist/NIVORA-feature-graphic.png`, and in `dist/store-listing/` four phone screenshots, four
    10-inch tablet screenshots and the description text (§1.1).
    `node scripts/store-assets.mjs --check` covers only the icon and the retired `public/store/` set.
 
 **Play Console — account**
 
-7. **Pay the US$25 registration fee.** One time, non-refundable, per Google account.
-8. **Complete identity verification** immediately. Government ID, and a D-U-N-S number if registering
-   as an organisation. This can take days and everything else waits on it. Decide personal vs
-   organisation here, knowing what §8 says about the trade-off.
+Both steps belong to the developer account, not to an app. If the new app is created in the account
+that held the abandoned listing, the fee is already paid. Confirm that identity verification is
+complete, then move on.
 
-**Play Console — create the app**
+9. **Pay the US$25 registration fee.** One time, non-refundable, per Google account.
+10. **Complete identity verification** immediately. Government ID, and a D-U-N-S number if registering
+    as an organisation. This can take days and everything else waits on it. Decide personal vs
+    organisation here, knowing what §8 says about the trade-off.
 
-9. **Create the app.** Name, default language, app-or-game (app), free-or-paid (free — and note that
-   free→paid cannot be reversed later).
-10. **Accept Play App Signing.** Mandatory for new apps; do not opt for uploading your own app signing
-    key. The app signing key is then shown under Protected with Play → Play Store distribution → Go to
-    Play app signing → App signing key section
+**Play Console — create the new app**
+
+11. **Create a new app.** Do not use the abandoned one: it is locked to `com.srnivora.app` and cannot
+    take a `com.nivorasr.app` bundle. Enter the name `Nivora`, a default language, app-or-game (app)
+    and free-or-paid (free — and note that free→paid cannot be reversed later). Every step from here
+    on is done on this new app. Nothing entered on the abandoned app carries over: store listing, App
+    content, Data safety, App access, content rating and testers are all entered again, with the same
+    answers.
+12. **Accept Play App Signing.** Mandatory for new apps; do not opt for uploading your own app signing
+    key. Play creates a new app signing key for this app, shown under Protected with Play → Play Store
+    distribution → Go to Play app signing → App signing key section
     ([Play Console Help](https://support.google.com/googleplay/android-developer/answer/9842756)).
-    The upload key is a different key: its SHA-256 starts `24:23:97` and ends `FB:64:65`
+    The abandoned app's signing key plays no part. The upload key is a different key, and it has not
+    changed: its SHA-256 starts `24:23:97` and ends `FB:64:65`
     ([`play-technical-compliance.md`](./play-technical-compliance.md) §4; read from the versionCode 4
-    AAB with `keytool -printcert -jarfile` on 2026-09-13).
-11. **Upload the versionCode 4 AAB** (`dist/NIVORA-1.0.0.aab`, which `nivora_app/scripts/release.sh`
-    writes at line 422) to a **closed testing** track. Not production — production access is exactly what the
-    closed test earns. The file built at 20:21 IST on 2026-09-13 has SHA-256
-    `a85e26c1469c09f5d41a1913343ef9834afe3f44f1776439c379e67507a975ba` and passed every artifact
-    check in [`play-technical-compliance.md`](./play-technical-compliance.md): badging, permissions,
-    AD_ID, 16 KB alignment, sizes and signing. **If `dist/` has been rebuilt since, those numbers no
-    longer apply: run the checks on the new files first.**
-12. ~~**Add the app signing key fingerprint to `assetlinks.json`.**~~ **Retired with the TWA.** This
+    AAB with `keytool -printcert -jarfile` on 2026-09-13). Read it again from the versionCode 5 AAB
+    before uploading.
+13. **Upload the versionCode 5 AAB** (`dist/NIVORA-1.0.0.aab`, which `nivora_app/scripts/release.sh`
+    writes at line 422) to a **closed testing** track, release name "1.0.0 (5)". Not production:
+    production access is exactly what the closed test earns. The file built at 15:47 IST on 2026-09-14 is
+    66,228,186 bytes, with SHA-256 `ec552f06eb45d1f52daeeffdb2f69cfaa087bfab70c34a4f3acee90d491f186f`. **This upload fixes the new app's
+    package for good.** So first run every artifact check in
+    [`play-technical-compliance.md`](./play-technical-compliance.md) on these files: badging (which
+    must show `com.nivorasr.app` and versionCode 5), permissions, AD_ID, 16 KB alignment, sizes and
+    signing. The versionCode 4 files passed those checks on 2026-09-13 (AAB SHA-256
+    `a85e26c1469c09f5d41a1913343ef9834afe3f44f1776439c379e67507a975ba`). They were built for the
+    abandoned listing, and they are not uploaded. **If `dist/` has been rebuilt since, these numbers
+    no longer apply: run the checks on the new files first.**
+14. ~~**Add the app signing key fingerprint to `assetlinks.json`.**~~ **Retired with the TWA.** This
     step let the TWA prove it owned `hostelpro-three.vercel.app`, so it would open without an address
-    bar. `com.srnivora.app` is a native build and its manifest declares no `autoVerify` link, so it
+    bar. `com.nivorasr.app` is a native build and its manifest declares no `autoVerify` link, so it
     has nothing to prove there. `public/.well-known/assetlinks.json` still names `app.nivora.twa`.
 
 **Play Console — store listing and content**
 
-13. **Store listing:** paste the text from `dist/store-listing/` (also tracked in
+15. **Store listing:** on the new app, paste the text from `dist/store-listing/` (also tracked in
     `docs/store-listing/`), using `full-description-without-push.txt` until push is confirmed on a
-    phone (step 4); upload `public/store/icon-512.png`, `dist/NIVORA-feature-graphic.png`, the four
+    phone (step 6); upload `public/store/icon-512.png`, `dist/NIVORA-feature-graphic.png`, the four
     phone screenshots and the four 10-inch tablet screenshots (§1.1); and set the category (Business)
     and a monitored support email.
-14. **Privacy policy URL:** paste `https://hostelpro-three.vercel.app/legal/privacy` after the step 1
+16. **Privacy policy URL:** paste `https://hostelpro-three.vercel.app/legal/privacy` after the step 1
     check confirms the deployed page still carries legal version 2026-09-13 and says that Razorpay's
     checkout runs inside the Android app, takes the card or UPI details typed and checks which UPI
     apps are installed. A 200 is necessary and not sufficient.
-15. **App access (§6):** add the four per-account instruction sets from
+17. **App access (§6):** add the four per-account instruction sets from
     [App access — what to enter in Console](./play-console-submission.md#app-access--what-to-enter-in-console):
     Set 1 Warden, Set 2 Resident, Set 3 Manager (only once that account exists) and Set 4 Owner, with
     the demo owner's setup key in place of `SETUP KEY`. Type each username and password into
     Console's own fields. This step used to suggest giving a test card; the demo PG has no Razorpay
     settlement on purpose, and Set 2 explains the refusal a reviewer sees on tapping Pay. Never give
     a Super Admin account, and leave the pre-launch report's test credentials empty.
-16. **Data safety (§2):** work from [`data-safety.md`](./data-safety.md), row by row, and submit it
-    in the same release as versionCode 4, after the step 1 check. Take the extra minute on
+18. **Data safety (§2):** work from [`data-safety.md`](./data-safety.md), row by row, and submit it
+    in the same release as versionCode 5, after the step 1 check. Take the extra minute on
     "shared" (§2.1 and §2.9), **Financial info** (§2.4 — Purchase history yes, **User payment info
     yes**, changed on 2026-09-13 from no), **Installed apps** (yes, for the same reason), **Device or
     other IDs** (the FCM registration token, App functionality) and the government-ID rows (§2.3).
-    Where `data-safety.md` and §2 disagree, `data-safety.md` is the newer. Paste the deletion URL.
-17. **Content rating (§3):** complete the IARC questionnaire. Answer **yes** to users interacting,
+    Where `data-safety.md` and §2 disagree, `data-safety.md` is the newer. Paste the deletion URL
+    once step 1 has confirmed that the live page names `com.nivorasr.app`.
+19. **Content rating (§3):** complete the IARC questionnaire. Answer **yes** to users interacting,
     and **no** to purchasing digital goods — rent is a real-world service (§5).
-18. **Target audience and content (§4):** 18 and over; not appealing to children.
-19. **All remaining declarations (§5):** ads no, IAP no, government app no, **financial features
+20. **Target audience and content (§4):** 18 and over; not appealing to children.
+21. **All remaining declarations (§5):** ads no, IAP no, government app no, **financial features
     none**, health none, news no. Read the Payments section of §5 first so the reasoning behind
     "financial features: none" is in your head if Console or a reviewer asks.
-20. **Clear every warning on the Dashboard.** Console will not let you apply for production while any
+22. **Clear every warning on the Dashboard.** Console will not let you apply for production while any
     required item is incomplete.
 
-**The closed test**
+**The closed test — on the new app**
 
-21. **Recruit 15 testers to hold 12.** Email list or Google Group. Send each the opt-in link *and*
+23. **Recruit 15 testers to hold 12.** Email list or Google Group. Send each the opt-in link *and*
     their sign-in details.
-22. **Confirm all 12+ are opted in**, then start the 14-day clock. Check the count every few days —
+24. **Confirm all 12+ are opted in** to the new app's closed testing track, then start the 14-day clock. Check the count every few days —
     if it drops below 12, the clock restarts.
-23. **Keep notes as it runs:** how testers were recruited, what they reported, what changed. The
+25. **Keep notes as it runs:** how testers were recruited, what they reported, what changed. The
     production-access application asks.
 
 **Production**
 
-24. **Apply for production access** on day 15 or later. Answer the three sections from the notes in
-    step 23. Review takes up to seven days.
-25. **Create the production release by promoting the tested one.** In the closed-testing track, open
-    the versionCode 4 release ("1.0.0 (4)") and use **Promote release → Production**; nothing is
+26. **Apply for production access** on day 15 or later. Answer the three sections from the notes in
+    step 25. Review takes up to seven days.
+27. **Create the production release by promoting the tested one.** In the closed-testing track, open
+    the versionCode 5 release ("1.0.0 (5)") and use **Promote release → Production**; nothing is
     uploaded again. Upload a new bundle only if the code changed during the test, and raise the number
-    after `+` in `nivora_app/pubspec.yaml` first (5 or higher) — Play rejects a re-upload of the same
+    after `+` in `nivora_app/pubspec.yaml` first (6 or higher) — Play rejects a re-upload of the same
     `versionCode`, and a number that has already been uploaded is burned even if that submission was
     rejected. This step
-    used to point at `android/app/build.gradle.kts`, which is the retired TWA's build.
-26. **Roll out at a staged percentage** — 20% is a sensible first step — and watch Android Vitals and
+    used to point at `android/app/build.gradle.kts`, which is the retired TWA's build. Until
+    2026-09-14 it named versionCode 4, "1.0.0 (4)", which was built for the abandoned listing.
+28. **Roll out at a staged percentage** — 20% is a sensible first step — and watch Android Vitals and
     crash reports before going to 100%.
-27. **After rollout, install the Play-delivered build on a real device** and sign in with each role.
+29. **After rollout, install the Play-delivered build on a real device** and sign in with each role.
     If push notifications arrive, switch the listing to `full-description.txt`. This step used to
     point at a §10 verification block in
     [`play-technical-compliance.md`](./play-technical-compliance.md), which has no §10, and ended
     with a "no address bar" check that was retired with the TWA.
+30. **After review, remove the temporary demo-account trigger (§6.1) and tidy the abandoned
+    listing's leftovers.** Run
+    `drop trigger if exists users_zz_demo_review_email_verified on public.users;` and
+    `drop function if exists app.demo_review_email_verified();`
+    (`db/migrations/2026-09-13-demo-review-skip-email-verification.sql:35-36`). Accounts it has
+    already stamped stay verified. Rotate the demo credentials (§6.2). In Supabase, remove the old
+    `com.srnivora.app://verify-email` redirect if step 4 left it. In Firebase project `nivorapg`, the
+    `com.srnivora.app` Android app may be deleted. **Never delete `com.nivorasr.app` there: it is the
+    app.**
 
 **Standing**
 
-28. **Every August, Play raises the target API floor.** Raise `targetSdk`, rebuild, re-upload — or
+31. **Every August, Play raises the target API floor.** Raise `targetSdk`, rebuild, re-upload — or
     the listing stops accepting updates. In `nivora_app/android/app/build.gradle.kts`, `targetSdk`
     follows `flutter.targetSdkVersion` (line 113) and `compileSdk` is pinned to 37 (line 75). The
     current floor is API 36 from 31 August 2026; assume API 37 from around August 2027.
@@ -1305,7 +1406,7 @@ In order. Each step assumes the previous one is done.
 
 > **Historical: TWA era.** `play-store.md` is the build guide for the retired Trusted Web Activity,
 > package `app.nivora.twa`, and the table below corrects that document. Its TWA sections do not
-> describe `com.srnivora.app` (its Console-obligations section is kept current for it); for the
+> describe `com.nivorasr.app` (its Console-obligations section is kept current for it); for the
 > current build, see
 > [`play-technical-compliance.md`](./play-technical-compliance.md) and
 > [`play-console-submission.md`](./play-console-submission.md). §10.1 is not TWA-era.

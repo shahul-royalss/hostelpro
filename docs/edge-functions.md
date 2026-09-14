@@ -48,29 +48,42 @@ notification rows are still written and still visible in the app's own list.
 
 1. **Create the Firebase project** — <https://console.firebase.google.com> → Add project. Any name;
    Google Analytics is not needed and adds an advertising id, which this app declares it does not use.
-2. **Add an Android app** with package name **`com.srnivora.app`** exactly — check it letter by
-   letter. On 2026-09-13 the first registration in `nivorapg` went in as `com.nivorasr.app`, and a
-   `google-services.json` for the wrong package fails the build ("No matching client found").
-   Editing the package name inside the file is not a fix: the app id beside it belongs to the other
-   registration, so tokens would never register. Prefer the CLI, which is what fixed it:
+2. **Add an Android app** with package name **`com.nivorasr.app`** exactly — check it letter by
+   letter. That is the build's `applicationId` (`nivora_app/android/app/build.gradle.kts:109`), and
+   it is already registered in `nivorapg`, so on this project the step is done. A
+   `google-services.json` with no client for that package fails the build ("No matching client
+   found"). Editing the package name inside the file is not a fix: the app id beside it belongs to
+   another registration, so tokens would never register. Fetch the file with the CLI:
 
    ```bash
-   npx -y firebase-tools@latest apps:create ANDROID "Nivora Android" --package-name com.srnivora.app --project nivorapg
+   npx -y firebase-tools@latest apps:list ANDROID --project nivorapg   # note the App ID of com.nivorasr.app
    npx -y firebase-tools@latest apps:sdkconfig ANDROID <APP_ID> --project nivorapg -o nivora_app/android/app/google-services.json
    ```
 
-   The file lists every Android app in the project, so a leftover registration appearing in it is
-   expected and harmless — the Google Services plugin picks the client matching the build's
-   applicationId. It is not a secret — it ships inside the APK — but it IS gitignored here, because
-   it belongs to whoever owns the Play listing.
+   On a fresh Firebase project, register the app first:
+   `npx -y firebase-tools@latest apps:create ANDROID "Nivora Android" --package-name com.nivorasr.app --project <project>`.
+
+   *Until 2026-09-13 this step named `com.srnivora.app`, the package of a Play listing that was
+   abandoned before any release, and warned against `com.nivorasr.app`. That is reversed:
+   `com.nivorasr.app` is the app. `com.srnivora.app` is the leftover and may be deleted from
+   `nivorapg` later. Do not delete `com.nivorasr.app`.*
+
+   The file lists every Android app in the project, so the leftover registration appearing in it
+   is expected and harmless: today's file has clients for both packages, and the Google Services
+   plugin picks the one matching the build's applicationId. It is not a secret (it ships inside the
+   APK), but it IS gitignored here (`nivora_app/.gitignore:53`), because it belongs to whoever owns
+   the Play listing.
 3. **Generate a service-account key** — Project settings → Service accounts → *Generate new private
    key*. This one IS a secret: it can send a notification to every device in the project.
 4. **Put it in Supabase, not in the repository** — Dashboard → Edge Functions → Secrets →
    `FCM_SERVICE_ACCOUNT`, pasting the whole JSON file as the value. Nothing else needs to change;
-   the next notification is pushed.
+   the next notification is pushed. The key belongs to the Firebase project, not to one app in it,
+   so the move to `com.nivorasr.app` on 2026-09-13 needs no new key.
 
 Until step 4 the app builds, runs and asks for notification permission exactly as it will
 afterwards — the only difference is that nothing arrives while the app is closed.
+
+**Not yet proven:** a push actually delivered to a real phone, under either package.
 
 ## 2. The functions
 
@@ -371,6 +384,11 @@ may write `email_verified_at` — `app.users_update_guard` raises `42501` for ev
 including the account holder and the super admin. Something that has *seen* GoTrue accept the
 link has to be the thing that writes it, and that cannot be the phone.
 
+One temporary exception lives in the database, not here: for Play review, trigger
+`users_zz_demo_review_email_verified` stamps a `demo.*@nivora.app` row in Demo PG
+(`db/migrations/2026-09-13-demo-review-skip-email-verification.sql`). What it covers, and the two
+lines that remove it, are in `docs/email-verification.md` §10.
+
 **What breaks if it is down:** the banner stays on screen for a little longer. The click is
 already recorded in GoTrue's own tables (`auth.flow_state.auth_code_issued_at` and
 `auth.audit_log_entries`), so the next `status` call picks it up. Contrast with the flow this
@@ -393,9 +411,12 @@ read `auth.mfa_amr_claims` and why that table can never gain a row for a PKCE li
 3. **A working mail sender.** Supabase's built-in SMTP is rate-limited to a handful of messages
    an hour and is not for production; a real SMTP provider belongs in
    Authentication → Emails → SMTP Settings before this ships to a hostel.
-4. **Authentication → URL Configuration → Redirect URLs — ONE ENTRY IS STILL MISSING.** The app
-   asks for `com.srnivora.app://verify-email`, a custom scheme whose intent filter opens
-   Nivora, so that the link signs the person in and that sign-in *is* the proof. GoTrue accepts
+4. **Authentication → URL Configuration → Redirect URLs must contain `com.nivorasr.app://verify-email`.**
+   The app asks for that string (`nivora_app/lib/core/config/env.dart:40`, `:100-103`), a custom
+   scheme whose intent filter opens Nivora (`nivora_app/android/app/src/main/AndroidManifest.xml:142`),
+   so that the link signs the person in and that sign-in *is* the proof. Until 2026-09-13 the app
+   asked for `com.srnivora.app://verify-email`; that entry, if present, can be removed.
+   GoTrue accepts
    a `redirect_to` only if it is on the allow-list or shares a hostname with the Site URL, and a
    custom scheme shares a hostname with nothing — so it needs the allow-list entry.
 
@@ -404,8 +425,9 @@ read `auth.mfa_amr_claims` and why that table can never gain a row for a PKCE li
    not need to change again.
 
    Measured 2026-09-01 by asking `/auth/v1/verify` to redirect a dead token and reading the
-   `Location` header: `com.srnivora.app://verify-email` and a deliberately bogus URL are both
-   **silently substituted** with the Site URL, while a same-host URL is honoured. GoTrue never
+   `Location` header: the then-current `com.srnivora.app://verify-email` and a deliberately bogus
+   URL were both **silently substituted** with the Site URL, while a same-host URL was honoured.
+   The new string falls under the same rule and has not been re-measured. GoTrue never
    refuses an unlisted redirect out loud, so there is no error for the app to catch and no way
    for this server to detect the condition.
 

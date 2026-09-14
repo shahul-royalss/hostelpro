@@ -1,4 +1,4 @@
-package com.srnivora.app
+package com.nivorasr.app
 
 import io.flutter.embedding.android.FlutterActivity
 

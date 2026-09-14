@@ -1,47 +1,74 @@
-# Play Console — getting this release accepted
+# Play Console — releasing Nivora as a new app
 
-Everything Console is currently complaining about, in the order it will stop complaining, plus the
-things it has not complained about yet but will.
+Everything Console will ask for on the new app, in the order to do it, plus the two things outside
+Play that this release depends on.
 
-**App name:** Nivora · **Package:** `com.srnivora.app` · **Upload artifact:** `dist/NIVORA-<v>.aab`
+**App name:** Nivora · **Package:** `com.nivorasr.app` · **Upload artifact:** `dist/NIVORA-1.0.0.aab`,
+versionCode 5, release name `1.0.0 (5)`
+
+> **This is a new Play Console app (2026-09-14).** Until 2026-09-13 this page drove a listing locked
+> to `com.srnivora.app`. That listing is abandoned: nothing was ever released from it, and nothing
+> entered there carries over. Every step below is done again on the new app, with the same answers.
+> What happened on the old listing is under [History](#history-the-abandoned-comsrnivoraapp-listing)
+> at the end.
+
+The package is set in code: `namespace` and `applicationId` are `com.nivorasr.app`
+(`nivora_app/android/app/build.gradle.kts:60` and `:109`), `MainActivity` lives in
+`nivora_app/android/app/src/main/kotlin/com/nivorasr/app/`, and the upload is `version: 1.0.0+5`
+(`nivora_app/pubspec.yaml:19`).
 
 ---
 
-## The three errors are one problem
+## Step 1 — create the app
 
-> **Error** You need to upload an APK or Android App Bundle for this app.
-> **Error** You can't rollout this release because it doesn't allow any existing users to upgrade to the newly added app bundles.
-> **Error** This release does not add or remove any app bundles.
+Play Console → **Home → Create app**.
 
-All three say the same thing from three angles: **the release has no bundle in it**. The second one
-reads like a version problem and is not — with no bundle there is nothing for anyone to upgrade
-*to*, so Console phrases the emptiness as an upgrade failure.
+- **App name:** `Nivora`. **Default language:** English (United States), the one language the
+  release notes declare ([play-release-notes.md](play-release-notes.md)).
+- Answer the remaining questions and accept the declarations yourself.
 
-The earlier upload was rejected for a different reason —
+There is no package field on that form. The new app takes its package from the first bundle
+uploaded to it, and from then on `com.nivorasr.app` is that app's identity **permanently**. Check
+the package before the first upload (see
+[Verifying the artifact](#verifying-the-artifact-before-you-upload-it)).
 
-> Your APK or Android App Bundle needs to have the package name com.srnivora.app
+## Step 2 — fill in what Console asks for
 
-— and that is now fixed at the source: `applicationId` and `namespace` are `com.srnivora.app`, the
-Kotlin package moved with them, and the email-verification deep link uses the same string as its
-custom scheme.
+None of this carried over from the old listing. Do it on the new app. It can come before or after the
+upload in Step 3; Console will not roll the closed test out until all of it is done:
 
-**Do this:**
+1. **Store listing:** graphics and text from [store-assets.md §2](store-assets.md); app category
+   **Business**.
+2. **App content:** every row of [the table below](#app-content--what-console-will-ask-for-next),
+   including Data safety from [data-safety.md](data-safety.md), Financial features *none*, and
+   **App access** with its four instruction sets.
+3. **Advertising ID:** No ([Warning 1](#warning-1--the-advertising-id-declaration)).
+4. **Content rating:** the questionnaire again.
+5. **Testers:** the email list ([Warning 2](#warning-2--no-testers-on-the-track)).
 
-1. Play Console → your app → **Test and release → Testing → Closed testing** → create a track, or
-   open the one you have → **Create new release**. Use **closed** testing, not internal: a personal
-   developer account needs 12 testers opted in for 14 continuous days **on a closed test** before it
-   can apply for production, and internal testing does not count toward that (Warning 2). If you also
-   want the quickest install on your own phone, create an Internal testing release afterwards and
-   pick the same bundle with **Add from library**; do not upload it a second time.
-2. Upload `dist/NIVORA-1.0.0.aab` — versionCode 4, SHA-256
-   `a85e26c1469c09f5d41a1913343ef9834afe3f44f1776439c379e67507a975ba` (check it first; see "Verifying the artifact before you upload it" below). Wait for it to
-   finish processing — the errors clear as soon as Console has parsed it, not when the upload bar
-   fills.
-3. Paste the release notes from [play-release-notes.md](play-release-notes.md).
-4. **Save**, then **Review release**.
+## Step 3 — the closed test, with versionCode 5
 
-An `applicationId` cannot be changed after the first accepted upload. `com.srnivora.app` is what
-this listing is now, permanently.
+1. Play Console → the new app → **Test and release → Testing → Closed testing** → create a track →
+   **Create new release**. Use **closed** testing, not internal. This is a personal developer
+   account, so it needs 12 testers opted in for 14 continuous days **on a closed test of this app**
+   before it can apply for production, and internal testing does not count toward that
+   ([Warning 2](#warning-2--no-testers-on-the-track)). If you also want the quickest install on
+   your own phone, create an Internal testing release afterwards and pick the same bundle with
+   **Add from library**; do not upload it a second time.
+2. Keep **Play App Signing** with a key Google generates. It creates a new app signing key for this
+   app. The upload key is the same one as before: the certificate SHA-256 that starts `24:23:97` and
+   ends `FB:64:65`, recorded in [play-technical-compliance.md](play-technical-compliance.md) §4.
+3. Upload `dist/NIVORA-1.0.0.aab`: versionCode 5, 66,228,186 bytes, SHA-256
+   `ec552f06eb45d1f52daeeffdb2f69cfaa087bfab70c34a4f3acee90d491f186f`, built 15:47 IST on 2026-09-14. Check it first (see
+   [Verifying the artifact](#verifying-the-artifact-before-you-upload-it)). Wait for it to finish
+   processing.
+4. Release name `1.0.0 (5)`. Paste the release notes from [play-release-notes.md](play-release-notes.md).
+5. **Save**, then **Review release**.
+6. Once 12 testers have stayed opted in for 14 days, apply for production.
+
+If Console reports that the release needs a bundle, that no existing users can upgrade, and that it
+adds no bundles, those are one problem: the release has no processed bundle in it yet. They clear
+once Console has parsed the upload, not when the upload bar fills.
 
 ---
 
@@ -83,14 +110,14 @@ If that ever prints a line, the declaration in Console is wrong and must change 
 This is a **warning, not an error** — the release will roll out. It will simply reach nobody, and
 the track will look broken when it is actually empty.
 
-Play Console → **Test and release → Testing → Closed testing** → your track → **Testers** tab. The
-same steps work on Internal testing if you use that track as well:
+Play Console → the new app → **Test and release → Testing → Closed testing** → your track →
+**Testers** tab. The same steps work on Internal testing if you use that track as well:
 
 1. Select the email list you already created — email lists belong to the developer account and can
    be ticked on any track — or **Create email list** → name it `Nivora testers`.
 2. Add `codewithshahul@gmail.com` — the account that owns this Play Console. It is allowed to be
-   its own tester, and it should be the first one. On a personal account, add at least 11 more
-   Google accounts: 12 have to opt in and stay opted in for the 14 days.
+   its own tester, and it should be the first one. This is a personal account, so add at least 11
+   more Google accounts: 12 have to opt in and stay opted in for the 14 days.
 3. **Tick the checkbox next to the list.** This is the step that clears the warning, and it is the
    one people miss: *creating* a list does not *assign* it to the track. An unticked list leaves
    the warning in place looking exactly as if nothing had been added.
@@ -99,21 +126,24 @@ same steps work on Internal testing if you use that track as well:
 Then **Copy link** (it goes live on this tab once the release is rolled out), open it in a browser
 signed in as that account, and accept the invitation. Only after accepting does Nivora appear in
 the Play Store — and the phone must be signed into the Play Store with the *same* account. Give it
-a few minutes to propagate before concluding it has failed.
+a few minutes to propagate before concluding it has failed. The link belongs to the new app, so
+anyone who accepted an invitation to the old listing has to accept this one too.
 
 Every tester must be a **Google account**. A non-Google address can be added to the list and can
 never join, with no error shown.
 
-**If this developer account is a personal (individual) account**, Google additionally requires
+**This developer account is a personal (individual) account**, so Google additionally requires
 **12 testers opted in for 14 continuous days on closed testing** before you can apply for
-production. Internal testing does not count toward it. Start that clock now if production is the
-goal — it is the longest pole in this whole list.
+production. Internal testing does not count toward it, and the new app's clock starts with its own
+closed test. Start it as soon as versionCode 5 is on the track — it is the longest pole in this
+whole list.
 
 ---
 
 ## App content — what Console will ask for next
 
-These are not warnings yet because you have not reached them. Each one blocks a production rollout.
+These are not warnings yet because you have not reached them. Each one blocks a production rollout,
+and each is answered again on the new app, with the same answers as before.
 
 | Section | Answer | Source |
 |---|---|---|
@@ -127,7 +157,10 @@ These are not warnings yet because you have not reached them. Each one blocks a 
 | Financial features | **"My app doesn't provide any financial features."** Rent for accommodation is paid to the hostel through Razorpay; Nivora offers no loans, banking, investment, crypto or money transfer, and holds no balance. Separately, because rent pays for a **physical service**, Play's billing requirement does not apply | [data-safety.md §5](data-safety.md) |
 | Government apps | No | — |
 | Health | No | — |
-| Data deletion | The in-app route and the web route both exist | [account-deletion.md](account-deletion.md) |
+| Data deletion | The in-app route and the web route both exist. The web page `/legal/account-deletion` prints the Android package from `ANDROID_PACKAGE`, now `com.nivorasr.app` (`lib/legal-config.ts:96`, shown at `app/legal/account-deletion/page.tsx:142`). The live site changes only when the website is pushed, so check that the page shows `com.nivorasr.app` before entering the URL | [account-deletion.md](account-deletion.md) |
+
+The legal version stays 2026-09-13 (`lib/legal-config.ts:80`): neither the privacy policy nor the
+terms names the package, so the package change did not touch them.
 
 ### App access — what to enter in Console
 
@@ -140,15 +173,31 @@ an unstated length limit.
 **Before submitting, sign in to each account yourself** on a phone, with the exact password you will
 type into Console. None of the demo accounts had signed in since 6 September at the time of writing.
 
-What is true of the demo property, checked against the live database on 2026-09-13:
+What is true of the demo property, checked against the live database on 2026-09-13, with the
+manager and the trigger re-checked on 2026-09-14:
 
 - Every account below belongs to **Demo PG (Play review)**. Everything in it is fabricated.
 - It was seeded so a reviewer lands on populated screens
   (`db/migrations/2026-09-13-demo-pg-play-review-seed.sql`): four months of expenses, a week's mess
   menu, notices, a pending and an approved leave, and visitors.
 - **No Razorpay account is linked to it, on purpose**, so nobody can move real money during review.
-- **It has no manager account yet.** Create `demo.manager@nivora.app` in Demo PG (active, email
-  confirmed, no forced password change) before submitting, then add set 3.
+- **It has no manager account yet.** Create `demo.manager@nivora.app` from the demo owner's staff
+  screen before submitting; the steps are under Set 3.
+- **Demo addresses in Demo PG do not owe an email proof, for now.** Migration
+  `db/migrations/2026-09-13-demo-review-skip-email-verification.sql`, applied to production, adds
+  the trigger `users_zz_demo_review_email_verified`. Before an insert, or an update of the email, it
+  stamps `public.users.email_verified_at` only when the row is in Demo PG
+  (`d3300000-0000-4000-8000-000000000001`), the address is `demo.<x>@nivora.app`, the row is not
+  already stamped, and, on an update, the email actually changed. It fires after
+  `users_update_guard`. A rolled-back probe proved each case. `demo.owner`, `demo.warden` and
+  resident `9000000001` were already verified on 2026-09-04. Real hostels still owe the proof.
+- **The trigger is temporary.** Remove it after review:
+
+  ```sql
+  drop trigger if exists users_zz_demo_review_email_verified on public.users;
+  drop function if exists app.demo_review_email_verified();
+  ```
+
 - The nightly retention job removes complaints and notices older than two months. Before any review
   after early November, re-seed them.
 
@@ -198,6 +247,32 @@ are de-duplicated for 30 days.
 #### Set 3 — Manager (after you create the account)
 
 Username: `demo.manager@nivora.app`
+
+**Create the account first**, after preparing Set 4, because the owner has to get past two-step
+verification to reach the staff screen:
+
+1. Sign in as `demo.owner@nivora.app`. On the owner's More screen, tap **Staff accounts**
+   (`nivora_app/lib/features/owner/more/owner_more_screen.dart:71`), then **Add manager**.
+2. Check that the sheet shows **Demo PG (Play review)** — the demo owner's only property, which the
+   sheet displays rather than asks for — and the Manager role. Type any full name and the email
+   `demo.manager@nivora.app` exactly, then tap **Create manager account**. The app calls
+   `owner-create-staff`.
+3. The dialog shows the email and a **Temporary password**, once. Copy it, tick **I have saved these
+   credentials**, and tap **Done**.
+4. Sign out, then sign in as `demo.manager@nivora.app` with the temporary password. The app makes you
+   set a new password (`nivora_app/lib/core/router/router.dart:171`). Choose the one you will type
+   into Console.
+
+**The demo manager is exempt from email verification, because of the Demo PG trigger above.** After
+a new staff account's first password change, the app opens a verify-email screen that cannot be
+dismissed (`nivora_app/lib/features/auth/change_password_screen.dart:190-191`). It opens only while
+`email_verified_at` is empty (`nivora_app/lib/core/auth/session.dart:126`), and nobody reads mail
+sent to `nivora.app`. The trigger stamps that column when `owner-create-staff` inserts the manager's
+row, so the screen never opens. For the same reason, `requireVerifiedEmail()`
+(`supabase/functions/_shared/verification.ts:108`) will not refuse this account if it ever creates
+accounts. If the verify-email screen does open, one of three things is wrong: the address is not
+exactly `demo.<x>@nivora.app`, the account is not in Demo PG, or the trigger has been dropped. Fix
+that before submitting.
 
 ```text
 Nivora is invitation-only software for PG and hostel operators in India. Staff accounts are created
@@ -258,28 +333,46 @@ must never be given the owner account.
 
 ### 1. The Supabase redirect URL (do this before anyone verifies an email)
 
-The confirmation link's custom scheme is the applicationId, so it changed with the package:
+The confirmation link's custom scheme is the applicationId (`Env.emailLinkScheme`,
+`nivora_app/lib/core/config/env.dart:40`, matched by the manifest filter at
+`nivora_app/android/app/src/main/AndroidManifest.xml:142`), so it changed with the package. The
+link now returns on:
 
 ```
-com.srnivora.app://verify-email
+com.nivorasr.app://verify-email
 ```
 
-Supabase Dashboard → **Authentication → URL Configuration → Redirect URLs** → add exactly that.
+Supabase Dashboard → **Authentication → URL Configuration → Redirect URLs** → add exactly that
+string. Until 2026-09-13 this step named `com.srnivora.app://verify-email`; that old entry can be
+removed.
 
 **GoTrue does not refuse an unlisted redirect — it silently substitutes the Site URL.** So a
 missing entry does not look broken: the email arrives, the link works, and it opens a web page
 instead of the app. Measured on this project on 2026-09-01; see
 [email-verification.md](email-verification.md).
 
+The demo manager does not depend on this entry (Set 3). Every real staff account does.
+
 ### 2. Push notifications: set up, not yet seen on a phone
 
-Firebase is set up for push only; the backend stays Supabase. Project `nivorapg` holds the Android
-app `com.srnivora.app`. Its `google-services.json` sits in `nivora_app/android/app/` on the build
-machine and is gitignored. The `FCM_SERVICE_ACCOUNT` secret is set in Supabase: a `push-send` probe on
-2026-09-13 answered `claimed: 0`, not `not_configured`. versionCode 4 carries the matching
-`google_app_id`. Details are in [edge-functions.md → push-send](edge-functions.md). **Do not create
-another Firebase project**, and never use the `com.nivorasr.app` registration in the same project;
-it was a typo.
+Firebase is set up for push only; the backend stays Supabase. Project `nivorapg` holds two Android
+apps:
+
+| Firebase Android app | Status |
+|---|---|
+| `com.nivorasr.app` | **The app.** It matches `applicationId` (`nivora_app/android/app/build.gradle.kts:109`). Keep it; do not delete it |
+| `com.srnivora.app` | Left over from the abandoned listing. Nothing uses it, and it may be deleted later |
+
+Until 2026-09-13 this section called the `com.nivorasr.app` registration a typo never to be used.
+That is reversed: it is now the app.
+
+`nivora_app/android/app/google-services.json` sits on the build machine and is gitignored
+(`nivora_app/.gitignore:53`). It has a client for each of the two packages, and the Google Services
+plugin (applied at `nivora_app/android/app/build.gradle.kts:25-26` when that file exists) picks the
+one matching `applicationId`, so the file needs no edit. The `FCM_SERVICE_ACCOUNT` secret in Supabase
+is project-level and needs no change either: a `push-send` probe on 2026-09-13 answered
+`claimed: 0`, not `not_configured`. Details are in
+[edge-functions.md → push-send](edge-functions.md). **Do not create another Firebase project.**
 
 What is not proven is delivery: nobody has yet seen a notification arrive on a real phone. Install
 the build from the testing track, tap **Agree and continue**, allow notifications, then trigger one
@@ -291,23 +384,61 @@ the build from the testing track, tap **Agree and continue**, allow notification
 ## Verifying the artifact before you upload it
 
 **Do not run `scripts/release.sh` for this.** It rebuilds, and it overwrites
-`dist/NIVORA-1.0.0.aab` with a new, unmeasured file that still says versionCode 4. Check the file
-that is already there:
+`dist/NIVORA-1.0.0.aab` with a new, unmeasured file that still says versionCode 5. Check the files
+that are already there. `nivora_app/scripts/release.sh:420-422` stages all three from one run:
+
+| File | What it is | Bytes |
+|---|---|---|
+| `dist/NIVORA-1.0.0.aab` | The upload | 66,228,186 |
+| `dist/NIVORA-1.0.0.apk` | arm64 APK, the one to hand round | 25,306,793 |
+| `dist/NIVORA-1.0.0-universal.apk` | Universal APK, any CPU | 68,586,719 |
+
+They were built at 15:47 IST on 2026-09-14.
 
 ```bash
 sha256sum dist/NIVORA-1.0.0.aab
-# must print a85e26c1469c09f5d41a1913343ef9834afe3f44f1776439c379e67507a975ba
+# must print ec552f06eb45d1f52daeeffdb2f69cfaa087bfab70c34a4f3acee90d491f186f
+BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+"$BT/aapt2.exe" dump badging dist/NIVORA-1.0.0.apk | head -1
+# must start: package: name='com.nivorasr.app' versionCode='5' versionName='1.0.0'
 cd nivora_app && bash scripts/verify-adid.sh
 ```
 
-A matching hash means this is the exact bundle measured in
-[play-technical-compliance.md](play-technical-compliance.md) on 2026-09-13: versionCode 4, ten
-permissions, no AD_ID, 16 KB alignment, signed with the upload key. A different hash means `dist/`
-was rebuilt, and every one of those checks has to be run again before upload.
+The package line matters more than usual. This is the first bundle for the new app, and its package
+becomes permanent the moment it is uploaded. `aapt2` reads APKs rather than bundles, so the line
+comes from the arm64 APK of the same `release.sh` run, not from the bundle itself; the build-tools
+lookup is the one `release.sh:34` uses.
+
+A matching hash means this is the versionCode 5 bundle. The measured checks in
+[play-technical-compliance.md](play-technical-compliance.md) — ten permissions (the receiver one is
+now `com.nivorasr.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`), no AD_ID, 16 KB alignment, signed
+with the upload key — were measured on this versionCode 5 bundle on 2026-09-14, after first being
+taken on versionCode 4 for the abandoned listing. That doc names
+`ec552f06eb45d1f52daeeffdb2f69cfaa087bfab70c34a4f3acee90d491f186f` as the build its tables describe. A different hash means
+`dist/` was rebuilt, and every one of those checks has to be run again before upload.
 
 When a rebuild *is* wanted — any code change, which also means raising the `+N` in
 `nivora_app/pubspec.yaml` — `scripts/release.sh` refuses to stage anything that fails its own gates:
 the upload key (`CN=HostelPro`, not a debug fallback), the launcher label (`Nivora` — it once
 shipped as "mobile", the Flutter project name), `libflutter.so` in every ABI directory, a versionCode
 matching `pubspec.yaml`, and no service-role key or Razorpay secret anywhere in the bundle, in
-either of the two encodings a Dart snapshot uses.
+either of the two encodings a Dart snapshot uses. It does not check the package name.
+
+---
+
+## History: the abandoned `com.srnivora.app` listing
+
+Until 2026-09-13 this page was about a different Console app, locked to the package
+`com.srnivora.app`. Nothing was ever released from it, and it has been abandoned in favour of the new
+app above.
+
+- An early upload to it was refused because the bundle's package did not match the one that listing
+  was locked to. The code was then moved to `com.srnivora.app` to fit.
+- A release on it then showed three errors that were one problem: the release had no bundle in it.
+  The note at the end of Step 3 comes from that.
+- versionCodes 1 to 4 were built for it. The verified build was versionCode 4, AAB SHA-256
+  `a85e26c1…a975ba`, checked in [play-technical-compliance.md](play-technical-compliance.md) on
+  2026-09-13.
+- On 2026-09-13 and 2026-09-14 the code, the email deep link, the Supabase redirect URL and the
+  Firebase registration moved to `com.nivorasr.app`, and versionCode 5 was built for the new app.
+  Everything entered on the old listing is entered again there.

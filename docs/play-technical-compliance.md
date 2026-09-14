@@ -1,18 +1,26 @@
 # Play technical compliance — independent verification of the release artifact
 
 **Artifact:** `dist/NIVORA-1.0.0.apk`, `dist/NIVORA-1.0.0-universal.apk` and `dist/NIVORA-1.0.0.aab`
-**Package:** `com.srnivora.app` · versionCode 4 · versionName 1.0.0 · release name `1.0.0 (4)` · compileSdk 37 · targetSdk 36
+**Package:** `com.nivorasr.app` · versionCode 5 · versionName 1.0.0 · release name `1.0.0 (5)` · compileSdk 37 · targetSdk 36
+**The upload:** versionCode 5, AAB SHA-256 `ec552f06eb45d1f52daeeffdb2f69cfaa087bfab70c34a4f3acee90d491f186f`, built by `scripts/release.sh` at 15:47 IST on 2026-09-14.
+**Until 2026-09-13 this document described the `com.srnivora.app` listing.** That Play Console app
+is abandoned and nothing was ever released from it; its verified build was versionCode 4, AAB
+SHA-256 `a85e26c1…a975ba`. Nivora now goes up as a new Play Console app, `com.nivorasr.app`
+(`nivora_app/android/app/build.gradle.kts:60`, `:109`), as versionCode 5 (`nivora_app/pubspec.yaml:19`
+is `1.0.0+5`). An applicationId is permanent once a bundle is uploaded to that app.
 **Verified:** 4 September 2026 against the versionCode 1 artifacts (then compiled against SDK 36);
 permissions verified again on 12 September 2026 against the rebuilt versionCode 1 artifact, compiled
 against SDK 37 after commit `ad64557` pinned `compileSdk = 37` that day; re-audited 13 September 2026
-against the versionCode 3 artifacts; and **re-measured 13 September 2026 against the versionCode 4
-artifacts, which are the upload**, built by `scripts/release.sh` at 20:21 IST from the source committed
-as `4fd41ef` (two comment-only edits, to `AndroidManifest.xml` and `proguard-rules.pro`, landed after
-the build copied the tree; neither changes the binary).
+against the versionCode 3 artifacts; re-measured 13 September 2026 against the `com.srnivora.app`
+versionCode 4 artifacts, then that listing's upload, built at 20:21 IST; and **re-measured 14 September
+2026 against the `com.nivorasr.app` versionCode 5 artifacts, which are the upload**, built by
+`scripts/release.sh` at 15:47 IST.
 **Which build the numbers belong to:** the badging (§1), the permission dump, merge origins and AD_ID
 check (§2), the 16 KB alignment table (§3), the signer digest (§4) and the sizes in verdict row 7 are
-**versionCode 4's**. The `apksigner` block in §4 is still the versionCode 1 output, kept for its
-format; the versionCode 4 certificate was read separately and is the same key. **Any rebuild
+**versionCode 5's**. Each matched versionCode 4 apart from the package name, the version code, the
+receiver permission's name and the AAB's byte count. The `apksigner` block in §4 is still the
+versionCode 1 output, kept for its format; the versionCode 5 certificate was read separately and is
+the same key. **Any rebuild
 invalidates every number here:** `libapp.so` is the AOT-compiled Dart code, so even a Dart-only change
 produces a different artifact that has to be measured again.
 **Method:** every artifact claim below was read out of the artifact itself with `aapt2`, `apksigner`,
@@ -31,19 +39,19 @@ manifests. Nothing was taken on trust from the build guide.
 
 | # | Requirement | Status |
 |---|---|---|
-| 1 | Target API level (API 36 required for new submissions from 31 Aug 2026) | **PASS** on versionCode 4 — `targetSdkVersion 36` (§1) |
-| 2 | Permissions minimal and justified | **Verified 2026-09-12** on versionCode 1, and **dumped again 2026-09-13** on versionCode 3 and on versionCode 4 — the same 10 entries each time. Each entry's origin is read from the versionCode 4 build's manifest-merger report (§2). No AD_ID in any of the three versionCode 4 artifacts, shown by a check that can actually read an APK manifest (§2 explains why the earlier "clean" was not evidence). See §2 |
-| 3 | Signing key strength | **PASS** — RSA 2048, `CN=HostelPro, O=HostelPro, C=IN` (the §4 `apksigner` block is the versionCode 1 output; the versionCode 4 bundle's certificate digest, read on 2026-09-13, is the same key) |
-| 4 | Signature schemes | **PASS** — AAB is JAR-signed (`keytool -printcert -jarfile` reads the upload certificate out of the versionCode 4 bundle), which is what Play requires; APK is v2, and the signature gate in `release.sh` passed on both versionCode 4 APKs |
-| 5 | **16 KB page-size compatibility** (required for apps targeting API 35+; from 1 Feb 2027 an update without it cannot be released) | **PASS on versionCode 4** — 12 native libraries, the same four in each of `arm64-v8a`, `armeabi-v7a` and `x86_64`, every `PT_LOAD` segment aligned ≥ 16 KB, measured on the versionCode 4 bundle; see §3 |
+| 1 | Target API level (API 36 required for new submissions from 31 Aug 2026) | **PASS** on `com.nivorasr.app` versionCode 5 — `targetSdkVersion 36` (§1) |
+| 2 | Permissions minimal and justified | **Verified 2026-09-12** on versionCode 1, and **dumped again 2026-09-13** on versionCode 3 and on versionCode 4 — the same 10 entries each time. Each entry's origin is read from the versionCode 4 build's manifest-merger report (§2). No AD_ID in any of the three versionCode 4 artifacts, shown by a check that can actually read an APK manifest (§2 explains why the earlier "clean" was not evidence). All of those were `com.srnivora.app` builds. **Dumped again 2026-09-14 on `com.nivorasr.app` versionCode 5:** the same 10 entries, the receiver permission renamed `com.nivorasr.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, identical origins in its merger report, and no AD_ID in any of its three artifacts. See §2 |
+| 3 | Signing key strength | **PASS** — RSA 2048, `CN=HostelPro, O=HostelPro, C=IN` (the §4 `apksigner` block is the versionCode 1 output; the versionCode 4 bundle's certificate digest, read on 2026-09-13, is the same key; the versionCode 5 bundle's digest, read on 2026-09-14, is the same key, which remains the upload key for the new `com.nivorasr.app` app) |
+| 4 | Signature schemes | **PASS** — AAB is JAR-signed (`keytool -printcert -jarfile` reads the upload certificate out of the versionCode 5 bundle), which is what Play requires; APK is v2, and the signature gate in `release.sh` passed on both versionCode 5 APKs |
+| 5 | **16 KB page-size compatibility** (required for apps targeting API 35+; from 1 Feb 2027 an update without it cannot be released) | **PASS on `com.nivorasr.app` versionCode 5** — 12 native libraries, the same four in each of `arm64-v8a`, `armeabi-v7a` and `x86_64`, every 64-bit library's `PT_LOAD` segments aligned ≥ 16 KB, measured on the versionCode 5 bundle (versionCode 4 gave the same values); see §3 |
 | 6 | ABI coverage | **PASS** — the AAB carries `arm64-v8a`, `armeabi-v7a` and `x86_64`, and Play splits it per device. The APK handed round directly is arm64-only by design; `NIVORA-<v>-universal.apk` is the one that installs anywhere |
-| 7 | Artifact size | **PASS** — measured on the versionCode 4 artifacts: arm64 APK 25.3 MB (25,306,793 bytes), universal APK 68.6 MB (68,586,719), AAB 66.2 MB (66,228,048), all far under the 200 MB base limit. What a phone downloads from Play is the per-device split of the AAB, not the whole bundle |
+| 7 | Artifact size | **PASS** — measured on the versionCode 5 artifacts: arm64 APK 25,306,793 bytes, universal APK 68,586,719 bytes, AAB 66,228,186 bytes, all far under the 200 MB base limit. The `com.srnivora.app` versionCode 4 artifacts measured arm64 APK 25.3 MB (25,306,793 bytes), universal APK 68.6 MB (68,586,719), AAB 66.2 MB (66,228,048). What a phone downloads from Play is the per-device split of the AAB, not the whole bundle |
 | 8 | Typeface available offline | **PASS** — Inter bundled; the app does not fetch fonts at runtime |
 | 9 | No secrets in the shipped bundle | **PASS** — see §5 |
 
-**No technical blockers in the versionCode 4 artifacts, which are the upload.** A rebuild of any
-kind needs §1–§4 and row 7 measured again. The remaining blockers are operational, not built into
-the binary, and are listed in §6.
+**No technical blockers in the `com.nivorasr.app` versionCode 5 artifacts, which are the upload.** A
+rebuild of any kind needs §1–§4 and row 7 measured again. The remaining blockers are operational, not
+built into the binary, and are listed in §6.
 
 ---
 
@@ -51,14 +59,15 @@ the binary, and are listed in §6.
 
 ```
 $ aapt2 dump badging dist/NIVORA-1.0.0.apk | grep -E "package:|targetSdkVersion"
-package: name='com.srnivora.app' versionCode='4' versionName='1.0.0'
+package: name='com.nivorasr.app' versionCode='5' versionName='1.0.0'
          platformBuildVersionName='17' platformBuildVersionCode='37'
          compileSdkVersion='37' compileSdkVersionCodename='17'
 targetSdkVersion:'36'
 ```
 
-That is the versionCode 4 build, dumped on 2026-09-13 with build-tools 37.0.0 (the `package:` line
-is wrapped here for width). versionCode 3 printed the same values apart from the version code. An
+That is the `com.nivorasr.app` versionCode 5 build, dumped on 2026-09-14 with build-tools 37.0.0 (the
+`package:` line is wrapped here for width); both APKs print it. The `com.srnivora.app` versionCode 4 and
+versionCode 3 builds printed the same values apart from the package and the version code. An
 earlier revision showed `versionCode='1'` and `compileSdkVersion='36'`; compileSdk
 is now 37, for the reason given below.
 
@@ -80,15 +89,17 @@ stays at Flutter's 36. The pin comes out once Flutter's own value reaches 37.
 ## 2. Permissions
 
 Verified against `dist/NIVORA-1.0.0.apk` **as built on 2026-09-12** (package `com.srnivora.app`,
-versionCode 1, targetSdk 36, compileSdk 37), dumped again on 2026-09-13 from both versionCode 3
-APKs, and dumped once more from the versionCode 4 universal APK that evening. All of them list the
-same ten permissions in the same order. The block below is in the format
+versionCode 1, targetSdk 36, compileSdk 37), dumped again on 2026-09-13 from both versionCode 3 APKs
+and from the versionCode 4 universal APK, and **dumped once more on 2026-09-14 from the
+`com.nivorasr.app` versionCode 5 arm64 APK**, which is the block below. All of them list the same ten
+permissions in the same order. The receiver permission takes its name from the applicationId, so it is
+the one entry whose name changed with the package. The block below is in the format
 build-tools 37.0.0 actually prints. An earlier revision showed a simplified one-name-per-line list
 instead:
 
 ```
 $ aapt2 dump permissions dist/NIVORA-1.0.0.apk
-package: com.srnivora.app
+package: com.nivorasr.app
 uses-permission: name='android.permission.INTERNET'
 uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
 uses-permission: name='android.permission.POST_NOTIFICATIONS'
@@ -97,8 +108,8 @@ uses-permission: name='android.permission.WAKE_LOCK'
 uses-permission: name='android.permission.VIBRATE'
 uses-permission: name='android.permission.NFC'
 uses-permission: name='com.google.android.c2dm.permission.RECEIVE'
-permission: com.srnivora.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
-uses-permission: name='com.srnivora.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'
+permission: com.nivorasr.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+uses-permission: name='com.nivorasr.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'
 uses-permission: name='android.permission.READ_BASIC_PHONE_STATE'
 ```
 
@@ -108,9 +119,9 @@ line after it is the app using it. Ten permissions used. **Only four are declare
 through the manifest merger from dependencies**, and three of our four are declared by dependencies
 as well.
 
-The Origin column is read from the manifest-merger report of the versionCode 4 build
-(`/c/nivora-work/app/build/app/outputs/logs/manifest-merger-release-report.txt`, written 20:21 IST on
-2026-09-13). For each entry it lists every source the merger `ADDED` or `MERGED`. "Ours" is the
+The Origin column is read from the manifest-merger report of the `com.nivorasr.app` versionCode 5 build
+(`/c/nivora-work/app/build/app/outputs/logs/manifest-merger-release-report.txt`, written 15:42 IST on
+2026-09-14; the versionCode 4 report of 2026-09-13 listed the same sources for every entry). For each entry it lists every source the merger `ADDED` or `MERGED`. "Ours" is the
 `ADDED` line from our own manifest; the libraries after it declare the same permission. An earlier
 pass rebuilt this column from the dependencies' own manifests because that build's report had already
 been deleted, and the report shows that pass missed several Google Play services and Firebase
@@ -122,7 +133,7 @@ transport libraries.
 | `ACCESS_NETWORK_STATE` | normal | **ours**, plus the `firebase_messaging` plugin, `firebase-messaging:25.1.2`, `firebase-installations:19.1.2`, `play-services-cloud-messaging:17.4.0`, `play-services-maps:17.0.0`, `transport-backend-cct:3.1.9`, `transport-runtime:3.1.9` and `com.razorpay:core:1.0.18` | **Yes.** Lets the app distinguish "you are offline" from "the server is down" — two different messages to a warden standing in a corridor. |
 | `NFC` | normal | `com.razorpay:standard-core:1.7.18` | **Yes, and not ours to remove.** Razorpay Checkout supports contactless card reads. No runtime prompt. |
 | `READ_BASIC_PHONE_STATE` | normal | `com.razorpay:core:1.0.18` | **Yes.** The API-33+ *reduced-scope* replacement for `READ_PHONE_STATE`; Razorpay uses it for carrier detection during UPI and OTP flows. It exposes no device identifier, so it needs **no** Play Console declaration — unlike `READ_PHONE_STATE`, which would. |
-| `com.srnivora.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `signature` | `androidx.core:core:1.18.0` | **Yes.** Auto-generated when a non-exported runtime receiver is registered on API 33+. Namespaced to this app, signature-level, grants access to nothing. Not shown to users. |
+| `com.nivorasr.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `signature` | `androidx.core:core:1.18.0` | **Yes.** Auto-generated when a non-exported runtime receiver is registered on API 33+. Namespaced to this app (until the package changed on 2026-09-13 it was `com.srnivora.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, as the dump above shows), signature-level, grants access to nothing. Not shown to users. |
 | `POST_NOTIFICATIONS` | dangerous | **ours**, plus `firebase-messaging`, the `firebase_messaging` plugin and `flutter_local_notifications` | **Yes.** Rent reminders, notices, "payment received", a task assigned. Runtime permission from Android 13: without it the app can hold a valid FCM token, the server can send a perfectly good message, and NOTHING APPEARS — silently. **Asked for behind the consent gate, not at sign-in and not on first launch.** Push starts in `lib/features/legal/consent_gate.dart`: from `initState` for someone who agreed on an earlier launch (`:93-95`), and from `_accept` for someone agreeing now (`:166`). `lib/core/notify/push_service.dart` then shows the system dialog itself, with no in-app rationale screen (`_askPermission`, `:183-193`), and a refusal still registers the token (`:117-118`). `lib/main.dart` only stops push, on sign-out (`:236`). Delivery to a real phone is not yet proven. |
 | `CAMERA` | dangerous | **ours** | **Yes.** A warden photographs a new resident and their ID proof at registration (`lib/features/warden/actions/register_student_sheet.dart`). This row used to add that a resident photographs a complaint; the resident Android app cannot attach a photo to a complaint, so that part of the justification was wrong and is gone. Declaring it is what makes it mandatory — `ACTION_IMAGE_CAPTURE` throws `SecurityException` for an app that declares CAMERA without holding it. `lib/data/capture.dart` requests it first. `<uses-feature android:required="false"/>` keeps the app installable on a device with no camera. |
 | `WAKE_LOCK` | normal | `:firebase_messaging`, `com.google.firebase:firebase-messaging:25.1.2` and `com.google.android.gms:play-services-cloud-messaging:17.4.0` | **Yes, and not ours to remove.** Wakes the device long enough to hand off an incoming push. No runtime prompt. |
@@ -149,8 +160,9 @@ transport libraries.
 
 The AD_ID absence in particular is a claim about the **merged** manifest, not about our source —
 which is the whole reason it is removed with `tools:node="remove"` rather than simply left out. It
-was verified on the built artifacts, all three of them, on 2026-09-13: on versionCode 3, and again on
-the versionCode 4 files, with the same result:
+was verified on the built artifacts, all three of them: on versionCode 3 and the `com.srnivora.app`
+versionCode 4 files on 2026-09-13, and on the `com.nivorasr.app` versionCode 5 files on 2026-09-14,
+with the same result each time:
 
 ```bash
 cd nivora_app && bash scripts/verify-adid.sh
@@ -175,8 +187,9 @@ question. It names the exact AAR and line that contributed each permission, whic
 When the repo is inside OneDrive, `scripts/release.sh` builds in `$NIVORA_WORK_DIR`, default
 `/c/nivora-work`, and deletes that tree at the start of every run
 (`nivora_app/scripts/release.sh:62-68`). So the report only ever describes the last build, and has
-to be read before the next one starts. The versionCode 4 origins in the table above were read from
-it on 2026-09-13, before any further build:
+to be read before the next one starts. The origins in the table above were read from the
+versionCode 5 report on 2026-09-14, before any further build, and from the versionCode 4 report the day
+before, with the same result:
 
 ```bash
 grep -A2 "permission.NFC" \
@@ -184,8 +197,9 @@ grep -A2 "permission.NFC" \
 ```
 
 **A permission dump is only ever true of one artifact.** An earlier version of this section was
-carried forward across a package-name change and described a build that no longer existed. If the
-dependency list moves, re-run the dump before signing anything off.
+carried forward across a package-name change and described a build that no longer existed. The move
+to `com.nivorasr.app` was another such change, which is why the dump above was taken again from the
+versionCode 5 build. If the dependency list moves, re-run the dump before signing anything off.
 
 ---
 
@@ -200,11 +214,11 @@ own wording and date. **An earlier revision of this document passed the requirem
 native code at all.** That is no longer true — a Flutter app ships the engine, so the requirement has
 to be met rather than sidestepped.
 
-Measured on 2026-09-13 by parsing, with Python, the ELF program headers of every library in all
+Measured on 2026-09-14 by parsing, with Python, the ELF program headers of every library in all
 three ABIs of `dist/NIVORA-1.0.0.aab` and taking the smallest `p_align` across each library's
-`PT_LOAD` segments. **These are the versionCode 4 bundle's figures**, measured after the 20:21 build.
-versionCode 3 gave identical values, but its `libapp.so` is a different file, so its figures were not
-carried over; they were measured again. The guide's threshold is `2**14` (16384, `0x4000`); a `LOAD`
+`PT_LOAD` segments. **These are the `com.nivorasr.app` versionCode 5 bundle's figures**, measured after
+the 15:47 build. versionCodes 3 and 4 gave identical values, but each `libapp.so` is a different file,
+so no figure was carried over; each bundle was measured. The guide's threshold is `2**14` (16384, `0x4000`); a `LOAD`
 segment at `2**13` or lower fails:
 
 | Library | min LOAD alignment | |
@@ -250,11 +264,13 @@ V2 Signer: certificate SHA-256 digest:
   24239746895a546386f1874b1db5f5313d02da99dbe472f5451923581ffb6465
 ```
 
-That block was printed for the versionCode 1 APK. For the versionCode 4 upload, on 2026-09-13,
-`keytool -printcert -jarfile dist/NIVORA-1.0.0.aab` printed the certificate SHA-256
+That block was printed for the versionCode 1 APK. For the `com.nivorasr.app` versionCode 5 bundle, on
+2026-09-14, `keytool -printcert -jarfile dist/NIVORA-1.0.0.aab` printed the certificate SHA-256
 `24:23:97:46:89:5A:54:63:86:F1:87:4B:1D:B5:F5:31:3D:02:DA:99:DB:E4:72:F5:45:19:23:58:1F:FB:64:65`,
-the same key as the digest above, and the signature gate in `scripts/release.sh` passed on both
-versionCode 4 APKs. A signature is a fact about one file: repeat this on any rebuild.
+the same key as the digest above (the `com.srnivora.app` versionCode 4 bundle printed the same on
+2026-09-13), and the signature gate in `scripts/release.sh` passed on both versionCode 5 APKs. The
+upload key stays the same for the new app. A signature is a fact about one file: repeat this on any
+rebuild.
 
 The AAB carries `META-INF/HOSTELPR.RSA` + `.SF` + `MANIFEST.MF` — JAR signing, which is the
 correct and only scheme for a bundle. Play re-signs the delivered APKs with its own key.
@@ -269,7 +285,9 @@ fingerprint is currently used. In Play Console it is under **Protected with Play
 distribution → Go to Play app signing**, in the **App signing key** section — the path Google's help
 page (`support.google.com/googleplay/android-developer/answer/9842756`) gives as of 2026-09-13. This
 used to say Console → Setup → App signing, which no longer matches that page. Google re-signs, so the certificate
-that reaches a user's device is not the one above.
+that reaches a user's device is not the one above. Play App Signing creates a new app signing key
+for the new `com.nivorasr.app` app, so an app signing fingerprint taken from the abandoned
+`com.srnivora.app` listing is not it.
 
 ---
 
@@ -306,13 +324,24 @@ The policy is `/legal/privacy` (`app/legal/privacy/page.tsx`), public because `/
 `PUBLIC_PATHS` (`lib/supabase/middleware.ts:9-11`). Its version 2026-09-13 text went live on
 2026-09-13: commit `4fd41ef` was pushed at 20:44 IST, and signed-out GETs of `/legal/privacy`,
 `/legal/account-deletion` and `/legal/terms` then returned 200 and showed version 2026-09-13. The
-in-app copy reaches users with versionCode 4, so the Data safety answers that rely on that text go in
-together with versionCode 4.
+in-app copy reaches users with versionCode 5, so the Data safety answers that rely on that text go in
+together with versionCode 5, entered again on the new `com.nivorasr.app` app. (Until 2026-09-13 this
+said versionCode 4, which was built for the abandoned `com.srnivora.app` listing and never released.)
+`/legal/account-deletion` prints the package from `ANDROID_PACKAGE`
+(`app/legal/account-deletion/page.tsx:142`, `lib/legal-config.ts:96`), now `com.nivorasr.app`; the
+live page shows the new package only once the website is pushed.
 
 **Note on `assetlinks.json`:** the previous revision listed it as a blocker. It was, for a Trusted
 Web Activity, where Digital Asset Links is what stops the app opening in a browser chrome. This is
 a native client and does not depend on it. It is required again only if App Links deep-linking is
 added later.
+
+**Note on the email-confirmation redirect (not a blocker):** the confirmation link now returns on
+`com.nivorasr.app://verify-email` (`nivora_app/lib/core/config/env.dart:40`, `:44`). Add exactly that
+string under Supabase → Authentication → URL Configuration → Redirect URLs; the old
+`com.srnivora.app://verify-email` entry can be removed. GoTrue silently substitutes the Site URL for
+an unlisted redirect, and the verification still completes (`env.dart:80-95`), so the only symptom is
+that the person lands on the web home page instead of back in the app.
 
 ---
 

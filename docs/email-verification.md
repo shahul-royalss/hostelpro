@@ -5,6 +5,12 @@
 > "the email verification has to be like: it has to ask to login through that link once they
 > login through that link they have to verify"
 
+**Updated 2026-09-13:** the link now returns on `com.nivorasr.app://verify-email`, because the
+app's package is now `com.nivorasr.app` (`nivora_app/android/app/build.gradle.kts:109`). Until
+then it was `com.srnivora.app`, the package of a Play listing that was abandoned before any
+release. Measurements dated 2026-09-01 below were taken with the old string and say so. §10 covers
+the temporary Demo PG exemption added the same day.
+
 ---
 
 ## 0. The one thing to paste. Everything else in this file is explanation.
@@ -16,18 +22,21 @@ Under **Redirect URLs**, click **Add URL** and paste this, exactly, with no trai
 no `https://` in front of it:
 
 ```
-com.srnivora.app://verify-email
+com.nivorasr.app://verify-email
 ```
 
 Press **Save**. There is no deploy step and no rebuild; it takes effect on the next email sent.
 
+If `com.srnivora.app://verify-email` is on the list from before 2026-09-13, remove it. The code no
+longer asks for it, and no build that did was ever released.
+
 **Does Site URL still matter? No — leave it alone.** It is already
-`https://hostelpro-three.vercel.app` (measured today, see §3), which is correct, and this
+`https://hostelpro-three.vercel.app` (measured 2026-09-01, see §3), which is correct, and this
 release does not need it changed. Site URL now only decides where a *browser* lands when it
 cannot open the deep link — the fallback in §4.2 — and where GoTrue sends a redirect it has
 refused. Both are already pointing at a page that loads.
 
-Do **not** add a wildcard (`com.srnivora.app://**`, or `https://hostelpro-three.vercel.app/**`).
+Do **not** add a wildcard (`com.nivorasr.app://**`, or `https://hostelpro-three.vercel.app/**`).
 The allow-list is what stops an emailed one-time token being redirected somewhere an attacker
 chose. One exact entry is all this needs.
 
@@ -72,12 +81,12 @@ So the redirect is a **custom scheme that opens Nivora**:
 
 | Piece | Where | Value |
 |---|---|---|
-| Redirect the app requests | `nivora_app/lib/core/config/env.dart` → `Env.emailConfirmRedirectUrl` | `com.srnivora.app://verify-email` |
-| Intent filter that catches it | `nivora_app/android/app/src/main/AndroidManifest.xml` | `<data android:scheme="com.srnivora.app" android:host="verify-email"/>` |
+| Redirect the app requests | `nivora_app/lib/core/config/env.dart:100-103` → `Env.emailConfirmRedirectUrl` | `com.nivorasr.app://verify-email` |
+| Intent filter that catches it | `nivora_app/android/app/src/main/AndroidManifest.xml:142` | `<data android:scheme="com.nivorasr.app" android:host="verify-email"/>` |
 | Dashboard allow-list entry | Supabase → Authentication → URL Configuration | the same string (§0) |
 
 All three must be the same string. The first two are asserted against each other by
-`nivora_app/test/email_verification_test.dart` §8, which reads the manifest and compares it to
+`nivora_app/test/email_verification_test.dart:846-872` (its eighth group), which reads the manifest and compares it to
 the Dart constant, because those two files cannot see one another and drift between them is
 silent. The third is a dashboard field no test can reach — which is why §0 exists and why the
 app itself names it on screen (§4.4).
@@ -86,7 +95,7 @@ What happens on the phone, in order:
 
 1. GoTrue matches the emailed token at `/auth/v1/verify` and stamps
    `auth.flow_state.auth_code_issued_at`. **The proof is minted here**, before any redirect.
-2. GoTrue 303s to `com.srnivora.app://verify-email?code=…`.
+2. GoTrue 303s to `com.nivorasr.app://verify-email?code=…`.
 3. Android hands that Uri to Nivora — to the copy already running, because `MainActivity` is
    `launchMode="singleTop"`, or by cold-starting it.
 4. `supabase_flutter`'s deep-link observer sees the `code` parameter, calls
@@ -100,13 +109,16 @@ An `https` intent filter would offer Nivora as a handler for ordinary web URLs. 
 verified Digital Asset Link, Android shows a disambiguation sheet on somebody else's links — and
 on Android 12+ an `autoVerify` filter that fails verification is **never offered to the app at
 all**. `public/.well-known/assetlinks.json` currently delegates `hostelpro-three.vercel.app` to
-`app.nivora.twa`, the old web wrapper, not to `com.srnivora.app`; adding the Flutter app needs
+`app.nivora.twa`, the old web wrapper, not to `com.nivorasr.app`; adding the Flutter app needs
 the Play App Signing SHA-256, which per `docs/PLAY-CRITICAL-assetlinks.md` does not exist until
-after the first upload. So an App Link would ship as a filter that never fires.
+after the first upload. Play App Signing creates a new app signing key for the new
+`com.nivorasr.app` app, so that means the first upload to that app. So an App Link would ship as
+a filter that never fires.
 
-`com.srnivora.app` is this app's own `applicationId` used as a scheme — the reverse-DNS form
-RFC 3986 allows, which nothing else on the device can claim. **Scheme and host are both pinned**,
-so the only Uri the filter accepts is `com.srnivora.app://verify-email[?…]`. It captures no
+`com.nivorasr.app` is this app's own `applicationId` (`nivora_app/android/app/build.gradle.kts:109`)
+used as a scheme — the reverse-DNS form RFC 3986 allows, which nothing else on the device can
+claim. **Scheme and host are both pinned**, so the only Uri the filter accepts is
+`com.nivorasr.app://verify-email[?…]`. It captures no
 `http`, no `https`, and no bare-scheme wildcard; a test asserts that too.
 
 ### One cost, stated plainly: the super admin re-enters their TOTP
@@ -127,7 +139,9 @@ verified, so in practice it will rarely be hit at all.
 
 Measured 2026-09-01 by asking `/auth/v1/verify` to redirect a **dead** token and reading the
 `Location` header back. That is the one probe that shows GoTrue's decision without spending a
-real link:
+real link. The app's scheme was still `com.srnivora.app` then, so that is the string probed. The
+current `com.nivorasr.app://verify-email` has not been probed, but it is a custom scheme too and
+falls under the same rule (point 2 below):
 
 ```
 redirect_to=com.srnivora.app://verify-email
@@ -145,10 +159,11 @@ Two facts follow, and both matter:
 1. **Site URL is already `https://hostelpro-three.vercel.app`.** Earlier revisions of this
    document said it was `http://localhost:3000`. That was true when they were written and is not
    true now — the owner fixed it. Nothing further is needed there.
-2. **The deep-link entry is not on the allow-list yet.** GoTrue accepts a `redirect_to` only if
+2. **The deep-link entry was not on the allow-list.** GoTrue accepts a `redirect_to` only if
    it is on the allow-list or shares a hostname with the Site URL. A custom scheme shares a
-   hostname with nothing, so it needs the entry. Until it is added, the link keeps landing on the
-   web root instead of opening Nivora.
+   hostname with nothing, so it needs the entry. The entry that matters now is
+   `com.nivorasr.app://verify-email` (§0), new as of 2026-09-13. Until it is added, the link keeps
+   landing on the web root instead of opening Nivora.
 
 **GoTrue never says no out loud.** It does not refuse an unlisted redirect — it *silently
 substitutes the Site URL*. There is no error for the app to catch, no log line, and no way for
@@ -197,8 +212,9 @@ below, which finishes it just as well."
 
 GoTrue substitutes the Site URL, so the link lands on `https://hostelpro-three.vercel.app`, which
 returns 200. The user sees the Nivora web home page instead of the app. Identical to §4.1 from
-there: the proof exists, the button finishes it. This is the situation **as of today**, and it is
-how the three verified accounts in §6 got verified.
+there: the proof exists, the button finishes it. This was the situation measured on 2026-09-01,
+it stays the situation until the `com.nivorasr.app` entry is added, and it is how the three
+verified accounts in §6 got verified.
 
 ### 4.3 The link has expired or was already used
 
@@ -243,7 +259,9 @@ nothing at all for them.
 `requireVerifiedEmail()` in `supabase/functions/_shared/verification.ts` is unchanged and is
 still the gate. It reads `public.users.email_verified_at` and refuses the one action where an
 unproved address becomes credentials in a stranger's inbox: **creating another account**
-(`sa-create-owner`, `owner-create-staff`, `warden-register-student`). Everything else in the app
+(`sa-create-owner`, `owner-create-staff`, `warden-register-student`, and
+`warden-student-credentials`, which resets a resident's password or changes their login email).
+Everything else in the app
 keeps working, which is why verification is a requirement and not a trap — the verify screen has
 a working back button and an "I will do this later", and the router deliberately does not divert
 to it.
@@ -372,18 +390,87 @@ click to the next `status` call, which is seconds — but it is why two independ
 
 ## 9. What was NOT measured, said plainly
 
-- **A real click on a link that redirects to `com.srnivora.app://verify-email`.** Not
-  measured. It cannot be, from here: the allow-list entry in §0 is a dashboard field, GoTrue
+- **A real click on a link that redirects to `com.nivorasr.app://verify-email`.** Not
+  measured, and neither was one under the old `com.srnivora.app` scheme. It cannot be, from
+  here: the allow-list entry in §0 is a dashboard field, GoTrue
   substitutes the Site URL until somebody adds it (§3), and adding it is not something this
   codebase or Claude can do. What *is* measured is the part that carries the risk — that the
   proof is minted before the redirect and is redirect-independent (§6) — so the deep link cannot
   cost a verification even if it fails outright.
-- **The app running on a device.** No APK or Gradle build was run. The manifest was parsed and
-  validated as well-formed XML, and the intent filter it registers was read back from the parse
-  tree: one `MainActivity`, `exported=true`, `launchMode=singleTop`, and a VIEW/DEFAULT/BROWSABLE
-  filter whose only `<data>` is `scheme=com.srnivora.app host=verify-email`.
+- **The app running on a device.** No APK or Gradle build was run for this document. On
+  2026-09-01 the manifest was parsed and validated as well-formed XML, and the intent filter it
+  registers was read back from the parse tree: one `MainActivity`, `exported=true`,
+  `launchMode=singleTop`, and a VIEW/DEFAULT/BROWSABLE filter whose only `<data>` was then
+  `scheme=com.srnivora.app host=verify-email`. Since 2026-09-13 that element reads
+  `scheme=com.nivorasr.app` (`nivora_app/android/app/src/main/AndroidManifest.xml:142`). The
+  rename was read from the file, not re-parsed.
 - **`supabase_flutter`'s behaviour was read, not run.** Version 2.17.2:
   `detectSessionInUri` defaults to `true`; the default callback predicate returns true for any
   Uri carrying `code` in the query or fragment; on Android the initial (cold-start) Uri arrives
   through the same `uriLinkStream`; and `_handleDeeplink` wraps `getSessionFromUrl` in a
   try/catch that logs and does **not** sign the user out.
+
+---
+
+## 10. Demo PG accounts are stamped without a click — TEMPORARY, for Play review
+
+**What.** Migration `db/migrations/2026-09-13-demo-review-skip-email-verification.sql`, applied to
+production, adds function `app.demo_review_email_verified()` and trigger
+`users_zz_demo_review_email_verified`, `BEFORE INSERT OR UPDATE OF email` on `public.users`
+(:39-64). It sets `email_verified_at = now()` only when every condition below holds (:42-55):
+
+| Condition | As written |
+|---|---|
+| The row belongs to Demo PG | `hostel_id = 'd3300000-0000-4000-8000-000000000001'` |
+| The address is a demo address | `lower(btrim(email)) like 'demo.%@nivora.app'` |
+| The row is not already stamped | `email_verified_at is null` |
+| On UPDATE, the address changed | `new.email is distinct from old.email` |
+
+Row triggers on the same event fire in name order, so it runs after `users_update_guard`
+(:29-31): on an address change the guard clears the stamp and this sets it again. A read-only
+query on 2026-09-14 found both objects live, with the trigger sorting after the guard.
+
+**Why.** Review accounts use `demo.*@nivora.app` addresses whose mail nobody reads, so none of
+them can ever open a link. `demo.manager@nivora.app`, which the operator creates from the demo
+owner's staff screen, would otherwise:
+
+- after its first password change, land on the verify screen pushed with `blocking: true`
+  (`nivora_app/lib/features/auth/change_password_screen.dart:191`), which cannot be dismissed
+  (`canPop: !widget.blocking`, `nivora_app/lib/features/auth/verify_email_screen.dart:364`); and
+- be refused by `requireVerifiedEmail()` (`supabase/functions/_shared/verification.ts:108`) if it
+  ever creates an account. The callers are `sa-create-owner/index.ts:146`,
+  `owner-create-staff/index.ts:97`, `warden-register-student/index.ts:120` and
+  `warden-student-credentials/index.ts:359`.
+
+A one-off UPDATE could not cover it: the row does not exist yet (none on 2026-09-14), and
+`users_update_guard` refuses a hand-written stamp from anything but the service role (§4.5).
+
+**Evidence that it is scoped.** A probe against production, rolled back, covered each case:
+
+| Case | Result |
+|---|---|
+| Demo address, in Demo PG | stamped |
+| Non-demo address, in Demo PG | not stamped |
+| Demo address, in another hostel | not stamped |
+| Demo address in Demo PG, email changed | stamped again |
+
+Every real hostel, and every other address inside Demo PG, still owes the proof. No app or Edge
+Function code changed; both already read `email_verified_at`. The cost, stated plainly: until the
+trigger is removed, a Demo PG row with a `demo.*@nivora.app` address passes
+`requireVerifiedEmail()` without anyone opening a link.
+
+**The accounts that were already verified.** `demo.owner@nivora.app`, `demo.warden@nivora.app`
+and resident `9000000001` were stamped on 2026-09-04 (12:35 UTC, read back 2026-09-14). The
+trigger is not what keeps two of them verified: `demo.owner` has no `users.hostel_id`, and the
+resident's address is `9000000001@student.hostelpro.local`, which §4.6 never asks anyway. So do
+not change the demo owner's address during review, because nothing would stamp it again.
+
+**Remove it after review.**
+
+```sql
+drop trigger if exists users_zz_demo_review_email_verified on public.users;
+drop function if exists app.demo_review_email_verified();
+```
+
+The migration keeps it out of `db/schema.sql` on purpose (:33). Dropping it does not clear the
+stamps it already wrote.

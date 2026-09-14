@@ -25,7 +25,7 @@
  * So creation still confirms at GoTrue (that flag now means only "the temporary password
  * works"), and the PROOF lives in `public.users.email_verified_at`, which starts NULL for every
  * account that has ever existed. The account can sign in and run the PG; what it cannot do
- * until it verifies is MINT ANOTHER ACCOUNT — see requireVerifiedEmail() and its three call
+ * until it verifies is MINT ANOTHER ACCOUNT — see requireVerifiedEmail() and its four call
  * sites. That is the one action where an unproved address turns into credentials in a
  * stranger's inbox, which is why it is the action that is gated.
  *
@@ -52,7 +52,7 @@
  *
  * ═══ 2026-09-01: THE LINK NOW OPENS THE APP, AND THIS FILE DID NOT HAVE TO CHANGE ═══
  *
- * The redirect became a custom scheme (com.srnivora.app://verify-email) so that the link opens
+ * The redirect became a custom scheme (com.nivorasr.app://verify-email) so that the link opens
  * Nivora and signs the person in, which is what the owner asked for. Nothing here moved, and
  * that is worth saying rather than assuming: both arms of email_link_proof() are written by
  * GoTrue's /auth/v1/verify handler BEFORE the 303, and the redirect target does not participate

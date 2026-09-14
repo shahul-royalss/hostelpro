@@ -57,7 +57,7 @@ val hasReleaseKey = listOf(ksStoreFile, ksKeyAlias, ksStorePassword, ksKeyPasswo
     .all { !it.isNullOrBlank() } && File(ksStoreFile!!).exists()
 
 android {
-    namespace = "com.srnivora.app"
+    namespace = "com.nivorasr.app"
     /*
      * PINNED AHEAD OF flutter.compileSdkVersion, WHICH IS 36.
      *
@@ -106,7 +106,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.srnivora.app"
+        applicationId = "com.nivorasr.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

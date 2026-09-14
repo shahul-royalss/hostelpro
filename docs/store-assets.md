@@ -3,7 +3,7 @@
 Google Play will not let you publish a listing without an icon, a feature graphic and at
 least two phone screenshots.
 
-**What to upload for `com.srnivora.app` is in §2.** The icon is `public/store/icon-512.png`. The
+**What to upload for `com.nivorasr.app` is in §2.** The icon is `public/store/icon-512.png`. The
 feature graphic is `dist/NIVORA-feature-graphic.png` (a byte-identical copy sits in
 `dist/store-listing/`), and the phone and 10-inch tablet screenshots and the listing text are in
 `dist/store-listing/`. `scripts/store-assets.mjs` neither produces nor checks any of the `dist/`
@@ -31,7 +31,7 @@ listing that makes it a check of the icon only. It is not a release check for th
 
 > **Retired for upload on 2026-09-13, except the icon.** The feature graphic and six screenshots in
 > this table were made for the retired web-app (TWA) listing, package `app.nivora.twa`. The listing
-> for `com.srnivora.app` uploads these instead: `dist/NIVORA-feature-graphic.png` (1024 × 500, a
+> for `com.nivorasr.app` uploads these instead: `dist/NIVORA-feature-graphic.png` (1024 × 500, a
 > different file from the one below; a byte-identical copy is in `dist/store-listing/`), and from
 > `dist/store-listing/` four phone screenshots `phone-{resident,warden,manager,owner}.png` at
 > 1080 × 1920 and four 10-inch tablet screenshots `tablet10-{resident,warden,manager,owner}.png` at
@@ -91,9 +91,14 @@ Upload `public/store/icon-512.png` to Play, not that one.
 
 ## 2. Where each one goes in Play Console
 
-All of these go on the **Main store listing** page for the app `com.srnivora.app`, under **Store
+All of these go on the **Main store listing** page for the app `com.nivorasr.app`, under **Store
 presence** in Play Console's menu. Console renames its menu groups from time to time; if the page is
 not there, search Console for "Main store listing".
+
+That is a **new app** in Play Console. Until 2026-09-13 this section named the `com.srnivora.app`
+listing, which is now abandoned with nothing released from it. Nothing entered there carries over,
+so every file and text field below is uploaded again on the new app. The files themselves do not
+change.
 
 1. **App icon** — *Graphics → App icon*. Upload `public/store/icon-512.png`.
 2. **Feature graphic** — *Graphics → Feature graphic*. Upload
@@ -116,13 +121,16 @@ push notification has been seen arriving on a real phone. `full-description.txt`
 text plus a NOTIFICATIONS section; switch to it only then. Tracked copies of all three files
 are in `docs/store-listing/`.
 
+The app category is set on the **Store settings** page, not this one: **Business**, the same answer
+as before.
+
 ---
 
 ## 3. How they are built
 
 > **Historical: the retired TWA listing.** §3, §4 and §5 describe how `scripts/store-assets.mjs`
 > builds the `public/store/` set for the retired web-app (TWA) listing, package `app.nivora.twa`.
-> Of that set only `public/store/icon-512.png` is uploaded for `com.srnivora.app`. For the current
+> Of that set only `public/store/icon-512.png` is uploaded for `com.nivorasr.app`. For the current
 > upload, see §2 and [`play-submission-pack.md`](./play-submission-pack.md) §1.1.
 
 `scripts/store-assets.mjs` composes SVG and rasterises it with **sharp** (already a Next.js
