@@ -8,6 +8,7 @@ import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../../shared/glass/glass.dart';
 import '../common/refresh.dart';
+import 'sa_hostel_controls.dart';
 import 'sa_payout_card.dart';
 import '../../shared/dashboard.dart';
 import 'data/sa_models.dart';
@@ -23,6 +24,9 @@ import 'widgets/sa_ui.dart';
 ///                               same function the warden's dashboard uses answers here too
 ///   public.hostels            — floors and rooms, which the summary row does not carry
 ///   public.subscriptions      — the billing history
+///
+/// CONTROLS (sa_hostel_controls.dart): sa-owner-account for the owner's password and email;
+/// public.sa_set_hostel_status, sa_cancel_subscription and sa_rename_hostel for the rest.
 ///
 /// ── WHY THE SUMMARY IS RE-READ RATHER THAN PASSED IN ─────────────────────────────────────
 ///
@@ -117,7 +121,7 @@ class _Detail extends ConsumerWidget {
       children: [
         // The consequence first. Everything below is reporting; this is the thing to act on.
         if (!hostel.isWritable) ...[
-          SaReadOnlyBand(hostel: hostel),
+          _ReadOnlyBand(hostel: hostel),
           const SizedBox(height: Space.md),
         ],
 
@@ -169,6 +173,8 @@ class _Detail extends ConsumerWidget {
                 caption: '${count(hostel.occupiedBeds)} of '
                     '${plural(hostel.totalBeds, 'bed')} taken',
               ),
+              const SizedBox(height: Space.sm),
+              SaRenameControl(hostel: hostel),
             ],
           ),
         ),
@@ -203,6 +209,66 @@ class _Detail extends ConsumerWidget {
   }
 }
 
+/// The plan the Super Admin cancelled, when that is why this hostel has no live plan.
+///
+/// rpc_sa_hostels leaves cancelled periods out, so after a cancel its row shows no plan at all,
+/// or an older period that ran out, and cannot say "cancelled". The history can: a cancelled
+/// period ending after the row's plan is the one that was cancelled. Null while the history is
+/// loading or reloading, because straight after a cancel it still holds the list from before.
+SubscriptionRecord? _cancelledPlan(
+  SaHostelRow hostel,
+  AsyncValue<List<SubscriptionRecord>> history,
+) {
+  if (hostel.subState != SubscriptionState.expired || history.isLoading) return null;
+  final subEnd = hostel.subEnd;
+  for (final record in history.value ?? const <SubscriptionRecord>[]) {
+    if (record.isCancelled && (subEnd == null || record.endDate.isAfter(subEnd))) return record;
+  }
+  return null;
+}
+
+/// "Never recorded" is said only when a settled read of the history agrees, not on a guess.
+bool _neverRecorded(AsyncValue<List<SubscriptionRecord>> history) =>
+    !history.isLoading && (history.value?.isEmpty ?? false);
+
+/// [SaReadOnlyBand], corrected where the row alone tells the wrong story.
+///
+/// A suspension, a lapsed plan and a hostel that never had one are the band's own sentences.
+/// A cancelled plan is not something it can see (see [_cancelledPlan]), and a hostel with no plan
+/// whose history has not settled is not yet known to have "never" had one.
+class _ReadOnlyBand extends ConsumerWidget {
+  const _ReadOnlyBand({required this.hostel});
+  final SaHostelRow hostel;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (hostel.hostelStatus == HostelStatus.suspended) return SaReadOnlyBand(hostel: hostel);
+    final history = ref.watch(saSubscriptionHistoryProvider(hostel.hostelId));
+    final cancelled = _cancelledPlan(hostel, history);
+
+    final String message;
+    if (cancelled != null) {
+      message = 'The plan was cancelled on ${dateLabel(cancelled.cancelledAt!.toLocal())}. Staff '
+          'can read but cannot record anything until a new period is recorded.';
+    } else if (hostel.subEnd == null && !_neverRecorded(history)) {
+      message = 'There is no current plan. Staff can read but cannot record anything until one '
+          'is recorded.';
+    } else {
+      return SaReadOnlyBand(hostel: hostel);
+    }
+
+    // The band's own tone rule, so the two never look like different warnings.
+    return NoticeBanner(
+      icon: Icons.lock_rounded,
+      tone: hostel.hostelStatus == HostelStatus.active
+          ? NivoraColors.error
+          : hostelTone(context, hostel.hostelStatus),
+      eyebrow: 'Read-only',
+      message: message,
+    );
+  }
+}
+
 /// Who to ring. The email and the phone are the two things a platform admin copies off this
 /// screen, so both are one tap rather than a long-press-and-hope.
 class _OwnerCard extends StatelessWidget {
@@ -231,6 +297,8 @@ class _OwnerCard extends StatelessWidget {
                 ? null
                 : SaCopyButton(text: hostel.ownerPhone!, label: 'phone number'),
           ),
+          const SizedBox(height: Space.sm),
+          SaOwnerControls(hostel: hostel),
         ],
       ),
     );
@@ -246,16 +314,27 @@ class _SubscriptionCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
     final history = ref.watch(saSubscriptionHistoryProvider(hostel.hostelId));
+    final cancelled = _cancelledPlan(hostel, history);
 
     return FlatSurface(
       padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (hostel.subEnd == null)
+          // A cancel outranks the period rows: what the row calls "current" after one is the
+          // older period that was not cancelled, and the history below lists both.
+          if (cancelled != null)
             Text(
-              'No subscription has ever been recorded for this hostel, so every write is '
-              'refused. Create one from the web console to bring it online.',
+              'The plan was cancelled on ${dateLabel(cancelled.cancelledAt!.toLocal())}, so every '
+              'write is refused until a new period is recorded.',
+              style: t.textTheme.bodyMedium,
+            )
+          else if (hostel.subEnd == null)
+            Text(
+              _neverRecorded(history)
+                  ? 'No subscription has ever been recorded for this hostel, so every write is '
+                      'refused.'
+                  : 'There is no current plan, so every write is refused until one is recorded.',
               style: t.textTheme.bodyMedium,
             )
           else ...[
@@ -274,6 +353,8 @@ class _SubscriptionCard extends ConsumerWidget {
               tone: subscriptionTone(context, hostel.subState),
             ),
           ],
+          const SizedBox(height: Space.sm),
+          SaSubscriptionControls(hostel: hostel),
           const SizedBox(height: Space.sm),
           Divider(height: Space.md, color: t.colorScheme.outlineVariant),
           Text('HISTORY', style: t.textTheme.labelSmall),
@@ -313,6 +394,9 @@ class _SubscriptionCard extends ConsumerWidget {
 
 /// One paid period. Renewals INSERT a row rather than moving the end date, so this list is the
 /// billing history rather than an audit of edits.
+///
+/// A CANCELLED period stays listed — it was sold — and says so, with when and why, because its
+/// dates alone would read as a plan that is still running.
 class _HistoryRow extends StatelessWidget {
   const _HistoryRow({required this.record});
   final SubscriptionRecord record;
@@ -320,6 +404,8 @@ class _HistoryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final cancelledAt = record.cancelledAt;
+    final reason = record.cancelReason?.trim();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Space.xs),
       child: Row(
@@ -335,6 +421,21 @@ class _HistoryRow extends StatelessWidget {
                 ),
                 if (record.notes != null)
                   Text(record.notes!, style: t.textTheme.bodySmall, maxLines: 2),
+                if (cancelledAt != null) ...[
+                  const SizedBox(height: Space.xxs),
+                  SaPill(
+                    label: 'Cancelled',
+                    tone: context.tones.error,
+                    icon: Icons.event_busy_rounded,
+                  ),
+                  const SizedBox(height: Space.xxs),
+                  Text(
+                    'On ${dateLabel(cancelledAt.toLocal())}'
+                    '${reason == null || reason.isEmpty ? '' : ': $reason'}',
+                    style: t.textTheme.bodySmall,
+                    maxLines: 4,
+                  ),
+                ],
               ],
             ),
           ),

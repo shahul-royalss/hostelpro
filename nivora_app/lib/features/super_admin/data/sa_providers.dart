@@ -34,6 +34,110 @@ final saPlatformWritesProvider = Provider<SaPlatformWrites>(
   (ref) => ref.watch(saRepositoryProvider),
 );
 
+/// The hostel screen's five controls, typed by the interface for the same reason as above.
+final saHostelControlsProvider = Provider<SaHostelControls>(
+  (ref) => ref.watch(saRepositoryProvider),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HOSTEL CONTROLS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The changes a Super Admin can make from one hostel's screen.
+enum SaHostelAction { resetPassword, changeEmail, suspend, reactivate, cancelPlan, rename }
+
+/// Which control, if any, is in flight for one hostel. Null when idle.
+///
+/// A PROVIDER RATHER THAN A `_busy` FIELD ON EACH DIALOG, for two reasons. One flag for the
+/// whole hostel means a second change cannot start while the first is still on the wire — a
+/// rename racing a suspension would each audit and notify the owner out of order. And the
+/// refresh that follows success belongs to the hostel, not to the sheet that asked for it: a
+/// sheet dragged shut mid-request is gone, and the lists would otherwise keep the old name.
+final saHostelActionProvider = NotifierProvider.autoDispose
+    .family<SaHostelActionNotifier, SaHostelAction?, String>(SaHostelActionNotifier.new);
+
+class SaHostelActionNotifier extends Notifier<SaHostelAction?> {
+  SaHostelActionNotifier(this.hostelId);
+  final String hostelId;
+
+  @override
+  SaHostelAction? build() => null;
+
+  /// Refreshes nothing: a new password changes nothing this console draws.
+  Future<IssuedCredentials> resetOwnerPassword() => _run(
+        SaHostelAction.resetPassword,
+        (c) => c.resetOwnerPassword(hostelId),
+        (_) {},
+      );
+
+  Future<OwnerEmailOutcome> setOwnerEmail(String email) => _run(
+        SaHostelAction.changeEmail,
+        (c) => c.setOwnerEmail(hostelId, email),
+        (outcome) {
+          if (outcome is! OwnerEmailChanged) return;
+          _refreshHostel();
+          // The create wizard's owner picker shows the address too.
+          ref.invalidate(saOwnersProvider);
+        },
+      );
+
+  Future<HostelStatus> setStatus(HostelStatus status) => _run(
+        status == HostelStatus.suspended ? SaHostelAction.suspend : SaHostelAction.reactivate,
+        (c) => c.setHostelStatus(hostelId, status),
+        (_) => _refreshHostel(stats: true),
+      );
+
+  Future<int> cancelPlan(String reason) => _run(
+        SaHostelAction.cancelPlan,
+        (c) => c.cancelSubscription(hostelId, reason),
+        (_) {
+          _refreshHostel(stats: true);
+          ref.invalidate(saSubscriptionHistoryProvider(hostelId));
+        },
+      );
+
+  Future<String> rename(String name) => _run(
+        SaHostelAction.rename,
+        (c) => c.renameHostel(hostelId, name),
+        (_) => _refreshHostel(),
+      );
+
+  /// The detail row, every list the hostel appears in (all filters — its name, owner and state
+  /// are searched and filtered on), and public.hostels, which carries both name and status.
+  void _refreshHostel({bool stats = false}) {
+    ref.invalidate(saHostelProvider(hostelId));
+    ref.invalidate(saHostelListProvider);
+    ref.invalidate(saHostelsProvider);
+    ref.invalidate(hostelProvider(hostelId));
+    if (stats) ref.invalidate(saStatsProvider);
+  }
+
+  Future<T> _run<T>(
+    SaHostelAction action,
+    Future<T> Function(SaHostelControls controls) body,
+    void Function(T result) onSuccess,
+  ) async {
+    // Set before the first await, so a second tap in the same frame already sees it.
+    if (state != null) {
+      throw const ConflictFailure(
+        'Another change to this hostel is still being saved. Wait for it to finish.',
+      );
+    }
+    // Held for the length of the request: the screen can be left mid-flight, and the refresh
+    // on success still has to happen.
+    final link = ref.keepAlive();
+    state = action;
+    try {
+      final result = await body(ref.read(saHostelControlsProvider));
+      if (ref.mounted) onSuccess(result);
+      return result;
+    } finally {
+      if (ref.mounted) state = null;
+      link.close();
+    }
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // NAVIGATION
 // ─────────────────────────────────────────────────────────────────────────────

@@ -159,6 +159,21 @@ create table if not exists public.subscriptions (
 );
 create index if not exists subscriptions_hostel_idx on public.subscriptions (hostel_id, end_date desc);
 
+-- Cancellation (db/migrations/2026-09-16-sa-hostel-controls.sql). A cancelled period stays as
+-- billing history; every reader of the current plan ignores it. All three facts or none.
+alter table public.subscriptions
+  add column if not exists cancelled_at  timestamptz,
+  add column if not exists cancelled_by  uuid references public.users(id),
+  add column if not exists cancel_reason text;
+alter table public.subscriptions drop constraint if exists subscriptions_cancellation_shape;
+alter table public.subscriptions
+  add constraint subscriptions_cancellation_shape
+  check (
+    (cancelled_at is null and cancelled_by is null and cancel_reason is null)
+    or (cancelled_at is not null and cancel_reason is not null
+        and char_length(cancel_reason) between 3 and 300)
+  );
+
 create table if not exists public.floors (
   id            uuid primary key default gen_random_uuid(),
   hostel_id     uuid not null references public.hostels(id) on delete cascade,
@@ -572,7 +587,9 @@ language sql stable security definer set search_path = public as $$
       or app.user_hostel_id() = p_hostel_id
 $$;
 
--- Effective subscription status for a hostel (computed live from end_date)
+-- Effective subscription status for a hostel (computed live from end_date). Cancelled periods
+-- do not count: this is what makes a cancelled hostel read-only through hostel_writable() and
+-- every write policy (db/migrations/2026-09-16-sa-hostel-controls.sql).
 create or replace function app.subscription_state(p_hostel_id uuid) returns public.subscription_status
 language sql stable security definer set search_path = public as $$
   select case
@@ -581,12 +598,17 @@ language sql stable security definer set search_path = public as $$
     when max(end_date) - current_date <= 15 then 'expiring'::public.subscription_status
     else 'active'::public.subscription_status
   end
-  from public.subscriptions where hostel_id = p_hostel_id
+  from public.subscriptions
+  where hostel_id = p_hostel_id
+    and cancelled_at is null
 $$;
 
 create or replace function app.subscription_days_left(p_hostel_id uuid) returns int
 language sql stable security definer set search_path = public as $$
-  select (max(end_date) - current_date)::int from public.subscriptions where hostel_id = p_hostel_id
+  select (max(end_date) - current_date)::int
+  from public.subscriptions
+  where hostel_id = p_hostel_id
+    and cancelled_at is null
 $$;
 
 -- Hard rule §4.4 — writes are blocked when subscription expired or hostel not active
@@ -948,6 +970,7 @@ create or replace function app.subscription_status_compute() returns trigger
 language plpgsql set search_path = public as $$
 begin
   new.status := case
+    when new.cancelled_at is not null then 'expired'
     when new.end_date < current_date then 'expired'
     when new.end_date - current_date <= 15 then 'expiring'
     else 'active'
@@ -957,6 +980,26 @@ end $$;
 drop trigger if exists subscription_status_compute on public.subscriptions;
 create trigger subscription_status_compute before insert or update on public.subscriptions
   for each row execute function app.subscription_status_compute();
+
+-- A cancellation cannot be quietly undone through subscriptions_write: the way back is
+-- sa_renew_subscription, which writes a new period and tells the owner. `status` stays writable
+-- for refresh_subscription_statuses; the service role can still repair a genuine mistake.
+create or replace function app.subscriptions_cancellation_guard() returns trigger
+language plpgsql set search_path = public as $$
+begin
+  if old.cancelled_at is not null
+     and (new.cancelled_at  is distinct from old.cancelled_at
+       or new.cancelled_by  is distinct from old.cancelled_by
+       or new.cancel_reason is distinct from old.cancel_reason)
+     and not app.is_service_role() then
+    raise exception 'A cancelled plan stays cancelled. Renew the hostel to start a new plan.'
+      using errcode = 'P0001';
+  end if;
+  return new;
+end $$;
+drop trigger if exists subscriptions_cancellation_guard on public.subscriptions;
+create trigger subscriptions_cancellation_guard before update on public.subscriptions
+  for each row execute function app.subscriptions_cancellation_guard();
 
 -- Recompute all subscription statuses + hostel readonly flags; notify owners entering "expiring".
 -- Called by the Super Admin dashboard load and by the app on owner dashboard load (cheap).
@@ -995,9 +1038,13 @@ begin
     select s.id, s.hostel_id, s.owner_user_id, h.name, s.end_date
     from public.subscriptions s join public.hostels h on h.id = s.hostel_id
     where s.status in ('active', 'expiring')
+      -- a cancelled period is never "the plan" and never gets an expiry notice (2026-09-16)
+      and s.cancelled_at is null
       and s.end_date >= current_date and s.end_date - current_date <= 15
       and s.owner_user_id is not null
-      and s.id = (select x.id from public.subscriptions x where x.hostel_id = s.hostel_id order by x.end_date desc limit 1)
+      and s.id = (select x.id from public.subscriptions x
+                   where x.hostel_id = s.hostel_id and x.cancelled_at is null
+                   order by x.end_date desc limit 1)
       -- at most one expiry notice per owner per hostel per 7 days
       and not exists (
         select 1 from public.notifications n
@@ -1013,8 +1060,8 @@ begin
   end loop;
 
   update public.subscriptions
-     set status = case when end_date < current_date then 'expired' when end_date - current_date <= 15 then 'expiring' else 'active' end::public.subscription_status
-   where status is distinct from (case when end_date < current_date then 'expired' when end_date - current_date <= 15 then 'expiring' else 'active' end::public.subscription_status);
+     set status = case when cancelled_at is not null then 'expired' when end_date < current_date then 'expired' when end_date - current_date <= 15 then 'expiring' else 'active' end::public.subscription_status
+   where status is distinct from (case when cancelled_at is not null then 'expired' when end_date < current_date then 'expired' when end_date - current_date <= 15 then 'expiring' else 'active' end::public.subscription_status);
   update public.hostels h set status = 'readonly' where h.status = 'active' and app.subscription_state(h.id) = 'expired';
   update public.hostels h set status = 'active'   where h.status = 'readonly' and app.subscription_state(h.id) <> 'expired';
 end $$;
@@ -1032,6 +1079,24 @@ end $$;
 drop trigger if exists subscription_after_change on public.subscriptions;
 create trigger subscription_after_change after insert or update on public.subscriptions
   for each row execute function app.subscription_after_change();
+
+-- A move INTO 'active' that the plan does not cover is stored as 'readonly', which is what
+-- refresh_subscription_statuses would store a moment later. It closes the window the web console's
+-- PATCH-then-refresh leaves open, which _shared/tenant.ts would otherwise read as writable for a
+-- cancelled plan (db/migrations/2026-09-16-sa-hostel-controls.sql).
+create or replace function app.hostels_status_guard() returns trigger
+language plpgsql set search_path = public as $$
+begin
+  if new.status = 'active'
+     and old.status is distinct from new.status
+     and app.subscription_state(new.id) = 'expired' then
+    new.status := 'readonly';
+  end if;
+  return new;
+end $$;
+drop trigger if exists hostels_status_guard on public.hostels;
+create trigger hostels_status_guard before update of status on public.hostels
+  for each row execute function app.hostels_status_guard();
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- COMPLAINTS — timeline + notifications
@@ -1334,8 +1399,10 @@ begin
   if not app.is_super_admin() then
     raise exception 'Only the Super Admin can renew subscriptions.' using errcode = '42501';
   end if;
-  select owner_user_id into v_owner from public.hostels where id = p_hostel_id;
-  select max(end_date) into v_prev_end from public.subscriptions where hostel_id = p_hostel_id;
+  -- Locked, so a cancellation of the same hostel cannot land between reading v_prev_end and the
+  -- insert; and v_prev_end ignores cancelled periods, so renewing after a cancellation starts today.
+  select owner_user_id into v_owner from public.hostels where id = p_hostel_id for update;
+  select max(end_date) into v_prev_end from public.subscriptions where hostel_id = p_hostel_id and cancelled_at is null;
   if p_new_end_date <= coalesce(v_prev_end, current_date - 1) then
     raise exception 'New end date must be after the current end date (%).', v_prev_end using errcode = 'P0001';
   end if;
@@ -1348,6 +1415,353 @@ begin
           'Your subscription now runs until ' || to_char(p_new_end_date, 'DD Mon YYYY') || '.', '/owner');
   return v_id;
 end $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- SUPER ADMIN HOSTEL CONTROLS — suspend / reactivate, cancel the plan, rename.
+-- Each refuses everyone but the Super Admin with 42501 (coalesced: a NULL must not fail open),
+-- audits, and notifies the owner. Full reasoning: db/migrations/2026-09-16-sa-hostel-controls.sql.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Suspension is about the account, not the plan; lifting it returns the hostel read-only if the
+-- plan has lapsed or was cancelled. Returns the resulting status; a no-op writes nothing.
+create or replace function public.sa_set_hostel_status(p_hostel_id uuid, p_status text)
+returns text
+language plpgsql security definer set search_path = public as $$
+declare
+  v_hostel public.hostels%rowtype;
+  v_result public.hostel_status;
+begin
+  if not coalesce(app.is_super_admin(), false) then
+    raise exception 'Only the Super Admin can suspend or reactivate a hostel.' using errcode = '42501';
+  end if;
+
+  if p_status is null or p_status not in ('suspended', 'active') then
+    raise exception 'Choose whether to suspend or reactivate the hostel.' using errcode = 'P0001';
+  end if;
+
+  select * into v_hostel from public.hostels where id = p_hostel_id for update;
+  if not found then
+    raise exception 'No such hostel.' using errcode = 'P0001';
+  end if;
+
+  if p_status = 'suspended' then
+    v_result := 'suspended';
+  elsif app.subscription_state(p_hostel_id) = 'expired' then
+    v_result := 'readonly';
+  else
+    v_result := 'active';
+  end if;
+
+  if v_result = v_hostel.status then
+    return v_result::text;
+  end if;
+
+  update public.hostels
+     set status = v_result,
+         updated_at = now()
+   where id = p_hostel_id;
+
+  perform public.audit_event(
+    'sa.hostel.status',
+    'hostel',
+    p_hostel_id::text,
+    p_hostel_id,
+    jsonb_build_object('from', v_hostel.status, 'to', v_result, 'requested', p_status, 'surface', 'rpc'),
+    null, null, null, null
+  );
+
+  insert into public.notifications (hostel_id, user_id, type, title, body, link)
+  values (
+    p_hostel_id, v_hostel.owner_user_id, 'subscription',
+    case
+      when v_result = 'suspended'         then 'Hostel suspended'
+      when v_hostel.status = 'suspended'  then 'Hostel reactivated'
+      else                                     'Hostel is read-only'
+    end,
+    case v_result
+      when 'suspended' then format('Nivora has suspended %s. Your team can still open the app and read records, but nothing can be added or changed until it is reactivated. Contact Nivora support.', v_hostel.name)
+      when 'readonly'  then format('%s is not suspended, but its plan has ended, so it is read-only until the plan is renewed. Contact Nivora support to renew.', v_hostel.name)
+      else                  format('%s is active again. Your team can add and change records as usual.', v_hostel.name)
+    end,
+    '/owner'
+  );
+
+  return v_result::text;
+end $$;
+
+-- Cancels every uncancelled period that has not ended (today's AND any booked renewal), which
+-- makes the hostel read-only at once. Returns how many; P0001 when there were none.
+create or replace function public.sa_cancel_subscription(p_hostel_id uuid, p_reason text)
+returns int
+language plpgsql security definer set search_path = public as $$
+declare
+  v_reason text := regexp_replace(coalesce(p_reason, ''), '^[[:space:]]+|[[:space:]]+$', '', 'g');
+  v_hostel public.hostels%rowtype;
+  v_count  int;
+  v_ends   date;
+begin
+  if not coalesce(app.is_super_admin(), false) then
+    raise exception 'Only the Super Admin can cancel a plan.' using errcode = '42501';
+  end if;
+
+  if char_length(v_reason) < 3 or char_length(v_reason) > 300 then
+    raise exception 'Give a reason for cancelling, between 3 and 300 characters.' using errcode = 'P0001';
+  end if;
+
+  select * into v_hostel from public.hostels where id = p_hostel_id for update;
+  if not found then
+    raise exception 'No such hostel.' using errcode = 'P0001';
+  end if;
+
+  with cancelled as (
+    update public.subscriptions
+       set cancelled_at  = now(),
+           cancelled_by  = auth.uid(),
+           cancel_reason = v_reason
+     where hostel_id = p_hostel_id
+       and cancelled_at is null
+       and end_date >= current_date
+    returning end_date
+  )
+  select count(*)::int, max(end_date) into v_count, v_ends from cancelled;
+
+  if v_count = 0 then
+    raise exception 'There is no current plan to cancel.' using errcode = 'P0001';
+  end if;
+
+  update public.hostels
+     set status = 'readonly',
+         updated_at = now()
+   where id = p_hostel_id
+     and status = 'active'
+     and app.subscription_state(p_hostel_id) = 'expired';
+
+  perform public.audit_event(
+    'sa.subscription.cancel',
+    'hostel',
+    p_hostel_id::text,
+    p_hostel_id,
+    jsonb_build_object('periods', v_count, 'latest_end', v_ends, 'reason', v_reason, 'surface', 'rpc'),
+    null, null, null, null
+  );
+
+  insert into public.notifications (hostel_id, user_id, type, title, body, link)
+  values (
+    p_hostel_id, v_hostel.owner_user_id, 'subscription', 'Plan cancelled',
+    format('Nivora has cancelled the plan for %s. From today your team can still read records, but nothing can be added or changed until a new plan starts. Reason: %s', v_hostel.name, v_reason),
+    '/owner'
+  );
+
+  return v_count;
+end $$;
+
+-- Trimmed, 2-120 characters, one line. Returns the stored name; renaming to the same name writes nothing.
+create or replace function public.sa_rename_hostel(p_hostel_id uuid, p_name text)
+returns text
+language plpgsql security definer set search_path = public as $$
+declare
+  v_name   text := regexp_replace(coalesce(p_name, ''), '^[[:space:]]+|[[:space:]]+$', '', 'g');
+  v_hostel public.hostels%rowtype;
+begin
+  if not coalesce(app.is_super_admin(), false) then
+    raise exception 'Only the Super Admin can rename a hostel.' using errcode = '42501';
+  end if;
+
+  if char_length(v_name) < 2 or char_length(v_name) > 120 then
+    raise exception 'Enter a hostel name between 2 and 120 characters.' using errcode = 'P0001';
+  end if;
+  if v_name ~ '[[:cntrl:]]' then
+    raise exception 'A hostel name has to fit on one line.' using errcode = 'P0001';
+  end if;
+
+  select * into v_hostel from public.hostels where id = p_hostel_id for update;
+  if not found then
+    raise exception 'No such hostel.' using errcode = 'P0001';
+  end if;
+
+  if v_hostel.name = v_name then
+    return v_hostel.name;
+  end if;
+
+  update public.hostels
+     set name = v_name,
+         updated_at = now()
+   where id = p_hostel_id;
+
+  perform public.audit_event(
+    'sa.hostel.rename',
+    'hostel',
+    p_hostel_id::text,
+    p_hostel_id,
+    jsonb_build_object('from', v_hostel.name, 'to', v_name, 'surface', 'rpc'),
+    null, null, null, null
+  );
+
+  insert into public.notifications (hostel_id, user_id, type, title, body, link)
+  values (
+    p_hostel_id, v_hostel.owner_user_id, 'system', 'Hostel renamed',
+    format('Nivora has renamed %s to %s. Your team will see the new name the next time they open the app.', v_hostel.name, v_name),
+    '/owner'
+  );
+
+  return v_name;
+end $$;
+
+-- anon by name: Supabase grants EXECUTE to anon explicitly, and a revoke from PUBLIC misses it.
+revoke all on function public.sa_set_hostel_status(uuid, text) from public, anon;
+grant execute on function public.sa_set_hostel_status(uuid, text) to authenticated;
+revoke all on function public.sa_cancel_subscription(uuid, text) from public, anon;
+grant execute on function public.sa_cancel_subscription(uuid, text) to authenticated;
+revoke all on function public.sa_rename_hostel(uuid, text) from public, anon;
+grant execute on function public.sa_rename_hostel(uuid, text) to authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- SUPER ADMIN — the owner's login, for supabase/functions/sa-owner-account
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Address, identity, profile, pending tokens and sessions move in ONE transaction, so a Super Admin
+-- taking a login back cannot leave an address change or recovery link redeemable at
+-- /auth/v1/verify, or sessions alive. GoTrue's admin API does neither of those things.
+-- Full reasoning: db/migrations/2026-09-16-sa-hostel-controls.sql section 6.
+
+-- An address change in flight (both halves) and a recovery or magic link, in both places this
+-- GoTrue keeps them. Returns whether anything was pending.
+create or replace function app.clear_pending_login_tokens(p_user_id uuid) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare
+  v_columns integer;
+  v_rows    integer;
+begin
+  update auth.users
+     set email_change                = '',
+         email_change_token_new      = '',
+         email_change_token_current  = '',
+         email_change_confirm_status = 0,
+         email_change_sent_at        = null,
+         recovery_token              = '',
+         recovery_sent_at            = null,
+         updated_at                  = now()
+   where id = p_user_id
+     and (coalesce(email_change, '') <> ''
+       or coalesce(email_change_token_new, '') <> ''
+       or coalesce(email_change_token_current, '') <> ''
+       or coalesce(recovery_token, '') <> '');
+  get diagnostics v_columns = row_count;
+
+  delete from auth.one_time_tokens
+   where user_id = p_user_id
+     and token_type in ('email_change_token_new', 'email_change_token_current', 'recovery_token');
+  get diagnostics v_rows = row_count;
+
+  return v_columns > 0 or v_rows > 0;
+end $$;
+
+create or replace function app.set_owner_login_email(p_user_id uuid, p_email text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_email    text := lower(btrim(coalesce(p_email, '')));
+  v_user     public.users%rowtype;
+  v_auth     text;
+  v_prev     text;
+  v_tokens   boolean;
+  v_sessions integer;
+begin
+  -- HINT 'email' tells the Edge Function the refusal belongs under the address box.
+  if char_length(v_email) > 200 or v_email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then
+    raise exception 'Enter a valid email address' using errcode = 'P0001', hint = 'email';
+  end if;
+  if not app.email_is_reachable(v_email) then
+    raise exception 'Enter a real email address' using errcode = 'P0001', hint = 'email';
+  end if;
+
+  select * into v_user from public.users where id = p_user_id for update;
+  if not found or v_user.role <> 'owner' then
+    raise exception 'Only an owner''s login can be changed here.' using errcode = 'P0001';
+  end if;
+  if v_user.deleted_at is not null or v_user.status <> 'active' then
+    raise exception 'That owner account is inactive. Reactivate it before changing its login.'
+      using errcode = 'P0001';
+  end if;
+
+  select au.email into v_auth from auth.users au where au.id = p_user_id for update;
+  if v_auth is null then
+    raise exception 'That owner has no login to change.' using errcode = 'P0001';
+  end if;
+
+  if lower(v_auth) = v_email then
+    return jsonb_build_object('loginEmail', lower(v_auth), 'changed', false,
+                              'verificationCleared', false, 'sessionsEnded', 0,
+                              'pendingTokensCleared', false);
+  end if;
+
+  if exists (select 1 from auth.users au where lower(au.email) = v_email and au.id <> p_user_id)
+     or exists (select 1 from public.users u where lower(u.email) = v_email and u.id <> p_user_id) then
+    raise exception 'That email address already belongs to another account.' using errcode = '23505';
+  end if;
+
+  -- users_update_guard recognises the service role; execution is granted to nobody else.
+  v_prev := current_setting('request.jwt.claims', true);
+  perform set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+  v_tokens := app.clear_pending_login_tokens(p_user_id);
+
+  update auth.users
+     set email              = v_email,
+         email_confirmed_at = now(),
+         confirmation_token = '',
+         updated_at         = now()
+   where id = p_user_id;
+  delete from auth.one_time_tokens where user_id = p_user_id and token_type = 'confirmation_token';
+
+  update auth.identities
+     set identity_data = jsonb_set(identity_data, '{email}', to_jsonb(v_email), true),
+         updated_at    = now()
+   where user_id = p_user_id
+     and provider = 'email';
+
+  update public.users set email = v_email where id = p_user_id;
+
+  v_sessions := app.revoke_user_sessions(p_user_id);
+
+  perform set_config('request.jwt.claims', coalesce(v_prev, ''), true);
+
+  return jsonb_build_object(
+    'loginEmail', v_email,
+    'changed', true,
+    'verificationCleared', v_user.email_verified_at is not null,
+    'sessionsEnded', v_sessions,
+    'pendingTokensCleared', v_tokens
+  );
+end $$;
+
+create or replace function public.svc_set_owner_login_email(p_user_id uuid, p_email text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not app.is_service_role() then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+  return app.set_owner_login_email(p_user_id, p_email);
+end $$;
+
+create or replace function public.svc_clear_owner_login_tokens(p_user_id uuid) returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if not app.is_service_role() then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.users u where u.id = p_user_id and u.role = 'owner') then
+    raise exception 'Only an owner''s login can be changed here.' using errcode = 'P0001';
+  end if;
+  return app.clear_pending_login_tokens(p_user_id);
+end $$;
+
+revoke all on function app.clear_pending_login_tokens(uuid) from public, anon, authenticated;
+grant execute on function app.clear_pending_login_tokens(uuid) to service_role;
+revoke all on function app.set_owner_login_email(uuid, text) from public, anon, authenticated;
+grant execute on function app.set_owner_login_email(uuid, text) to service_role;
+revoke all on function public.svc_set_owner_login_email(uuid, text) from public, anon, authenticated;
+grant execute on function public.svc_set_owner_login_email(uuid, text) to service_role;
+revoke all on function public.svc_clear_owner_login_tokens(uuid) from public, anon, authenticated;
+grant execute on function public.svc_clear_owner_login_tokens(uuid) to service_role;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- WARDEN — register student (DB half; auth user is created by the server action first)
@@ -1876,7 +2290,9 @@ language sql stable security invoker set search_path = public as $$
   order by 1
 $$;
 
--- Super Admin platform stats
+-- Super Admin platform stats. The month is the IST month (app.today()), as live. Cancelled periods
+-- are not this month's revenue (2026-09-16); the three plan counts already go through
+-- subscription_state, which ignores them.
 create or replace function public.rpc_sa_dashboard()
 returns table (
   total_hostels int, total_owners int, total_students int,
@@ -1891,7 +2307,9 @@ language sql stable security definer set search_path = public as $$
     (select count(*)::int from public.hostels h where app.subscription_state(h.id) = 'active'),
     (select count(*)::int from public.hostels h where app.subscription_state(h.id) = 'expiring'),
     (select count(*)::int from public.hostels h where app.subscription_state(h.id) = 'expired'),
-    coalesce((select sum(amount) from public.subscriptions where to_char(created_at,'YYYY-MM') = to_char(current_date,'YYYY-MM')), 0)
+    coalesce((select sum(amount) from public.subscriptions
+               where to_char(created_at, 'YYYY-MM') = to_char(app.today(), 'YYYY-MM')
+                 and cancelled_at is null), 0)
   where app.is_super_admin()
 $$;
 
@@ -1906,8 +2324,21 @@ language sql stable security definer set search_path = public as $$
   order by 1
 $$;
 
--- Hostel summary rows for the SA table (owner name, sub end, days left, counts)
-create or replace function public.rpc_sa_hostels()
+-- Hostel summary rows for the SA table (owner name, sub end, days left, counts).
+-- The live shape: filters pushed into the WHERE (db/migrations/2026-08-31-sa-hostels-pushdown.sql),
+-- and the latest-period lateral ignores cancelled periods (2026-09-16). The zero-argument version
+-- this file used to create is dropped first, or replaying this file would leave two overloads and
+-- a PostgREST call that cannot choose between them.
+drop function if exists public.rpc_sa_hostels();
+
+create or replace function public.rpc_sa_hostels(
+  p_hostel_id     uuid                       default null,
+  p_search        text                       default null,
+  p_sub_state     public.subscription_status default null,
+  p_hostel_status public.hostel_status       default null,
+  p_limit         integer                    default null,
+  p_offset        integer                    default null
+)
 returns table (
   hostel_id uuid, hostel_name text, hostel_status public.hostel_status, address text,
   owner_id uuid, owner_name text, owner_email text, owner_phone text,
@@ -1915,6 +2346,12 @@ returns table (
   total_beds int, occupied_beds int, active_students int, open_complaints int, created_at timestamptz
 )
 language sql stable security definer set search_path = public as $$
+  with pat as (
+    select case
+             when nullif(btrim(p_search), '') is null then null
+             else '%' || replace(replace(replace(btrim(p_search), '\', '\\'), '%', '\%'), '_', '\_') || '%'
+           end as like_pattern
+  )
   select h.id, h.name, h.status, h.address,
          u.id, u.full_name, u.email, u.phone,
          ls.start_date, ls.end_date, ls.amount, app.subscription_state(h.id), app.subscription_days_left(h.id),
@@ -1925,10 +2362,30 @@ language sql stable security definer set search_path = public as $$
          h.created_at
   from public.hostels h
   join public.users u on u.id = h.owner_user_id
-  left join lateral (select * from public.subscriptions s where s.hostel_id = h.id order by end_date desc limit 1) ls on true
+  left join lateral (
+    select * from public.subscriptions s
+     where s.hostel_id = h.id and s.cancelled_at is null
+     order by s.end_date desc limit 1
+  ) ls on true
+  cross join pat
   where app.is_super_admin()
-  order by h.created_at desc
+    and (p_hostel_id is null or h.id = p_hostel_id)
+    and (p_hostel_status is null or h.status = p_hostel_status)
+    and (pat.like_pattern is null
+         or h.name      ilike pat.like_pattern
+         or u.full_name ilike pat.like_pattern
+         or u.email     ilike pat.like_pattern
+         or h.address   ilike pat.like_pattern)
+    and (p_sub_state is null or app.subscription_state(h.id) = p_sub_state)
+  order by h.created_at desc, h.id desc
+  limit p_limit offset coalesce(p_offset, 0)
 $$;
+
+revoke all on function public.rpc_sa_hostels(
+  uuid, text, public.subscription_status, public.hostel_status, integer, integer) from public, anon;
+grant execute on function public.rpc_sa_hostels(
+  uuid, text, public.subscription_status, public.hostel_status, integer, integer)
+  to authenticated, service_role;
 
 -- Weekly complaint counts (SA hostel detail chart)
 create or replace function public.rpc_complaints_per_week(p_hostel_id uuid, p_weeks int default 8)

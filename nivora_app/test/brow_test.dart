@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/theme/theme.dart';
 import 'package:mobile/core/theme/tokens.dart';
 import 'package:mobile/shared/brow.dart';
+import 'package:mobile/shared/brow_header.dart';
 import 'package:mobile/shared/glass/glass.dart';
 
 /// THE BROW — the one device taken wholesale from the competitor teardown.
@@ -72,21 +73,28 @@ void main() {
   });
 
   group('a header on the brow', () {
-    testWidgets('IS the brow — opaque brand, curved, white ink', (tester) async {
+    testWidgets('IS the brow — opaque brand gradient, curved, white ink', (tester) async {
       await tester.pumpWidget(_host(child: const GlassHeader(onBrow: true, child: Text('Rooms'))));
 
       // OPAQUE, not transparent. The first design made it see-through over a full-height brow
       // and the list scrolled up THROUGH it — a header that is not opaque is not a header.
       expect(find.byType(GlassSurface), findsNothing,
           reason: 'it paints the brand block directly, not a pane');
-      final box = tester.widget<ColoredBox>(
-        find.descendant(of: find.byType(ClipPath), matching: find.byType(ColoredBox)),
-      );
-      expect(box.color, NivoraColors.brandDeep);
+      // It was a flat brandDeep ColoredBox. It is now the brand header's gradient, which runs
+      // from a lighter mix of the brand down to brandDeep — both stops opaque. The inks and
+      // their ratios are brow_header_test.dart's business.
+      final painters = tester
+          .widgetList<CustomPaint>(
+            find.descendant(of: find.byType(ClipPath), matching: find.byType(CustomPaint)),
+          )
+          .map((p) => p.painter);
+      expect(painters.whereType<BrowBackdropPainter>(), hasLength(1));
+      expect(BrowInk.deep, NivoraColors.brandDeep);
+      expect(BrowInk.bright.a, 1.0);
 
       final style = DefaultTextStyle.of(tester.element(find.text('Rooms'))).style;
       expect(style.color, const Color(0xFFFFFFFF),
-          reason: 'white is 10.20:1 on the brow, in both themes');
+          reason: 'white is 7.43:1 on the lightest stop of the brow, in both themes');
       expect(
         tester.widget<IconTheme>(find.ancestor(
           of: find.text('Rooms'),

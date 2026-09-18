@@ -30,9 +30,41 @@ double _unfold(WidgetTester tester) {
   return align.widthFactor!;
 }
 
+/// The settle, read off the nearest Transform above the mark. The lockup's translate is also a
+/// Transform, further out, so the frame-zero assertion that this is above 1 is what proves the
+/// right one was found.
+double _markScale(WidgetTester tester) {
+  final transform = tester.widget<Transform>(
+    find.ancestor(of: find.byType(Image), matching: find.byType(Transform)).first,
+  );
+  return transform.transform.getMaxScaleOnAxis();
+}
 
-/// One island of ink on the lockup's row.
-typedef _Run = ({int start, int end, int height});
+/// The mark's height as a multiple of the letters' cap height, and how far its foot is from their
+/// baseline — both taken from what was laid out, at whatever text scale the letters were set.
+///
+/// The scaler is read off the Text rather than assumed, so a wordmark that starts following the
+/// system font size again gets measured at the size it is drawn, and fails here if the mark has
+/// not grown with it.
+({double ratio, double offBaseline}) _markAgainstWord(WidgetTester tester) {
+  final mark = tester.getRect(find.byType(Image));
+  final word = tester.getRect(find.text('IVORA'));
+  final text = tester.widget<Text>(find.text('IVORA'));
+  final scaler = text.textScaler ?? MediaQuery.textScalerOf(tester.element(find.text('IVORA')));
+  final style = text.style!;
+  final painter = TextPainter(
+    text: TextSpan(text: 'IVORA', style: style),
+    textDirection: TextDirection.ltr,
+    textScaler: scaler,
+  )..layout();
+  final capHeight = scaler.scale(style.fontSize!) * 1490 / 2048;
+  final baseline = word.top + painter.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+  painter.dispose();
+  return (ratio: mark.height / capHeight, offBaseline: mark.bottom - baseline);
+}
+
+/// One island of ink on the lockup's row. [bottom] is the lowest inked row, the glyph's foot.
+typedef _Run = ({int start, int end, int height, int bottom});
 
 /// Render the tree under [key] and find the horizontal runs of drawn pixels across the band the
 /// lockup occupies.
@@ -79,7 +111,7 @@ Future<List<_Run>> _inkColumnRuns(WidgetTester tester, GlobalKey key) async {
             }
           }
         }
-        found.add((start: start, end: x - 1, height: lo - hi + 1));
+        found.add((start: start, end: x - 1, height: lo - hi + 1, bottom: lo));
         start = null;
       }
     }
@@ -127,12 +159,21 @@ void main() {
       reason: 'the mark must not fade in — it continues the system splash seamlessly',
     );
     expect(_unfold(tester), 0, reason: 'IVORA is not folded away at the start');
+    expect(_markScale(tester), greaterThan(1.02),
+        reason: 'the mark starts at rest, so there is no settle to see');
 
     // 40% in: the mark has fully arrived and the letters have started to emerge.
     await tester.pump(const Duration(milliseconds: 600));
     final atMiddle = _unfold(tester);
     expect(atMiddle, greaterThan(0), reason: 'IVORA has not started unfolding by 600ms');
     expect(atMiddle, lessThan(1), reason: 'IVORA finished before the animation was half done');
+
+    // THE N IS AT REST BEFORE IT HAS NEIGHBOURS. It stands 1.4x the letters now, so a mark still
+    // shrinking while IVORA comes out beside it would read as a wobble rather than a settle.
+    // 1e-3 is about 0.05dp on this mark. The fake clock leaves a residue near 1e-8, so an exact
+    // compare would fail on arithmetic rather than on motion.
+    expect(_markScale(tester), closeTo(1, 1e-3),
+        reason: 'the mark is still settling while IVORA is already coming out of it');
 
     // The end: fully out, and not a fraction over.
     await tester.pump(const Duration(milliseconds: 900));
@@ -204,10 +245,6 @@ void main() {
     // Read off the tree, not restated here: a copy of the numbers in this file would pass
     // happily while the screen drifted away from them.
     final style = tester.widget<Text>(find.text('IVORA')).style!;
-    final painter = TextPainter(
-      text: TextSpan(text: 'IVORA', style: style),
-      textDirection: TextDirection.ltr,
-    )..layout();
 
     // FIRST, THAT THERE IS A MARK AT ALL.
     //
@@ -229,25 +266,78 @@ void main() {
           '${(inkCentre - screen.center.dx).toStringAsFixed(1)}dp',
     );
 
-    // AND THE MARK IS NOT TWICE THE HEIGHT OF THE WORD. "The N goes so long" was the other half
-    // of the same report: a flat 70dp mark beside a 32dp cap height reads as a badge with a
-    // word after it rather than as one wordmark. Bounded on BOTH sides — a mark shorter than
-    // the letters would be just as wrong, and is the mistake an over-correction makes.
-    final capHeight = style.fontSize! * 1490 / 2048;
-    expect(mark.height / capHeight, inInclusiveRange(1.0, 1.5),
-        reason: 'the mark is ${(mark.height / capHeight).toStringAsFixed(2)}x the cap height '
+    // THE N IS BIGGER THAN THE LETTERS, AND NOT A BADGE. Bounded on both sides, and both bounds
+    // were the product owner's. "The N goes so long" was a flat 70dp mark beside a 32dp cap: a
+    // badge with a word after it. The equal-height fix that followed was then superseded on
+    // 2026-09-16 by "the N has to be some big compared other letters", so the floor is no
+    // longer 1.0: an N the height of I V O R A is now the regression.
+    final geometry = _markAgainstWord(tester);
+    expect(geometry.ratio, inInclusiveRange(1.3, 1.45),
+        reason: 'the mark is ${geometry.ratio.toStringAsFixed(2)}x the cap height '
             'of the letters beside it');
 
     // STANDING ON THE BASELINE, not centred against the line box. All-caps type never uses the
     // descender room under it, so centring the two sat the mark low by half of that descent —
     // small, constant, and exactly the kind of thing that reads as "slightly off" without ever
     // being nameable. The mark's artwork is trimmed to its own ink, so its bottom edge IS the
-    // bottom of the drawing.
-    final baseline =
-        word.top + painter.computeDistanceToActualBaseline(TextBaseline.alphabetic);
-    expect(mark.bottom, closeTo(baseline, 0.5),
+    // bottom of the drawing. A taller mark grows UP from here, like a capital, never down.
+    expect(geometry.offBaseline, closeTo(0, 0.5),
         reason: 'the mark does not stand on the letters\' baseline');
   });
+
+  // ── 320dp, AT THE LARGEST TEXT THE APP ALLOWS ───────────────────────────────────────────
+  //
+  // Growing the N made the lockup wider, and the narrowest phones this ships to are 320dp.
+  // main.dart clamps the system font scale at 1.4, so 1.4 is the most any Text here can be asked
+  // to grow. That case also caught a real bug: the letters followed the font size and the mark
+  // did not, so at 1.4x the N was no taller than IVORA and hung 2dp below its baseline.
+  for (final textScale in const [1.0, 1.4]) {
+    testWidgets('the lockup fits a 320dp phone at ${textScale}x text, N still standing tall',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(ProviderScope(
+        child: MaterialApp(
+          theme: NivoraTheme.light(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)),
+            child: child!,
+          ),
+          home: const SplashScreen(),
+        ),
+      ));
+      await tester.pump(splashMinimum);
+      await _decodeTheMark(tester);
+
+      // A RenderFlex overflow is REPORTED, not thrown, and this is where the report surfaces.
+      expect(tester.takeException(), isNull,
+          reason: 'the lockup overflowed a 320dp screen at ${textScale}x text');
+
+      final mark = tester.getRect(find.byType(Image));
+      final word = tester.getRect(find.text('IVORA'));
+      final style = tester.widget<Text>(find.text('IVORA')).style!;
+      expect(mark.width, greaterThan(0),
+          reason: 'assets/brand_mark.png did not decode — the lockup is the word alone');
+
+      // Not merely inside the screen: at least the 16dp side gutter every screen keeps.
+      const width = 320.0;
+      final inkRight = word.right - style.letterSpacing!;
+      expect(mark.left, greaterThanOrEqualTo(16),
+          reason: 'the mark is ${mark.left.toStringAsFixed(1)}dp from the left edge');
+      expect(width - inkRight, greaterThanOrEqualTo(16),
+          reason: 'the A is ${(width - inkRight).toStringAsFixed(1)}dp from the right edge');
+
+      final geometry = _markAgainstWord(tester);
+      expect(geometry.ratio, inInclusiveRange(1.3, 1.45),
+          reason: 'at ${textScale}x text the mark is ${geometry.ratio.toStringAsFixed(2)}x '
+              'the cap height of the letters beside it');
+      expect(geometry.offBaseline, closeTo(0, 0.5),
+          reason: 'at ${textScale}x text the mark\'s foot is '
+              '${geometry.offBaseline.toStringAsFixed(1)}dp off the letters\' baseline');
+    });
+  }
 
   testWidgets('the N is a letter of the word, not a badge in front of it', (tester) async {
     // ── WHAT THE PRODUCT OWNER SAW, AND WHY ONLY PIXELS COULD ANSWER IT ───────────────────
@@ -261,6 +351,9 @@ void main() {
     // SizedBox that looked small (8dp) rendered a 25dp hole beside a mark whose own box is
     // flush with its artwork. And an Image's height is its BOX; the drawing inside it is only
     // the same thing because scripts/cut-brand-mark.py trims to visible alpha.
+    //
+    // The height half has since been reversed: on 2026-09-16 the owner asked for the N to be
+    // bigger than the letters. The gap half stands.
     //
     // So this renders the screen and scans columns. It is slower than every other test in this
     // file and it is the only one that can fail for the reason the owner filed.
@@ -303,14 +396,27 @@ void main() {
     expect(markToWord, greaterThanOrEqualTo(1),
         reason: 'the mark is touching the I at ${markToWord}px');
 
-    // AND IT IS THE SAME HEIGHT AS THE LETTERS. Not taller: a mark that stands proud of the cap
-    // line reads as a badge with a word after it, which is the one thing a lockup must not do.
-    final markHeight = runs.first.height;
-    final glyphHeight = runs.last.height;
+    // CLEARLY TALLER THAN THE LETTERS, BUT STILL ONE OF THEM. Measured in ink against the I,
+    // the cleanest cap height in the word. The floor is "clearly bigger", which an N that
+    // merely pokes a few pixels above the cap line is not. The ceiling keeps it short of the
+    // badge the owner first complained about. At 1.4x cap height the ink ratio renders about
+    // 1.34, because anti-aliasing adds a pixel to the I.
+    final mark = runs.first;
+    final letterI = runs[1];
+    final inkRatio = mark.height / letterI.height;
     expect(
-      (markHeight - glyphHeight).abs(),
-      lessThanOrEqualTo(2),
-      reason: 'the mark is ${markHeight}px tall against the letters\' $glyphHeight',
+      inkRatio,
+      inInclusiveRange(1.25, 1.45),
+      reason: 'the mark is ${mark.height}px tall against the I\'s ${letterI.height}px '
+          '(${inkRatio.toStringAsFixed(2)}x)',
+    );
+
+    // AND ITS FOOT IS ON THE SAME LINE AS THE LETTERS'. A taller N that sinks below the word
+    // reads as a separate object far sooner than one that only rises above it.
+    expect(
+      (mark.bottom - letterI.bottom).abs(),
+      lessThanOrEqualTo(1),
+      reason: 'the mark\'s ink ends at row ${mark.bottom}, the I\'s at ${letterI.bottom}',
     );
   });
 

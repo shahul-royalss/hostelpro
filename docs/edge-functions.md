@@ -90,6 +90,7 @@ afterwards — the only difference is that nothing arrives while the app is clos
 | Function | Caller must be | What it does | `verify_jwt` |
 |---|---|---|---|
 | `sa-create-owner` | `super_admin` | Creates an owner login + their hostel, subscription and room scaffold | **on** (default) |
+| `sa-owner-account` | `super_admin` | Resets a hostel owner's password, or moves their login to a new email. The owner is resolved from the hostel, never sent | **on** (default) |
 | `owner-create-staff` | `owner` | Creates the manager or warden login for a hostel that owner owns | **on** (default) |
 | `warden-register-student` | `warden` | Creates a student login, uploads photo + ID proof, writes the students row and assigns a bed | **on** (default) |
 | `razorpay-order` | `student` | Opens a Razorpay order for the caller's own outstanding rent | **on** (default) |
@@ -198,6 +199,7 @@ A file is one `git add -f` away from being committed forever.
 
 ```bash
 npx supabase functions deploy sa-create-owner
+npx supabase functions deploy sa-owner-account
 npx supabase functions deploy owner-create-staff
 npx supabase functions deploy warden-register-student
 npx supabase functions deploy razorpay-order
@@ -207,7 +209,8 @@ npx supabase functions deploy razorpay-webhook --no-verify-jwt
 `--no-verify-jwt` on the webhook only. Razorpay's servers do not hold a project JWT, so with the
 gate on, every delivery would 401 before the function ran. That function authenticates its caller
 by verifying Razorpay's HMAC signature instead — which is stronger than a shared bearer token,
-because it also proves the *body* was not altered. Do not add that flag to any of the other four.
+because it also proves the *body* was not altered. Do not add that flag to any of the others —
+least of all `sa-owner-account`, which hands out an owner's password.
 
 Secrets take effect on the next invocation; you do not have to redeploy after `secrets set`.
 But if you deploy *before* setting the service-role key, the three account functions will return
@@ -288,6 +291,57 @@ final res = await Supabase.instance.client.functions.invoke(
   "credentials": { "name": "Asha Rao", "loginId": "asha@example.com", "password": "Sage-7413-Kite" } // null in "existing" mode
 }
 ```
+
+### `sa-owner-account`
+
+```jsonc
+{ "action": "reset-password", "hostelId": "<uuid>" }
+{ "action": "set-email",      "hostelId": "<uuid>", "email": "owner@example.com" }
+```
+
+```jsonc
+// reset-password
+"data": { "ownerName": "Asha Rao", "loginId": "asha@example.com", "password": "Sage-7413-Kite" }
+// set-email
+"data": { "ownerName": "Asha Rao", "loginId": "new@example.com" }
+```
+
+There is **no user id in the request, deliberately**. The owner is whoever
+`hostels.owner_user_id` names, read on the server, and that row must be an active, non-deleted
+`owner`. Any other role, including `super_admin`, is refused. A body that carried a user id would
+turn this into "reset the password of any account on the platform".
+
+- **reset-password** mints a temporary password, sets `must_change_password = true` in both
+  `public.users` and `app_metadata`, and ends the owner's sessions. Before the password changes,
+  it cancels every pending address-change, recovery and magic-link token
+  (`svc_clear_owner_login_tokens`). That step fails closed. Once the sessions have ended, it cancels
+  any such token again. The password is in this response only (§8).
+- **set-email** moves the owner's **login**, because owners sign in with their email. The whole move
+  is one transaction in `svc_set_owner_login_email`:
+  - `auth.users.email` and `auth.identities` change, stamped confirmed so the new address works at once.
+  - `public.users.email` changes, and `app.users_update_guard` clears `email_verified_at`, so the owner still proves the new mailbox.
+  - Every pending token is cancelled.
+  - Every session ends.
+
+  All of it lands or none of it does. So there is no rollback case, and no success response over
+  sessions that survived.
+- **Why the tokens.** GoTrue's admin API changes an address or a password but leaves two things
+  redeemable: an address change already in flight, and a recovery link already mailed.
+  `/auth/v1/verify` needs only the token, so ending sessions does not stop it. Any owner access
+  token, plus the anon key in the APK, can start such a change.
+- **Deploy order.** Apply `db/migrations/2026-09-16-sa-hostel-controls.sql` first. Both actions
+  call RPCs it adds, and until it is applied every call fails.
+- **Refusals.** `fieldErrors.email` with 409 for an address that belongs to another account or
+  ends in `@student.hostelpro.local`. 404 when the hostel does not exist. 409 when it has no usable
+  owner.
+- **Throttled** at 20 per hour per Super Admin, both actions together. Both are audited:
+  `sa.owner.password_reset` and `sa.owner.email_change`. The email change records both addresses
+  masked (`a***@example.com`); neither action records the password.
+
+The Super Admin's other hostel controls are **database RPCs, not functions**. They are
+`sa_set_hostel_status`, `sa_cancel_subscription` and `sa_rename_hostel`, in
+`db/migrations/2026-09-16-sa-hostel-controls.sql`. None of them needs the service role, so none of
+them is here.
 
 ### `owner-create-staff`
 

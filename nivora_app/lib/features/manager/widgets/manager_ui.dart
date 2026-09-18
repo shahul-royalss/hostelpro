@@ -6,9 +6,9 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
+import '../../../shared/brow_header.dart';
 import '../../../shared/glass/glass.dart';
 import '../../shell/staff_profile_sheet.dart';
-import '../../../shared/wordmark.dart';
 import '../../../shared/sign_in_again.dart';
 import '../../../shared/motion/settle.dart';
 
@@ -237,7 +237,6 @@ class ManagerScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
     return Column(
       children: [
         // The shell's top bar IS the brow — the brand block with the curved bottom edge that
@@ -247,73 +246,38 @@ class ManagerScreen extends StatelessWidget {
           onBrow: true,
           child: masthead
               ? _masthead(context)
-              : Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // title 16/700 — the design's own `text-[16px] Bold` (4:1173).
-                    Text(title,
-                        style: t.textTheme.titleMedium,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: Space.xxs / 2),
-                      // meta 11/400 (4:1174). The design sets it in #6F747A, which measures
-                      // 3.92:1 and is not AA as text; `tones.muted` is that hue lifted until it
-                      // passes. See NivoraColors.darkMuted.
-                      Text(subtitle!,
-                          style: t.textTheme.bodySmall?.copyWith(color: context.tones.muted),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
-                    ],
-                  ],
-                ),
-              ),
-              ...actions,
-            ],
-          ),
+              // title 16/700 (4:1173) over meta 11/400 (4:1174), in the brow's own ink. The
+              // subtitle used to be `tones.muted`, a grey tuned for the near-black ground that
+              // measures under 3:1 on violet; BrowTitleBlock resolves both lines inside the
+              // header instead.
+              : BrowTitleBlock(title: title, subtitle: subtitle, actions: actions),
         ),
         Expanded(child: child),
       ],
     );
   }
 
-  /// Avatar, signature, and an empty box the same width as the avatar so the mark is centred on
-  /// the SCREEN rather than on the space beside it.
+  /// Avatar, greeting and signature, centred on the SCREEN rather than on the space beside the
+  /// avatar — BrowTitleBlock.masthead balances the avatar with an empty twin.
   Widget _masthead(BuildContext context) {
     final name = title.replaceFirst('Hello, ', '').trim();
-    return Row(
-      children: [
-        Tooltip(
-          message: 'Your account',
-          child: InkWell(
-            onTap: () => showStaffProfile(context),
-            customBorder: const CircleBorder(),
-            child: Padding(
-              // 8 + 44 + 8 is a 60dp target on the control that opens profile, two-factor
-              // and sign out. `customBorder: CircleBorder()` clips the hit region to a circle,
-              // so the corners are dead and the real target is smaller than its box — which is
-              // why it is generous. The disc grew from 32 on 2026-09-12; see AvatarSize.header.
-              padding: const EdgeInsets.all(Space.xs),
-              child: AccountAvatar(name: name.isEmpty ? 'Nivora' : name, size: AvatarSize.header),
-            ),
+    return BrowTitleBlock.masthead(
+      name: name,
+      leading: Tooltip(
+        message: 'Your account',
+        child: InkWell(
+          onTap: () => showStaffProfile(context),
+          customBorder: const CircleBorder(),
+          child: Padding(
+            // 8 + 44 + 8 is a 60dp target on the control that opens profile, two-factor and
+            // sign out. `customBorder: CircleBorder()` clips the hit region to a circle, so the
+            // corners are dead and the real target is smaller than its box — which is why it is
+            // generous. The disc grew from 32 on 2026-09-12; see AvatarSize.header.
+            padding: const EdgeInsets.all(Space.xs),
+            child: AccountAvatar(name: name.isEmpty ? 'Nivora' : name, size: AvatarSize.header),
           ),
         ),
-        // ── HELLO FIRST, BRAND SECOND ────────────────────────────────────────────────
-        //
-        // Was the drawn wordmark alone. The masthead now greets the person and signs the app
-        // underneath, which is [MastheadBlock] — one widget, so this and the other three
-        // shells cannot drift apart the way they did when each owned a copy of the layout.
-        Expanded(child: Center(child: MastheadBlock(name: name))),
-        // The avatar block's EXACT twin, so the masthead is centred on the screen.
-        // This said `IconSize.xl + Space.xxs * 2` — 40 — while the block opposite it is a
-        // 44dp disc inside Space.xs of padding, 60. The masthead has been sitting off
-        // centre in all four shells for as long as both lines have existed.
-        const SizedBox(width: AvatarSize.header + Space.xs * 2),
-      ],
+      ),
     );
   }
 }

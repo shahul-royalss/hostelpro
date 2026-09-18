@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/tokens.dart';
 import 'brow.dart';
+import 'brow_header.dart';
 import 'package:path_parsing/path_parsing.dart';
 
 /// The NIVORA signature, and the machinery to draw it as if it were being written.
@@ -292,11 +293,22 @@ class _WordmarkPainter extends CustomPainter {
 /// The tracking is what makes it a mark rather than a word. 4 at this size is wide enough to
 /// read as a logotype without the letters losing their relationship to each other.
 class NivoraTypeMark extends StatelessWidget {
-  const NivoraTypeMark({super.key, this.color, this.fontSize = 15});
+  const NivoraTypeMark({
+    super.key,
+    this.color,
+    this.fontSize = 15,
+    this.letterSpacing = tracking,
+  });
+
+  /// The lockup's own tracking.
+  static const tracking = 4.0;
 
   /// Null takes the surrounding ink, which is what a masthead on a brow wants.
   final Color? color;
   final double fontSize;
+
+  /// [tracking], except while the brow's entrance is still settling it.
+  final double letterSpacing;
 
   @override
   Widget build(BuildContext context) {
@@ -307,7 +319,7 @@ class NivoraTypeMark extends StatelessWidget {
         color: color,
         fontSize: fontSize,
         fontWeight: FontWeight.w800,
-        letterSpacing: 4,
+        letterSpacing: letterSpacing,
         height: 1,
       ),
       maxLines: 1,
@@ -335,13 +347,40 @@ class MastheadBlock extends StatelessWidget {
     final t = Theme.of(context);
     final first = name.trim().split(RegExp(r'\s+')).firstWhere((w) => w.isNotEmpty,
         orElse: () => '');
+    final greeting = first.isEmpty ? 'Hello' : 'Hello $first';
+
+    // ON THE BROW THE INK IS NOT OURS TO PICK. `titleMedium` with a null colour is the theme's
+    // ink, and in light that drew the greeting near-black on the brand violet — the same leak
+    // every header had. BrowText resolves it inside the header, and the signature takes the
+    // eyebrow's champagne and settles its tracking with the rest of the entrance.
+    if (BrowScope.of(context)) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          BrowText.title(
+            greeting,
+            textAlign: TextAlign.center,
+            style: const TextStyle(height: 1.1),
+          ),
+          const SizedBox(height: Space.xxs / 2),
+          BrowReveal(
+            line: BrowLine.eyebrow,
+            builder: (context, spread) => NivoraTypeMark(
+              color: BrowInk.eyebrow,
+              letterSpacing: NivoraTypeMark.tracking + spread,
+            ),
+          ),
+        ],
+      );
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
-          first.isEmpty ? 'Hello' : 'Hello $first',
+          greeting,
           style: t.textTheme.titleMedium?.copyWith(color: color, height: 1.1),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,

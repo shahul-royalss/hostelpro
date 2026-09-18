@@ -6,6 +6,7 @@ import '../../core/auth/session.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/version/update_banner.dart';
 import '../../shared/aurora.dart';
+import '../../shared/brow_header.dart';
 import '../../shared/glass/glass.dart';
 import '../../shared/wordmark.dart';
 import 'staff_profile_sheet.dart';
@@ -225,37 +226,29 @@ class _RoleShellState extends ConsumerState<RoleShell> {
     if (widget.role == UserRole.student) return _residentHeader(t, session);
 
     final name = session?.fullName.trim() ?? '';
-    return Row(
-      children: [
-        // Leading and trailing are the same width so the block between them is centred on the
-        // SCREEN rather than on the space left over — an avatar on one side and nothing on the
-        // other would push it off-centre by exactly one avatar.
-        Tooltip(
-          message: 'Your account',
-          child: InkWell(
-            onTap: () => showStaffProfile(context),
-            customBorder: const CircleBorder(),
-            child: Padding(
-              // 8 + 44 + 8 is a 60dp target on the control that opens profile, two-factor
-              // and sign out. `customBorder: CircleBorder()` clips the hit region to a circle,
-              // so the corners are dead and the real target is smaller than its box — which is
-              // why it is generous. The disc grew from 32 on 2026-09-12; see AvatarSize.header.
-              padding: const EdgeInsets.all(Space.xs),
-              child: AccountAvatar(
-                name: name.isEmpty ? 'Nivora' : name,
-                size: AvatarSize.header,
-              ),
+    // BrowTitleBlock.masthead balances the avatar with an empty twin of the same width, so the
+    // greeting is centred on the SCREEN rather than on the space left over beside it, and it
+    // draws the greeting and the [MastheadBlock] signature in the brow's own ink.
+    return BrowTitleBlock.masthead(
+      name: name,
+      leading: Tooltip(
+        message: 'Your account',
+        child: InkWell(
+          onTap: () => showStaffProfile(context),
+          customBorder: const CircleBorder(),
+          child: Padding(
+            // 8 + 44 + 8 is a 60dp target on the control that opens profile, two-factor and
+            // sign out. `customBorder: CircleBorder()` clips the hit region to a circle, so the
+            // corners are dead and the real target is smaller than its box — which is why it is
+            // generous. The disc grew from 32 on 2026-09-12; see AvatarSize.header.
+            padding: const EdgeInsets.all(Space.xs),
+            child: AccountAvatar(
+              name: name.isEmpty ? 'Nivora' : name,
+              size: AvatarSize.header,
             ),
           ),
         ),
-        Expanded(child: Center(child: MastheadBlock(name: name))),
-        // The empty twin of the avatar. Sized from the same constants so the two cannot drift.
-        // The avatar block's EXACT twin, so the masthead is centred on the screen.
-        // This said `IconSize.xl + Space.xxs * 2` — 40 — while the block opposite it is a
-        // 44dp disc inside Space.xs of padding, 60. The masthead has been sitting off
-        // centre in all four shells for as long as both lines have existed.
-        const SizedBox(width: AvatarSize.header + Space.xs * 2),
-      ],
+      ),
     );
   }
 
@@ -272,9 +265,8 @@ class _RoleShellState extends ConsumerState<RoleShell> {
   /// the icon alone would have taken two-factor authentication away from residents entirely,
   /// which is a security downgrade dressed up as a layout change. It is a row on the Profile
   /// tab now, beside sign out, which is where a resident would look for it anyway.
-  Widget _residentHeader(ThemeData t, NivoraSession? session) => Center(
-        child: MastheadBlock(name: session?.fullName.trim() ?? ''),
-      );
+  Widget _residentHeader(ThemeData t, NivoraSession? session) =>
+      BrowTitleBlock.masthead(name: session?.fullName.trim() ?? '');
 
   Widget _body(ThemeData t, List<({String label, IconData icon})> tabs) {
     // The owner's section owns its bodies the way the student's does — an IndexedStack over

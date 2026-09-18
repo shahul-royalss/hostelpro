@@ -34,6 +34,7 @@ class CredentialsDialog extends StatefulWidget {
     super.key,
     required this.credentials,
     this.hostelName,
+    this.title = 'Owner account created',
   });
 
   final IssuedCredentials credentials;
@@ -41,12 +42,17 @@ class CredentialsDialog extends StatefulWidget {
   /// Named in the heading, so an admin creating several in a row knows which one this is for.
   final String? hostelName;
 
+  /// The heading. The hostel screen's password reset shows the same one-time secret through
+  /// this same dialog, and "Owner account created" over a reset would be a false sentence.
+  final String title;
+
   /// Presents it. Returns when the admin has confirmed they have saved the password — there is
   /// no other way for this future to complete.
   static Future<void> show(
     BuildContext context, {
     required IssuedCredentials credentials,
     String? hostelName,
+    String title = 'Owner account created',
   }) {
     return showDialog<void>(
       context: context,
@@ -55,6 +61,7 @@ class CredentialsDialog extends StatefulWidget {
       builder: (_) => CredentialsDialog(
         credentials: credentials,
         hostelName: hostelName,
+        title: title,
       ),
     );
   }
@@ -109,7 +116,7 @@ class _CredentialsDialogState extends State<CredentialsDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Owner account created', style: t.textTheme.titleMedium),
+                          Text(widget.title, style: t.textTheme.titleMedium),
                           if (widget.hostelName != null)
                             Text(widget.hostelName!,
                                 style: t.textTheme.bodySmall,
@@ -170,15 +177,21 @@ class _CredentialsDialogState extends State<CredentialsDialog> {
                 ),
 
                 const SizedBox(height: Space.sm),
-                CheckboxListTile(
-                  value: _confirmed,
-                  onChanged: (v) => setState(() => _confirmed = v ?? false),
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: Text(
-                    'I have saved these credentials',
-                    style: t.textTheme.bodyMedium,
+                // A transparent Material of its own: the glass pane above is a coloured
+                // DecoratedBox, and a ListTile paints its ink on the nearest Material — so
+                // without this the tick's ripple drew underneath the pane (and Flutter asserts).
+                Material(
+                  type: MaterialType.transparency,
+                  child: CheckboxListTile(
+                    value: _confirmed,
+                    onChanged: (v) => setState(() => _confirmed = v ?? false),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text(
+                      'I have saved these credentials',
+                      style: t.textTheme.bodyMedium,
+                    ),
                   ),
                 ),
                 const SizedBox(height: Space.xs),

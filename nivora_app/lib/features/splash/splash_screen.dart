@@ -226,26 +226,29 @@ class _Lockup extends StatelessWidget {
   /// not a number measured off a screenshot.
   static const double _capRatio = 1490 / 2048;
 
-  /// HOW BIG THE N IS, AS A MULTIPLE OF THE LETTERS BESIDE IT.
+  /// HOW BIG THE N IS, AS A MULTIPLE OF THE LETTERS' CAP HEIGHT.
   ///
-  /// The product owner's note was "the N goes so long". He is right: it was a flat 70dp against
-  /// a 32dp cap height — the mark stood at more than twice the height of the word, so the eye
-  /// read "[badge] IVORA" instead of NIVORA, which is the one thing a lockup must not do.
+  /// The product owner has moved this three times, and the latest word stands:
   ///
-  /// EXACTLY CAP HEIGHT. The mark is the N of NIVORA, so it is as tall as the letters it is a
-  /// letter of — no optical bump, which is what 1.15 was and what the product owner saw:
-  /// "the N letter is longer than compared to other letters I V O R A".
+  ///   - A flat 70dp against a 32dp cap: "the N goes so long". At twice the word's height the
+  ///     eye read "[badge] IVORA" instead of NIVORA. That limit still holds.
+  ///   - 1.0, exactly cap height, after "the N letter is longer than compared to other letters
+  ///     I V O R A" (1.15 had measured 37px of ink against the letters' 34).
+  ///   - 1.4, on 2026-09-16: "the N has to be some big compared other letters". This replaces
+  ///     the equal-height request.
   ///
-  /// Rendering the lockup and scanning its pixels is what settled it. At 1.15 the mark's ink
-  /// measured 37px against the letters' 34, and it stood 4px proud of the cap line while
-  /// sitting on the same baseline — a mark that pokes above the word rather than belonging to
-  /// it. At 1.0 the two are the same height, top and bottom.
+  /// WHY 1.4, PICKED BY RENDERING. The splash was drawn at 1.0, 1.30, 1.35, 1.40 and 1.45 on a
+  /// 360dp screen at 3x, and the mark's ink over the I's ink measured 0.96, 1.24, 1.30, 1.34 and
+  /// 1.40 (the I's ink is 33dp, a hair over the 32dp cap, because of anti-aliasing). At 1.30 the
+  /// N is a tower poking above the word; at 1.45 it starts to stand in front of it. At 1.4 it is
+  /// plainly the capital of NIVORA and still one word, because the two things that bind it to
+  /// IVORA did not move: it stands on the same baseline, and the ink gap to the I is still 7dp.
   ///
   /// THIS NUMBER ONLY BECAME HONEST WHEN THE ASSET WAS RE-CUT. brand_mark.png used to carry a
   /// fringe of alpha 1-3 out to its edges — invisible, and 20% of the file's height. Flutter
   /// sizes the image BOX, so `height: 40` drew 32dp of visible mark and this ratio described
   /// something that was not on the screen. See scripts/cut-brand-mark.py.
-  static const double _markToCap = 1.0;
+  static const double _markToCap = 1.4;
 
   /// ── THE GAP IS 1.6dp, AND THAT IS NOT A TYPO ────────────────────────────────────────────
   ///
@@ -256,7 +259,8 @@ class _Lockup extends StatelessWidget {
   /// Measured off a render of this very screen — mark ink ends at x=469, the I's ink starts at
   /// 495, and the text box starts at 489.6 — the four gaps BETWEEN the letters came out 8, 5, 9
   /// and 6 (letter-spacing 6, plus or minus each pair's bearings), a mean of 7. The mark-to-I
-  /// gap was 25.
+  /// gap was 25. Re-measured after the N grew to 1.4x: still 7dp (21px at 3x), since the gap
+  /// hangs off the mark's trailing edge, not its height.
   ///
   /// So the target is the letters' own rhythm, and the arithmetic is: 7 wanted, 5.4 of it
   /// already provided by the bearing, 1.6 left to add. splash_opening_test.dart asserts the
@@ -286,6 +290,8 @@ class _Lockup extends StatelessWidget {
     final painter = TextPainter(
       text: TextSpan(text: 'IVORA', style: style),
       textDirection: TextDirection.ltr,
+      // The same size the Text below is set at, which is the point of measuring with it.
+      textScaler: TextScaler.noScaling,
     )..layout();
 
     // THE MARK STANDS ON THE LETTERS' BASELINE, which is where a letter would stand.
@@ -319,13 +325,15 @@ class _Lockup extends StatelessWidget {
             padding: EdgeInsets.only(bottom: descent),
             child: Transform.scale(
               // Scale does not change the laid-out size, so the settle cannot disturb the
-              // baseline it is standing on.
+              // baseline it is standing on. It does paint the foot about 1dp low at frame zero,
+              // but IVORA is folded away then, and the settle is over before the letters are
+              // half out. splash_opening_test.dart holds it to that.
               scale: markScale,
               child: Image.asset(
                 'assets/brand_mark.png',
                 height: markHeight,
                 // Decoded at the size it is painted — 3x covers every phone this ships to —
-                // instead of holding a 781px bitmap for a 61px slot.
+                // instead of holding the whole 405px-tall bitmap for a 45dp slot.
                 cacheHeight: (markHeight * 3).round(),
                 filterQuality: FilterQuality.high,
               ),
@@ -336,7 +344,12 @@ class _Lockup extends StatelessWidget {
             child: Align(
               alignment: Alignment.centerLeft,
               widthFactor: unfold,
-              child: Text('IVORA', style: style),
+              // NOT SCALED WITH THE SYSTEM FONT SIZE. This is a logo, not text anyone reads,
+              // and every proportion in this class is against a 44dp face. main.dart lets text
+              // grow to 1.4x: at that size these letters grew and the mark did not, so the N
+              // came out no taller than IVORA and hung 2dp below its baseline, which undoes the
+              // owner's request for exactly the people who turned their font up.
+              child: Text('IVORA', style: style, textScaler: TextScaler.noScaling),
             ),
           ),
         ],

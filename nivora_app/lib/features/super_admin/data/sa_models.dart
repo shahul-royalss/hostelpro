@@ -104,10 +104,12 @@ class SubscriptionRecord {
     required this.status,
     required this.createdAt,
     this.notes,
+    this.cancelledAt,
+    this.cancelReason,
   });
 
-  static const columns =
-      'id, hostel_id, owner_user_id, start_date, end_date, amount, status, notes, created_at';
+  static const columns = 'id, hostel_id, owner_user_id, start_date, end_date, amount, status, '
+      'notes, created_at, cancelled_at, cancel_reason';
 
   final String id;
   final String hostelId;
@@ -118,6 +120,17 @@ class SubscriptionRecord {
   final SubscriptionState status;
   final String? notes;
   final DateTime createdAt;
+
+  /// Stamped by public.sa_cancel_subscription. A cancelled period STAYS in the history — it was
+  /// sold and paid for — but every reader that derives the hostel's plan ignores it, so its
+  /// [status] column can still say 'active' for a period that no longer admits a single write.
+  /// Draw [isCancelled] over [status], never the other way round.
+  final DateTime? cancelledAt;
+
+  /// Why the Super Admin cancelled it, 3-300 characters, written for the owner to read.
+  final String? cancelReason;
+
+  bool get isCancelled => cancelledAt != null;
 
   /// Days from today to the end date, inclusive of today. Negative once it has lapsed.
   int daysLeftFrom(DateTime today) {
@@ -138,6 +151,8 @@ class SubscriptionRecord {
       status: wireOrThrow(SubscriptionState.values, row['status'], src, 'status'),
       notes: optString(row, 'notes'),
       createdAt: reqTimestamp(row, src, 'created_at'),
+      cancelledAt: optTimestamp(row, src, 'cancelled_at'),
+      cancelReason: optString(row, 'cancel_reason'),
     );
   }
 }
@@ -449,6 +464,17 @@ class IssuedCredentials {
       name: reqString(row, src, 'name'),
       loginId: reqString(row, src, 'loginId'),
       password: reqString(row, src, 'password'),
+    );
+  }
+
+  /// The `data` of sa-owner-account's reset-password action, which names the owner
+  /// `ownerName` rather than `name`. Same one-time secret, same rules: never persisted.
+  factory IssuedCredentials.fromOwnerReset(Map<String, dynamic> data) {
+    const src = 'sa-owner-account';
+    return IssuedCredentials(
+      name: reqString(data, src, 'ownerName'),
+      loginId: reqString(data, src, 'loginId'),
+      password: reqString(data, src, 'password'),
     );
   }
 }

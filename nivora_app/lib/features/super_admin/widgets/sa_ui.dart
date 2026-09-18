@@ -8,9 +8,9 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../shared/brow.dart';
+import '../../../shared/brow_header.dart';
 import '../../../shared/glass/glass.dart';
 import '../../shell/staff_profile_sheet.dart';
-import '../../../shared/wordmark.dart';
 import '../../../shared/sign_in_again.dart';
 import '../data/sa_models.dart';
 
@@ -238,8 +238,6 @@ class SaScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-
     Widget body = child;
     if (scrollable) {
       body = SingleChildScrollView(
@@ -265,36 +263,16 @@ class SaScreen extends StatelessWidget {
           onBrow: true,
           child: masthead
               ? _masthead(context)
-              : Row(
-                  children: [
-                    const SaBrandDot(),
-                    const SizedBox(width: Space.xs),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(eyebrow, style: t.textTheme.labelSmall),
-                          // 4:135 sets the header's own title at 16/700, not at 20. The design has
-                          // no 20pt type on any screen; letting the bar outweigh the KPI figures
-                          // under it is what made this console read as a different app.
-                          Text(
-                            title,
-                            style: t.textTheme.titleMedium,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (subtitle != null)
-                            Text(
-                              subtitle!,
-                              style: t.textTheme.bodySmall,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                        ],
-                      ),
-                    ),
-                    ...actions,
-                  ],
+              // STRINGS, NOT Text WIDGETS. These three lines were built here with the theme's
+              // labelSmall / titleMedium / bodySmall, which carry the theme's own ink and beat
+              // the brow's white — the owner's "dark grey on deep purple" Subscriptions header.
+              // BrowTitleBlock resolves the ink inside the header, where no call site reaches.
+              : BrowTitleBlock(
+                  leading: const SaBrandDot(),
+                  eyebrow: eyebrow,
+                  title: title,
+                  subtitle: subtitle,
+                  actions: actions,
                 ),
         ),
         Expanded(child: body),
@@ -302,43 +280,30 @@ class SaScreen extends StatelessWidget {
     );
   }
 
-  /// Avatar, signature, and an empty box the width of the avatar so the mark is centred on the
-  /// SCREEN. The SaBrandDot is not drawn here — it exists to put the brand in front of a text
-  /// title, and the brand IS the title now.
+  /// Avatar, greeting and signature. The SaBrandDot is not drawn here — it exists to put the
+  /// brand in front of a text title, and the brand IS the title now.
   Widget _masthead(BuildContext context) {
-    // `subtitle` carries the signed-in person's name here — the avatar two lines down has
-    // always read it — so the greeting reads it from the same place rather than inventing a
-    // second source that could disagree with the initials beside it.
-    final name = subtitle ?? '';
-    return Row(
-      children: [
-        Tooltip(
-          message: 'Your account',
-          child: InkWell(
-            onTap: () => showStaffProfile(context),
-            customBorder: const CircleBorder(),
-            child: Padding(
-              // 8 + 44 + 8 is a 60dp target on the control that opens profile, two-factor
-              // and sign out. `customBorder: CircleBorder()` clips the hit region to a circle,
-              // so the corners are dead and the real target is smaller than its box — which is
-              // why it is generous. The disc grew from 32 on 2026-09-12; see AvatarSize.header.
-              padding: const EdgeInsets.all(Space.xs),
-              child: AccountAvatar(name: subtitle ?? 'Nivora', size: AvatarSize.header),
-            ),
+    // `subtitle` carries the signed-in person's name here — the avatar has always read it — so
+    // the greeting reads it from the same place rather than inventing a second source that
+    // could disagree with the initials beside it.
+    return BrowTitleBlock.masthead(
+      name: subtitle ?? '',
+      leading: Tooltip(
+        message: 'Your account',
+        child: InkWell(
+          onTap: () => showStaffProfile(context),
+          customBorder: const CircleBorder(),
+          child: Padding(
+            // 8 + 44 + 8 is a 60dp target on the control that opens profile, two-factor and
+            // sign out. `customBorder: CircleBorder()` clips the hit region to a circle, so the
+            // corners are dead and the real target is smaller than its box — which is why it is
+            // generous. The block's default leadingExtent is exactly this width, so the
+            // greeting stays centred on the screen.
+            padding: const EdgeInsets.all(Space.xs),
+            child: AccountAvatar(name: subtitle ?? 'Nivora', size: AvatarSize.header),
           ),
         ),
-        // ── HELLO FIRST, BRAND SECOND ────────────────────────────────────────────────
-        //
-        // Was the drawn wordmark alone. The masthead now greets the person and signs the app
-        // underneath, which is [MastheadBlock] — one widget, so this and the other three
-        // shells cannot drift apart the way they did when each owned a copy of the layout.
-        Expanded(child: Center(child: MastheadBlock(name: name))),
-        // The avatar block's EXACT twin, so the masthead is centred on the screen.
-        // This said `IconSize.xl + Space.xxs * 2` — 40 — while the block opposite it is a
-        // 44dp disc inside Space.xs of padding, 60. The masthead has been sitting off
-        // centre in all four shells for as long as both lines have existed.
-        const SizedBox(width: AvatarSize.header + Space.xs * 2),
-      ],
+      ),
     );
   }
 }
@@ -356,12 +321,11 @@ class SaBrandDot extends StatelessWidget {
     width: Space.xs,
     height: Space.xs,
     decoration: BoxDecoration(
-      // White on the brow. The dot is `primary`, and `primary` IS the brow's own family —
-      // a violet disc on #4D2896 is a disc nobody can see. It names its colour, so it
-      // cannot inherit the header's white the way the title beside it does.
-      color: BrowScope.of(context)
-          ? const Color(0xFFFFFFFF)
-          : Theme.of(context).colorScheme.primary,
+      // Gold on the brow, the ribbon's own colour. The dot is `primary`, and `primary` IS the
+      // brow's own family — a violet disc on violet is a disc nobody can see. Gold measures
+      // 3.32:1 on the brow's lightest stop, over the 3:1 a graphic needs. It names its colour,
+      // so it reads BrowScope rather than inheriting.
+      color: BrowScope.of(context) ? BrowInk.gold : Theme.of(context).colorScheme.primary,
       shape: BoxShape.circle,
     ),
   );

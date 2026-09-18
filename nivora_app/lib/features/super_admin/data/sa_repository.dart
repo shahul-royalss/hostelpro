@@ -1,8 +1,11 @@
 library;
 
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../data/models/models.dart';
+import '../../../data/models/parse.dart';
 import '../../../data/repositories/repository.dart';
 import 'sa_models.dart';
 
@@ -24,6 +27,36 @@ abstract interface class SaPlatformWrites {
   /// Creates the owner (or reuses one), the hostel, its scaffold and its subscription.
   /// supabase/functions/sa-create-owner.
   Future<CreateOutcome> createOwnerAndHostel(CreateOwnerHostelDraft draft);
+}
+
+/// The five controls on the hostel screen, behind their own interface.
+///
+/// A SEPARATE SEAM FROM [SaPlatformWrites] rather than five more methods on it, so a test that
+/// fakes the create wizard does not have to stub a password reset it never touches, and the
+/// other way round. Each of these either mints a secret that exists once or blocks every write
+/// in a running PG — the states worth holding down in `flutter test` are the refusals, and a
+/// test needs a stand-in to produce them.
+///
+/// NONE OF THEM IS DECIDED HERE. The owner is resolved server-side from hostels.owner_user_id
+/// (the phone never names a user), and each RPC re-checks the Super Admin and the second factor
+/// itself. This interface is how the app asks.
+abstract interface class SaHostelControls {
+  /// A fresh temporary password for the hostel's owner, shown once. sa-owner-account.
+  Future<IssuedCredentials> resetOwnerPassword(String hostelId);
+
+  /// Moves the owner's login to [email]. sa-owner-account. A refusal about the address comes
+  /// back as [OwnerEmailRejected] so the sheet can put it under the field.
+  Future<OwnerEmailOutcome> setOwnerEmail(String hostelId, String email);
+
+  /// public.sa_set_hostel_status. Returns the status the hostel actually ended up in, which for
+  /// a reactivation can be [HostelStatus.readonly] when the plan has lapsed.
+  Future<HostelStatus> setHostelStatus(String hostelId, HostelStatus status);
+
+  /// public.sa_cancel_subscription. Returns how many current periods were cancelled.
+  Future<int> cancelSubscription(String hostelId, String reason);
+
+  /// public.sa_rename_hostel. Returns the name as stored.
+  Future<String> renameHostel(String hostelId, String name);
 }
 
 /// Everything the platform console reads and writes.
@@ -50,8 +83,20 @@ abstract interface class SaPlatformWrites {
 /// re-verifies the caller's role against public.users, and then calls
 /// sa_create_hostel_with_subscription AS THE CALLER so the RPC's own `app.is_super_admin()`
 /// guard still runs. The phone asks; the server decides.
-final class SaRepository extends Repository implements SaPlatformWrites {
-  const SaRepository(super.db);
+final class SaRepository extends Repository implements SaPlatformWrites, SaHostelControls {
+  const SaRepository(super.db, {this.ownerAccountDeadline = defaultOwnerAccountDeadline});
+
+  /// How long a sa-owner-account call may take before the app stops waiting for it.
+  ///
+  /// The RPCs get [dataDeadline] through [guard]; `functions.invoke` has no deadline of its own,
+  /// and the reset dialog cannot be closed while its request is out. Longer than the 12s a read
+  /// gets because one call is several upstream trips — the caller and second factor, the hostel,
+  /// GoTrue's admin API, the session revoke, public.users, the audit row — on a function that may
+  /// be starting cold.
+  static const defaultOwnerAccountDeadline = Duration(seconds: 20);
+
+  /// Overridable so a test can reach it without waiting twenty real seconds.
+  final Duration ownerAccountDeadline;
 
   // ───────────────────────────────────────────────────────────────────────────
   // HOSTELS
@@ -226,6 +271,211 @@ final class SaRepository extends Repository implements SaPlatformWrites {
           'p_direct': direct,
         });
       });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // HOSTEL CONTROLS — suspend, cancel, rename
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /// public.sa_set_hostel_status(p_hostel_id, p_status).
+  ///
+  /// [guard], not [guardWrite]: setting a status the hostel already has changes nothing, so a
+  /// repeat after a timeout is harmless. Only 'active' and 'suspended' are sent — 'readonly' is
+  /// the server's to derive from the plan, never the admin's to pick.
+  @override
+  Future<HostelStatus> setHostelStatus(String hostelId, HostelStatus status) => guard(() async {
+        if (status == HostelStatus.readonly) {
+          throw const InvalidInputFailure('Choose suspend or reactivate.');
+        }
+        final data = await db.rpc('sa_set_hostel_status', params: {
+          'p_hostel_id': hostelId,
+          'p_status': status.wire,
+        });
+        return wireOrThrow(HostelStatus.values, data, 'sa_set_hostel_status', '(result)');
+      });
+
+  /// public.sa_cancel_subscription(p_hostel_id, p_reason).
+  ///
+  /// [guard]: a second call finds nothing left to cancel and says so in its own P0001 sentence,
+  /// which is a better answer after a timeout than "we cannot tell whether that worked".
+  @override
+  Future<int> cancelSubscription(String hostelId, String reason) => guard(() async {
+        final data = await db.rpc('sa_cancel_subscription', params: {
+          'p_hostel_id': hostelId,
+          'p_reason': reason.trim(),
+        });
+        if (data is num) return data.toInt();
+        throw RowShapeError('sa_cancel_subscription', '(result)',
+            'expected a count, got ${data.runtimeType}');
+      });
+
+  /// public.sa_rename_hostel(p_hostel_id, p_name). [guard]: renaming twice to one name is one
+  /// rename.
+  @override
+  Future<String> renameHostel(String hostelId, String name) => guard(() async {
+        final data = await db.rpc('sa_rename_hostel', params: {
+          'p_hostel_id': hostelId,
+          'p_name': name.trim(),
+        });
+        if (data is String) return data;
+        throw RowShapeError('sa_rename_hostel', '(result)',
+            'expected the stored name, got ${data.runtimeType}');
+      });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // THE OWNER'S LOGIN — supabase/functions/sa-owner-account
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /// Issues a new temporary password for the hostel's owner and returns it, once.
+  ///
+  /// THE HOSTEL, NOT THE USER, IS WHAT IS SENT. The function reads hostels.owner_user_id and
+  /// refuses anything that is not a live owner account, so this call cannot be pointed at the
+  /// Super Admin or at a warden however its body is edited.
+  @override
+  Future<IssuedCredentials> resetOwnerPassword(String hostelId) async {
+    final data = await _ownerAccountCall(
+      {'action': 'reset-password', 'hostelId': hostelId},
+      // Repeating it is the fix, not the risk: a second reset only replaces the first password.
+      unresolved: 'The password may have been reset. Reset it again to get one you can pass on '
+          '— each reset replaces the one before it.',
+    );
+    return IssuedCredentials.fromOwnerReset(data);
+  }
+
+  /// Moves the owner's login to a new address.
+  ///
+  /// Returns a rejection rather than throwing one for the same reason [createOwnerAndHostel]
+  /// does: "that address is already in use" is about one text field, and the sheet needs it
+  /// under that field.
+  @override
+  Future<OwnerEmailOutcome> setOwnerEmail(String hostelId, String email) async {
+    try {
+      final data = await _ownerAccountCall(
+        {'action': 'set-email', 'hostelId': hostelId, 'email': email.trim()},
+        rejectFields: true,
+        // The function answers an address the owner already has with success and writes
+        // nothing, so saving it again is how to find out.
+        unresolved: 'The login may already have moved. Save the same address again: if it went '
+            'through, that changes nothing.',
+      );
+      return OwnerEmailChanged(
+        ownerName: reqString(data, 'sa-owner-account', 'ownerName'),
+        loginId: reqString(data, 'sa-owner-account', 'loginId'),
+      );
+    } on OwnerEmailRejectedSignal catch (signal) {
+      return signal.rejection;
+    }
+  }
+
+  Future<Map<String, dynamic>> _ownerAccountCall(
+    Map<String, dynamic> body, {
+    required String unresolved,
+    bool rejectFields = false,
+  }) async {
+    final FunctionResponse response;
+    final abort = Completer<void>();
+    try {
+      response = await db.functions
+          .invoke('sa-owner-account', body: body, abortSignal: abort.future)
+          .timeout(ownerAccountDeadline);
+    } on TimeoutException catch (error, stack) {
+      // Frees the socket nobody is listening to. It un-sends nothing — the function may have
+      // done the work — which is why the failure says the outcome is unknown and what to do.
+      abort.complete();
+      Error.throwWithStackTrace(
+        AppFailure.timedOut(error, sideEffect: SideEffect.unknown, unresolved: unresolved),
+        stack,
+      );
+    } on FunctionException catch (error, stack) {
+      if (rejectFields) {
+        final rejection = _emailRejectionFrom(error);
+        if (rejection != null) throw OwnerEmailRejectedSignal(rejection);
+      }
+      Error.throwWithStackTrace(ownerAccountFailureFrom(error), stack);
+    } catch (error, stack) {
+      Error.throwWithStackTrace(AppFailure.from(error), stack);
+    }
+    final envelope = response.data;
+    if (envelope is! Map || envelope['data'] is! Map) {
+      throw RowShapeError('sa-owner-account', '(body)', 'expected a JSON object envelope');
+    }
+    return (envelope['data'] as Map).cast<String, dynamic>();
+  }
+
+  /// A refusal about the typed address: a 400/409 carrying `fieldErrors.email`, or a 409 whose
+  /// sentence is about the email. Anything else is not the admin's to fix in the box.
+  static OwnerEmailRejected? _emailRejectionFrom(FunctionException error) {
+    final details = error.details;
+    if (details is! Map) return null;
+    final message = _messageFrom(details);
+    final raw = details['fieldErrors'];
+    if (raw is Map) {
+      final value = raw['email'];
+      final field = value is List && value.isNotEmpty && value.first is String
+          ? value.first as String
+          : value is String
+              ? value
+              : null;
+      if (field != null) return OwnerEmailRejected(message ?? field, emailError: field);
+    }
+    if (error.status == 409 && message != null && message.toLowerCase().contains('email')) {
+      return OwnerEmailRejected(message, emailError: message);
+    }
+    return null;
+  }
+
+  /// [failureFrom], worded for the owner-login function rather than the create wizard.
+  ///
+  /// Separate because every sentence differs: a missing deployment here changed nothing about a
+  /// login, and a 404 from the function itself is a hostel with no owner, not an owner row.
+  /// The function's own message wins wherever there is one — it already says what to do.
+  static AppFailure ownerAccountFailureFrom(FunctionException error) {
+    final message = _messageFrom(error.details);
+
+    if (error is FunctionsFetchException || error.status == 0) {
+      return OfflineFailure(
+        'Cannot reach Nivora. The owner\'s login was not changed — check your connection and '
+        'try again.',
+        technical: error.toString(),
+      );
+    }
+
+    return switch (error.status) {
+      401 => SignedOutFailure(
+          message ?? 'Your session has ended. Sign in again to continue.',
+          technical: error.toString(),
+        ),
+      // Includes the second-factor refusal requireCaller raises, whose sentence says how to
+      // pass it — so the message is kept rather than flattened into "not permitted".
+      403 => AccessDeniedFailure(
+          message ?? 'Only the Super Admin can change an owner\'s login.',
+          technical: error.toString(),
+        ),
+      404 when message == null => NotFoundFailure(
+          'Changing an owner\'s login is not available on this server yet. Nothing was '
+              'changed. The sa-owner-account function needs to be deployed.',
+          technical: 'sa-owner-account answered 404 with no body — the Edge Function is not '
+              'deployed on this project, so nothing decided the hostel was missing. $error',
+        ),
+      404 => NotFoundFailure(message!, technical: error.toString()),
+      409 => ConflictFailure(
+          message ?? 'That conflicts with another account.',
+          technical: error.toString(),
+        ),
+      400 || 422 => InvalidInputFailure(
+          message ?? 'That was not accepted. Check it and try again.',
+          technical: error.toString(),
+        ),
+      429 => ServerFailure(
+          message ?? 'Too many owner login changes just now. Wait a minute and try again.',
+          technical: error.toString(),
+        ),
+      _ => ServerFailure(
+          message ?? 'Nivora could not finish changing that login. Check the owner\'s details '
+              'before trying again.',
+          technical: error.toString(),
+        ),
+    };
+  }
 
   // ───────────────────────────────────────────────────────────────────────────
   // OWNERS
@@ -446,4 +696,34 @@ final class CreateRejected extends CreateOutcome {
   /// 'subscription.endDate'. One message per field — the function accumulates a list, and the
   /// first is the one that explains the others.
   final Map<String, String> fieldErrors;
+}
+
+/// What "Change email" produced. Same two-outcome shape as [CreateOutcome], for the same reason.
+sealed class OwnerEmailOutcome {
+  const OwnerEmailOutcome();
+}
+
+final class OwnerEmailChanged extends OwnerEmailOutcome {
+  const OwnerEmailChanged({required this.ownerName, required this.loginId});
+  final String ownerName;
+
+  /// What the owner types from now on.
+  final String loginId;
+}
+
+final class OwnerEmailRejected extends OwnerEmailOutcome {
+  const OwnerEmailRejected(this.message, {required this.emailError});
+
+  /// Safe to show verbatim.
+  final String message;
+
+  /// The sentence for under the email field.
+  final String emailError;
+}
+
+/// Carries a rejection out of the shared call helper without making it an [AppFailure] — it is
+/// an outcome, and [SaRepository.setOwnerEmail] turns it straight back into one.
+final class OwnerEmailRejectedSignal implements Exception {
+  const OwnerEmailRejectedSignal(this.rejection);
+  final OwnerEmailRejected rejection;
 }
