@@ -19,17 +19,30 @@ import type { Caller } from "./caller.ts";
 export interface HostelContext {
   id: string;
   name: string;
-  status: "active" | "suspended";
-  /** false when the hostel is suspended or the subscription has lapsed → all writes blocked. */
+  status: "active" | "suspended" | "readonly";
+  /**
+   * false when the hostel is suspended, read-only, or its plan has lapsed or been cancelled →
+   * all writes blocked.
+   */
   writable: boolean;
   latestSubscriptionEnd: string | null;
 }
 
 /**
  * Load a hostel and compute its writability the same way app.hostel_writable() does:
- * hostels.status = 'active' AND the newest subscription's end_date has not passed.
+ * hostels.status = 'active' AND the newest UNCANCELLED subscription's end_date has not passed.
  * Dates are compared as YYYY-MM-DD strings in UTC, which is the calendar day Postgres
  * current_date reports on a Supabase instance.
+ *
+ * THE cancelled_at FILTER IS LOAD-BEARING, and it was missing until 2026-09-19. A plan the Super
+ * Admin cancels usually still has months to run, so without it the newest row's end_date is a
+ * future date and this reads a cancelled hostel as writable — while app.subscription_state(),
+ * which every RLS policy consults, already calls it expired. The service role bypasses RLS on
+ * exactly the paths that import this file (creating staff, registering a resident, re-issuing a
+ * resident's login, uploading a complaint photo), so this function is the only thing standing
+ * between them and a hostel the database has already closed. See
+ * db/migrations/2026-09-16-sa-hostel-controls.sql, which added the column and the table guard
+ * that keeps hostels.status honest for the same reason.
  */
 async function loadHostel(hostelId: string): Promise<HostelContext | null> {
   const admin = serviceClient();
@@ -48,11 +61,12 @@ async function loadHostel(hostelId: string): Promise<HostelContext | null> {
     .from("subscriptions")
     .select("end_date")
     .eq("hostel_id", hostelId)
+    .is("cancelled_at", null)
     .order("end_date", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  const row = hostel as { id: string; name: string; status: "active" | "suspended" };
+  const row = hostel as { id: string; name: string; status: "active" | "suspended" | "readonly" };
   const end = (sub as { end_date: string } | null)?.end_date ?? null;
   return {
     id: row.id,
