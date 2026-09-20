@@ -48,11 +48,15 @@ Tapping the link in the mail opened `hostelpro-three.vercel.app` and showed
 
 > Page not found — That link doesn't exist, or you don't have access to it.
 
-The reason, measured rather than guessed: `app/verify-email/confirmed/page.tsx` **is untracked in
-git** — `git ls-files app/verify-email/` returns nothing — so it was never pushed and never
-deployed. The route does not exist in production. So does the middleware change that would make
-it public (`lib/supabase/middleware.ts` is modified but uncommitted). Both are the owner's to
-resolve; §7 has the exact commands.
+The reason, measured rather than guessed: when that screenshot was taken,
+`app/verify-email/confirmed/page.tsx` was **untracked in git**, so it had never been pushed and the
+route did not exist in production. The middleware change that makes it public sat uncommitted
+beside it.
+
+**Both have since shipped.** The page was committed on 2026-09-02 (`0e58dd6`),
+`lib/supabase/middleware.ts` is clean, and a signed-out GET of `/verify-email/confirmed` returned
+HTTP 200 on 2026-09-20. §7 keeps the commands, for the next time something sits in the working tree
+unpushed.
 
 **The address was verified anyway, every time.** GoTrue matches the single-use token at
 `/auth/v1/verify` **before** it redirects anywhere. The redirect is the last thing that happens
@@ -61,8 +65,8 @@ click and a stamped `email_verified_at` today (§6), earned through exactly that
 page. The failure was **cosmetic in the browser and fatal in the head**: the user believed
 nothing had happened and never came back to Nivora to let it re-check.
 
-Deploying the missing page would have removed the scary screen. It would not have given the
-owner what they asked for, and it could never have, for the reason in §2.
+Deploying the page removed the scary screen. It did not give the owner what they asked for, and it
+could never have, for the reason in §2.
 
 ---
 
@@ -110,10 +114,12 @@ verified Digital Asset Link, Android shows a disambiguation sheet on somebody el
 on Android 12+ an `autoVerify` filter that fails verification is **never offered to the app at
 all**. `public/.well-known/assetlinks.json` currently delegates `hostelpro-three.vercel.app` to
 `app.nivora.twa`, the old web wrapper, not to `com.nivorasr.app`; adding the Flutter app needs
-the Play App Signing SHA-256, which per `docs/PLAY-CRITICAL-assetlinks.md` does not exist until
-after the first upload. Play App Signing creates a new app signing key for the new
-`com.nivorasr.app` app, so that means the first upload to that app. So an App Link would ship as
-a filter that never fires.
+the Play App Signing SHA-256. That fingerprint exists now: Google generated it on 2026-09-19 when
+the `com.nivorasr.app` app was created in Play Console, and it is recorded in
+`docs/play-technical-compliance.md` §4, which is where to read it from rather than here. What is
+still missing is the hosted file. Until `assetlinks.json` names `com.nivorasr.app` with that
+fingerprint and is deployed, verification fails, so an App Link would still ship as a filter that
+never fires.
 
 `com.nivorasr.app` is this app's own `applicationId` (`nivora_app/android/app/build.gradle.kts:109`)
 used as a scheme — the reverse-DNS form RFC 3986 allows, which nothing else on the device can
@@ -315,13 +321,18 @@ verification, not a fault.
 
 ---
 
-## 7. The web page — the owner's action, with the exact commands
+## 7. The web page — shipped, and the commands that shipped it
 
 Nothing above needs the web page. It is the §4.1/§4.2 landing, so its only job is to stop a
-laptop showing a 404. Two honest options:
+laptop showing a 404.
 
-**Option A — ship it (recommended).** The page and the middleware change both already exist in
-the working tree; they have never been committed.
+**This is done.** The page was committed on 2026-09-02 (`0e58dd6`), `lib/supabase/middleware.ts`
+went with it, and `/verify-email/confirmed` answered HTTP 200 signed out on 2026-09-20. What
+follows is the record of what shipped, and the recipe for the next page that sits unpushed in the
+working tree. The two options below were the choice at the time; Option A is the one taken.
+
+**Option A — ship it (what was done).** The page and the middleware change both existed in the
+working tree, uncommitted.
 
 ```bash
 cd "C:/Users/shahu/OneDrive/Documents/pg management system"
@@ -432,7 +443,7 @@ query on 2026-09-14 found both objects live, with the trigger sorting after the 
 
 **Why.** Review accounts use `demo.*@nivora.app` addresses whose mail nobody reads, so none of
 them can ever open a link. `demo.manager@nivora.app`, which the operator creates from the demo
-owner's staff screen, would otherwise:
+owner's staff screen and which now exists and is active, would otherwise:
 
 - after its first password change, land on the verify screen pushed with `blocking: true`
   (`nivora_app/lib/features/auth/change_password_screen.dart:191`), which cannot be dismissed
@@ -442,8 +453,12 @@ owner's staff screen, would otherwise:
   `owner-create-staff/index.ts:97`, `warden-register-student/index.ts:120` and
   `warden-student-credentials/index.ts:359`.
 
-A one-off UPDATE could not cover it: the row does not exist yet (none on 2026-09-14), and
-`users_update_guard` refuses a hand-written stamp from anything but the service role (§4.5).
+A one-off UPDATE could not have covered it: on 2026-09-14 the row did not exist yet, and
+`users_update_guard` refuses a hand-written stamp from anything but the service role (§4.5). The
+row exists now. It was created from the demo owner's staff screen with the trigger already live,
+which is exactly the insert the trigger was written for. If that account is ever lost, recreating
+it is the same step, create the manager again from the demo owner's staff screen, and the trigger
+covers the new row on insert.
 
 **Evidence that it is scoped.** A probe against production, rolled back, covered each case:
 
@@ -460,8 +475,10 @@ trigger is removed, a Demo PG row with a `demo.*@nivora.app` address passes
 `requireVerifiedEmail()` without anyone opening a link.
 
 **The accounts that were already verified.** `demo.owner@nivora.app`, `demo.warden@nivora.app`
-and resident `9000000001` were stamped on 2026-09-04 (12:35 UTC, read back 2026-09-14). The
-trigger is not what keeps two of them verified: `demo.owner` has no `users.hostel_id`, and the
+and resident `9000000001` were stamped on 2026-09-04 (12:35 UTC, read back 2026-09-14).
+`demo.warden@nivora.app` has since been deactivated, when `demo.warden1@nivora.app` was created,
+so it records what was verified then and is not a login to use now. The trigger is not what
+keeps two of them verified: `demo.owner` has no `users.hostel_id`, and the
 resident's address is `9000000001@student.hostelpro.local`, which §4.6 never asks anyway. So do
 not change the demo owner's address during review, because nothing would stamp it again.
 

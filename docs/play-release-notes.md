@@ -6,22 +6,27 @@ Play counts the characters *inside* the tags, not the tags themselves.
 
 ---
 
-## v1.0.0 (versionCode 5) — first release
+## v1.0.0 (versionCode 6) — first release
 
-`nivora_app/pubspec.yaml:19` says `version: 1.0.0+5`. The bundle for this upload is
-`dist/NIVORA-1.0.0.aab`, built from it at 15:47 IST on 2026-09-14, SHA-256 `ec552f06eb45d1f52daeeffdb2f69cfaa087bfab70c34a4f3acee90d491f186f`. Check the
-hash before uploading; the steps are in [play-console-submission.md](play-console-submission.md).
+`nivora_app/pubspec.yaml:19` says `version: 1.0.0+6`. The bundle that went up is
+`dist/NIVORA-1.0.0.aab`, built from it on 2026-09-16, 66,433,003 bytes, SHA-256 `d1283f6b173eecf37d6ebbbb2d026e414d8e60b0dc7480a5505583075a888541`. Check the
+hash before any upload; the steps are in [play-console-submission.md](play-console-submission.md).
+That bundle is already up: the closed testing release `1.0.0 (6)` passed review and is published to
+the closed track. Production is still Inactive.
 
-This is the first bundle for the **new** Play Console app, package `com.nivorasr.app`. That app's
-bundle library is empty, so any versionCode would be accepted. It gets 5 so that no two different
-bundles share a number in these docs. versionCodes 1 to 4 were all built for the abandoned
-`com.srnivora.app` listing: 1 on 2026-09-12, and 2, 3 and 4 on 2026-09-13. Nothing was ever released
-from that listing. Until 2026-09-13 this section named versionCode 4, for that listing.
+versionCode 6 is the first bundle **uploaded** to the new Play Console app, package
+`com.nivorasr.app`. That app's bundle library was empty until then, so 6 was accepted. It gets 6 so
+that no two different bundles share a number in these docs. versionCode 5 was built on 2026-09-14
+and never uploaded; versionCode 6 superseded it two days later. versionCodes 1 to 4 were all built
+for the abandoned `com.srnivora.app` listing: 1 on 2026-09-12, and 2, 3 and 4 on 2026-09-13.
+Nothing was ever released from that listing. This section named versionCode 4 until 2026-09-14
+(`aca872f`), and versionCode 5 until 2026-09-20.
 
 Play refuses a versionCode that has *ever* been uploaded to an app's bundle library, even when the
-release it sat in was discarded. So every upload after this one must raise the `+N`.
+release it sat in was discarded. 6 is in that library now and cannot be reused, so the next release
+must be 7 or higher.
 
-**Release name** (a Console field, never shown to users, 50 characters max): `1.0.0 (5)`
+**Release name** (a Console field, never shown to users, 50 characters max): `1.0.0 (6)`
 
 ```
 <en-US>

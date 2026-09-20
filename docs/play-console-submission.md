@@ -4,22 +4,35 @@ Everything Console will ask for on the new app, in the order to do it, plus the 
 Play that this release depends on.
 
 **App name:** Nivora · **Package:** `com.nivorasr.app` · **Upload artifact:** `dist/NIVORA-1.0.0.aab`,
-versionCode 5, release name `1.0.0 (5)`
+versionCode 6, release name `1.0.0 (6)`
 
-> **This is a new Play Console app (2026-09-14).** Until 2026-09-13 this page drove a listing locked
+> **This is a new Play Console app (2026-09-19).** Until 2026-09-13 this page drove a listing locked
 > to `com.srnivora.app`. That listing is abandoned: nothing was ever released from it, and nothing
-> entered there carries over. Every step below is done again on the new app, with the same answers.
+> entered there carries over. Every step below was done again on the new app, with the same answers,
+> except the last one: applying for production, which waits on the closed test.
 > What happened on the old listing is under [History](#history-the-abandoned-comsrnivoraapp-listing)
 > at the end.
 
+> **Where this has got to, 2026-09-20.** The app was created on 2026-09-19. Store listing, app
+> category, every App content declaration and the Data safety form went in together as one batch of
+> 13 changes, with **Countries and regions: India only**. The closed testing release `1.0.0 (6)`
+> passed review and is published on the closed track, and 12 testers opted in on 2026-09-20, so the
+> 14 continuous days end around 2026-10-04. Production is Inactive; nothing has been released to it.
+> So Steps 1 to 3 below have all been carried out for this release, except the last part of Step 3,
+> applying for production, which only unlocks when those 14 days are up. The steps stay written as
+> instructions because the next release repeats them, and each one says whether it is finished.
+
 The package is set in code: `namespace` and `applicationId` are `com.nivorasr.app`
 (`nivora_app/android/app/build.gradle.kts:60` and `:109`), `MainActivity` lives in
-`nivora_app/android/app/src/main/kotlin/com/nivorasr/app/`, and the upload is `version: 1.0.0+5`
+`nivora_app/android/app/src/main/kotlin/com/nivorasr/app/`, and the upload is `version: 1.0.0+6`
 (`nivora_app/pubspec.yaml:19`).
 
 ---
 
 ## Step 1 — create the app
+
+**Done on 2026-09-19.** The steps stay here as the procedure, for whenever an app has to be created
+again.
 
 Play Console → **Home → Create app**.
 
@@ -27,26 +40,34 @@ Play Console → **Home → Create app**.
   release notes declare ([play-release-notes.md](play-release-notes.md)).
 - Answer the remaining questions and accept the declarations yourself.
 
-There is no package field on that form. The new app takes its package from the first bundle
-uploaded to it, and from then on `com.nivorasr.app` is that app's identity **permanently**. Check
-the package before the first upload (see
+There is no package field on that form. A new app takes its package from the first bundle uploaded
+to it, and from then on that package is the app's identity **permanently**. The versionCode 6 bundle
+was that first upload, so this app is `com.nivorasr.app` for good. Checking the package before an
+upload stays worth doing every time (see
 [Verifying the artifact](#verifying-the-artifact-before-you-upload-it)).
 
 ## Step 2 — fill in what Console asks for
 
-None of this carried over from the old listing. Do it on the new app. It can come before or after the
-upload in Step 3; Console will not roll the closed test out until all of it is done:
+**Done on 2026-09-19.** All five went in together as one batch of 13 changes, along with
+**Countries and regions: India only**. The list stays as the set of answers to give again, on the
+next app or on any declaration Console reopens.
+
+None of this carried over from the old listing. It can come before or after the upload in Step 3;
+Console will not roll the closed test out until all of it is done:
 
 1. **Store listing:** graphics and text from [store-assets.md §2](store-assets.md); app category
    **Business**.
-2. **App content:** every row of [the table below](#app-content--what-console-will-ask-for-next),
+2. **App content:** every row of [the table below](#app-content--every-row-and-the-answer-that-went-in),
    including Data safety from [data-safety.md](data-safety.md), Financial features *none*, and
    **App access** with its four instruction sets.
 3. **Advertising ID:** No ([Warning 1](#warning-1--the-advertising-id-declaration)).
 4. **Content rating:** the questionnaire again.
 5. **Testers:** the email list ([Warning 2](#warning-2--no-testers-on-the-track)).
 
-## Step 3 — the closed test, with versionCode 5
+## Step 3 — the closed test, with versionCode 6
+
+**Steps 1 to 5 are done**, and `1.0.0 (6)` is published on the closed track. Step 6, applying for
+production, is the one that is left.
 
 1. Play Console → the new app → **Test and release → Testing → Closed testing** → create a track →
    **Create new release**. Use **closed** testing, not internal. This is a personal developer
@@ -58,13 +79,15 @@ upload in Step 3; Console will not roll the closed test out until all of it is d
 2. Keep **Play App Signing** with a key Google generates. It creates a new app signing key for this
    app. The upload key is the same one as before: the certificate SHA-256 that starts `24:23:97` and
    ends `FB:64:65`, recorded in [play-technical-compliance.md](play-technical-compliance.md) §4.
-3. Upload `dist/NIVORA-1.0.0.aab`: versionCode 5, 66,228,186 bytes, SHA-256
-   `ec552f06eb45d1f52daeeffdb2f69cfaa087bfab70c34a4f3acee90d491f186f`, built 15:47 IST on 2026-09-14. Check it first (see
+3. Upload `dist/NIVORA-1.0.0.aab`: versionCode 6, 66,433,003 bytes, SHA-256
+   `d1283f6b173eecf37d6ebbbb2d026e414d8e60b0dc7480a5505583075a888541`, built on 2026-09-16. Check it first (see
    [Verifying the artifact](#verifying-the-artifact-before-you-upload-it)). Wait for it to finish
    processing.
-4. Release name `1.0.0 (5)`. Paste the release notes from [play-release-notes.md](play-release-notes.md).
+4. Release name `1.0.0 (6)`. Paste the release notes from [play-release-notes.md](play-release-notes.md).
 5. **Save**, then **Review release**.
-6. Once 12 testers have stayed opted in for 14 days, apply for production.
+6. Once 12 testers have stayed opted in for 14 days, apply for production. `1.0.0 (6)` passed
+   review and is published on the closed track, and the twelfth tester opted in on 2026-09-20, so
+   the 14 days run out around 2026-10-04.
 
 If Console reports that the release needs a bundle, that no existing users can upgrade, and that it
 adds no bundles, those are one problem: the release has no processed bundle in it yet. They clear
@@ -77,7 +100,9 @@ once Console has parsed the upload, not when the upload bar fills.
 > You must complete the advertising ID declaration before you can release an app that targets
 > Android 13 (API 33).
 
-**Answer: No, this app does not use an advertising ID.**
+**Answer: No, this app does not use an advertising ID.** It was answered that way on 2026-09-19, in
+the App content batch. The answer has to be given again on any future app, and re-checked whenever
+a dependency is added.
 
 Play Console → **Policy → App content → Advertising ID** → *No* → Save.
 
@@ -110,6 +135,9 @@ If that ever prints a line, the declaration in Console is wrong and must change 
 This is a **warning, not an error** — the release will roll out. It will simply reach nobody, and
 the track will look broken when it is actually empty.
 
+**It is cleared on this app's closed track:** the email list is ticked and the release is out to it.
+The steps stay as the procedure for the next track and the next release.
+
 Play Console → the new app → **Test and release → Testing → Closed testing** → your track →
 **Testers** tab. The same steps work on Internal testing if you use that track as well:
 
@@ -135,15 +163,17 @@ never join, with no error shown.
 **This developer account is a personal (individual) account**, so Google additionally requires
 **12 testers opted in for 14 continuous days on closed testing** before you can apply for
 production. Internal testing does not count toward it, and the new app's clock starts with its own
-closed test. Start it as soon as versionCode 5 is on the track — it is the longest pole in this
-whole list.
+closed test. That clock is running: versionCode 6 is on the track and 12 testers opted in on
+2026-09-20, so the 14 days end around 2026-10-04. It is the longest pole in this whole list, so on
+the next release get the testers on the track the day the build lands.
 
 ---
 
-## App content — what Console will ask for next
+## App content — every row, and the answer that went in
 
-These are not warnings yet because you have not reached them. Each one blocks a production rollout,
-and each is answered again on the new app, with the same answers as before.
+Every row here was answered on the new app on 2026-09-19, with the same answers as before, and
+submitted with the rest of that batch. Each one blocks a production rollout, so the table stays as
+the record of what was given and as the answer sheet for the next time Console asks.
 
 | Section | Answer | Source |
 |---|---|---|
@@ -157,7 +187,7 @@ and each is answered again on the new app, with the same answers as before.
 | Financial features | **"My app doesn't provide any financial features."** Rent for accommodation is paid to the hostel through Razorpay; Nivora offers no loans, banking, investment, crypto or money transfer, and holds no balance. Separately, because rent pays for a **physical service**, Play's billing requirement does not apply | [data-safety.md §5](data-safety.md) |
 | Government apps | No | — |
 | Health | No | — |
-| Data deletion | The in-app route and the web route both exist. The web page `/legal/account-deletion` prints the Android package from `ANDROID_PACKAGE`, now `com.nivorasr.app` (`lib/legal-config.ts:96`, shown at `app/legal/account-deletion/page.tsx:142`). The live site changes only when the website is pushed, so check that the page shows `com.nivorasr.app` before entering the URL | [account-deletion.md](account-deletion.md) |
+| Data deletion | The in-app route and the web route both exist. The web page `/legal/account-deletion` prints the Android package from `ANDROID_PACKAGE`, now `com.nivorasr.app` (`lib/legal-config.ts:96`, shown at `app/legal/account-deletion/page.tsx:142`). The live site changes only when the website is pushed, so check that the page shows `com.nivorasr.app` before entering the URL on any submission. It did on 2026-09-20, re-checked signed out, and the URL is in the form | [account-deletion.md](account-deletion.md) |
 
 The legal version stays 2026-09-13 (`lib/legal-config.ts:80`): neither the privacy policy nor the
 terms names the package, so the package change did not touch them.
@@ -170,19 +200,24 @@ Console's own fields, and paste the matching block below into that set's **"Any 
 One short set per account is easier for a reviewer than one long block, and safer if the field has
 an unstated length limit.
 
-**Before submitting, sign in to each account yourself** on a phone, with the exact password you will
-type into Console. None of the demo accounts had signed in since 6 September at the time of writing.
+The four sets below went in on 2026-09-19. They stay here as the text to paste again on the next
+release, and because a changed password or a changed account means editing them first.
 
-What is true of the demo property, checked against the live database on 2026-09-13, with the
-manager and the trigger re-checked on 2026-09-14:
+**Before submitting, sign in to each account yourself** on a phone, with the exact password you will
+type into Console. That is standing procedure for every submission, not a one-off. All four accounts
+existed and were active on 2026-09-20; check them again rather than trusting a date written here.
+
+What is true of the demo property, checked against the live database on 2026-09-13, with the trigger
+re-checked on 2026-09-14 and the four logins confirmed active on 2026-09-20:
 
 - Every account below belongs to **Demo PG (Play review)**. Everything in it is fabricated.
 - It was seeded so a reviewer lands on populated screens
   (`db/migrations/2026-09-13-demo-pg-play-review-seed.sql`): four months of expenses, a week's mess
   menu, notices, a pending and an approved leave, and visitors.
 - **No Razorpay account is linked to it, on purpose**, so nobody can move real money during review.
-- **It has no manager account yet.** Create `demo.manager@nivora.app` from the demo owner's staff
-  screen before submitting; the steps are under Set 3.
+- **The manager account exists.** `demo.manager@nivora.app` was created from the demo owner's staff
+  screen and is active, so nothing has to be created before submitting. The steps that made it are
+  kept under Set 3, as the way to recreate it if it is ever lost.
 - **Demo addresses in Demo PG do not owe an email proof, for now.** Migration
   `db/migrations/2026-09-13-demo-review-skip-email-verification.sql`, applied to production, adds
   the trigger `users_zz_demo_review_email_verified`. Before an insert, or an update of the email, it
@@ -190,7 +225,9 @@ manager and the trigger re-checked on 2026-09-14:
   (`d3300000-0000-4000-8000-000000000001`), the address is `demo.<x>@nivora.app`, the row is not
   already stamped, and, on an update, the email actually changed. It fires after
   `users_update_guard`. A rolled-back probe proved each case. `demo.owner`, `demo.warden` and
-  resident `9000000001` were already verified on 2026-09-04. Real hostels still owe the proof.
+  resident `9000000001` were already verified on 2026-09-04; `demo.warden` has since been
+  deactivated, and the warden login is now `demo.warden1@nivora.app`. Real hostels still owe the
+  proof.
 - **The trigger is temporary.** Remove it after review:
 
   ```sql
@@ -205,7 +242,7 @@ manager and the trigger re-checked on 2026-09-14:
 
 #### Set 1 — Warden
 
-Username: `demo.warden@nivora.app`
+Username: `demo.warden1@nivora.app`
 
 ```text
 Nivora is invitation-only software for PG and hostel operators in India. Accounts are created by an
@@ -244,12 +281,13 @@ If "Delete my account and data" already shows "Request sent", an earlier review 
 are de-duplicated for 30 days.
 ```
 
-#### Set 3 — Manager (after you create the account)
+#### Set 3 — Manager
 
 Username: `demo.manager@nivora.app`
 
-**Create the account first**, after preparing Set 4, because the owner has to get past two-step
-verification to reach the staff screen:
+**This account exists and is active.** The steps that made it are kept here as the way to recreate
+it if it is ever lost or deactivated. They need the owner's authenticator, because the owner has to
+get past two-step verification to reach the staff screen:
 
 1. Sign in as `demo.owner@nivora.app`. On the owner's More screen, tap **Staff accounts**
    (`nivora_app/lib/features/owner/more/owner_more_screen.dart:71`), then **Add manager**.
@@ -289,15 +327,24 @@ tasks the owner assigns, and editing the mess menu. All data belongs to a fabric
 
 Username: `demo.owner@nivora.app`
 
-**Prepare this account first.** Google requires review logins to be reusable, and the owner role
-always asks for an authenticator code, so the reviewer needs a key that works every time:
+**This account is already enrolled in two-step verification.** The setup screen only opens for an
+account that has no second factor yet, so signing in as the owner will not show it again, and the
+key cannot be read back out of the app. The key was captured at enrolment and is held outside this
+repository. It is what goes in place of `SETUP KEY` in the block below, when that block is typed
+into Console. It is never written into this file.
 
-1. Sign in to Nivora as `demo.owner@nivora.app`. The app opens the two-step verification setup screen.
+Google requires review logins to be reusable, and the owner role always asks for an authenticator
+code, so the reviewer needs a key that works every time. If the enrolment ever has to be done again,
+on this account or on a demo owner for a later release, that is:
+
+1. Sign in to Nivora as the demo owner, on an account with no second factor yet. The app opens the
+   two-step verification setup screen.
 2. It shows a QR code and, under **SETUP KEY**, the same key as text with a Copy button. Copy the
    text key.
 3. Add that key to your own authenticator app and tick **"I have saved this key"**. Under
    **"2. Enter the code it shows"**, type the 6-digit code and tap **"Turn on two-factor"**.
-4. Paste the text key into the block below, in place of `SETUP KEY`.
+4. Keep the text key outside this repository, with the passwords. Put it in place of `SETUP KEY`
+   when you paste the block below into Console, not in this file.
 
 This key protects only the demo owner account, which holds fabricated data. **Never do this for a
 real owner.**
@@ -384,38 +431,39 @@ the build from the testing track, tap **Agree and continue**, allow notification
 ## Verifying the artifact before you upload it
 
 **Do not run `scripts/release.sh` for this.** It rebuilds, and it overwrites
-`dist/NIVORA-1.0.0.aab` with a new, unmeasured file that still says versionCode 5. Check the files
+`dist/NIVORA-1.0.0.aab` with a new, unmeasured file that still says versionCode 6. Check the files
 that are already there. `nivora_app/scripts/release.sh:420-422` stages all three from one run:
 
 | File | What it is | Bytes |
 |---|---|---|
-| `dist/NIVORA-1.0.0.aab` | The upload | 66,228,186 |
-| `dist/NIVORA-1.0.0.apk` | arm64 APK, the one to hand round | 25,306,793 |
-| `dist/NIVORA-1.0.0-universal.apk` | Universal APK, any CPU | 68,586,719 |
+| `dist/NIVORA-1.0.0.aab` | The upload | 66,433,003 |
+| `dist/NIVORA-1.0.0.apk` | arm64 APK, the one to hand round | 25,372,605 |
+| `dist/NIVORA-1.0.0-universal.apk` | Universal APK, any CPU | 68,799,987 |
 
-They were built at 15:47 IST on 2026-09-14.
+They were built on 2026-09-16.
 
 ```bash
 sha256sum dist/NIVORA-1.0.0.aab
-# must print ec552f06eb45d1f52daeeffdb2f69cfaa087bfab70c34a4f3acee90d491f186f
+# must print d1283f6b173eecf37d6ebbbb2d026e414d8e60b0dc7480a5505583075a888541
 BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
 "$BT/aapt2.exe" dump badging dist/NIVORA-1.0.0.apk | head -1
-# must start: package: name='com.nivorasr.app' versionCode='5' versionName='1.0.0'
+# must start: package: name='com.nivorasr.app' versionCode='6' versionName='1.0.0'
 cd nivora_app && bash scripts/verify-adid.sh
 ```
 
-The package line matters more than usual. This is the first bundle for the new app, and its package
-becomes permanent the moment it is uploaded. `aapt2` reads APKs rather than bundles, so the line
+The package line matters more than usual. The first bundle uploaded to a new app fixes its package
+permanently, and versionCode 6 was that bundle, so `com.nivorasr.app` is now locked in and every
+later upload has to carry it. `aapt2` reads APKs rather than bundles, so the line
 comes from the arm64 APK of the same `release.sh` run, not from the bundle itself; the build-tools
 lookup is the one `release.sh:34` uses.
 
-A matching hash means this is the versionCode 5 bundle. The measured checks in
+A matching hash means this is the versionCode 6 bundle. The measured checks in
 [play-technical-compliance.md](play-technical-compliance.md) — ten permissions (the receiver one is
 now `com.nivorasr.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`), no AD_ID, 16 KB alignment, signed
-with the upload key — were measured on this versionCode 5 bundle on 2026-09-14, after first being
-taken on versionCode 4 for the abandoned listing. That doc names
-`ec552f06eb45d1f52daeeffdb2f69cfaa087bfab70c34a4f3acee90d491f186f` as the build its tables describe. A different hash means
-`dist/` was rebuilt, and every one of those checks has to be run again before upload.
+with the upload key — were measured on the versionCode 5 bundle on 2026-09-14, after first being
+taken on versionCode 4 for the abandoned listing. They have not been re-run on versionCode 6, so
+run them again on this bundle rather than reading those tables as if they described it. A different
+hash means `dist/` was rebuilt, and every one of those checks has to be run again before upload.
 
 When a rebuild *is* wanted — any code change, which also means raising the `+N` in
 `nivora_app/pubspec.yaml` — `scripts/release.sh` refuses to stage anything that fails its own gates:
@@ -441,4 +489,5 @@ app above.
   2026-09-13.
 - On 2026-09-13 and 2026-09-14 the code, the email deep link, the Supabase redirect URL and the
   Firebase registration moved to `com.nivorasr.app`, and versionCode 5 was built for the new app.
+  That build was never uploaded: versionCode 6, built on 2026-09-16, went up instead.
   Everything entered on the old listing is entered again there.

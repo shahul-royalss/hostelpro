@@ -1,9 +1,9 @@
 # Shipping NIVORA to Google Play
 
-> **Mostly historical. Read this first (2026-09-14).** This file was written for the Trusted Web
+> **Mostly historical. Read this first (2026-09-20).** This file was written for the Trusted Web
 > Activity build (`app.nivora.twa`, the root `android/` project, `public/.well-known/assetlinks.json`).
 > That build is retired and is not the Play submission. The upload is the native Flutter app
-> `com.nivorasr.app` in `nivora_app/`, versionCode 5, release name `1.0.0 (5)`. Its manifest declares
+> `com.nivorasr.app` in `nivora_app/`, versionCode 6, release name `1.0.0 (6)`. Its manifest declares
 > no `autoVerify` link, so nothing in it depends on Digital Asset Links.
 >
 > **It goes up as a new app in Play Console.** Until 2026-09-13 the native app was
@@ -62,7 +62,7 @@ public/.well-known/assetlinks.json      the site half of the app<->site proof
 | | |
 |---|---|
 | applicationId | `app.nivora.twa` |
-| versionCode / versionName | `1` / `1.0.0` for this TWA build. The native app that replaced it (`com.nivorasr.app`) uploads as versionCode `5`, versionName `1.0.0`, release name `1.0.0 (5)` |
+| versionCode / versionName | `1` / `1.0.0` for this TWA build. The native app that replaced it (`com.nivorasr.app`) uploads as versionCode `6`, versionName `1.0.0`, release name `1.0.0 (6)` |
 | minSdk | 23 (Android 6.0) |
 | targetSdk / compileSdk | 36 (Android 16) |
 | TWA library | `com.google.androidbrowserhelper:androidbrowserhelper:2.7.3` (wraps `androidx.browser.trusted`) |
@@ -147,10 +147,11 @@ Play takes the **`.aab`**. The `.apk` is only for testing on a device you can re
 uploaded to the app, even in a release that was discarded. For the TWA that meant bumping
 `versionCode` in `android/app/build.gradle.kts`. The native app does not set it in Gradle:
 `nivora_app/android/app/build.gradle.kts:118` reads `flutter.versionCode`, which is the `+N` in
-`nivora_app/pubspec.yaml`. The upload is `version: 1.0.0+5` (`pubspec.yaml:19`), release name
-`1.0.0 (5)`, the first bundle for the new `com.nivorasr.app` app; raise the `+N` for every upload
-after it. Until 2026-09-13 this paragraph named `1.0.0+4`, which was built for the abandoned
-`com.srnivora.app` listing.
+`nivora_app/pubspec.yaml`. The upload is `version: 1.0.0+6` (`pubspec.yaml:19`), release name
+`1.0.0 (6)`, the first bundle for the new `com.nivorasr.app` app; raise the `+N` for every upload
+after it. Until 2026-09-20 this paragraph named `1.0.0+5`, which was built on 2026-09-14 and never
+uploaded: versionCode 6 superseded it two days later. Before that it named `1.0.0+4`, which was
+built for the abandoned `com.srnivora.app` listing.
 
 ### Verifying a build
 
@@ -349,8 +350,11 @@ closed test are all entered again on the new app. The answers themselves do not 
   now happens up front and can take days. Start it early.
 - This developer account is a **personal** (individual) account, so Google additionally
   requires a **closed test with at least 12 testers opted in continuously for 14 days**
-  before you may apply for production access. The new app needs its own closed test. Plan the
-  calendar around it. Verify the current rule in Console before you commit — Google changes it.
+  before you may apply for production access. The new app needs its own closed test, and it is
+  running: the Console app was created on 2026-09-19, the closed test release `1.0.0 (6)` passed
+  review and is published, and 12 testers had opted in by 2026-09-20, so the 14 days end about
+  2026-10-04, when **Apply for production** unlocks. Plan the calendar around it. Verify the
+  current rule in Console before you commit — Google changes it.
 
 ### Privacy policy
 
@@ -370,7 +374,7 @@ nor the terms names it.
 2026-09-12 18:30 UTC) and is `LEGAL_VERSION` in `lib/legal-config.ts:80`. Commit `4fd41ef` was
 pushed at 20:44 IST on 2026-09-13, and signed-out GETs of both pages then returned 200 and showed
 version 2026-09-13. The in-app copy (`nivora_app/lib/features/legal/legal_documents.dart`,
-`kLegalVersion` at `:46`) reaches users with versionCode 5. Test both URLs with `curl` from a
+`kLegalVersion` at `:46`) reaches users with versionCode 6. Test both URLs with `curl` from a
 signed-out client again before pasting them into Console.
 
 The policy has to name what the Data safety form declares:
@@ -412,7 +416,7 @@ other IDs, Installed apps or App interactions. Answer the form from
 - **§3.5** covers the FCM registration token.
 
 The 2026-09-13 privacy text is live; submit the answers that rely on it together with
-versionCode 5, on the new app.
+versionCode 6, on the new app.
 
 Security practices section:
 

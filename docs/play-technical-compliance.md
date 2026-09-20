@@ -1,28 +1,33 @@
 # Play technical compliance — independent verification of the release artifact
 
 **Artifact:** `dist/NIVORA-1.0.0.apk`, `dist/NIVORA-1.0.0-universal.apk` and `dist/NIVORA-1.0.0.aab`
-**Package:** `com.nivorasr.app` · versionCode 5 · versionName 1.0.0 · release name `1.0.0 (5)` · compileSdk 37 · targetSdk 36
-**The upload:** versionCode 5, AAB SHA-256 `ec552f06eb45d1f52daeeffdb2f69cfaa087bfab70c34a4f3acee90d491f186f`, built by `scripts/release.sh` at 15:47 IST on 2026-09-14.
+**Package:** `com.nivorasr.app` · versionCode 6 · versionName 1.0.0 · release name `1.0.0 (6)` · compileSdk 37 · targetSdk 36
+**The upload:** versionCode 6, AAB SHA-256 `d1283f6b173eecf37d6ebbbb2d026e414d8e60b0dc7480a5505583075a888541`, 66,433,003 bytes, built 2026-09-16.
+**Superseded:** versionCode 5, AAB SHA-256 `ec552f06eb45d1f52daeeffdb2f69cfaa087bfab70c34a4f3acee90d491f186f`, 66,228,186 bytes, built by `scripts/release.sh` at 15:47 IST on 2026-09-14. It was built but never uploaded; versionCode 6 replaced it two days later.
 **Until 2026-09-13 this document described the `com.srnivora.app` listing.** That Play Console app
 is abandoned and nothing was ever released from it; its verified build was versionCode 4, AAB
 SHA-256 `a85e26c1…a975ba`. Nivora now goes up as a new Play Console app, `com.nivorasr.app`
-(`nivora_app/android/app/build.gradle.kts:60`, `:109`), as versionCode 5 (`nivora_app/pubspec.yaml:19`
-is `1.0.0+5`). An applicationId is permanent once a bundle is uploaded to that app.
+(`nivora_app/android/app/build.gradle.kts:60`, `:109`), as versionCode 6 (`nivora_app/pubspec.yaml:19`
+is `1.0.0+6`). An applicationId is permanent once a bundle is uploaded to that app.
 **Verified:** 4 September 2026 against the versionCode 1 artifacts (then compiled against SDK 36);
 permissions verified again on 12 September 2026 against the rebuilt versionCode 1 artifact, compiled
 against SDK 37 after commit `ad64557` pinned `compileSdk = 37` that day; re-audited 13 September 2026
 against the versionCode 3 artifacts; re-measured 13 September 2026 against the `com.srnivora.app`
 versionCode 4 artifacts, then that listing's upload, built at 20:21 IST; and **re-measured 14 September
-2026 against the `com.nivorasr.app` versionCode 5 artifacts, which are the upload**, built by
-`scripts/release.sh` at 15:47 IST.
+2026 against the `com.nivorasr.app` versionCode 5 artifacts**, built by
+`scripts/release.sh` at 15:47 IST. Those versionCode 5 artifacts were never uploaded. **Nothing here
+has been measured against versionCode 6 except the artifact sizes in verdict row 7**, re-read on
+20 September 2026; versionCode 6 is the build that went to Play.
 **Which build the numbers belong to:** the badging (§1), the permission dump, merge origins and AD_ID
-check (§2), the 16 KB alignment table (§3), the signer digest (§4) and the sizes in verdict row 7 are
-**versionCode 5's**. Each matched versionCode 4 apart from the package name, the version code, the
+check (§2), the 16 KB alignment table (§3) and the signer digest (§4) are
+**versionCode 5's**; only the sizes in verdict row 7 are versionCode 6's. Each matched versionCode 4 apart from the package name, the version code, the
 receiver permission's name and the AAB's byte count. The `apksigner` block in §4 is still the
 versionCode 1 output, kept for its format; the versionCode 5 certificate was read separately and is
 the same key. **Any rebuild
 invalidates every number here:** `libapp.so` is the AOT-compiled Dart code, so even a Dart-only change
-produces a different artifact that has to be measured again.
+produces a different artifact that has to be measured again. **versionCode 6 is exactly such a
+rebuild, and it is the upload.** So every measurement below other than those sizes is a record of the
+versionCode 5 build, and has to be re-run on versionCode 6 before it can be claimed of what is on Play.
 **Method:** every artifact claim below was read out of the artifact itself with `aapt2`, `apksigner`,
 `unzip` and a direct ELF header parse. The permission origins in §2 come from the dependencies' own
 manifests. Nothing was taken on trust from the build guide.
@@ -45,13 +50,14 @@ manifests. Nothing was taken on trust from the build guide.
 | 4 | Signature schemes | **PASS** — AAB is JAR-signed (`keytool -printcert -jarfile` reads the upload certificate out of the versionCode 5 bundle), which is what Play requires; APK is v2, and the signature gate in `release.sh` passed on both versionCode 5 APKs |
 | 5 | **16 KB page-size compatibility** (required for apps targeting API 35+; from 1 Feb 2027 an update without it cannot be released) | **PASS on `com.nivorasr.app` versionCode 5** — 12 native libraries, the same four in each of `arm64-v8a`, `armeabi-v7a` and `x86_64`, every 64-bit library's `PT_LOAD` segments aligned ≥ 16 KB, measured on the versionCode 5 bundle (versionCode 4 gave the same values); see §3 |
 | 6 | ABI coverage | **PASS** — the AAB carries `arm64-v8a`, `armeabi-v7a` and `x86_64`, and Play splits it per device. The APK handed round directly is arm64-only by design; `NIVORA-<v>-universal.apk` is the one that installs anywhere |
-| 7 | Artifact size | **PASS** — measured on the versionCode 5 artifacts: arm64 APK 25,306,793 bytes, universal APK 68,586,719 bytes, AAB 66,228,186 bytes, all far under the 200 MB base limit. The `com.srnivora.app` versionCode 4 artifacts measured arm64 APK 25.3 MB (25,306,793 bytes), universal APK 68.6 MB (68,586,719), AAB 66.2 MB (66,228,048). What a phone downloads from Play is the per-device split of the AAB, not the whole bundle |
+| 7 | Artifact size | **PASS** — measured 2026-09-20 on the versionCode 6 artifacts in `dist/`, built 2026-09-16: arm64 APK 25,372,605 bytes, universal APK 68,799,987 bytes, AAB 66,433,003 bytes, all far under the 200 MB base limit. Size is the only row re-measured on versionCode 6. The versionCode 5 artifacts, never uploaded, measured arm64 APK 25,306,793 bytes, universal APK 68,586,719 bytes, AAB 66,228,186 bytes. The `com.srnivora.app` versionCode 4 artifacts measured arm64 APK 25.3 MB (25,306,793 bytes), universal APK 68.6 MB (68,586,719), AAB 66.2 MB (66,228,048). What a phone downloads from Play is the per-device split of the AAB, not the whole bundle |
 | 8 | Typeface available offline | **PASS** — Inter bundled; the app does not fetch fonts at runtime |
 | 9 | No secrets in the shipped bundle | **PASS** — see §5 |
 
-**No technical blockers in the `com.nivorasr.app` versionCode 5 artifacts, which are the upload.** A
-rebuild of any kind needs §1–§4 and row 7 measured again. The remaining blockers are operational, not
-built into the binary, and are listed in §6.
+**No technical blockers in the `com.nivorasr.app` versionCode 5 artifacts.** Those artifacts were
+never uploaded, though. **The upload is versionCode 6, and §1–§4 have not been measured against it**;
+row 7 has. A rebuild of any kind needs §1–§4 and row 7 measured again, and versionCode 6 is a
+rebuild. The remaining blockers are operational, not built into the binary, and are listed in §6.
 
 ---
 
@@ -70,6 +76,11 @@ That is the `com.nivorasr.app` versionCode 5 build, dumped on 2026-09-14 with bu
 versionCode 3 builds printed the same values apart from the package and the version code. An
 earlier revision showed `versionCode='1'` and `compileSdkVersion='36'`; compileSdk
 is now 37, for the reason given below.
+
+**The versionCode 6 build, which is the upload, has not been dumped.** Nothing in the project changed
+`targetSdk` between the two builds, so it is almost certainly still 36, but that is an inference from
+the source rather than a reading of the artifact, and reading the artifact is the standard the rest
+of this document holds to. Re-run the dump above on versionCode 6.
 
 Google requires API 36 for new submissions from 31 August 2026. This targets 36 today, so the
 deadline is not a future migration.
@@ -199,7 +210,9 @@ grep -A2 "permission.NFC" \
 **A permission dump is only ever true of one artifact.** An earlier version of this section was
 carried forward across a package-name change and described a build that no longer existed. The move
 to `com.nivorasr.app` was another such change, which is why the dump above was taken again from the
-versionCode 5 build. If the dependency list moves, re-run the dump before signing anything off.
+versionCode 5 build. versionCode 6 is a later build again: the dump above has not been re-run on it,
+and the Origin column comes from the versionCode 5 merger report, which describes that build and not
+the upload. If the dependency list moves, re-run the dump before signing anything off.
 
 ---
 
@@ -218,7 +231,9 @@ Measured on 2026-09-14 by parsing, with Python, the ELF program headers of every
 three ABIs of `dist/NIVORA-1.0.0.aab` and taking the smallest `p_align` across each library's
 `PT_LOAD` segments. **These are the `com.nivorasr.app` versionCode 5 bundle's figures**, measured after
 the 15:47 build. versionCodes 3 and 4 gave identical values, but each `libapp.so` is a different file,
-so no figure was carried over; each bundle was measured. The guide's threshold is `2**14` (16384, `0x4000`); a `LOAD`
+so no figure was carried over; each bundle was measured. **The versionCode 6 bundle has not been
+measured**, and by that same rule its figures cannot be carried over from this table;
+`dist/NIVORA-1.0.0.aab` now holds versionCode 6, so re-run the parse against it. The guide's threshold is `2**14` (16384, `0x4000`); a `LOAD`
 segment at `2**13` or lower fails:
 
 | Library | min LOAD alignment | |
@@ -270,7 +285,10 @@ That block was printed for the versionCode 1 APK. For the `com.nivorasr.app` ver
 the same key as the digest above (the `com.srnivora.app` versionCode 4 bundle printed the same on
 2026-09-13), and the signature gate in `scripts/release.sh` passed on both versionCode 5 APKs. The
 upload key stays the same for the new app. A signature is a fact about one file: repeat this on any
-rebuild.
+rebuild. **The versionCode 6 bundle's certificate has not been printed.** The upload key is
+unchanged, and Play accepted the upload, which it would not have done had the bundle been signed
+with a different upload key; that is good evidence, but it is not the same as reading the
+certificate out of the file.
 
 The AAB carries `META-INF/HOSTELPR.RSA` + `.SF` + `MANIFEST.MF` — JAR signing, which is the
 correct and only scheme for a bundle. Play re-signs the delivered APKs with its own key.
@@ -280,8 +298,13 @@ back to the *debug* key when release signing is misconfigured, and it does so si
 build succeeds and the artifact is rejected only at upload. `scripts/release.sh` refuses to stage
 anything not signed with `CN=HostelPro` precisely because that failure is invisible otherwise.
 
-**After the first upload**, add the SHA-256 of the *Play App Signing* key anywhere the upload
-fingerprint is currently used. In Play Console it is under **Protected with Play → Play Store
+**The Play App Signing key now exists.** Google generated it on 2026-09-19, when the new
+`com.nivorasr.app` Console app was created, and its SHA-256 is
+`B1:CC:19:EE:FD:D1:2D:12:C8:EC:B6:D9:06:04:7A:EE:B1:55:FE:15:BD:77:65:72:2E:B2:DE:19:AC:5B:A8:D2`.
+The two keys do different jobs: an upload to Play is signed with the upload key above, and what a
+user actually installs is signed with this app signing key. So this is the fingerprint to give
+anything that has to recognise the installed app, and the upload fingerprint stays where something
+checks what was uploaded. In Play Console it is under **Protected with Play → Play Store
 distribution → Go to Play app signing**, in the **App signing key** section — the path Google's help
 page (`support.google.com/googleplay/android-developer/answer/9842756`) gives as of 2026-09-13. This
 used to say Console → Setup → App signing, which no longer matches that page. Google re-signs, so the certificate
@@ -311,6 +334,11 @@ Verified on the staged artifact:
 
 Neither is inside the artifact.
 
+**Where the submission has got to, as of 2026-09-20:** the new Play Console app was created on
+2026-09-19, the closed testing release `1.0.0 (6)` passed review and is published, and 12 testers
+have opted in. The 14-day closed test run ends about 2026-10-04, and **Apply for production**
+unlocks then.
+
 **6.1 — CLEARED. The Edge Functions are deployed.** On 2026-09-13 all eleven are ACTIVE on project
 `nimxvgzscbanhtvgnjll`: `sa-create-owner`, `owner-create-staff`, `warden-register-student`,
 `razorpay-order`, `razorpay-webhook`, `mobile-auth`, `email-verification`, `complaint-photo`,
@@ -324,9 +352,10 @@ The policy is `/legal/privacy` (`app/legal/privacy/page.tsx`), public because `/
 `PUBLIC_PATHS` (`lib/supabase/middleware.ts:9-11`). Its version 2026-09-13 text went live on
 2026-09-13: commit `4fd41ef` was pushed at 20:44 IST, and signed-out GETs of `/legal/privacy`,
 `/legal/account-deletion` and `/legal/terms` then returned 200 and showed version 2026-09-13. The
-in-app copy reaches users with versionCode 5, so the Data safety answers that rely on that text go in
-together with versionCode 5, entered again on the new `com.nivorasr.app` app. (Until 2026-09-13 this
-said versionCode 4, which was built for the abandoned `com.srnivora.app` listing and never released.)
+in-app copy reaches users with versionCode 6, so the Data safety answers that rely on that text go in
+together with versionCode 6, entered again on the new `com.nivorasr.app` app. (Until 2026-09-13 this
+said versionCode 4, which was built for the abandoned `com.srnivora.app` listing and never released;
+it then said versionCode 5, which was built on 2026-09-14 and never uploaded either.)
 `/legal/account-deletion` prints the package from `ANDROID_PACKAGE`
 (`app/legal/account-deletion/page.tsx:142`, `lib/legal-config.ts:96`), now `com.nivorasr.app`; the
 live page shows the new package only once the website is pushed.

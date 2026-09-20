@@ -48,12 +48,15 @@ live RLS attack suites. This document does not restate or re-verify those result
   than missing), package `app.nivora.mobile` (the applicationId at `af71ea6`), versionCode 1 on both APKs and on the bundle, four
   arm64 native libraries all aligned ≥ 16 KB, and no secrets in either APK or in any of the
   AAB's three ABIs. *(Those were the 2026-09-04 artifacts, under the package the app had then. The
-  upload now going to Play is package `com.nivorasr.app`, versionCode 5, release name `1.0.0 (5)`,
-  for a new Play Console app; until 2026-09-13 it was versionCode 4 of `com.srnivora.app`, a listing
-  abandoned with nothing released. This pass attests to none of their artifacts. On
+  upload now on Play is package `com.nivorasr.app`, versionCode 6, release name `1.0.0 (6)`, for a
+  new Play Console app; versionCode 5 was built on 2026-09-14 but never uploaded, and versionCode 6
+  superseded it two days later; until 2026-09-13 it was versionCode 4 of `com.srnivora.app`, a
+  listing abandoned with nothing released. This pass attests to none of their artifacts. On
   2026-09-13 all twelve libraries across `arm64-v8a`, `armeabi-v7a` and `x86_64` were measured at
   ≥ 16 KB alignment, first in the versionCode 3 bundle and then again in the `com.srnivora.app`
-  versionCode 4 bundle, and on 2026-09-14 in the `com.nivorasr.app` versionCode 5 bundle; see `docs/play-technical-compliance.md` §3. `libapp.so` holds the compiled
+  versionCode 4 bundle, and on 2026-09-14 in the `com.nivorasr.app` versionCode 5 bundle; see `docs/play-technical-compliance.md` §3.
+  That versionCode 5 bundle was never uploaded, and the alignment of the versionCode 6 bundle that
+  is the upload, built 2026-09-16, is not attested here. `libapp.so` holds the compiled
   Dart code (next paragraph), so those figures belong to the bundle they were read from and are
   measured again on any rebuild.)*
 
@@ -76,10 +79,11 @@ are clean — but until today it held by luck rather than by test.
   deployed pages still showed version 2026-09-12. Commit `4fd41ef` was pushed at 20:44 IST, and
   signed-out GETs of `/legal/privacy`, `/legal/account-deletion` and `/legal/terms` then returned
   200 and showed version 2026-09-13, which production's `public.legal_versions` already held
-  (effective 2026-09-12 18:30 UTC). The in-app copy reaches users with versionCode 5, so the Data
-  safety answers that declare what that text describes go in together with versionCode 5, on the
+  (effective 2026-09-12 18:30 UTC). The in-app copy reaches users with versionCode 6, so the Data
+  safety answers that declare what that text describes go in together with versionCode 6, on the
   new `com.nivorasr.app` app. (Until 2026-09-13 this said versionCode 4, the abandoned
-  `com.srnivora.app` build.)
+  `com.srnivora.app` build; until 2026-09-20 it said versionCode 5, which was built on
+  2026-09-16 but never uploaded.)
 
 Sign-off holds **for the source at `af71ea6` and the artifacts staged from it**, conditional on
 the open item above.
