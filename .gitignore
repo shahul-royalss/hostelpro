@@ -85,3 +85,7 @@ RAZORPAY-WEBHOOK-SECRET.txt
 # credential from the environment (never hardcoded), but they are session artefacts rather than
 # part of the app, and a repo that accumulates them stops being readable.
 .probe-*.mjs
+
+# Codemagic API token (scripts/codemagic-ipa.sh reads it from the home directory, never the repo).
+# Listed so a stray copy dropped into the repository can never be committed.
+.codemagic-token

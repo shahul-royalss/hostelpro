@@ -229,7 +229,8 @@ and behaves like the website, and rent is paid through Razorpay's web checkout.
 
 This is the only free way to put the actual Flutter app on someone else's iPhone. Run the
 **iOS unsigned .ipa (sideload, no Apple account)** workflow and download the .ipa from the build's
-Artifacts. Each person then installs it themselves:
+Artifacts, or let `scripts/codemagic-ipa.sh` do both from this computer (below). Each person then
+installs it themselves:
 
 1. On **their own computer** (Windows or Mac), install a sideloading tool: Sideloadly or AltStore.
 2. Connect the iPhone by cable, open the tool, and give it the .ipa.
@@ -250,6 +251,32 @@ The limits come from Apple's free signing, and they are why this is a stopgap:
 One caution to pass on: these tools ask for the person's Apple ID password to do the signing.
 Someone uneasy about typing their main Apple ID into a third-party tool can create a second, free
 Apple ID just for this.
+
+#### Getting the .ipa onto this computer with one command
+
+`scripts/codemagic-ipa.sh` starts the build on Codemagic, waits for it, and downloads the .ipa
+into `dist/ios/`, which git ignores. It needs a Codemagic API token, set up once:
+
+1. Codemagic → **Teams** → **Personal Account** → **Integrations** → **Codemagic API** → **Show**,
+   and copy the token.
+2. In Notepad, paste only the token and **Save As** `C:\Users\<you>\.codemagic-token`, with
+   **Save as type: All files**, so Notepad does not add `.txt`.
+
+The token is a password to your Codemagic account. It goes in that file and nowhere else: not in
+this repository, not in chat, not in a screenshot. The script never prints it and never puts it on
+a command line; it hands it to curl on standard input. `.codemagic-token` is also in `.gitignore`,
+in case a copy ever lands in the repository.
+
+Then, from the repository root in Git Bash:
+
+```bash
+bash scripts/codemagic-ipa.sh
+```
+
+It prints each status change, a link to watch the build live, and at the end the file's path,
+size and SHA-256. A build takes roughly 15 to 25 minutes. To fetch the .ipa from a build that
+already ran, set `CM_BUILD_ID` to its ID first. The script checks the downloaded size against what
+Codemagic reports and stops if they differ.
 
 ### Which to use
 
