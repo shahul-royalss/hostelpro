@@ -57,10 +57,74 @@
 			</array>
 		</dict>
 	</array>
+	<!-- THE LINK ABOVE HAS ONE RECIPIENT, AND IT IS NOT THE ROUTER. With this key absent the
+	     engine treats deep linking as ON (FlutterSharedApplication.mm: "if not set, return YES",
+	     with a comment that apps using a deep-link plugin should turn it off), so the
+	     verification link would be delivered twice: to app_links, which hands the PKCE code to
+	     supabase_flutter, and to go_router as a route. Nothing reads the code from the router,
+	     so the second delivery is pure risk: an unmatched route draws the router's errorBuilder,
+	     "That page has moved", at the exact moment the user has just tapped the link. app_links
+	     keeps receiving every link; this flag is checked only inside the engine. The plugin's own
+	     example sets it the same way. -->
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
+	<!-- WITHOUT THIS, THE CHECKOUT SHOWS NO UPI APPS ON iOS. Since iOS 9, canOpenURL answers NO for
+	     every scheme not listed here, whatever is installed, and Razorpay's iOS SDK finds UPI apps
+	     with canOpenURL. So GPay and PhonePe would never appear as tiles, although
+	     lib/features/payments/pay_rent.dart promises they "open directly". Residents could still
+	     pay by UPI ID or card; nothing crashes, the fastest route just disappears.
+
+	     This is the iOS side of the <queries> upi intent in AndroidManifest.xml. The list is
+	     Razorpay's own, copied from its Flutter integration guide (UPI Intent section, 23
+	     schemes) and checked against it on 2026-09-21. Order does not matter. iOS reads at most
+	     50 entries. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tez</string>
+		<string>phonepe</string>
+		<string>paytmmp</string>
+		<string>credpay</string>
+		<string>mobikwik</string>
+		<string>in.fampay.app</string>
+		<string>bhim</string>
+		<string>amazonpay</string>
+		<string>navi</string>
+		<string>kiwi</string>
+		<string>payzapp</string>
+		<string>jupiter</string>
+		<string>omnicard</string>
+		<string>icici</string>
+		<string>popclubapp</string>
+		<string>sbiyono</string>
+		<string>myjio</string>
+		<string>slice-upi</string>
+		<string>bobupi</string>
+		<string>shriramone</string>
+		<string>indusmobile</string>
+		<string>whatsapp</string>
+		<string>kotakbank</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>NIVORA uses the camera so a warden can photograph a resident's ID proof or a maintenance issue while standing in front of it, instead of finding the file later.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>NIVORA opens your photo library so you can attach an existing photo of an ID proof, a paid receipt, or a maintenance issue to a resident's record or a complaint.</string>
+	<!-- WITHOUT THIS, SAVING A RECEIPT KILLS THE APP. It is a different key from the one above:
+	     that one is for READING the library, this one is for ADDING to it. The rent receipt is
+	     shared as a PNG (lib/features/payments/receipt_export.dart), and share_plus hands an image
+	     to the share sheet as a UIImage, which makes iOS offer "Save Image". That action writes to
+	     Photos inside this app's process, and with no add-only usage string iOS terminates it.
+	     The receipt screen tells residents to "save it to your phone from the same menu", so this
+	     is the path a resident is sent down, not an edge case. -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>NIVORA saves your rent receipt to Photos when you choose Save Image from the share menu, so you have proof of payment on your phone.</string>
+	<!-- WITHOUT THIS, EVERY TESTFLIGHT BUILD STOPS AT "MISSING COMPLIANCE" until someone answers
+	     Apple's export questions by hand in App Store Connect, and no tester can install it. The
+	     answer is genuinely NO: all network traffic is HTTPS to Supabase and Razorpay, and the
+	     only cryptography in the app is JWT signature checking and PKCE hashing inside gotrue,
+	     which are authentication uses and exempt. If the app ever adds its own encryption of
+	     data, this key must change and the export questions be answered. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

@@ -3,6 +3,8 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
+
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -125,9 +127,18 @@ final class PluginDocumentCapture implements DocumentCapture {
       status.isPermanentlyDenied
           // permission_handler cannot distinguish "denied twice" from "blocked by policy", and
           // both end the same way: the system dialog will not appear again, so the only route
-          // left is Settings. Saying which screen beats "permission denied".
-          ? 'Nivora cannot open the camera. Turn it on in Settings → Apps → Nivora → '
-              'Permissions → Camera, then try again. You can also choose an existing photo.'
+          // left is Settings. Saying which screen beats "permission denied". The path differs by
+          // platform. iOS has no Permissions screen: the camera switch sits on the app's own page,
+          // which iOS 18 moved under Settings → Apps; iOS 17 and earlier list it directly under
+          // Settings. The minimum here is iOS 15, so both are named. On iOS this branch is not
+          // rare: the first "Don't Allow" already reports permanentlyDenied, because iOS never
+          // shows the camera prompt a second time.
+          ? (defaultTargetPlatform == TargetPlatform.iOS
+              ? 'Nivora cannot open the camera. Turn it on in Settings → Apps → Nivora → Camera '
+                  '(on iOS 17 or earlier, Settings → Nivora → Camera), then try again. You can '
+                  'also choose an existing photo.'
+              : 'Nivora cannot open the camera. Turn it on in Settings → Apps → Nivora → '
+                  'Permissions → Camera, then try again. You can also choose an existing photo.')
           : 'Nivora needs the camera to take this photo. You can also choose an existing photo '
               'instead.',
     );

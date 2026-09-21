@@ -1,0 +1,132 @@
+# Codemagic builds the iOS app on a Mac in the cloud and uploads it to TestFlight.
+#
+# WHY THIS EXISTS: iOS apps can only be compiled and signed by Xcode, which runs only on macOS, and
+# the build machine for this repo is Windows. `flutter build ipa` refuses to run there. Codemagic
+# supplies the Mac.
+#
+# WHY TESTFLIGHT AND NOT A LOOSE .ipa: an iPhone installs only apps Apple has signed for a known
+# route. An .ipa file emailed to someone will not install. TestFlight is the route for testers,
+# the iOS equivalent of the Play closed test. The .ipa is still kept as a build artifact.
+#
+# WHAT HAS TO EXIST BEFORE THE FIRST RUN (none of it can live in this file):
+#   1. An Apple Developer Program membership.
+#   2. An app record in App Store Connect with bundle ID com.nivorasr.app.
+#   3. An App Store Connect API key (role: App Manager), added in Codemagic under
+#      Team settings -> Integrations -> Developer Portal, and named EXACTLY
+#      "Nivora App Store Connect". The name below must match it character for character.
+#   4. This repository added as an app in Codemagic.
+# docs/ios-codemagic.md walks through each one.
+#
+# NO SECRETS BELONG HERE. The Supabase URL and anon key are compiled into the app as defaults in
+# nivora_app/lib/core/config/env.dart, exactly as in the Android build, and the anon key is a
+# client key gated by RLS. Razorpay's publishable key comes from the server per order. Signing
+# material is fetched at build time through the integration and never touches the repository.
+
+workflows:
+  ios-testflight:
+    name: iOS to TestFlight
+    # The Flutter app is a subdirectory; the website occupies the repository root.
+    working_directory: nivora_app
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    integrations:
+      app_store_connect: Nivora App Store Connect
+
+    environment:
+      # Pinned to the version that builds the Android release (.flutter-plugins-dependencies records
+      # 3.47.1). A floating "stable" would let an upstream release change the iOS build between two
+      # runs of an unchanged commit.
+      flutter: 3.47.1
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.nivorasr.app
+      vars:
+        # Makes permission_handler_apple print the Info.plist it found and the permission macros
+        # it resolved from it (its README, environment variables table). Under Swift Package
+        # Manager the camera permission is compiled in ONLY if that discovery finds Info.plist;
+        # if it finds nothing, every permission is compiled out and the camera silently stops
+        # working, and that warning otherwise never reaches a log. Search the build log for
+        # PERMISSION_CAMERA to confirm it resolved to 1.
+        PERMISSION_HANDLER_VERBOSE: "1"
+
+    # No triggering block: builds start only when you press Start in Codemagic. Every build spends
+    # macOS minutes, and pushing a docs change should not burn them.
+
+    scripts:
+      - name: Flutter version and packages
+        script: |
+          flutter --version
+          flutter pub get
+
+      - name: Apply code signing to the Xcode project
+        # Writes the provisioning profile that ios_signing fetched into the project, and generates
+        # /Users/builder/export_options.plist for the build step below.
+        script: xcode-project use-profiles
+
+      - name: Install CocoaPods
+        # `flutter build ipa` would run this itself. It is its own step so that a Podfile problem
+        # fails here, with its own log, instead of somewhere inside a long Xcode build. The
+        # committed ios/Podfile carries the permission_handler macros; see the comment in it.
+        script: |
+          cd ios
+          pod install
+
+      - name: Build the .ipa
+        script: |
+          set -e
+          # iOS refuses an upload whose build number is not higher than every build already on
+          # TestFlight for this version. Codemagic's own counter (BUILD_NUMBER) always rises, but
+          # it restarts if this app is ever recreated in Codemagic, so when APP_STORE_APPLE_ID is
+          # set (the numeric Apple ID from App Store Connect -> App Information) the latest
+          # TestFlight number is asked for as well, and the higher of the two wins.
+          LATEST=0
+          if [ -n "${APP_STORE_APPLE_ID:-}" ]; then
+            LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
+          fi
+          NEXT=$(( LATEST + 1 ))
+          if [ "$BUILD_NUMBER" -gt "$NEXT" ]; then NEXT=$BUILD_NUMBER; fi
+          echo "Building version $(grep '^version:' pubspec.yaml | cut -d' ' -f2 | cut -d+ -f1) build $NEXT"
+          # --build-name is left to pubspec.yaml, so iOS and Android show the same version string.
+          flutter build ipa --release \
+            --build-number="$NEXT" \
+            --export-options-plist=/Users/builder/export_options.plist
+
+      - name: Report Razorpay's privacy-sensitive API use (diagnostic, never fails)
+        # Apple refuses uploads (ITMS-91053) when a binary calls a "required reason" API with no
+        # declared reason. Every plugin here ships its own privacy manifest, and so does
+        # RazorpayStandard, but Razorpay.framework and RazorpayCore.framework ship none, and
+        # whether they call such an API cannot be read from source because they are binaries.
+        # This prints the answer from the actual build. If a category appears for Razorpay or
+        # RazorpayCore and Apple then emails ITMS-91053, the fix is an app-level
+        # PrivacyInfo.xcprivacy declaring that category; docs/ios-codemagic.md has the details.
+        script: |
+          APP=build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app
+          for f in Razorpay RazorpayCore RazorpayStandard; do
+            BIN="$APP/Frameworks/$f.framework/$f"
+            if [ ! -f "$BIN" ]; then echo "$f: not in the bundle"; continue; fi
+            echo "== $f =="
+            # Captured and tested, not piped into `|| echo`: sort succeeds on empty input, so a
+            # pipeline would print nothing either way and "none found" would look like a failure.
+            HITS=$(nm -u "$BIN" 2>/dev/null | grep -E 'NSUserDefaults|systemUptime|mach_absolute_time|_stat$|_fstat$|getattrlist|statfs|NSFileSystemFreeSize|volumeAvailableCapacity|creationDate|modificationDate' | sort -u)
+            if [ -n "$HITS" ]; then echo "$HITS" | sed 's/^/  uses: /'; else echo "  no required-reason API symbols found"; fi
+            if [ -f "$APP/Frameworks/$f.framework/PrivacyInfo.xcprivacy" ]; then echo "  ships its own PrivacyInfo.xcprivacy"; else echo "  ships NO privacy manifest"; fi
+          done
+          exit 0
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      # Symbol files, so a crash report from a tester's phone can be read as source lines.
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        # Internal testers (people on your App Store Connect team) get it as soon as Apple finishes
+        # processing, usually within half an hour. External testers need a beta group and one short
+        # Beta App Review for the first build; add `beta_groups:` here once that group exists.
+        submit_to_testflight: true
+        submit_to_app_store: false

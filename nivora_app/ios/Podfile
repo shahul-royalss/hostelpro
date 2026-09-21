@@ -1,0 +1,103 @@
+# Matches IPHONEOS_DEPLOYMENT_TARGET in Runner.xcodeproj. Stating it here stops CocoaPods guessing a
+# lower platform and warning about every pod on every build.
+platform :ios, '15.0'
+
+# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+
+  # THE RAZORPAY PIN, the iOS twin of the one in android/build.gradle.kts. razorpay_flutter
+  # 1.4.6's podspec says `s.dependency 'razorpay-pod'` with no version at all, but its Swift
+  # imports RazorpayCore and conforms to RazorpayEventCallback, which exist only from
+  # razorpay-pod 1.5.0 onward (earlier versions vendor a single Razorpay.xcframework and nothing
+  # else). An unversioned dependency resolves to whatever the spec source offers on the day, so
+  # a stale or mirrored source could hand back 1.4.x and the plugin would stop compiling. This
+  # states the floor the plugin actually needs, and lets fixes within 1.5 through.
+  pod 'razorpay-pod', '~> 1.5.8'
+
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+
+    # THIS BLOCK IS A FALLBACK, AND ON TODAY'S BUILD IT DOES NOTHING FOR THE CAMERA. Read this
+    # before relying on it or removing it.
+    #
+    # Flutter 3.47.1 builds iOS plugins with Swift Package Manager by default (features.dart:
+    # stable enabledByDefault true), and Runner.xcodeproj is already wired for it. Every plugin
+    # here ships a Package.swift except razorpay_flutter, so permission_handler_apple builds under
+    # SPM, and under SPM its Package.swift switches each permission on by itself when the
+    # matching NS*UsageDescription key is in Info.plist. NSCameraUsageDescription is there, so
+    # the camera works because of Info.plist, not because of this Podfile. The Podfile is still
+    # used, but only for razorpay_flutter.
+    #
+    # Under COCOAPODS it is the other way round: nothing reads Info.plist, every permission is
+    # compiled OUT unless a PERMISSION_* macro turns it on, and lib/data/capture.dart's
+    # Permission.camera.request() would answer permanentlyDenied with no dialog, so the warden
+    # could never photograph an ID proof. This block is what keeps the camera alive if SPM is
+    # ever turned off (pubspec `flutter: config: enable-swift-package-manager: false`, or a
+    # Flutter release that changes the default).
+    #
+    # One SPM caveat, from the same README: the Info.plist detection runs when building from the
+    # command line (`flutter build ipa`, which is what codemagic.yaml does). An Archive from the
+    # Xcode window needs PERMISSION_HANDLER_INFO_PLIST set first.
+    #
+    # Exactly one is on, and the list is deliberately short. The same README warns that
+    # referencing a permission API with no matching usage description gets the binary refused as
+    # ITMS-90683, so turning on extras "to be safe" is the unsafe choice:
+    #   PERMISSION_CAMERA  lib/data/capture.dart, _requireCamera(). Info.plist has
+    #                      NSCameraUsageDescription.
+    # Deliberately off:
+    #   PERMISSION_NOTIFICATIONS  lib/core/notify/push_service.dart calls Permission.notification
+    #                             only inside its Android branch. On iOS it asks through
+    #                             FirebaseMessaging.requestPermission(), which is not gated here.
+    #   PERMISSION_PHOTOS         The gallery goes through the system picker, which needs no
+    #                             permission and is not gated in capture.dart.
+    #
+    # Add a macro here only together with the Dart call that needs it and, where Apple requires
+    # one, the Info.plist usage description.
+    #
+    # Not the README's `||= [...]` form: that assigns only when the setting is empty, so a pod that
+    # already carries its own definitions would silently get no macros at all. CocoaPods may also
+    # hold the value as a single space-separated String rather than an Array, where `<<` would glue
+    # the macro on with no separator. Normalising to an Array and taking the union covers empty,
+    # Array and String, and running `pod install` twice adds nothing twice.
+    target.build_configurations.each do |config|
+      defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
+      defs = defs.split(' ') if defs.is_a?(String)
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] =
+        defs | ['PERMISSION_CAMERA=1']
+    end
+  end
+end
