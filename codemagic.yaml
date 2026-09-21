@@ -55,7 +55,10 @@ workflows:
     # No triggering block: builds start only when you press Start in Codemagic. Every build spends
     # macOS minutes, and pushing a docs change should not burn them.
 
-    scripts:
+    # The steps are anchored (&ios_steps) so the ad hoc workflow below runs exactly these, not a
+    # copy of them that could drift. Both workflows differ only in how they sign and where the
+    # .ipa goes.
+    scripts: &ios_steps
       - name: Flutter version and packages
         script: |
           flutter --version
@@ -116,7 +119,7 @@ workflows:
           done
           exit 0
 
-    artifacts:
+    artifacts: &ios_artifacts
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       # Symbol files, so a crash report from a tester's phone can be read as source lines.
@@ -130,3 +133,42 @@ workflows:
         # Beta App Review for the first build; add `beta_groups:` here once that group exists.
         submit_to_testflight: true
         submit_to_app_store: false
+
+  # AN .ipa FILE YOU CAN SEND, FOR PHONES YOU HAVE REGISTERED. Apple calls this ad hoc.
+  #
+  # The .ipa installs ONLY on iPhones whose UDIDs are registered in the Apple Developer account
+  # (Certificates, Identifiers & Profiles -> Devices) BEFORE this runs: the provisioning profile
+  # fetched below lists exactly those devices, and iOS refuses the app on any other phone. Apple
+  # allows 100 iPhones per year. There is no .ipa that installs on every iPhone.
+  #
+  # Adding a person means registering their UDID and running this again. If a newly registered
+  # phone still refuses the install, the old ad hoc profile was reused: delete it in the Developer
+  # portal (Profiles) and run again, so a fresh one is made with every device in it.
+  #
+  # Nothing is uploaded to Apple. The .ipa is a build artifact to download from Codemagic.
+  # docs/ios-codemagic.md, "Sharing the .ipa file", covers collecting UDIDs and getting the file
+  # onto a phone.
+  ios-adhoc:
+    name: iOS ad hoc .ipa (share the file)
+    working_directory: nivora_app
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    integrations:
+      app_store_connect: Nivora App Store Connect
+
+    environment:
+      flutter: 3.47.1
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: ad_hoc
+        bundle_identifier: com.nivorasr.app
+      vars:
+        PERMISSION_HANDLER_VERBOSE: "1"
+
+    # The same steps as ios-testflight. `xcode-project use-profiles` writes an ad hoc
+    # export_options.plist here, so the one build command produces an ad hoc .ipa.
+    scripts: *ios_steps
+
+    artifacts: *ios_artifacts

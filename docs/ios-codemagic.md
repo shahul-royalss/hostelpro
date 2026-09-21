@@ -81,7 +81,13 @@ if the app is ever removed from Codemagic and added again.
 
 ## Running a build
 
-Codemagic → the app → **Start new build** → workflow **iOS to TestFlight** → branch `main`.
+Codemagic → the app → **Start new build** → branch `main` → one of two workflows:
+
+- **iOS to TestFlight** uploads to TestFlight, and testers install from an invite.
+- **iOS ad hoc .ipa (share the file)** produces an .ipa to download and send yourself. It installs
+  only on iPhones registered in advance; see [Sharing the .ipa file](#sharing-the-ipa-file-ad-hoc).
+
+Both run exactly the same build steps; they differ only in how the app is signed and where it goes.
 
 Builds never start on their own. Every build spends macOS minutes, and a docs commit should not.
 
@@ -119,6 +125,73 @@ as soon as processing finishes, with no review. Up to 100.
 
 A TestFlight build expires 90 days after upload. Upload a new one before then.
 
+
+## Sharing the .ipa file (ad hoc)
+
+For sending a file instead of an invitation. It works, with one condition Apple does not waive:
+**the .ipa installs only on iPhones registered in your Apple Developer account before it is
+built.** Up to 100 iPhones a year. On any other iPhone it refuses to install, and no build setting
+changes that.
+
+### 1. Get each person's UDID
+
+The UDID is the iPhone's device identifier. It is not the serial number, and Settings does not
+show it.
+
+- **With a cable, the first-party way:** connect the iPhone to a Windows PC running Apple's Apple
+  Devices app (or iTunes), open the device, and click the serial number until it changes to the
+  UDID. On a Mac, Finder does the same.
+- Websites can read it by having the person install a configuration profile on their phone. They
+  work, but it means asking someone to install a profile from a third party, so prefer the cable
+  where you can.
+
+### 2. Register the phones
+
+developer.apple.com → Certificates, Identifiers & Profiles → **Devices** → **+**. One entry per
+iPhone: a name you will recognise, and its UDID. Each registration counts against the 100 for the
+membership year, even if you delete it later.
+
+### 3. Build
+
+Codemagic → Start new build → workflow **iOS ad hoc .ipa (share the file)**. Nothing is uploaded
+to Apple. When it finishes, the .ipa is listed under the build's **Artifacts**; download it.
+
+### 4. Get it onto the phones
+
+Tapping an .ipa on an iPhone does not install it. Use one of these:
+
+- **An install link.** Upload the .ipa to an ad hoc distribution service. Diawi is the common one,
+  and Firebase App Distribution also accepts iOS ad hoc builds (this app already has a Firebase
+  project). The person opens the link **in Safari** and taps Install. Either way you are handing the
+  app file to that service.
+- **A Mac and a cable.** In Finder, select the iPhone and drag the .ipa onto it, or use Apple
+  Configurator.
+
+### Adding someone later
+
+Register their UDID, build again, and send the new .ipa. The old file keeps working on the phones
+it was built for. If the newly registered phone still refuses to install, Codemagic reused an ad
+hoc profile made before that phone was added: delete the ad hoc profile for `com.nivorasr.app`
+under **Profiles** in the Developer portal and build once more, so a fresh one includes every
+device.
+
+### How long it keeps working
+
+Until its provisioning profile expires, a year after it was made, or until the distribution
+certificate is revoked. Then build and send again.
+
+### Ad hoc or TestFlight
+
+| | Ad hoc: a file | TestFlight: an invitation |
+|---|---|---|
+| Device IDs collected first | Yes, for every phone | No |
+| How many people | 100 iPhones a year | 10,000 |
+| When someone new joins | Register, rebuild, resend | Add their email address |
+| Apple review | None | The first build for external testers, about a day |
+| How long a build lasts | A year | 90 days |
+
+Ad hoc suits a handful of phones you know in advance: your own, and a few owners you work with. For
+more than that, TestFlight is less work for you and for them.
 
 ## What was fixed so the first build does not break on a phone
 
