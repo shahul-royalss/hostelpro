@@ -86,8 +86,12 @@ Codemagic → the app → **Start new build** → branch `main` → one of two w
 - **iOS to TestFlight** uploads to TestFlight, and testers install from an invite.
 - **iOS ad hoc .ipa (share the file)** produces an .ipa to download and send yourself. It installs
   only on iPhones registered in advance; see [Sharing the .ipa file](#sharing-the-ipa-file-ad-hoc).
+- **iOS unsigned .ipa (sideload, no Apple account)** needs no paid account and runs on Codemagic's
+  free plan. Each person has to sign and install it themselves; see
+  [No paid Apple account](#no-paid-apple-account).
 
-Both run exactly the same build steps; they differ only in how the app is signed and where it goes.
+The first two run exactly the same build steps and differ only in how the app is signed and where it
+goes. The third skips signing.
 
 Builds never start on their own. Every build spends macOS minutes, and a docs commit should not.
 
@@ -192,6 +196,67 @@ certificate is revoked. Then build and send again.
 
 Ad hoc suits a handful of phones you know in advance: your own, and a few owners you work with. For
 more than that, TestFlight is less work for you and for them.
+
+## No paid Apple account
+
+**Without the Apple Developer Program, no .ipa installs on an iPhone the normal way.** Tapping it
+does nothing, and there is no free signing that lets you send one file to many people. That is
+Apple's gate, not a build setting. There are two free routes that do work.
+
+Codemagic's free plan includes 500 macOS minutes a month, and an iOS build takes roughly 15 to 25
+of them, so building costs nothing on either route.
+
+### Option 1, recommended: the web app on the Home Screen
+
+The website, `https://hostelpro-three.vercel.app`, is already set up to install on an iPhone: its
+manifest opens it full screen, and it carries Apple's home-screen tags and a 180×180 home-screen
+icon. It has every role: owner, manager, warden, resident and super admin. Same accounts, same
+data, same Supabase backend as the app.
+
+On the iPhone, in **Safari** (Chrome on iPhone cannot do this):
+
+1. Open `https://hostelpro-three.vercel.app` and sign in.
+2. Tap **Share**, then **Add to Home Screen**, then **Add**.
+3. A NIVORA icon appears on the Home Screen. It opens full screen, without Safari's address bar.
+
+Free for any number of people, with no expiry and no device IDs. A change reaches everyone the
+moment the website is deployed, and nobody installs an update.
+
+Be clear with yourself about what it is: the website's own interface, not the Flutter app. It looks
+and behaves like the website, and rent is paid through Razorpay's web checkout.
+
+### Option 2: send an unsigned .ipa, and each person sideloads it
+
+This is the only free way to put the actual Flutter app on someone else's iPhone. Run the
+**iOS unsigned .ipa (sideload, no Apple account)** workflow and download the .ipa from the build's
+Artifacts. Each person then installs it themselves:
+
+1. On **their own computer** (Windows or Mac), install a sideloading tool: Sideloadly or AltStore.
+2. Connect the iPhone by cable, open the tool, and give it the .ipa.
+3. Sign in with **their own** Apple ID when the tool asks. The tool uses it to sign the app for
+   that one phone. This is a free Apple ID, not a developer account.
+4. On the iPhone: Settings → General → **VPN & Device Management** → tap their Apple ID →
+   **Trust**.
+5. On iOS 16 and later, also turn on Settings → Privacy & Security → **Developer Mode**, and restart
+   when asked. Apps signed this way will not open without it.
+
+The limits come from Apple's free signing, and they are why this is a stopgap:
+
+- **The app stops opening 7 days after it was signed.** They repeat the install to renew it. AltStore
+  can renew automatically, but only while its helper runs on their computer on the same Wi-Fi.
+- A free Apple ID can have at most **3** sideloaded apps active on a device.
+- Every person needs a computer and has to do all of the above themselves.
+
+One caution to pass on: these tools ask for the person's Apple ID password to do the signing.
+Someone uneasy about typing their main Apple ID into a third-party tool can create a second, free
+Apple ID just for this.
+
+### Which to use
+
+For real users, residents and wardens who open the app every day, use **Option 1**. Asking them to
+reinstall through a computer every week will not last. Option 2 suits you testing the actual app on
+your own iPhone, or one or two people who are comfortable with it. When the app earns enough to pay
+for the Apple Developer Program, TestFlight replaces both.
 
 ## What was fixed so the first build does not break on a phone
 

@@ -59,7 +59,8 @@ workflows:
     # copy of them that could drift. Both workflows differ only in how they sign and where the
     # .ipa goes.
     scripts: &ios_steps
-      - name: Flutter version and packages
+      - &step_packages
+        name: Flutter version and packages
         script: |
           flutter --version
           flutter pub get
@@ -69,10 +70,11 @@ workflows:
         # /Users/builder/export_options.plist for the build step below.
         script: xcode-project use-profiles
 
-      - name: Install CocoaPods
+      - &step_pods
+        name: Install CocoaPods
         # `flutter build ipa` would run this itself. It is its own step so that a Podfile problem
-        # fails here, with its own log, instead of somewhere inside a long Xcode build. The
-        # committed ios/Podfile carries the permission_handler macros; see the comment in it.
+        # fails here, with its own log, instead of somewhere inside a long Xcode build. Only
+        # razorpay_flutter goes through CocoaPods; the rest build with Swift Package Manager.
         script: |
           cd ios
           pod install
@@ -172,3 +174,52 @@ workflows:
     scripts: *ios_steps
 
     artifacts: *ios_artifacts
+
+  # AN UNSIGNED .ipa, FOR WHEN THERE IS NO PAID APPLE ACCOUNT. Needs no Apple account and no
+  # integration, so it runs on Codemagic's free plan.
+  #
+  # An unsigned .ipa does NOT install by tapping it. Each person installs it with a sideloading tool
+  # (Sideloadly or AltStore) on their own computer, which signs it with THEIR free Apple ID for
+  # THEIR phone. Apple's rules for free signing then apply, and they are why this is a stopgap:
+  #   - the app stops opening 7 days after it was signed, until it is signed again;
+  #   - one free Apple ID can have at most 3 sideloaded apps active on a device.
+  # docs/ios-codemagic.md, "No paid Apple account", explains the install and the free web app,
+  # which has neither limit.
+  ios-unsigned:
+    name: iOS unsigned .ipa (sideload, no Apple account)
+    working_directory: nivora_app
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    environment:
+      flutter: 3.47.1
+      xcode: latest
+      cocoapods: default
+      vars:
+        PERMISSION_HANDLER_VERBOSE: "1"
+
+    scripts:
+      - *step_packages
+      - *step_pods
+
+      - name: Build the app without signing
+        # --no-codesign compiles a release Runner.app and skips signing, which is the part that
+        # needs an Apple account. The sideloading tool signs it later, on the recipient's side.
+        script: |
+          set -e
+          flutter build ios --release --no-codesign --build-number="$BUILD_NUMBER"
+
+      - name: Package the .ipa
+        # An .ipa is a zip holding Payload/Runner.app. Built by hand because `flutter build ipa`
+        # refuses to export without a signing identity.
+        script: |
+          set -e
+          rm -rf build/ios/unsigned
+          mkdir -p build/ios/unsigned/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/unsigned/Payload/
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d' ' -f2 | cut -d+ -f1)
+          ( cd build/ios/unsigned && zip -qry "Nivora-$VERSION-$BUILD_NUMBER-unsigned.ipa" Payload )
+          ls -l build/ios/unsigned/*.ipa
+
+    artifacts:
+      - build/ios/unsigned/*.ipa
