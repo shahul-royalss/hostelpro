@@ -355,9 +355,29 @@ here ship their own `PrivacyInfo.xcprivacy`, and so does `RazorpayStandard`. But
 `Razorpay.framework` and `RazorpayCore.framework` ship none, and whether they call such an API
 cannot be read from source, because they arrive as compiled binaries.
 
-So the app has no privacy manifest of its own yet, deliberately. Adding one means editing
+**Answered by the first build (2026-09-22, Codemagic build `6ab25af4260f4e4de257c0e9`).** The
+three Razorpay binaries were read out of the built .ipa:
+
+| Framework | Required-reason APIs referenced | Ships its own manifest |
+|---|---|---|
+| `Razorpay` | none | no, and needs none |
+| `RazorpayCore` | none | no, and needs none |
+| `RazorpayStandard` | `NSUserDefaults`, `NSFileModificationDate` | yes, but it declares only `UserDefaults` (CA92.1) |
+
+So the one real gap is **FileTimestamp**, which `RazorpayStandard` uses and does not declare. It
+does not affect a sideloaded or ad hoc build: Apple checks privacy manifests only on upload to App
+Store Connect. **Before the first TestFlight upload**, add an app-level
+`ios/Runner/PrivacyInfo.xcprivacy` declaring `NSPrivacyAccessedAPICategoryFileTimestamp` with
+reason `C617.1`, as a member of the Runner target (on a Mac: Xcode, File, New, File, App Privacy,
+target Runner). If Apple then emails `ITMS-91053` naming anything else, add that category too.
+
+The method, for re-checking after a Razorpay SDK update: unzip the .ipa, search each
+`Payload/Runner.app/Frameworks/*.framework` binary for the API names, and read any
+`PrivacyInfo.xcprivacy` beside it. The steps below describe the same check on a signed build.
+
+The app has no privacy manifest of its own yet, deliberately. Adding one means editing
 `project.pbxproj` by hand, which a Windows machine cannot validate, and a malformed project file
-breaks every build. The first build answers the question instead:
+breaks every build. On a signed build, the last Codemagic step repeats the check:
 
 1. The last Codemagic step prints, for each Razorpay framework, which required-reason symbols it
    uses and whether it ships a manifest.
