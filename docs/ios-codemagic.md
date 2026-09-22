@@ -267,16 +267,29 @@ this repository, not in chat, not in a screenshot. The script never prints it an
 a command line; it hands it to curl on standard input. `.codemagic-token` is also in `.gitignore`,
 in case a copy ever lands in the repository.
 
-Then, from the repository root in Git Bash:
+Then, from the repository root, in PowerShell or Git Bash:
 
 ```bash
 bash scripts/codemagic-ipa.sh
 ```
 
-It prints each status change, a link to watch the build live, and at the end the file's path,
-size and SHA-256. A build takes roughly 15 to 25 minutes. To fetch the .ipa from a build that
-already ran, set `CM_BUILD_ID` to its ID first. The script checks the downloaded size against what
-Codemagic reports and stops if they differ.
+That **starts a new build** each time. It prints each status change, a link to watch the build
+live, and at the end the file's path, size and SHA-256. The first build took about 4 minutes. To
+download the .ipa from a build that already ran, without building again:
+
+```bash
+bash scripts/codemagic-ipa.sh --build <build id>
+```
+
+**`bash` means different things in the two shells.** In PowerShell it starts WSL (Linux), because
+Windows keeps its own `bash.exe` ahead of Git's on the PATH; in Git Bash it is Git Bash. The script
+works in both. Under WSL it finds the token file in your Windows profile, not WSL's own home, and
+it uses Python 3 for JSON because WSL has no `node`. Use `--build` rather than setting
+`CM_BUILD_ID` in PowerShell: environment variables set in PowerShell do not reach WSL.
+
+The download is written to a `.part` file and moved into place only once its size matches what
+Codemagic reports, so an interrupted download never replaces a good .ipa. WSL's connection does
+sometimes drop mid-download; the script retries, fetching a fresh link each time.
 
 ### Which to use
 
