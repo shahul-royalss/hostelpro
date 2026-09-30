@@ -990,6 +990,95 @@ class AuthController extends AsyncNotifier<AuthPhase> {
     }
   }
 
+  /// Re-read the profile row and republish the phase, and THROW when that fails.
+  ///
+  /// [reload]'s twin with the opposite failure contract, for the one caller whose whole
+  /// operation IS the re-read: a warden or manager switching PG. `staff_switch_hostel` moves
+  /// `users.hostel_id` on the server, and every screen keys its reads off the session's copy of
+  /// that column. Until this republishes, the app is showing one PG while RLS answers for
+  /// another, so every list comes back empty. Swallowing a failure here, as [reload] does, would
+  /// tell the person "switched" over a screen that is quietly wrong, so the switch sheet needs
+  /// to hear about it and say so.
+  ///
+  /// A FAILURE LEAVES THE PUBLISHED PHASE ALONE. The error is thrown before anything is
+  /// assigned, so a dropped packet cannot sign anybody out or blank a working screen; the caller
+  /// reports it and a second tap retries (the switch itself is a no-op the second time).
+  ///
+  /// A SUCCESS PUBLISHES WHATEVER THE SERVER SAYS, including a signed-out phase for an account
+  /// that was deactivated in the meantime. That is the truth, and the router acts on it.
+  ///
+  /// `state = AsyncData(...)`, not `ref.invalidateSelf()`, for the reason [reload] gives.
+  Future<AuthPhase> republish() async {
+    final next = await _resolve().timeout(_networkTimeout);
+    state = AsyncData(next);
+    return next;
+  }
+
+  /// When a warden or manager comes back to the app, check whether their PG moved while they
+  /// were away, and republish only if it did.
+  ///
+  /// ── WHY THIS EXISTS ─────────────────────────────────────────────────────────────────────
+  ///
+  /// `users.hostel_id` is one column shared by every device the account is signed in on. A
+  /// switch made on the website, or on a second phone, moves it for this phone too, but nothing
+  /// tells this phone: it goes on keying every read to the old PG while RLS answers for the new
+  /// one, and the screens fill with empty lists that look like a PG with nothing in it. Asking
+  /// on resume is the cheapest moment that catches it, because a switch elsewhere means the
+  /// person was using something else. The one other caller is `StaffHostelBar`, when a fresh
+  /// PG list says the server has them in a different PG from the session (an owner took their
+  /// PG away while the app was open, say).
+  ///
+  /// ── WHAT IT COSTS, AND WHY THE GATE IS HERE ─────────────────────────────────────────────
+  ///
+  /// One read of the caller's own `public.users` row, and only for the two roles that can
+  /// switch at all. An owner, a resident and a super admin never move `users.hostel_id` this
+  /// way, so they pay nothing. Neither of the two MFA roles is a staff role, so [_resolve] makes
+  /// no second round trip for these two.
+  ///
+  /// ── WHY IT DOES NOT REPUBLISH AN UNCHANGED SESSION ──────────────────────────────────────
+  ///
+  /// Every resume would otherwise hand the app a new session object, and everything watching
+  /// the whole session would rebuild for no reason. It republishes when the PG moved, and when
+  /// the account is no longer signed in at all (deactivated while the phone was in a pocket),
+  /// because both are facts the screens must act on.
+  ///
+  /// Never throws: this is a background correction nobody asked for, and the rule [reload]
+  /// states holds here too.
+  Future<void> syncActiveHostel() async {
+    final held = state.value;
+    if (held is! AuthSignedIn) return;
+    final before = held.session;
+    if (before.role != UserRole.warden && before.role != UserRole.manager) return;
+    try {
+      final next = await _resolve().timeout(_networkTimeout);
+      // ANYTHING PUBLISHED WHILE THE READ WAS IN FLIGHT WINS. A sign-out, a sign-in as somebody
+      // else, or a switch on this device may have landed in the meantime, and this answer was
+      // read before it. Comparing only the user id is not enough: a switch made here after this
+      // read left would be undone by it, putting the screens back on the old PG while the
+      // server has the new one. So the answer is used only if the phase it was asked about is
+      // still the one published, by identity. Token refreshes do not republish (see
+      // [actionForAuthEvent]), so this drops an answer only when something real happened, and
+      // the next resume asks again.
+      //
+      // ONE EXCEPTION: A SIGN-OUT THAT CARRIES ITS REASON. For a deactivated account [_resolve]
+      // signs out itself, and gotrue's `signedOut` event reaches the listener in [build] before
+      // this await returns, publishing a sign-out with no sentence. That is the same sign-out
+      // this answer describes, only without the why, so the login screen would say nothing to
+      // somebody who has just lost access. Replacing one sign-out with another cannot undo a
+      // switch or resurrect a session, which is what the rule above guards against.
+      if (!identical(state.value, held)) {
+        if (next is AuthSignedOut && next.message != null && state.value is AuthSignedOut) {
+          state = AsyncData(next);
+        }
+        return;
+      }
+      if (next is AuthSignedIn && next.session.hostelId == before.hostelId) return;
+      state = AsyncData(next);
+    } catch (e) {
+      debugPrint('resume PG check failed: ${e.runtimeType} $e');
+    }
+  }
+
   /// The sentence for an [AuthException] that escaped [signIn] or [verifyMfa].
   ///
   /// ═══ A 400 IS NOT AN OUTAGE ═══

@@ -4,6 +4,7 @@ import * as React from "react";
 import { CalendarDays, Check, ListChecks, Play, RotateCcw, Undo2 } from "lucide-react";
 import { updateTaskStatus } from "@/lib/actions/manager";
 import { useAction } from "@/hooks/use-action";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 import type { TaskRow, TaskStatus } from "@/lib/types";
 import { cn, daysUntil, formatDate, formatDateTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,8 @@ export function DueDate({ date, status, className }: { date: string | null; stat
 
 /** Status transition buttons: pending → in_progress → done (and back). */
 export function TaskActions({ task, disabled, size = "sm" }: { task: TaskRow; disabled?: boolean; size?: "sm" | "default" }) {
-  const { run, pending } = useAction(updateTaskStatus);
+  const update = useHostelBound(updateTaskStatus);
+  const { run, pending } = useAction(update);
   const go = (status: TaskStatus) => run({ taskId: task.id, status });
   // Read-only (expired subscription): keep the controls visible but disabled (rule §4.4), don't hide them.
   const off = disabled || pending;

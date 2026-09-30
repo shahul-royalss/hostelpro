@@ -3,13 +3,15 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, ChevronsUpDown, LogOut, Menu, ShieldCheck, X } from "lucide-react";
+import { Building2, ChevronsUpDown, Loader2, LogOut, Menu, ShieldCheck, X } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { ROLE_LABEL, type UserRole } from "@/lib/roles";
 import { NAV, isActive } from "./nav-config";
 import { NotificationBell } from "@/components/shared/notification-bell";
 import { UserAvatar } from "@/components/ui/avatar";
-import { signOut, switchHostel } from "@/lib/actions/session";
+import { signOut } from "@/lib/actions/session";
+import { canSwitchHostel, HostelSwitchItems, useHostelSwitch } from "./hostel-switcher";
+import { LayoutHostel } from "./rendered-hostel";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,7 +20,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { toast } from "sonner";
 
 export interface ShellUser {
   id: string;
@@ -43,6 +44,11 @@ export interface ShellHostel {
  * The hostel name appears exactly ONCE here: in the top bar, where it is also
  * the hostel switcher. It used to appear a second time under the logo in the
  * sidebar, which is why /manager rendered "Sunrise Residency" three times.
+ *
+ * `hostels` is what the switcher offers, and what it means depends on the role:
+ * an owner's own hostels (cookie switch), or the PGs a manager is allowed into
+ * (staff_switch_hostel). hostel-switcher.tsx keeps the two apart; with one
+ * entry or none there is no switcher, only the name.
  */
 export function DesktopShell({
   user,
@@ -141,8 +147,8 @@ export function DesktopShell({
             <Menu className="h-5 w-5" />
           </button>
           <div className="min-w-0 text-subhead font-semibold text-navy md:text-callout md:font-semibold">
-            {hostels.length > 1 && user.role === "owner" ? (
-              <HostelSwitcher hostel={hostel} hostels={hostels} />
+            {hostels.length > 1 && canSwitchHostel(user.role) ? (
+              <HostelSwitcher role={user.role} hostel={hostel} hostels={hostels} />
             ) : (
               <span className="inline-flex min-w-0 items-center gap-2">
                 <Building2 className="h-4 w-4 shrink-0 text-navy/50" />
@@ -160,13 +166,18 @@ export function DesktopShell({
       {/* Content */}
       <main className="app-main app-main-inline pb-[calc(48px+var(--safe-bottom))] md:pl-[calc(232px+24px)] md:pr-page-desktop">
         {banner ? <div className="mb-5">{banner}</div> : null}
-        <div className="mx-auto max-w-[1400px] animate-fade-in">{children}</div>
+        {/* Lets a page notice that this (layout-kept) top bar names a PG it has left. rendered-hostel.tsx. */}
+        <LayoutHostel hostelId={hostel?.id ?? null}>
+          <div className="mx-auto max-w-[1400px] animate-fade-in">{children}</div>
+        </LayoutHostel>
       </main>
     </div>
   );
 }
 
 function UserMenu({ user, hostel, hostels }: { user: ShellUser; hostel?: ShellHostel | null; hostels: ShellHostel[] }) {
+  // Held here, not in the items: the menu content unmounts when an item is picked.
+  const { switchTo, pending } = useHostelSwitch(user.role, hostel?.id);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -186,23 +197,17 @@ function UserMenu({ user, hostel, hostels }: { user: ShellUser; hostel?: ShellHo
           <div className="text-sm font-semibold text-navy">{user.name}</div>
           <div className="text-xs text-muted">{user.email ?? ROLE_LABEL[user.role]}</div>
         </DropdownMenuLabel>
-        {hostels.length > 1 && (
+        {hostels.length > 1 && canSwitchHostel(user.role) && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Switch hostel</DropdownMenuLabel>
-            {hostels.map((h) => (
-              <DropdownMenuItem
-                key={h.id}
-                onSelect={async () => {
-                  const res = await switchHostel(h.id);
-                  if (!res.ok) toast.error(res.error);
-                  else window.location.assign("/owner");
-                }}
-                className={cn(h.id === hostel?.id && "font-semibold text-navy")}
-              >
-                <Building2 /> {h.name}
-              </DropdownMenuItem>
-            ))}
+            <HostelSwitchItems
+              role={user.role}
+              label={user.role === "owner" ? "Switch hostel" : "Switch PG"}
+              hostels={hostels}
+              currentId={hostel?.id}
+              pending={pending}
+              onSwitch={switchTo}
+            />
           </>
         )}
         <DropdownMenuSeparator />
@@ -222,31 +227,34 @@ function UserMenu({ user, hostel, hostels }: { user: ShellUser; hostel?: ShellHo
   );
 }
 
-function HostelSwitcher({ hostel, hostels }: { hostel?: ShellHostel | null; hostels: ShellHostel[] }) {
+function HostelSwitcher({ role, hostel, hostels }: { role: UserRole; hostel?: ShellHostel | null; hostels: ShellHostel[] }) {
+  const { switchTo, pending } = useHostelSwitch(role, hostel?.id);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border border-material-strong bg-material-tint/60 px-3.5 py-1.5 text-sm font-semibold text-navy backdrop-blur-md hover:bg-material-tint/80">
+        <button
+          aria-label={role === "owner" ? "Switch hostel" : "Switch PG"}
+          aria-busy={pending || undefined}
+          className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border border-material-strong bg-material-tint/60 px-3.5 py-1.5 text-sm font-semibold text-navy backdrop-blur-md hover:bg-material-tint/80"
+        >
           <Building2 className="h-4 w-4 shrink-0 text-navy/60" />
           <span className="truncate">{hostel?.name}</span>
-          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted" />
+          {pending ? (
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted" />
+          ) : (
+            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted" />
+          )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
-        <DropdownMenuLabel>Your hostels</DropdownMenuLabel>
-        {hostels.map((h) => (
-          <DropdownMenuItem
-            key={h.id}
-            onSelect={async () => {
-              const res = await switchHostel(h.id);
-              if (!res.ok) toast.error(res.error);
-              else window.location.assign("/owner");
-            }}
-            className={cn(h.id === hostel?.id && "font-semibold text-navy")}
-          >
-            <Building2 /> {h.name}
-          </DropdownMenuItem>
-        ))}
+        <HostelSwitchItems
+          role={role}
+          label={role === "owner" ? "Your hostels" : "Your PGs"}
+          hostels={hostels}
+          currentId={hostel?.id}
+          pending={pending}
+          onSwitch={switchTo}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   );

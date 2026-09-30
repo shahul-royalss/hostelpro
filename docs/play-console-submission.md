@@ -3,8 +3,9 @@
 Everything Console will ask for on the new app, in the order to do it, plus the two things outside
 Play that this release depends on.
 
-**App name:** Nivora · **Package:** `com.nivorasr.app` · **Upload artifact:** `dist/NIVORA-1.0.0.aab`,
-versionCode 6, release name `1.0.0 (6)`
+**App name:** Nivora · **Package:** `com.nivorasr.app` · **On the closed track:** `1.0.0 (6)` ·
+**Next upload:** `dist/NIVORA-1.1.0.aab`, versionCode 7, release name `1.1.0 (7)`
+([Step 4](#step-4--versioncode-7-and-production))
 
 > **This is a new Play Console app (2026-09-19).** Until 2026-09-13 this page drove a listing locked
 > to `com.srnivora.app`. That listing is abandoned: nothing was ever released from it, and nothing
@@ -92,6 +93,63 @@ production, is the one that is left.
 If Console reports that the release needs a bundle, that no existing users can upgrade, and that it
 adds no bundles, those are one problem: the release has no processed bundle in it yet. They clear
 once Console has parsed the upload, not when the upload bar fills.
+
+## Step 4 — versionCode 7 and production
+
+`dist/NIVORA-1.1.0.aab`, versionCode 7, release name `1.1.0 (7)`, built 2026-09-30. Sizes, hashes
+and the release notes are in [play-release-notes.md](play-release-notes.md). It adds staff access
+to several PGs, with a Switch PG control for wardens and managers.
+
+**A. Before anything reaches a phone: the backend, in this order.** versionCode 7 calls database
+functions that do not exist until the migration runs. On 2026-09-30 the migration was built and
+tested but **not yet applied** to the live project.
+
+1. Apply `db/migrations/2026-09-30-multi-pg-staff-access.sql` (Supabase → SQL Editor → paste the
+   whole file → Run). It is one transaction: it either all lands or nothing does.
+2. Paste `db/migrations/2026-09-30-multi-pg-staff-access.test.sql` → Run. It rolls itself back and
+   must end with `ALL MULTI-PG TESTS PASSED`. If it raises `FAIL n`, undo with the `.down.sql`.
+3. Redeploy the five Edge Functions that share the changed files:
+   `npx supabase functions deploy owner-create-staff warden-register-student warden-student-credentials complaint-photo sa-create-owner`.
+   Not before step 1: `_shared/tenant.ts` now reads `staff_hostel_access`, and without the table every
+   warden call to those functions answers "Could not verify the hostel."
+4. Push `main`. Vercel then deploys the website, which uses the same functions.
+
+**B. Put versionCode 7 on the closed track (any time after A, before or after day 14).** The 14-day
+rule counts testers who stay opted in; publishing a newer release to the same track does not reset
+it, and it gives the testers a few days on the multi-PG screens before production.
+
+1. **Test and release → Testing → Closed testing** → the existing track → **Create new release**.
+2. Upload `dist/NIVORA-1.1.0.aab` and wait until it has finished processing. Check the SHA-256
+   first ([Verifying the artifact](#verifying-the-artifact-before-you-upload-it)).
+3. Release name `1.1.0 (7)`, release notes from [play-release-notes.md](play-release-notes.md).
+4. **Next → Save → Publishing overview → Send changes for review.**
+
+**C. Apply for production (from about 2026-10-04).**
+
+1. **Dashboard.** Once 12 testers have been opted in for 14 continuous days, **Apply for
+   production** appears there.
+2. Answer the questionnaire in your own words: how you found the testers, what they tried, what
+   feedback came back, and what changed because of it (versionCode 7 and its Switch PG are a fair
+   answer to the last one). Google's reply usually takes up to a week and arrives by email and in
+   the Inbox.
+
+**D. Release to production (after Google approves the application).**
+
+1. **Test and release → Production → Countries / regions** → add **India** (the same single country
+   as the closed test).
+2. **Production → Create new release → Add from library** → pick versionCode 7. Do **not** upload the
+   file again; Play refuses a versionCode it already holds. **Promote release → Production** on the
+   closed track's `1.1.0 (7)` does the same thing.
+3. Release name `1.1.0 (7)`; the notes carry over from the library, so check they are there.
+4. Optional: a **staged rollout** (say 20%) so a problem reaches few phones. Raise it from the same
+   page later; **Halt rollout** stops it.
+5. **Next → Save → Publishing overview → Send changes for review.** Production review usually takes
+   a few days. Data safety, App access and content rating need no change for versionCode 7: it
+   collects nothing new and adds no permission.
+
+**E. After production approval.** Remove the temporary Demo PG email-verification exemption:
+`drop trigger if exists users_zz_demo_review_email_verified on public.users; drop function if exists app.demo_review_email_verified();`
+Keep the demo accounts themselves: every future update is reviewed by signing in with them.
 
 ---
 

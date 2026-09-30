@@ -32,9 +32,17 @@ export function roleForPath(pathname: string): UserRole | null {
   return null;
 }
 
-/** Hard limits per hostel (Hard rule §4.3) */
+/**
+ * Hard limits per hostel (Hard rule §4.3). Five managers and five wardens since 2026-09-12
+ * (db/migrations/2026-09-12-five-staff-per-role.sql), counted as ACTIVE staff WITH ACCESS to the
+ * PG (staff_hostel_access), not only the ones working in it right now. The database is the rule;
+ * these numbers only drive the web's early messages and disabled buttons.
+ */
 export const ROLE_LIMITS = {
-  manager: 1,
-  warden: 1,
+  manager: 5,
+  warden: 5,
   student: 10_000,
 } as const;
+
+/** How many PGs one staff account may be given at creation (owner-create-staff accepts 1..20). */
+export const MAX_STAFF_HOSTELS = 20;

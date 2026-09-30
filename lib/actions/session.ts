@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { ACTIVE_HOSTEL_COOKIE, assertRole, errorMessage, getSessionUser } from "@/lib/permissions";
 import { fail, ok, type ActionResult, type NotificationRow } from "@/lib/types";
+import { ROLE_HOME } from "@/lib/roles";
 import { audit } from "@/lib/audit";
 
 export async function signOut() {
@@ -19,7 +20,10 @@ export async function signOut() {
   redirect("/login");
 }
 
-/** Owner: switch the active hostel (multi-subscription owners). */
+/**
+ * Owner: switch the active hostel (multi-subscription owners). Owner-only by assertRole: staff
+ * switch through switchStaffHostel() below, and the shell never offers them this one.
+ */
 export async function switchHostel(hostelId: string): Promise<ActionResult> {
   try {
     const user = await assertRole("owner");
@@ -39,6 +43,45 @@ export async function switchHostel(hostelId: string): Promise<ActionResult> {
   } catch (e) {
     return fail(errorMessage(e));
   }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Manager / warden: switch the PG they are working in, then go to their home screen.
+ *
+ * NOT the owner mechanism above. An owner's active hostel is a cookie on this browser; a staff
+ * member's is users.hostel_id, because every RLS policy scopes staff through
+ * app.user_hostel_id(). staff_switch_hostel moves it, and only to a PG in the caller's own
+ * staff_hostel_access rows, so the access decision is made in Postgres, not here. The
+ * consequence users must understand: the column is shared, so switching here switches every
+ * device the account is signed in on. Forms still open on those devices are caught by the stale
+ * form guard (assertWritableContextFor).
+ *
+ * Redirects on success (home, because the page the user was on belongs to the PG they just
+ * left); returns an error result otherwise.
+ */
+export async function switchStaffHostel(hostelId: string): Promise<ActionResult> {
+  let home: string;
+  try {
+    const user = await assertRole("manager", "warden");
+    if (typeof hostelId !== "string" || !UUID_RE.test(hostelId)) return fail("Choose a PG to switch to.");
+    home = ROLE_HOME[user.role];
+    if (hostelId !== user.hostel_id) {
+      const supabase = await createClient();
+      // The RPC writes the staff.hostel.switch audit row itself (and rate-limits switching), so
+      // nothing is audited here: a second row for the same switch would only be noise in the trail.
+      const { error } = await supabase.rpc("staff_switch_hostel", { p_hostel_id: hostelId });
+      if (error) return fail(errorMessage(error));
+    }
+  } catch (e) {
+    return fail(errorMessage(e));
+  }
+  // Outside the try: redirect() throws to unwind and must not be caught as a failure. The layout
+  // is revalidated too, because the shell (PG name, switcher) is rendered by it and an App Router
+  // layout is otherwise kept across the navigation.
+  revalidatePath(home, "layout");
+  redirect(home);
 }
 
 /** Latest notifications for the bell */

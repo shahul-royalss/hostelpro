@@ -39,8 +39,24 @@ function dueInfo(task: TaskRow): { text: string; tone: "red" | "sand" | "muted" 
 
 const dueTone = { red: "text-red", sand: "text-sand-deep", muted: "text-muted", teal: "text-teal" } as const;
 
-/** OW-4 "Tasks for manager": add row, filterable list with status pills, edit + soft delete. */
-export function TasksCard({ tasks, manager, writable }: { tasks: TaskRow[]; manager: StaffUser | null; writable: boolean }) {
+/**
+ * OW-4 "Tasks for manager": add row, filterable list with status pills, edit + soft delete.
+ *
+ * `manager` is who a NEW task goes to (taskManagerFor). `staffNames` names the assignee on each
+ * line, because with up to five managers per PG existing tasks may belong to any of them. A task
+ * whose assignee no longer has access to this PG simply shows no name.
+ */
+export function TasksCard({
+  tasks,
+  manager,
+  staffNames = {},
+  writable,
+}: {
+  tasks: TaskRow[];
+  manager: StaffUser | null;
+  staffNames?: Record<string, string>;
+  writable: boolean;
+}) {
   const [filter, setFilter] = React.useState<Filter>("all");
   const [editing, setEditing] = React.useState<TaskRow | null>(null);
   const [deleting, setDeleting] = React.useState<TaskRow | null>(null);
@@ -76,7 +92,7 @@ export function TasksCard({ tasks, manager, writable }: { tasks: TaskRow[]; mana
             <ListChecks className="h-4 w-4 text-teal" /> Tasks for manager
           </span>
         }
-        description={manager ? `Assigned to ${manager.full_name}. The manager updates status from their app.` : "Add a manager first — tasks are assigned to the active manager."}
+        description={manager ? `New tasks go to ${manager.full_name}. They update the status from their app.` : "Add a manager first. Tasks go to an active manager of this PG."}
       />
 
       <AddTaskRow disabled={!canWrite} />
@@ -108,6 +124,7 @@ export function TasksCard({ tasks, manager, writable }: { tasks: TaskRow[]; mana
                 <div className="min-w-0 flex-1">
                   <p className={cn("text-sm font-medium text-charcoal", t.status === "done" && "text-muted line-through decoration-line")}>{t.title}</p>
                   {t.description ? <p className="mt-0.5 line-clamp-2 text-[12px] text-muted">{t.description}</p> : null}
+                  {staffNames[t.assigned_to] ? <p className="mt-0.5 text-[11px] text-muted">For {staffNames[t.assigned_to]}</p> : null}
                 </div>
                 <div className={cn("hidden shrink-0 items-center gap-1.5 text-[12px] font-medium tabular sm:flex", dueTone[due.tone])}>
                   <CalendarDays className="h-3.5 w-3.5" />

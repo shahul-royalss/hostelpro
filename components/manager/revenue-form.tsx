@@ -4,6 +4,7 @@ import * as React from "react";
 import { Save } from "lucide-react";
 import { createRevenue, updateRevenue } from "@/lib/actions/manager";
 import { useAction } from "@/hooks/use-action";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 import { REVENUE_SOURCES, type RevenueRow, type RevenueSource } from "@/lib/types";
 import { cn, titleCase, toISODate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,9 @@ export function RevenueForm({
   const [errors, setErrors] = React.useState<FieldErrors>({});
   const [defaultDate] = React.useState(() => initial?.date ?? toISODate());
 
-  const create = useAction(createRevenue, {
+  const createBound = useHostelBound(createRevenue);
+  const updateBound = useHostelBound(updateRevenue);
+  const create = useAction(createBound, {
     onSuccess: () => {
       setErrors({});
       formRef.current?.reset();
@@ -39,7 +42,7 @@ export function RevenueForm({
       onDone?.();
     },
   });
-  const update = useAction(updateRevenue, {
+  const update = useAction(updateBound, {
     onSuccess: () => {
       setErrors({});
       onDone?.();

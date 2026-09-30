@@ -10,9 +10,11 @@
  * requireCaller(req, "warden") verifies the bearer token with GoTrue and then reads the role
  * from public.users — never from the request body or from JWT app_metadata.
  *
- * The hostel is NOT accepted from the client on this path at all. A warden belongs to exactly
- * one hostel, so requireOwnHostel() takes users.hostel_id and that is the tenant for the
- * login, the uploads and the rows. There is no hostelId parameter to get wrong or to abuse.
+ * The hostel is NOT accepted from the client on this path at all. A warden works in exactly
+ * one hostel at a time (users.hostel_id, their active PG, even when the owner has given them
+ * several to switch between), so requireOwnHostel() takes users.hostel_id, re-checks the
+ * warden still has access to it, and that is the tenant for the login, the uploads and the
+ * rows. There is no hostelId parameter to get wrong or to abuse.
  * assertWritable() then applies the same subscription/suspension gate app.hostel_writable()
  * would have applied, because the account-creation step runs with the service role and so
  * escapes RLS.

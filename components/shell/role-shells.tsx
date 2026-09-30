@@ -3,11 +3,22 @@ import * as React from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getHostelContext, requireRole } from "@/lib/permissions";
+import { getMyStaffHostels } from "@/lib/queries/staff";
 import type { UserRole } from "@/lib/roles";
 import { DesktopShell } from "./desktop-shell";
 import { MobileShell } from "./mobile-shell";
 import { SubscriptionBanner } from "@/components/shared/subscription-banner";
 import { firstName, greeting } from "@/lib/utils";
+
+/**
+ * The PGs a manager/warden may switch between, as the shells want them: empty unless there are
+ * at least two, because one PG means there is nothing to switch to and no control is drawn.
+ */
+async function staffSwitchList(): Promise<{ id: string; name: string }[]> {
+  const supabase = await createClient();
+  const list = await getMyStaffHostels(supabase);
+  return list.length > 1 ? list.map((h) => ({ id: h.id, name: h.name })) : [];
+}
 
 async function unreadCount() {
   const supabase = await createClient();
@@ -48,14 +59,23 @@ export async function DesktopRoleShell({
   children: React.ReactNode;
 }) {
   const user = await requireRole(role);
-  const [ctx, unread, noMfa] = await Promise.all([role === "super_admin" ? null : getHostelContext(), unreadCount(), mfaMissing()]);
+  const [ctx, unread, noMfa, staffHostels] = await Promise.all([
+    role === "super_admin" ? null : getHostelContext(),
+    unreadCount(),
+    mfaMissing(),
+    // Rides alongside the other reads, so a manager's switcher costs no extra wait.
+    role === "manager" ? staffSwitchList() : Promise.resolve([]),
+  ]);
   const nudge = (role === "super_admin" || role === "owner") && noMfa;
+  // What the top-bar switcher offers: the owner's own hostels, or the PGs this manager is
+  // allowed into. DesktopShell/hostel-switcher decide which action each list is switched with.
+  const hostels = role === "manager" ? staffHostels : ctx?.hostels.map((h) => ({ id: h.id, name: h.name })) ?? [];
 
   return (
     <DesktopShell
       user={{ id: user.id, name: user.full_name, role: user.role, email: user.email }}
       hostel={ctx ? { id: ctx.hostel.id, name: ctx.hostel.name } : null}
-      hostels={ctx?.hostels.map((h) => ({ id: h.id, name: h.name })) ?? []}
+      hostels={hostels}
       unread={unread}
       banner={
         ctx || nudge ? (
@@ -125,7 +145,11 @@ export async function MobilePage({
   contentClassName?: string;
 }) {
   const user = await requireRole(role);
-  const [ctx, unread] = await Promise.all([getHostelContext(), unreadCount()]);
+  const [ctx, unread, staffHostels] = await Promise.all([
+    getHostelContext(),
+    unreadCount(),
+    role === "warden" ? staffSwitchList() : Promise.resolve([]),
+  ]);
 
   const resolvedTitle = title === "greeting" ? `${greeting()}, ${firstName(user.full_name)}` : title;
   const hostelName = ctx?.hostel.name ?? null;
@@ -141,6 +165,10 @@ export async function MobilePage({
       title={resolvedTitle}
       subtitle={resolvedSubtitle}
       hostelName={hostelName}
+      // The PG this page was rendered with: MobileShell provides it to every warden write
+      // (stale form guard). Same request, same cached context as the page's own.
+      hostelId={ctx?.hostel.id ?? null}
+      switchHostels={staffHostels}
       avatarName={user.full_name}
       unread={unread}
       backHref={backHref}

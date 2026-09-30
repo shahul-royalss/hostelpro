@@ -31,6 +31,11 @@ export function dbError(err: PostgrestLikeError | null | undefined, fallback = "
   if (code === "23505") {
     if (/students_phone_active_key/.test(msg)) return new HttpError(409, "A student with this phone number is already registered.");
     if (/users_email_key/.test(msg)) return new HttpError(409, "An account with this email already exists.");
+    // Dropped from the live database by db/migrations/2026-09-12-five-staff-per-role.sql, but NOT
+    // yet dead: db/schema.sql still creates this index, so a database built from the baseline
+    // without replaying the migrations still raises it. The apps still recognise this sentence
+    // too (nivora_app staff_repository.dart, _roleTaken). Remove it when the baseline stops
+    // creating the index.
     if (/users_one_active_staff_per_hostel/.test(msg)) return new HttpError(409, "This hostel already has an active manager or warden in that role. Deactivate the current one first.");
     if (/students_one_active_per_bed|beds_student_key/.test(msg)) return new HttpError(409, "That bed is already occupied. Choose a free bed.");
     return new HttpError(409, "This record already exists.");
@@ -38,7 +43,11 @@ export function dbError(err: PostgrestLikeError | null | undefined, fallback = "
   if (code === "23503") return new HttpError(400, "That record is linked to something that no longer exists.");
   if (code === "23514" || code === "22003") return new HttpError(400, "One of the values is out of the allowed range.");
   if (code === "22P02" || code === "22007" || code === "22008") return new HttpError(400, "One of the values has an invalid format.");
-  if (code === "P0001" && msg) return new HttpError(400, msg); // our own friendly raises
+  // Our own friendly raises, shown verbatim. That includes everything staff_hostel_access can
+  // refuse, above all the per-PG staff limit ("This PG already has 5 active wardens. Remove one
+  // from it first."), which the apps recognise by its shape, not by a status code. 400 even
+  // then: rollbackAwareError() re-wraps it as a 400 anyway once a half-created login is undone.
+  if (code === "P0001" && msg) return new HttpError(400, msg);
   if (code === "PGRST116") return new HttpError(404, "Not found.");
 
   // Anything else: log the raw error where only we can see it, tell the caller nothing.

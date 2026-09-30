@@ -3,6 +3,7 @@ import { requireHostelContext } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { getMenu } from "@/lib/queries/manager";
 import { PageHeader } from "@/components/shared/page-header";
+import { RenderedHostel } from "@/components/shell/rendered-hostel";
 import { MenuEditor } from "@/components/manager/menu-editor";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,8 @@ export default async function ManagerMenuPage() {
   const rows = await getMenu(supabase, ctx.hostel.id);
 
   return (
-    <>
+    <RenderedHostel hostelId={ctx.hostel.id}>
+      {/* Stale form guard: the writes below carry the PG this page was rendered for. */}
       <PageHeader
         title="Weekly mess menu"
         description={
@@ -23,6 +25,6 @@ export default async function ManagerMenuPage() {
         }
       />
       <MenuEditor rows={rows} writable={ctx.writable} />
-    </>
+    </RenderedHostel>
   );
 }

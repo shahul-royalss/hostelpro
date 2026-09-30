@@ -13,9 +13,21 @@ allprojects {
     //
     // Forced to 1.6.41: the version already in this machine's Gradle cache and in every artifact
     // shipped so far. Raise it deliberately, never by leaving the range open.
+    //
+    // THAT PIN ALONE PINNED NOTHING THAT RUNS. checkout 1.6.41 is an empty wrapper: its
+    // classes.jar is empty and its POM depends on com.razorpay:standard-core at version LATEST,
+    // which pulls com.razorpay:core. So every online build took whatever Razorpay had published
+    // that day, which is exactly what the paragraph above says this block prevents. v6 (the first
+    // closed-test release) shipped standard-core 1.7.18 with core 1.0.18; Razorpay published
+    // 1.7.19 / 1.0.19 on 2026-09-21, unreviewed here, and the next online build would have taken
+    // them silently. The two lines below pin the code that actually executes to what v6 shipped
+    // and is in this machine's cache. Raise all three together, on purpose, after reading the
+    // release notes.
     configurations.all {
         resolutionStrategy {
             force("com.razorpay:checkout:1.6.41")
+            force("com.razorpay:standard-core:1.7.18")
+            force("com.razorpay:core:1.0.18")
         }
     }
 }

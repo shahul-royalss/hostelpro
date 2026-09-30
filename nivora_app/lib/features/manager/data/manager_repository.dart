@@ -8,7 +8,8 @@ import 'manager_models.dart';
 
 /// The queries the manager needs that no other role does.
 ///
-/// TABLES: public.users, public.tasks (counts only).
+/// TABLES: public.tasks (counts only).
+/// RPCs:   public.hostel_staff_names.
 ///
 /// Everything else this role reads or writes already has a repository: expenses and revenues
 /// go through FinanceRepository, the task list and its status changes through TaskRepository,
@@ -38,20 +39,22 @@ final class ManagerRepository extends Repository {
   // STAFF
   // ───────────────────────────────────────────────────────────────────────────
 
-  /// The owner, the manager and the warden of this hostel.
+  /// The owner of this PG and every warden and manager with access to it.
+  /// public.hostel_staff_names.
   ///
-  /// Used to put a NAME against a task's `created_by` and `assigned_to`. The role filter
-  /// mirrors the users_select policy rather than trying to do its job: a manager who asked for
-  /// students here would get an empty list from the server, not a leak.
+  /// Used to put a NAME against a task's `created_by` and `assigned_to`, and nothing else.
+  ///
+  /// NOT `users` FILTERED BY `hostel_id` ANY MORE. That column is the PG somebody is working in
+  /// right now, and since a warden or manager can hold several PGs it would drop anybody who
+  /// had switched to another one, so their tasks here lost their name. The function lists by
+  /// access instead. It is SECURITY DEFINER and answers only a caller who may read the PG
+  /// (`app.can_read_hostel`), so asking about another owner's PG gets nothing back; the id
+  /// passed here picks the PG and grants nothing.
   Future<List<StaffMember>> staff(String hostelId) => guard(() async {
-        final rows = await db
-            .from('users')
-            .select(StaffMember.columns)
-            .eq('hostel_id', hostelId)
-            .inFilter('role', const ['owner', 'manager', 'warden'])
-            .isFilter('deleted_at', null)
-            .order('role');
-        return rows.map(StaffMember.fromJson).toList(growable: false);
+        final data = await db.rpc('hostel_staff_names', params: {'p_hostel_id': hostelId});
+        return rpcRows(data, 'hostel_staff_names')
+            .map(StaffMember.fromJson)
+            .toList(growable: false);
       });
 
   // ───────────────────────────────────────────────────────────────────────────

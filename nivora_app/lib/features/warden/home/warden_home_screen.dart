@@ -11,6 +11,7 @@ import '../../../data/providers.dart';
 import '../../../shared/dashboard.dart';
 import '../../../shared/glass/glass.dart';
 import '../../common/refresh.dart';
+import '../../common/staff_hostel_switcher.dart';
 import '../../common/staff_notices.dart';
 import '../notices/warden_notices_screen.dart';
 import '../../auth/verify_email_screen.dart';
@@ -48,8 +49,8 @@ class WardenHomeScreen extends ConsumerWidget {
         child: const EmptyState(
           icon: Icons.home_work_outlined,
           title: 'No hostel on this account',
-          detail: 'A warden is attached to exactly one hostel. Ask the owner to check the '
-              'assignment — until then there is nothing to show.',
+          detail: 'Ask the owner to give you access to a PG. Until then there is nothing to '
+              'show.',
         ),
       );
     }
@@ -115,12 +116,20 @@ class _Body extends ConsumerWidget {
         ref.invalidate(visitorsOnSiteProvider(hostelId));
         ref.invalidate(pendingLeavesProvider(hostelId));
         ref.invalidate(roomOccupancyProvider(hostelId));
+        // So a PG the owner has just given this warden access to brings the Switch PG control
+        // with it on a pull, rather than only after the next sign-in.
+        ref.invalidate(myStaffHostelsProvider);
         return settleRefresh(context, () => ref.read(stats.future));
       },
       child: ListView(
         padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.xxxl),
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
+          // Which PG every figure below belongs to. The masthead carries the greeting and not
+          // the property, and since a warden can hold more than one PG the answer is no longer
+          // obvious. It also carries the Switch PG control, for a warden with two or more.
+          StaffHostelBar(hostelId: hostelId),
+          const SizedBox(height: Space.md),
           AsyncSection<HostelStats?>(
             value: stats,
             onRetry: () => ref.invalidate(hostelStatsProvider),

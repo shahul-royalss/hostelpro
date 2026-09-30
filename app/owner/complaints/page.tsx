@@ -4,6 +4,7 @@ import { signedUrl } from "@/lib/storage";
 import { getComplaintById, getComplaintEvents, getComplaintsInbox, type ComplaintFilter } from "@/lib/queries/owner";
 import { formatNumber } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
+import { RenderedHostel } from "@/components/shell/rendered-hostel";
 import { ComplaintsInbox, type SelectedComplaint } from "@/components/owner/complaints-inbox";
 
 export const dynamic = "force-dynamic";
@@ -37,9 +38,10 @@ export default async function OwnerComplaintsPage({ searchParams }: { searchPara
   }
 
   return (
-    <>
+    <RenderedHostel hostelId={ctx.hostel.id}>
+      {/* updateComplaintStatus is shared with the warden and carries the rendered hostel id. */}
       <PageHeader title="Complaints inbox" description={`${formatNumber(open)} open · ${formatNumber(counts.all)} total`} />
       <ComplaintsInbox inbox={inbox} params={{ status, q }} selected={selected} writable={ctx.writable} />
-    </>
+    </RenderedHostel>
   );
 }

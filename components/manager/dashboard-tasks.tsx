@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, ListChecks } from "lucide-react";
 import { updateTaskStatus } from "@/lib/actions/manager";
 import { useAction } from "@/hooks/use-action";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 import type { TaskRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/misc";
@@ -14,7 +15,8 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { DueDate } from "./task-list";
 
 function TaskRowItem({ task, writable }: { task: TaskRow; writable: boolean }) {
-  const { run, pending } = useAction(updateTaskStatus);
+  const update = useHostelBound(updateTaskStatus);
+  const { run, pending } = useAction(update);
   const id = `task-${task.id}`;
   return (
     <li className={cn("flex items-start gap-3 py-3 transition-opacity", pending && "opacity-60")}>

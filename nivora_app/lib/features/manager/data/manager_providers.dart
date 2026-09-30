@@ -285,7 +285,8 @@ final managerFinanceProvider =
 // the manager tests that override `weeklyMenuProvider` off this import, are addressing the one
 // and only instance of it.
 
-/// Owner, manager and warden of this hostel, by name. public.users.
+/// The owner of this PG and every warden and manager with access to it, by name.
+/// public.hostel_staff_names.
 final hostelStaffProvider =
     FutureProvider.autoDispose.family<List<StaffMember>, String>((ref, hostelId) {
   return ref.watch(managerRepositoryProvider).staff(hostelId);

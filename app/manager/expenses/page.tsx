@@ -3,6 +3,7 @@ import { requireHostelContext } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { getExpenses, resolvePeriod } from "@/lib/queries/manager";
 import { PageHeader } from "@/components/shared/page-header";
+import { RenderedHostel } from "@/components/shell/rendered-hostel";
 import { GlassCard, GlassCardHeader } from "@/components/shared/glass-card";
 import { ExpenseForm } from "@/components/manager/expense-form";
 import { ExpenseTable } from "@/components/manager/expense-table";
@@ -17,7 +18,8 @@ export default async function ManagerExpensesPage({ searchParams }: { searchPara
   const rows = await getExpenses(supabase, ctx.hostel.id, period);
 
   return (
-    <>
+    <RenderedHostel hostelId={ctx.hostel.id}>
+      {/* Stale form guard: the writes below carry the PG this page was rendered for. */}
       <PageHeader title="Daily expenses" description={`Record and track outflow for ${ctx.hostel.name}.`} />
 
       <GlassCard>
@@ -38,6 +40,6 @@ export default async function ManagerExpensesPage({ searchParams }: { searchPara
       <div className="mt-6">
         <ExpenseTable rows={rows} month={period} writable={ctx.writable} />
       </div>
-    </>
+    </RenderedHostel>
   );
 }

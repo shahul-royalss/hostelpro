@@ -6,14 +6,15 @@ import '../../../data/models/models.dart';
 import '../../../data/repositories/repository.dart';
 import 'staff_models.dart';
 
-/// The two staff writes, behind an interface.
+/// The three staff writes, behind an interface.
 ///
 /// The list is a plain read and a screen that reads is tested by overriding the provider that
-/// holds the answer. These two are not: one mints a credential that exists exactly once, and
-/// the other takes somebody's access to a running PG away. Their interesting states — a
-/// validator refusing three fields at once, §4.3 refusing a second warden, a deactivation that
-/// RLS silently matched no rows for — are the states worth holding down in `flutter test`, and
-/// a test needs a stand-in for them. Same shape and same reasoning as `SaPlatformWrites`.
+/// holds the answer. These are not: one mints a credential that exists exactly once, and the
+/// other two take somebody's access to a running PG away. Their interesting states (a validator
+/// refusing three fields at once, §4.3 refusing a sixth warden, a deactivation that RLS silently
+/// matched no rows for, an access change that would leave somebody with no PG at all) are the
+/// states worth holding down in `flutter test`, and a test needs a stand-in for them. Same shape
+/// and same reasoning as `SaPlatformWrites`.
 abstract interface class OwnerStaffWrites {
   /// Creates the manager or warden login. supabase/functions/owner-create-staff.
   Future<StaffCreateOutcome> createStaff({
@@ -21,26 +22,34 @@ abstract interface class OwnerStaffWrites {
     required StaffDraft draft,
   });
 
-  /// Activates or deactivates one staff account, returning the row as it now stands.
-  Future<StaffMember> setStaffStatus({
-    required String hostelId,
+  /// Activates or deactivates one staff account, across EVERY PG they have access to.
+  Future<void> setStaffStatus({
     required String userId,
     required StaffStatus status,
+  });
+
+  /// Replaces which of the owner's PGs one staff member may work in with exactly [hostelIds].
+  /// public.owner_set_staff_hostels.
+  Future<List<StaffHostelGrant>> setStaffHostels({
+    required String userId,
+    required List<String> hostelIds,
   });
 }
 
 /// Manager and warden accounts for one PG.
 ///
-/// TABLES: public.users.
+/// TABLES: public.users (the status write).
+/// RPCs:   public.owner_hostel_staff, public.owner_set_staff_hostels.
 /// EDGE:   owner-create-staff.
 ///
 /// ── WHAT IS AND IS NOT A CONTROL IN THIS FILE ────────────────────────────────────────────
 ///
-/// Nothing here authorises anything. `.eq('hostel_id', …)` narrows a query so the server does
-/// less work and the screen gets the rows it asked for; what actually stops one owner reading
-/// or editing another's staff is `users_select` / `users_update` in db/rls-policies.sql plus
-/// the `users_update_guard` trigger, all evaluated against `auth.uid()` — and they would still
-/// hold if every filter below were deleted.
+/// Nothing here authorises anything. The two RPCs are SECURITY DEFINER and check ownership
+/// themselves, from `auth.uid()`: `owner_hostel_staff` refuses a PG the caller does not own,
+/// and `owner_set_staff_hostels` refuses unless the caller owns EVERY PG named and the staff
+/// member is their own. The status write is a plain update under `users_update` in
+/// db/rls-policies.sql plus the `users_update_guard` trigger, evaluated against `auth.uid()`.
+/// Every one of those would still hold if every filter below were deleted.
 ///
 /// The create does not happen here at all. Minting a login needs `auth.admin.createUser`, which
 /// needs the service-role key, which bypasses RLS for the entire project and therefore may
@@ -55,29 +64,32 @@ abstract interface class OwnerStaffWrites {
 final class OwnerStaffRepository extends Repository implements OwnerStaffWrites {
   const OwnerStaffRepository(super.db);
 
-  /// Every manager and warden of one PG, active first, newest first within that.
+  /// Every manager and warden with ACCESS to one PG, active first and by name within that.
+  /// public.owner_hostel_staff.
   ///
-  /// Mirrors `getStaff()` in lib/queries/owner.ts exactly, including the ordering. `status` is
-  /// the `public.user_status` enum, declared `('active','inactive')`, so ascending puts the
-  /// people currently running the PG at the top — an ordering that comes from the enum's
-  /// declaration order, not from the alphabet, and would silently invert if that declaration
-  /// were ever reordered.
+  /// ── WHY NOT `users` FILTERED BY `hostel_id` ANY MORE ──────────────────────────────────
   ///
-  /// NOT PAGINATED. §4.3 caps this at one active manager and one active warden; the rest of the
-  /// list is the handful of people who have held those posts before.
+  /// `users.hostel_id` is the ONE PG somebody is working in right now. A warden with access to
+  /// two of the owner's PGs would appear under whichever they switched to last and vanish from
+  /// the other, and a warden who is absent from a PG's list cannot be deactivated or given a
+  /// task from it. The RPC lists everybody with access, active AND inactive (the inactive are
+  /// who the owner reactivates from here), which is also the set the five-per-role limit
+  /// counts. See [StaffMember] for the columns.
   ///
-  /// SOFT-DELETED ROWS ARE EXCLUDED, not because RLS hides them (it does not — `users_select`
-  /// admits any row of a hostel the owner can read) but because a deleted account is not staff.
+  /// THE ORDER IS SETTLED HERE, NOT ON THE SERVER. The function orders by role and then name;
+  /// this screen has always led each post with the people running the PG today, so the
+  /// active are moved ahead of the inactive and the server's name order is kept within each.
+  /// `List.sort` is not stable, which is why this is two passes rather than a comparator.
+  ///
+  /// NOT PAGINATED. Five active of each role per PG, plus the handful who used to hold them.
   Future<List<StaffMember>> staff(String hostelId) => guard(() async {
-        final rows = await db
-            .from('users')
-            .select(StaffMember.columns)
-            .eq('hostel_id', hostelId)
-            .inFilter('role', const ['manager', 'warden'])
-            .isFilter('deleted_at', null)
-            .order('status', ascending: true)
-            .order('created_at', ascending: false);
-        return rows.map(StaffMember.fromJson).toList(growable: false);
+        final data = await db.rpc('owner_hostel_staff', params: {'p_hostel_id': hostelId});
+        final members =
+            rpcRows(data, 'owner_hostel_staff').map(StaffMember.fromJson).toList(growable: false);
+        return [
+          ...members.where((m) => m.isActive),
+          ...members.where((m) => !m.isActive),
+        ];
       });
 
   /// Creates the manager or warden account. supabase/functions/owner-create-staff.
@@ -136,22 +148,30 @@ final class OwnerStaffRepository extends Repository implements OwnerStaffWrites 
   /// — a difference worth knowing about, and the reason the confirmation copy says "loses
   /// access" rather than "is signed out".
   ///
-  /// AUTHORISATION IS THE DATABASE'S. `users_update` admits `role in ('manager','warden') and
-  /// app.owns_hostel(hostel_id)`, its WITH CHECK adds `app.hostel_writable(hostel_id)` so a
-  /// lapsed subscription refuses, and `app.users_update_guard` independently confirms that
-  /// whoever is changing a status actually administers that account. The filters below only
-  /// pick the row.
+  /// ACCOUNT-WIDE, ON PURPOSE. Status lives on the account, not on an access row, so a warden
+  /// with three PGs loses all three. Taking away ONE PG is [setStaffHostels]; the confirmation
+  /// on the screen says which of the two the owner is about to do.
+  ///
+  /// NO `hostel_id` FILTER, AND THAT IS A FIX RATHER THAN A LOOSENING. It used to carry
+  /// `.eq('hostel_id', <the PG on screen>)`. A warden with access to two PGs who is working in
+  /// the other one right now has `users.hostel_id` set to THAT one, so the filter matched no
+  /// row and the owner was told the account was not theirs. What decides is unchanged:
+  /// `users_update` admits `role in ('manager','warden') and app.owns_hostel(hostel_id)` (the
+  /// active PG is always one of the owner's, because access is only ever granted within one
+  /// owner's PGs), its WITH CHECK adds `app.hostel_writable(hostel_id)` so a lapsed
+  /// subscription refuses, and `app.users_update_guard` independently confirms that whoever is
+  /// changing a status actually administers that account. The id and role filters only pick
+  /// the row.
   ///
   /// AN EMPTY RESULT IS A REFUSAL, NOT A SUCCESS. When the USING clause does not admit the row,
   /// Postgres updates nothing and PostgREST reports no error at all — so without the `.select()`
   /// and the check beneath it, "you may not do that" and "done" would look identical.
   ///
-  /// REACTIVATION CAN FAIL, ON PURPOSE. `app.enforce_role_limits` fires on `update of status`
-  /// too, so reactivating a warden while another one holds the post raises P0001 with its own
+  /// REACTIVATION CAN FAIL, ON PURPOSE. The per-PG staff limit fires on `update of status`
+  /// too, so reactivating a warden into a PG that already has five raises P0001 with its own
   /// sentence, which [AppFailure] passes through verbatim as an [InvalidInputFailure].
   @override
-  Future<StaffMember> setStaffStatus({
-    required String hostelId,
+  Future<void> setStaffStatus({
     required String userId,
     required StaffStatus status,
   }) =>
@@ -160,18 +180,49 @@ final class OwnerStaffRepository extends Repository implements OwnerStaffWrites 
             .from('users')
             .update({'status': status.wire})
             .eq('id', userId)
-            .eq('hostel_id', hostelId)
             .inFilter('role', const ['manager', 'warden'])
             .isFilter('deleted_at', null)
-            .select(StaffMember.columns);
+            .select('id');
 
         if (rows.isEmpty) {
           throw const AccessDeniedFailure(
-            'That account is no longer part of this PG, or it is not yours to change. '
+            'That account is no longer one of your staff, or it is not yours to change. '
             'Pull down to refresh the list.',
           );
         }
-        return StaffMember.fromJson(rows.first);
+      });
+
+  /// Gives one staff member access to exactly [hostelIds], no more and no fewer.
+  /// public.owner_set_staff_hostels.
+  ///
+  /// A REPLACEMENT, NOT A DIFF, which is what makes it safe under [guard]: sending the same
+  /// list twice leaves the same rows, so a timed-out save may simply be saved again.
+  ///
+  /// THE SERVER DECIDES EVERYTHING THAT MATTERS, from `auth.uid()`:
+  ///   · the caller must own EVERY PG in the list ('You can only give access to your own PGs.');
+  ///   · the person must be the caller's own warden or manager ('That staff member is not
+  ///     yours.');
+  ///   · the list must not be empty ('Choose at least one PG.'). The sheet refuses that first,
+  ///     but only so the owner is not sent on a round trip to hear it;
+  ///   · each newly granted PG must have room under the five-per-role limit ('This PG already
+  ///     has 5 active wardens. Remove one from it first.').
+  /// All four are P0001 with sentences written for the owner, passed through verbatim.
+  ///
+  /// When the PG they are working in is taken away, the RPC moves them to the first remaining
+  /// PG by name, and the row with `is_active` set says where they landed.
+  @override
+  Future<List<StaffHostelGrant>> setStaffHostels({
+    required String userId,
+    required List<String> hostelIds,
+  }) =>
+      guard(() async {
+        final data = await db.rpc('owner_set_staff_hostels', params: {
+          'p_user_id': userId,
+          'p_hostel_ids': hostelIds,
+        });
+        return rpcRows(data, 'owner_set_staff_hostels')
+            .map(StaffHostelGrant.fromJson)
+            .toList(growable: false);
       });
 }
 
@@ -190,7 +241,9 @@ final class OwnerStaffRepository extends Repository implements OwnerStaffWrites 
 /// matches on the message rather than on the number:
 ///
 ///   • the function's friendly pre-count           → 409 "This PG already has 5 active
-///                                                    managers. Deactivate one first."
+///                                                    managers. Remove one from it first."
+///                                                    (the PG's name in place of "This PG"
+///                                                    when several were asked for)
 ///   • `app.enforce_role_limits` winning the race  → P0001, mapped by dbError to a 400, then
 ///                                                    re-wrapped by rollbackAwareError, which
 ///                                                    hard-codes 400 once the auth user has

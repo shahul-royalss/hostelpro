@@ -92,6 +92,23 @@ bool reqBool(Map<String, dynamic> row, String source, String column) {
   throw RowShapeError(source, column, 'expected a boolean, got ${v.runtimeType}');
 }
 
+/// A `text[]` or `uuid[]`, which PostgREST sends as a JSON array of strings.
+///
+/// The KEY must be present, like every other column read here, so a typo in an RPC's column
+/// list still names itself. A NULL value is an empty list rather than a throw, because
+/// `array_agg` over no rows is null in Postgres and every caller of this reads "none" either
+/// way. Anything that is not a list of strings is a disagreement about the shape and throws.
+List<String> stringList(Map<String, dynamic> row, String source, String column) {
+  if (!row.containsKey(column)) {
+    throw RowShapeError(source, column,
+        'column missing from the response; check the column list against db/schema.sql');
+  }
+  final v = row[column];
+  if (v == null) return const <String>[];
+  if (v is List && v.every((e) => e is String)) return v.cast<String>().toList(growable: false);
+  throw RowShapeError(source, column, 'expected an array of text, got ${v.runtimeType}');
+}
+
 /// A `timestamptz`. Kept in the zone Postgres sent (UTC); call `.toLocal()` at the point of
 /// display. Converting here would make two identical rows compare unequal after a timezone
 /// change, and the hostel day boundary is IST — a decision the UI layer owns, not this one.

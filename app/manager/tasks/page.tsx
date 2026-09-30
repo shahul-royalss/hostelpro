@@ -3,6 +3,7 @@ import { requireHostelContext } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { getMyTasks } from "@/lib/queries/manager";
 import { PageHeader } from "@/components/shared/page-header";
+import { RenderedHostel } from "@/components/shell/rendered-hostel";
 import { TaskList } from "@/components/manager/task-list";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,8 @@ export default async function ManagerTasksPage() {
   const open = tasks.filter((t) => t.status !== "done").length;
 
   return (
-    <>
+    <RenderedHostel hostelId={ctx.hostel.id}>
+      {/* Stale form guard: the writes below carry the PG this page was rendered for. */}
       <PageHeader
         title="My tasks"
         description={open > 0 ? `${open} open ${open === 1 ? "task" : "tasks"} assigned by your owner. Move them from pending to in progress to done.` : "Tasks assigned by your owner. Move them from pending to in progress to done."}
@@ -27,6 +29,6 @@ export default async function ManagerTasksPage() {
         }
       />
       <TaskList tasks={tasks} writable={ctx.writable} />
-    </>
+    </RenderedHostel>
   );
 }

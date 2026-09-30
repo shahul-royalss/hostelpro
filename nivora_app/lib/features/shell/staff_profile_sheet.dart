@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/auth/session.dart';
 import '../../core/router/router.dart';
 import '../../core/theme/tokens.dart';
+import '../../data/models/models.dart';
+import '../../data/providers.dart';
 import '../../shared/glass/glass.dart';
+import '../common/staff_hostel_switcher.dart';
 import '../legal/account_deletion.dart';
 import '../settings/security_screen.dart';
 
@@ -47,6 +51,23 @@ class _StaffProfileSheet extends ConsumerWidget {
     if (session == null) return const SizedBox.shrink();
 
     final name = session.fullName.trim().isEmpty ? 'Your account' : session.fullName.trim();
+
+    // THE PG, FOR THE TWO ROLES THAT WORK IN ONE. A warden or manager may now hold access to
+    // several PGs and work in one at a time, so "which PG am I in" belongs next to who they are.
+    // The switch action is offered only for two or more: the list is empty for every other
+    // role without a round trip, and a single PG has nowhere to switch to.
+    final staffRole = session.role == UserRole.warden || session.role == UserRole.manager;
+    final hostels = staffRole
+        ? ref.watch(myStaffHostelsProvider).value ?? const <StaffHostel>[]
+        : const <StaffHostel>[];
+    String? pgName;
+    for (final h in hostels) {
+      if (h.hostelId == session.hostelId) pgName = h.name;
+    }
+    if (staffRole && pgName == null && session.hostelId != null) {
+      pgName = ref.watch(hostelProvider(session.hostelId!)).value?.name;
+    }
+    final canSwitch = hostels.length >= 2;
 
     return DraggableScrollableSheet(
       expand: false,
@@ -104,9 +125,25 @@ class _StaffProfileSheet extends ConsumerWidget {
                   // colleague standing in the corridor actually needs.
                   _Row(label: 'Phone', value: session.phone),
                   _Row(label: 'Email', value: session.email),
+                  if (staffRole) _Row(label: 'Working in', value: pgName),
                 ],
               ),
             ),
+            if (canSwitch) ...[
+              const SizedBox(height: Space.lg),
+              GlassCard(
+                child: _Action(
+                  icon: Icons.swap_horiz_rounded,
+                  label: 'Switch PG',
+                  caption: 'You have access to ${hostels.length} PGs. Choose the one you are '
+                      'working in.',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    openStaffHostelSwitcher(context);
+                  },
+                ),
+              ),
+            ],
 
             const SizedBox(height: Space.lg),
             GlassCard(

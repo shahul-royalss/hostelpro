@@ -10,6 +10,7 @@ import '../../../shared/glass/glass.dart';
 import '../owner_providers.dart';
 import '../widgets/states.dart';
 import 'add_staff_sheet.dart';
+import 'staff_access_sheet.dart';
 import 'staff_models.dart';
 import 'staff_providers.dart';
 
@@ -39,8 +40,17 @@ import 'staff_providers.dart';
 /// (hostel, role) before it counts, which is what replaced the partial unique index that could
 /// only ever say "at most one". This screen only draws it.
 ///
-/// READS: public.users (via [ownerStaffProvider], under RLS).
-/// WRITES: supabase/functions/owner-create-staff, and a status update on public.users.
+/// ── ONE PERSON, SEVERAL PGs ──────────────────────────────────────────────────────────────
+///
+/// A warden or manager can now hold access to more than one of the owner's PGs and work in one
+/// at a time. So the list for a PG is everybody with ACCESS to it, wherever they are working
+/// right now, and each card says where that is and which other PGs they hold. "PG access" on a
+/// card changes that set; Deactivate still takes away the whole account, every PG at once, and
+/// its confirmation says so when there is more than one.
+///
+/// READS: public.owner_hostel_staff (via [ownerStaffProvider]).
+/// WRITES: supabase/functions/owner-create-staff, public.owner_set_staff_hostels, and a status
+///         update on public.users.
 class OwnerStaffScreen extends ConsumerWidget {
   const OwnerStaffScreen({super.key});
 
@@ -133,6 +143,9 @@ class _StaffBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
     final staff = ref.watch(ownerStaffProvider(hostelId));
+    // Names for the other PGs on each card, and the choices in PG access. Already watched by
+    // the header, so this costs nothing.
+    final owned = ref.watch(myHostelsProvider).value ?? const <Hostel>[];
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -181,10 +194,11 @@ class _StaffBody extends ConsumerWidget {
                 members: members,
                 hostelId: hostelId,
                 hostelName: hostelName,
+                owned: owned,
               ),
               const SizedBox(height: Space.md),
             ],
-            const _DeactivationNote(),
+            _DeactivationNote(severalPgs: owned.length >= 2),
             const SizedBox(height: Space.xl),
           ],
         ),
@@ -200,12 +214,16 @@ class _RoleSection extends ConsumerStatefulWidget {
     required this.members,
     required this.hostelId,
     required this.hostelName,
+    required this.owned,
   });
 
   final StaffRole role;
   final List<StaffMember> members;
   final String hostelId;
   final String? hostelName;
+
+  /// Every PG this owner holds, by name. Two or more is what makes PG access worth offering.
+  final List<Hostel> owned;
 
   @override
   ConsumerState<_RoleSection> createState() => _RoleSectionState();
@@ -230,11 +248,39 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
       full: _full,
     );
     if (created == true && mounted) {
-      // The sheet already invalidated the list; this is here so the section that opened it is
+      // The sheet already invalidated the lists; this is here so the section that opened it is
       // certainly showing the new holder even if the sheet's own invalidation was disposed
       // with it.
       ref.invalidate(ownerStaffProvider(widget.hostelId));
     }
+  }
+
+  /// Which of the owner's PGs this person may work in.
+  Future<void> _editAccess(StaffMember member) async {
+    if (_busy) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final grants = await showStaffAccessSheet(context, member: member, owned: widget.owned);
+    if (grants == null || !mounted) return;
+
+    // Say where they are working now when saving moved them, because that is the one effect
+    // the owner did not choose directly: the RPC picks the first remaining PG by name.
+    String? movedTo;
+    for (final g in grants) {
+      if (g.isActive && g.hostelId != member.activeHostelId) {
+        for (final h in widget.owned) {
+          if (h.id == g.hostelId) movedTo = h.name;
+        }
+      }
+    }
+    messenger.showSnackBar(SnackBar(
+      content: Text(movedTo == null
+          ? 'PG access saved'
+          : member.isActive
+              ? 'PG access saved. ${member.fullName} is now working in $movedTo.'
+              // Deactivated: they are working nowhere, but this is where they return.
+              : 'PG access saved. If reactivated, ${member.fullName} will start in $movedTo.'),
+      behavior: SnackBarBehavior.floating,
+    ));
   }
 
   /// Deactivate or reactivate, after a confirmation that says what actually happens.
@@ -254,12 +300,26 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
               // Precise on purpose. This is not "sign them out" — see
               // OwnerStaffRepository.setStaffStatus for exactly how much of the session dies
               // and what does not.
-              ? '${member.fullName} loses access to this PG immediately: every screen and every '
-                  'record stops loading for them. Their history stays — the expenses they '
-                  'entered and the residents they registered are unaffected — and you can '
-                  'reactivate them at any time.'
-              : 'This only works while there is a free place — a PG can have $maxStaffPerRole '
-                  'active ${member.role.label.toLowerCase()}s at once.',
+              //
+              // AND ACCOUNT-WIDE, which only needs saying when there is more than one PG to
+              // lose. An owner who meant "not in this building any more" should use PG access,
+              // and has to be told that before they take the other building away as well.
+              ? member.hasSeveralPgs
+                  ? '${member.fullName} loses access to all ${member.hostelIds.length} of '
+                      'your PGs immediately, not only this one. Every screen and every record '
+                      'stops loading for them. To take away just this PG, use PG access '
+                      'instead. Their history stays, and you can reactivate them at any time.'
+                  : '${member.fullName} loses access to this PG immediately: every screen and '
+                      'every record stops loading for them. Their history stays — the expenses '
+                      'they entered and the residents they registered are unaffected — and you '
+                      'can reactivate them at any time.'
+              : member.hasSeveralPgs
+                  // Reactivating brings back every PG they hold, so every one of them needs room.
+                  ? 'This only works while each of their ${member.hostelIds.length} PGs has a '
+                      'free place. A PG can have $maxStaffPerRole active '
+                      '${member.role.label.toLowerCase()}s at once.'
+                  : 'This only works while there is a free place — a PG can have '
+                      '$maxStaffPerRole active ${member.role.label.toLowerCase()}s at once.',
         ),
         actions: [
           TextButton(
@@ -278,11 +338,12 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
     setState(() => _busy = true);
     try {
       await ref.read(ownerStaffWritesProvider).setStaffStatus(
-            hostelId: widget.hostelId,
             userId: member.id,
             status: to,
           );
-      ref.invalidate(ownerStaffProvider(widget.hostelId));
+      // Every PG's list: the status is the account's, so it changed on every card this person
+      // appears on, and every count of active staff they were part of.
+      ref.invalidate(ownerStaffProvider);
       if (!mounted) return;
       setState(() => _busy = false);
       messenger.showSnackBar(SnackBar(
@@ -317,12 +378,16 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final role = widget.role;
-    // Active first, newest first within that — the order the repository asks the server for.
+    // Active first, by name within that: the order the repository puts the server's rows in.
     // Everyone who has ever held the post is here: reactivating somebody who worked a season
     // ago is one tap, and a post that looks empty shows why it is empty.
     final everyone = widget.members.inRole(role);
     final active = widget.members.activeInRole(role);
     final full = active.length >= maxStaffPerRole;
+    final pgNames = {for (final h in widget.owned) h.id: h.name};
+    // A choice between PGs needs two of them. For a single-PG owner the sheet would be one
+    // checkbox that cannot be unticked, which is furniture.
+    final canEditAccess = widget.owned.length >= 2;
 
     return GlassCard(
       padding: const EdgeInsets.all(Space.md),
@@ -362,28 +427,40 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
           else
             for (var i = 0; i < everyone.length; i++) ...[
               if (i > 0) const Divider(height: Space.lg),
-              _StaffDetails(member: everyone[i]),
+              _StaffDetails(member: everyone[i], hostelId: widget.hostelId, pgNames: pgNames),
               const SizedBox(height: Space.xs),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: everyone[i].isActive
-                    ? OutlinedButton.icon(
-                        onPressed:
-                            _busy ? null : () => _setStatus(everyone[i], StaffStatus.inactive),
-                        icon: const Icon(Icons.person_off_outlined, size: IconSize.md),
-                        label: const Text('Deactivate'),
-                        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
-                      )
-                    // Disabled rather than hidden when the post is full: the reason is the
-                    // count above it, and a button that vanishes reads as a lost feature.
-                    : OutlinedButton.icon(
-                        onPressed: _busy || full
-                            ? null
-                            : () => _setStatus(everyone[i], StaffStatus.active),
-                        icon: const Icon(Icons.person_outline_rounded, size: IconSize.md),
-                        label: const Text('Reactivate'),
-                        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
-                      ),
+              // A Wrap, not a Row: at 320dp and a large text scale the two buttons do not fit
+              // side by side, and the second drops under the first rather than overflowing.
+              Wrap(
+                spacing: Space.xs,
+                runSpacing: Space.xs,
+                children: [
+                  everyone[i].isActive
+                      ? OutlinedButton.icon(
+                          onPressed:
+                              _busy ? null : () => _setStatus(everyone[i], StaffStatus.inactive),
+                          icon: const Icon(Icons.person_off_outlined, size: IconSize.md),
+                          label: const Text('Deactivate'),
+                          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                        )
+                      // Disabled rather than hidden when the post is full: the reason is the
+                      // count above it, and a button that vanishes reads as a lost feature.
+                      : OutlinedButton.icon(
+                          onPressed: _busy || full
+                              ? null
+                              : () => _setStatus(everyone[i], StaffStatus.active),
+                          icon: const Icon(Icons.person_outline_rounded, size: IconSize.md),
+                          label: const Text('Reactivate'),
+                          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                        ),
+                  if (canEditAccess)
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : () => _editAccess(everyone[i]),
+                      icon: const Icon(Icons.apartment_rounded, size: IconSize.md),
+                      label: const Text('PG access'),
+                      style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                    ),
+                ],
               ),
             ],
           const SizedBox(height: Space.sm),
@@ -414,9 +491,15 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
 
 /// Name, login and contact for whoever holds a post — the mockup's card header and inner block.
 class _StaffDetails extends StatelessWidget {
-  const _StaffDetails({required this.member});
+  const _StaffDetails({required this.member, required this.hostelId, required this.pgNames});
 
   final StaffMember member;
+
+  /// The PG this list is for.
+  final String hostelId;
+
+  /// The owner's PGs by id, to name the other PGs this person holds.
+  final Map<String, String> pgNames;
 
   static final DateFormat _added = DateFormat('d MMM yyyy');
 
@@ -426,6 +509,24 @@ class _StaffDetails extends StatelessWidget {
     final muted = context.tones.muted;
     final active = member.isActive;
     final tone = active ? NivoraColors.success : NivoraColors.textMuted;
+
+    // WHERE THEY ARE WORKING, AND WHAT ELSE THEY HOLD, only when there is anything to say. A
+    // warden with this one PG is working here by definition, and a line saying so on every
+    // single-PG card would be furniture.
+    final activeId = member.activeHostelId;
+    final elsewhere = activeId != null && activeId != hostelId;
+    final showPgs = member.hasSeveralPgs || elsewhere;
+    final workingIn = activeId == null
+        ? null
+        : activeId == hostelId
+            ? '${pgNames[activeId] ?? member.activeHostelName ?? 'This PG'} (this PG)'
+            : pgNames[activeId] ?? member.activeHostelName ?? 'Another of your PGs';
+    final others = [
+      for (final id in member.hostelIds)
+        if (id != activeId) pgNames[id] ?? 'Another of your PGs',
+    ];
+    final hasContact = member.email != null || member.phone != null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -460,7 +561,7 @@ class _StaffDetails extends StatelessWidget {
         // than the property, because this screen already names the PG in its header and
         // repeating it on both cards would be furniture. The shape is the design's: a step up
         // the container ramp, a square icon badge, a `label-caps` eyebrow over the value.
-        if (member.email != null || member.phone != null) ...[
+        if (hasContact || showPgs) ...[
           const SizedBox(height: Space.sm),
           FlatSurface(
             weight: GlassWeight.regular,
@@ -483,6 +584,25 @@ class _StaffDetails extends StatelessWidget {
                     label: 'Phone',
                     text: member.phone!,
                   ),
+                if (showPgs && workingIn != null) ...[
+                  if (hasContact) const SizedBox(height: Space.sm),
+                  _DetailLine(
+                    icon: Icons.apartment_rounded,
+                    // A deactivated member is working nowhere. The PG is still worth naming,
+                    // because it is where they land if they are reactivated.
+                    label: active ? 'Working in now' : 'Last worked in',
+                    text: workingIn,
+                  ),
+                ],
+                if (showPgs && others.isNotEmpty) ...[
+                  const SizedBox(height: Space.sm),
+                  _DetailLine(
+                    icon: Icons.domain_rounded,
+                    label: others.length == 1 ? 'Other PG' : 'Other PGs',
+                    text: others.join(', '),
+                    maxLines: 3,
+                  ),
+                ],
               ],
             ),
           ),
@@ -493,11 +613,20 @@ class _StaffDetails extends StatelessWidget {
 }
 
 class _DetailLine extends StatelessWidget {
-  const _DetailLine({required this.icon, required this.label, required this.text});
+  const _DetailLine({
+    required this.icon,
+    required this.label,
+    required this.text,
+    this.maxLines = 1,
+  });
 
   final IconData icon;
   final String label;
   final String text;
+
+  /// One line for an id or a number. A list of PG names may take a few, rather than cutting
+  /// the one the owner is looking for off the end.
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -521,7 +650,7 @@ class _DetailLine extends StatelessWidget {
               Text(
                 text,
                 style: t.textTheme.bodyMedium,
-                maxLines: 1,
+                maxLines: maxLines,
                 overflow: TextOverflow.ellipsis,
               ),
             ],
@@ -538,7 +667,11 @@ class _DetailLine extends StatelessWidget {
 /// owner who thinks it only hides them from a list will hand the PG to their replacement
 /// without doing it at all.
 class _DeactivationNote extends StatelessWidget {
-  const _DeactivationNote();
+  const _DeactivationNote({required this.severalPgs});
+
+  /// The owner has two or more PGs, so a staff member may hold several and "deactivate" and
+  /// "take away this PG" are different things worth telling apart.
+  final bool severalPgs;
 
   @override
   Widget build(BuildContext context) {
@@ -558,9 +691,13 @@ class _DeactivationNote extends StatelessWidget {
           const SizedBox(width: Space.xs),
           Expanded(
             child: Text(
-              'Deactivating keeps the record and the history — the expenses a manager entered '
-              'and the residents a warden registered all stay. It only takes away their access, '
-              'and it frees a place so you can add somebody else.',
+              severalPgs
+                  ? 'Deactivating keeps the record and the history. It takes away their access '
+                      'to every PG they hold and frees a place in each. To take away one PG '
+                      'only, use PG access.'
+                  : 'Deactivating keeps the record and the history — the expenses a manager '
+                      'entered and the residents a warden registered all stay. It only takes '
+                      'away their access, and it frees a place so you can add somebody else.',
               style: t.textTheme.bodySmall,
             ),
           ),

@@ -4,6 +4,7 @@ import * as React from "react";
 import { FileText, ImageIcon, Save, UploadCloud, X } from "lucide-react";
 import { createExpense, updateExpense } from "@/lib/actions/manager";
 import { useAction } from "@/hooks/use-action";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 import { EXPENSE_CATEGORIES, type ExpenseRow } from "@/lib/types";
 import { cn, titleCase, toISODate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -43,7 +44,9 @@ export function ExpenseForm({
   // Default date is computed on the client so "today" follows the manager's timezone.
   const [defaultDate] = React.useState(() => initial?.date ?? toISODate());
 
-  const action = mode === "create" ? createExpense : updateExpense;
+  const create = useHostelBound(createExpense);
+  const update = useHostelBound(updateExpense);
+  const action = mode === "create" ? create : update;
   const { run, pending } = useAction(action, {
     onSuccess: () => {
       setErrors({});

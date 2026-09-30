@@ -17,6 +17,7 @@ import type { FreeBed, RoomDetail } from "@/lib/queries/warden";
 import type { RoomOccupancyRow } from "@/lib/types";
 import { cn, formatDate, formatINR } from "@/lib/utils";
 import { EditRoomSheet } from "./room-list";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 
 type BedCard = RoomDetail["beds"][number] & { photoUrl: string | null };
 type Occupant = NonNullable<BedCard["student"]>;
@@ -232,7 +233,8 @@ function ReassignSheet({
   const [freeBeds, setFreeBeds] = React.useState<FreeBed[] | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
-  const { run, pending } = useAction(reassignBed, { onSuccess: () => onOpenChange(false) });
+  const reassign = useHostelBound(reassignBed);
+  const { run, pending } = useAction(reassign, { onSuccess: () => onOpenChange(false) });
 
   React.useEffect(() => {
     if (!target) return;
@@ -350,7 +352,8 @@ function VacateDialog({
   roomNumber: string;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { run, pending } = useAction(vacateStudent, { onSuccess: () => onOpenChange(false) });
+  const vacate = useHostelBound(vacateStudent);
+  const { run, pending } = useAction(vacate, { onSuccess: () => onOpenChange(false) });
   return (
     <Dialog open={!!target} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">

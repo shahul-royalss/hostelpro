@@ -80,6 +80,9 @@ export async function requestAccountDeletion(input: {
     // must not be refused because the hostel's subscription lapsed (Hard rule §4.4 gates
     // *hostel* writes). A read-only tenant still owes its residents this path, and a deletion
     // route that fails on an expired plan is, for Play's purposes, no route at all.
+    // For the same reason it takes no stale form guard (assertWritableContextFor): the request is
+    // about the ACCOUNT, not the data of the PG a warden happens to be in, and whichever of their
+    // PGs it is filed from, it reaches the same owner.
     const { user, ctx } = await assertHostelContext("student", "warden", "manager", "owner");
 
     const rl = await rateLimit(`account:deletion:${user.id}`, REQUEST_LIMIT.max, REQUEST_LIMIT.windowSeconds);
@@ -101,8 +104,12 @@ export async function requestAccountDeletion(input: {
     let notifiedCount = 0;
     if (recipients.length) {
       try {
+        // The PG is named because a warden or owner may look after several: without it, a shared
+        // warden could not tell which building's resident is asking.
         const body =
           user.full_name +
+          " at " +
+          ctx.hostel.name +
           " asked for their NIVORA account and personal data to be deleted." +
           (reason ? ' Reason: "' + reason.slice(0, REASON_IN_NOTIFICATION) + '"' : "") +
           " Verify who they are in person before acting.";
@@ -246,9 +253,12 @@ interface Recipient {
  *  • warden / manager → the owner, who created the account and is the only one who can remove it
  *  • owner            → the Super Admin; nobody inside the tenant is above them
  *
- * Mirrors `app.complaints_after_change()`: wardens are matched on `users.hostel_id`, the owner
- * on `hostels.owner_user_id` (an owner with several hostels may carry a different `hostel_id`).
- * The requester is never notified about their own request.
+ * Wardens are matched on `staff_hostel_access`: every active warden ALLOWED into the hostel, not
+ * only the ones whose `users.hostel_id` (the PG they are working in right now) points at it. A
+ * warden shared between two PGs who happens to be in the other one today still has to vacate
+ * this resident, so they are told. The owner is matched on `hostels.owner_user_id` (an owner with
+ * several hostels may carry a different `hostel_id`). The requester is never notified about
+ * their own request.
  */
 async function recipientsFor(user: SessionUser, hostelId: string, ownerUserId: string): Promise<Recipient[]> {
   const admin = createAdminClient();
@@ -264,14 +274,18 @@ async function recipientsFor(user: SessionUser, hostelId: string, ownerUserId: s
     for (const r of (data ?? []) as { id: string }[]) out.push({ id: r.id, role: "super_admin" });
   } else {
     if (user.role === "student") {
-      const { data } = await admin
-        .from("users")
-        .select("id")
-        .eq("role", "warden")
-        .eq("hostel_id", hostelId)
-        .eq("status", "active")
-        .is("deleted_at", null);
-      for (const r of (data ?? []) as { id: string }[]) out.push({ id: r.id, role: "warden" });
+      const { data: access } = await admin.from("staff_hostel_access").select("user_id").eq("hostel_id", hostelId);
+      const staffIds = ((access ?? []) as { user_id: string }[]).map((r) => r.user_id);
+      if (staffIds.length) {
+        const { data } = await admin
+          .from("users")
+          .select("id")
+          .in("id", staffIds)
+          .eq("role", "warden")
+          .eq("status", "active")
+          .is("deleted_at", null);
+        for (const r of (data ?? []) as { id: string }[]) out.push({ id: r.id, role: "warden" });
+      }
     }
     const { data: owner } = await admin
       .from("users")

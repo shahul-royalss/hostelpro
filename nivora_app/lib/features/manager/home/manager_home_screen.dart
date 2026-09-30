@@ -9,6 +9,7 @@ import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
 import '../../../shared/dashboard.dart';
 import '../../common/refresh.dart';
+import '../../common/staff_hostel_switcher.dart';
 import '../data/manager_models.dart';
 import '../../auth/verify_email_screen.dart';
 import '../data/manager_providers.dart';
@@ -70,8 +71,8 @@ class ManagerHomeScreen extends ConsumerWidget {
           child: EmptyNote(
             icon: Icons.home_work_outlined,
             title: 'No hostel on this account',
-            detail: 'A manager is attached to exactly one hostel. Ask the owner to check the '
-                'assignment — until then there is nothing to show.',
+            detail: 'Ask the owner to give you access to a PG. Until then there is nothing to '
+                'show.',
           ),
         ),
       );
@@ -102,6 +103,9 @@ class ManagerHomeScreen extends ConsumerWidget {
           ref.invalidate(taskLoadProvider(hostelId));
           ref.invalidate(managerFinanceProvider(hostelId));
           ref.invalidate(tasksProvider);
+          // So a PG the owner has just given this manager access to brings the Switch PG
+          // control with it on a pull, rather than only after the next sign-in.
+          ref.invalidate(myStaffHostelsProvider);
           return settleRefresh(
               context, () => ref.read(managerFinanceProvider(hostelId).future));
         },
@@ -112,6 +116,10 @@ class ManagerHomeScreen extends ConsumerWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             const VerifyEmailBanner(),
+            // Which PG every figure below belongs to, and the Switch PG control for a manager
+            // with two or more. The masthead carries the greeting and not the property.
+            StaffHostelBar(hostelId: hostelId),
+            const SizedBox(height: Space.md),
             _HostelStatus(hostelId: hostelId, hostel: hostel),
             // Banded like every other role's home — see shared/dashboard.dart. The tiles below
             // were already tinted, one figure each, so this names the groups rather than

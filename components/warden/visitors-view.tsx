@@ -13,6 +13,7 @@ import { GlassCard } from "@/components/shared/glass-card";
 import { Chip, StatusPill } from "@/components/shared/status-pill";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useAction } from "@/hooks/use-action";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 import { checkOutVisitor, logVisitor, searchStudents } from "@/lib/actions/warden";
 import type { StudentOption, VisitorWithStudent } from "@/lib/queries/warden";
 import { cn, formatDate } from "@/lib/utils";
@@ -123,7 +124,8 @@ export function VisitorsView({
 }
 
 function VisitorCard({ visitor: v, writable }: { visitor: VisitorWithStudent; writable: boolean }) {
-  const { run, pending } = useAction(checkOutVisitor);
+  const checkOut = useHostelBound(checkOutVisitor);
+  const { run, pending } = useAction(checkOut);
   const inside = !v.check_out_at;
   return (
     <GlassCard as="article" className="p-4" aria-label={`Visitor ${v.visitor_name}`}>
@@ -181,7 +183,8 @@ function LogVisitorSheet({ open, onOpenChange }: { open: boolean; onOpenChange: 
   const [relation, setRelation] = React.useState<string>("");
   const [checkIn, setCheckIn] = React.useState(localNow());
   const [errors, setErrors] = React.useState<Record<string, string>>({});
-  const { run, pending } = useAction(logVisitor, { onSuccess: () => onOpenChange(false) });
+  const log = useHostelBound(logVisitor);
+  const { run, pending } = useAction(log, { onSuccess: () => onOpenChange(false) });
 
   React.useEffect(() => {
     if (open) {

@@ -23,6 +23,7 @@ import type { FreeBed } from "@/lib/queries/warden";
 import type { FloorRow, RoomOccupancyRow } from "@/lib/types";
 import { cn, formatDate, formatINR, toISODate } from "@/lib/utils";
 import { StickyBar } from "./sticky-bar";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 
 const STEPS = ["Personal", "Guardian", "ID proof", "Room & fee", "Review"] as const;
 const STEP_FIELDS: FieldPath<RegisterFormValues>[][] = [
@@ -72,6 +73,7 @@ export function RegisterStudentForm({
 
   const [step, setStep] = React.useState(0);
   const [pending, startTransition] = React.useTransition();
+  const registerHere = useHostelBound(registerStudent);
   const [photo, setPhoto] = React.useState<File | null>(null);
   const [idProof, setIdProof] = React.useState<File | null>(null);
   const [floor, setFloor] = React.useState<number | null>(preselected?.floor_number ?? floors[0]?.floor_number ?? null);
@@ -161,7 +163,7 @@ export function RegisterStudentForm({
     if (photo) fd.set("photo", photo);
     fd.set("idProof", idProof);
     startTransition(async () => {
-      const res = await registerStudent(fd);
+      const res = await registerHere(fd);
       if (!res.ok) {
         toast.error(res.error);
         if (res.fieldErrors) {

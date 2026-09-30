@@ -11,6 +11,7 @@ import { Metric, MetricGrid } from "@/components/dashboard/metric-grid";
 import { ActionRow, PrimaryAction, SecondaryAction } from "@/components/dashboard/primary-action";
 import { longMonth, monthDeadlineShort, monthProgress, previousPeriod, shortMonth, plural } from "@/components/dashboard/period";
 import { DashboardTasks } from "@/components/manager/dashboard-tasks";
+import { RenderedHostel } from "@/components/shell/rendered-hostel";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +85,7 @@ export default async function ManagerDashboardPage() {
   const ranked = [...categories].sort((a, b) => b.value - a.value);
 
   return (
-    <>
+    <RenderedHostel hostelId={hostelId}>
       {/* The hostel name lives in the top bar and nowhere else on this page. */}
       <header className="mb-6">
         <h1 className="text-title-sm md:text-title text-navy">
@@ -271,6 +272,6 @@ export default async function ManagerDashboardPage() {
           </section>
         </div>
       </div>
-    </>
+    </RenderedHostel>
   );
 }

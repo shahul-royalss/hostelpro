@@ -4,6 +4,7 @@ import * as React from "react";
 import { Coffee, Cookie, Moon, RotateCcw, Save, Sun, type LucideIcon } from "lucide-react";
 import { saveMenu } from "@/lib/actions/manager";
 import { useAction } from "@/hooks/use-action";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 import { DAYS_OF_WEEK, DAY_LABEL, MEALS, MEAL_LABEL, MEAL_TIMING, type DayOfWeek, type MealType, type MenuRow } from "@/lib/types";
 import { cn, formatDateTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -91,7 +92,8 @@ export function MenuEditor({ rows, writable }: { rows: MenuRow[]; writable: bool
   const filled = DAYS_OF_WEEK.reduce((n, d) => n + MEALS.filter((m) => grid[d][m].trim().length > 0).length, 0);
   const lastUpdated = rows.reduce<string | null>((latest, r) => (!latest || r.updated_at > latest ? r.updated_at : latest), null);
 
-  const { run, pending } = useAction(saveMenu, {
+  const save = useHostelBound(saveMenu);
+  const { run, pending } = useAction(save, {
     onSuccess: () => setSaved(grid),
   });
 

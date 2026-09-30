@@ -68,8 +68,19 @@ export async function deleteAuthUser(userId: string) {
 
 /**
  * Create a staff/owner account (owner | manager | warden) + its public.users row.
- * The role-limit trigger (1 manager / 1 warden per hostel) fires on the insert and
+ * The role-limit trigger (5 managers / 5 wardens per PG) fires on the insert and
  * surfaces a friendly message; on failure the auth user is deleted again.
+ *
+ * MULTI-PG STAFF. `hostelIds` lists every PG a manager/warden may work in; the first is where
+ * they start (users.hostel_id, their active PG). The users insert's AFTER INSERT trigger writes
+ * the staff_hostel_access row for that first PG, and this function writes the rest.
+ *
+ * SECURITY: this is a service-role write, which bypasses RLS, so ownership is checked here and
+ * not assumed from the caller: every id must be a hostel whose owner_user_id is `createdBy`,
+ * read from the database BEFORE anything is created. That keeps an owner from minting access to
+ * someone else's PG even if a caller forgets its own check (lib/actions/owner.ts does check,
+ * against the same column). Any failure after the auth user exists deletes it again, which
+ * cascades to its users row and every access row, so nothing half-made is left behind.
  */
 export async function createStaffAccount(args: {
   role: Extract<UserRole, "owner" | "manager" | "warden">;
@@ -77,17 +88,34 @@ export async function createStaffAccount(args: {
   email: string;
   phone?: string | null;
   hostelId?: string | null; // owner: null at creation (set by sa_create_hostel_with_subscription)
+  /** manager / warden only: every PG they may work in, the first being where they start. Overrides hostelId. */
+  hostelIds?: string[];
   createdBy: string;
 }): Promise<CreatedAccount> {
   const admin = createAdminClient();
   const email = args.email.trim().toLowerCase();
   const phone = args.phone ? normalizePhone(args.phone) : null;
+
+  const hostelIds = args.hostelIds ? [...new Set(args.hostelIds)] : null;
+  if (hostelIds) {
+    if (args.role === "owner") throw new Error("An owner account is not given staff PG access.");
+    if (hostelIds.length === 0) throw new Error("Choose at least one PG.");
+    const { data: owned, error: ownedError } = await admin
+      .from("hostels")
+      .select("id")
+      .in("id", hostelIds)
+      .eq("owner_user_id", args.createdBy);
+    if (ownedError) throw new Error("Could not check your PGs. Please try again.");
+    if ((owned ?? []).length !== hostelIds.length) throw new Error("You can only give access to your own PGs.");
+  }
+  const hostelId = hostelIds ? hostelIds[0] : args.hostelId ?? null;
+
   const { userId, password } = await createAuthUser({
     role: args.role,
     email,
     fullName: args.fullName,
     phone,
-    hostelId: args.hostelId ?? null,
+    hostelId,
   });
 
   const { error } = await admin.from("users").insert({
@@ -96,7 +124,7 @@ export async function createStaffAccount(args: {
     full_name: args.fullName.trim(),
     email,
     phone,
-    hostel_id: args.hostelId ?? null,
+    hostel_id: hostelId,
     status: "active",
     must_change_password: true,
     created_by: args.createdBy,
@@ -104,6 +132,25 @@ export async function createStaffAccount(args: {
   if (error) {
     await deleteAuthUser(userId);
     throw new Error(error.message);
+  }
+
+  const extra = hostelIds ? hostelIds.slice(1) : [];
+  if (extra.length) {
+    // ignoreDuplicates: should the trigger ever write more than the first row, re-adding one is
+    // not an error. Any limit the database enforces on these rows still raises, and rolls back.
+    const { error: accessError } = await admin
+      .from("staff_hostel_access")
+      .upsert(
+        extra.map((id) => ({ user_id: userId, hostel_id: id, granted_by: args.createdBy })),
+        { onConflict: "user_id,hostel_id", ignoreDuplicates: true },
+      );
+    if (accessError) {
+      await deleteAuthUser(userId);
+      // Keeps the SQLSTATE, so errorMessage() shows the guard's P0001 sentence (the staff limit,
+      // "your own PGs") word for word and turns anything else into its generic message instead
+      // of putting a raw database error in front of the owner.
+      throw Object.assign(new Error(accessError.message), { code: accessError.code });
+    }
   }
   return { userId, loginId: email, password };
 }

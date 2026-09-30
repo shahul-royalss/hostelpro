@@ -11,6 +11,7 @@ import { GlassCard } from "@/components/shared/glass-card";
 import { Chip, StatusPill } from "@/components/shared/status-pill";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useAction } from "@/hooks/use-action";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 import { decideLeave } from "@/lib/actions/warden";
 import type { LeaveWithStudent } from "@/lib/queries/warden";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
@@ -132,7 +133,8 @@ export function LeavesView({ leaves, writable }: { leaves: LeaveWithStudent[]; w
 
 function DecideDialog({ target, onOpenChange }: { target: { leave: LeaveWithStudent; status: "approved" | "rejected" } | null; onOpenChange: (open: boolean) => void }) {
   const [note, setNote] = React.useState("");
-  const { run, pending } = useAction(decideLeave, { onSuccess: () => onOpenChange(false) });
+  const decide = useHostelBound(decideLeave);
+  const { run, pending } = useAction(decide, { onSuccess: () => onOpenChange(false) });
   React.useEffect(() => {
     if (target) setNote("");
   }, [target]);

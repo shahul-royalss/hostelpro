@@ -44,7 +44,8 @@ class StaffCredentialsDialog extends StatefulWidget {
 
   final IssuedStaffCredentials credentials;
 
-  /// Named in the heading, so an owner with several PGs knows which one this login is for.
+  /// Named in the heading, so an owner with several PGs knows which one this login is for. For
+  /// an account given several PGs, their names joined.
   final String? hostelName;
 
   /// Presents it. Returns when the owner has confirmed they have saved the password — there is
@@ -116,10 +117,12 @@ class _StaffCredentialsDialogState extends State<StaffCredentialsDialog> {
                       Text('${c.roleLabel} account created',
                           style: t.textTheme.titleLarge, textAlign: TextAlign.center),
                       if (widget.hostelName != null)
+                        // Two lines, because an account made for several PGs names them all,
+                        // and the one cut off the end is the one the owner will look for.
                         Text(widget.hostelName!,
                             style: t.textTheme.bodySmall,
                             textAlign: TextAlign.center,
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis),
                       const SizedBox(height: Space.sm),
                       Text(

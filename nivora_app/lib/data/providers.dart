@@ -18,6 +18,7 @@ import 'repositories/menu_repository.dart';
 import 'repositories/notice_repository.dart';
 import 'repositories/push_repository.dart';
 import 'repositories/room_repository.dart';
+import 'repositories/staff_access_repository.dart';
 import 'repositories/student_repository.dart';
 import 'repositories/task_repository.dart';
 
@@ -132,6 +133,19 @@ final financeRepositoryProvider = Provider<FinanceRepository>(
 
 final dashboardRepositoryProvider = Provider<DashboardRepository>(
   (ref) => DashboardRepository(ref.watch(supabaseClientProvider)),
+);
+
+/// Which PGs a warden or manager may work in, and moving between them.
+/// public.my_staff_hostels + public.staff_switch_hostel.
+final staffAccessRepositoryProvider = Provider<StaffAccessRepository>(
+  (ref) => StaffAccessRepository(ref.watch(supabaseClientProvider)),
+);
+
+/// The same two calls, TYPED BY THE INTERFACE, so a test can stand in for them without a
+/// network or a Supabase client. See [StaffHostelAccess]: same shape and same reasoning as
+/// [feeDeskProvider] below.
+final staffHostelAccessProvider = Provider<StaffHostelAccess>(
+  (ref) => ref.watch(staffAccessRepositoryProvider),
 );
 
 /// Taking money at the desk. public.wd_record_payment + public.wd_correct_payment.
@@ -706,9 +720,49 @@ final noticeAuthorsProvider =
 });
 
 /// Who to call about what. public.st_hostel_contacts.
+///
+/// UNKEYED, AND THE ONE UNKEYED READ THAT CAN GO STALE UNDER A SWITCH. The function resolves
+/// the hostel itself from `app.user_hostel_id()`, so nothing in this provider's arguments says
+/// which PG the answer is about. For a resident that never changes. For a warden it is the PG
+/// they are working in, and since staff_hostel_access that can move: the warden's receipt
+/// prints the PG name from here, and a held answer would put the previous PG's name on a
+/// receipt for money taken in this one.
+///
+/// So it WATCHES the session's hostel id, which is the same column the function reads. When a
+/// switch (on this device, another one, or the website) is republished, this rebuilds and asks
+/// again. The switch path also invalidates it explicitly; the watch is what covers every other
+/// path that republishes a session.
 final hostelContactsProvider = FutureProvider.autoDispose<HostelContacts?>((ref) {
   holdForSession(ref);
+  ref.watch(currentHostelIdProvider);
   return ref.watch(hostelRepositoryProvider).contacts();
+});
+
+/// Every PG the signed-in warden or manager may work in. public.my_staff_hostels.
+///
+/// Its only job is to decide whether a Switch PG control is drawn, and to list the choices when
+/// it is. Fewer than two rows means there is nothing to switch to, which is every warden today.
+///
+/// EMPTY WITHOUT A ROUND TRIP for every other role. Not as a permission check (the function
+/// returns no rows to them anyway) but because an owner, a resident or a super admin asking is
+/// a request whose answer is known before it is sent.
+///
+/// Session-held: it backs a control on the home screen and the profile sheet, which must not
+/// flicker back to "loading" on every visit. It watches the session's hostel id so the
+/// `is_active` flag follows a switch made anywhere, and the switch path invalidates it too.
+///
+/// A FAILED READ DRAWS NO SWITCHER, and that is deliberate rather than an oversight. The
+/// warden's PG name still comes from the hostel row, and the switcher is a convenience for
+/// the few with more than one PG: an error card on every warden's home because this one
+/// call failed would be a regression for all of them.
+final myStaffHostelsProvider = FutureProvider.autoDispose<List<StaffHostel>>((ref) {
+  holdForSession(ref);
+  final role = ref.watch(sessionProvider.select((s) => s?.role));
+  if (role != UserRole.warden && role != UserRole.manager) {
+    return Future.value(const <StaffHostel>[]);
+  }
+  ref.watch(currentHostelIdProvider);
+  return ref.watch(staffHostelAccessProvider).myHostels();
 });
 
 /// One resident's payment history. public.fee_payments.

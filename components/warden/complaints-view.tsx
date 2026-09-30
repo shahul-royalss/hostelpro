@@ -13,6 +13,7 @@ import { Chip, StatusPill } from "@/components/shared/status-pill";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ComplaintTimeline } from "@/components/shared/complaint-timeline";
 import { useAction } from "@/hooks/use-action";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 import { updateComplaintStatus } from "@/lib/actions/complaints";
 import type { ComplaintWithStudent } from "@/lib/queries/warden";
 import type { ComplaintCategory, ComplaintStatus } from "@/lib/types";
@@ -121,7 +122,8 @@ export function ComplaintsView({ complaints, writable }: { complaints: Complaint
 
 function ComplaintSheet({ complaint: c, writable, onOpenChange }: { complaint: ComplaintItem | null; writable: boolean; onOpenChange: (open: boolean) => void }) {
   const [note, setNote] = React.useState("");
-  const { run, pending } = useAction(updateComplaintStatus, { onSuccess: () => onOpenChange(false) });
+  const update = useHostelBound(updateComplaintStatus);
+  const { run, pending } = useAction(update, { onSuccess: () => onOpenChange(false) });
   React.useEffect(() => {
     if (c) setNote(c.resolution_note ?? "");
   }, [c]);

@@ -3,6 +3,7 @@ import { requireHostelContext } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { getRevenues, resolvePeriod } from "@/lib/queries/manager";
 import { PageHeader } from "@/components/shared/page-header";
+import { RenderedHostel } from "@/components/shell/rendered-hostel";
 import { GlassCard, GlassCardHeader } from "@/components/shared/glass-card";
 import { RevenueForm } from "@/components/manager/revenue-form";
 import { RevenueTable } from "@/components/manager/revenue-table";
@@ -17,7 +18,8 @@ export default async function ManagerRevenuePage({ searchParams }: { searchParam
   const rows = await getRevenues(supabase, ctx.hostel.id, period);
 
   return (
-    <>
+    <RenderedHostel hostelId={ctx.hostel.id}>
+      {/* Stale form guard: the writes below carry the PG this page was rendered for. */}
       <PageHeader title="Daily revenue" description={`Record fees, mess and other collections for ${ctx.hostel.name}.`} />
 
       <GlassCard>
@@ -38,6 +40,6 @@ export default async function ManagerRevenuePage({ searchParams }: { searchParam
       <div className="mt-6">
         <RevenueTable rows={rows} month={period} writable={ctx.writable} />
       </div>
-    </>
+    </RenderedHostel>
   );
 }

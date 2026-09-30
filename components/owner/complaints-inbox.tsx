@@ -9,6 +9,7 @@ import type { ComplaintEventRow, ComplaintStatus } from "@/lib/types";
 import type { ComplaintFilter, ComplaintListItem, ComplaintsInboxResult } from "@/lib/queries/owner";
 import { updateComplaintStatus } from "@/lib/actions/complaints";
 import { useAction } from "@/hooks/use-action";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 import { cn, formatDateTime, formatNumber, titleCase } from "@/lib/utils";
 import { GlassCard } from "@/components/shared/glass-card";
 import { SegmentedPills } from "@/components/shared/segmented";
@@ -206,7 +207,8 @@ export function ComplaintsInbox({
 function ComplaintDetail({ selected, writable }: { selected: SelectedComplaint; writable: boolean }) {
   const { complaint: c, events, photoUrl } = selected;
   const [note, setNote] = React.useState(c.resolution_note ?? "");
-  const { run, pending } = useAction(updateComplaintStatus, { refresh: true });
+  const update = useHostelBound(updateComplaintStatus);
+  const { run, pending } = useAction(update, { refresh: true });
   const noteDirty = (note.trim() || null) !== (c.resolution_note ?? null);
 
   const submit = (status: ComplaintStatus) => run({ complaintId: c.id, status, resolutionNote: note.trim() || null });

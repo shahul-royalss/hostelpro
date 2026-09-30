@@ -188,12 +188,22 @@ export async function fetchOwners(supabase: SupabaseClient): Promise<SaOwnerOpti
   return ((users ?? []) as Omit<SaOwnerOption, "hostel_count">[]).map((u) => ({ ...u, hostel_count: counts.get(u.id) ?? 0 }));
 }
 
-/** Manager + warden accounts of a hostel (active first). */
+/**
+ * Manager + warden accounts of a hostel (active first).
+ *
+ * "Of a hostel" means allowed into it (staff_hostel_access), not working in it right now
+ * (users.hostel_id): staff shared between an owner's PGs are listed on each. The Super Admin can
+ * read every access row and every users row, so two plain reads do it.
+ */
 export async function fetchHostelStaff(supabase: SupabaseClient, hostelId: string): Promise<UserRow[]> {
+  const { data: access, error: accessError } = await supabase.from("staff_hostel_access").select("user_id").eq("hostel_id", hostelId);
+  if (accessError) throw accessError;
+  const ids = ((access ?? []) as { user_id: string }[]).map((r) => r.user_id);
+  if (ids.length === 0) return [];
   const { data, error } = await supabase
     .from("users")
     .select("*")
-    .eq("hostel_id", hostelId)
+    .in("id", ids)
     .in("role", ["manager", "warden"])
     .is("deleted_at", null)
     .order("status", { ascending: true })

@@ -13,7 +13,7 @@ import {
   fetchSubscriptionHistory,
 } from "@/lib/queries/super-admin";
 import { formatDate, formatINR, formatINRCompact, formatNumber, percent } from "@/lib/utils";
-import { ROLE_LABEL } from "@/lib/roles";
+import { ROLE_LABEL, ROLE_LIMITS } from "@/lib/roles";
 import { PageHeader } from "@/components/shared/page-header";
 import { GlassCard, GlassCardHeader } from "@/components/shared/glass-card";
 import { StatCard } from "@/components/shared/stat-card";
@@ -65,8 +65,10 @@ export default async function HostelDetailPage({ params }: { params: Promise<{ i
   const complaintsData = complaintsWeekly.map((w) => ({ week: formatDate(w.week_start, "d MMM"), complaints: w.complaints }));
   const hasComplaints = complaintsWeekly.some((w) => w.complaints > 0);
 
-  const manager = staff.find((u) => u.role === "manager" && u.status === "active") ?? staff.find((u) => u.role === "manager") ?? null;
-  const warden = staff.find((u) => u.role === "warden" && u.status === "active") ?? staff.find((u) => u.role === "warden") ?? null;
+  // Everyone with access to this PG, active first (fetchHostelStaff's order). Up to five of each
+  // role can be active, so showing only the first would hide most of them.
+  const managers = staff.filter((u) => u.role === "manager");
+  const wardens = staff.filter((u) => u.role === "warden");
   const renewTarget = { hostelId: hostel.hostel_id, hostelName: hostel.hostel_name, currentEnd: hostel.sub_end, defaultAmount: hostel.sub_amount };
   const effectiveStatus = hostel.hostel_status === "suspended" ? "suspended" : hostel.sub_state;
 
@@ -200,10 +202,10 @@ export default async function HostelDetailPage({ params }: { params: Promise<{ i
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6">
           <GlassCard>
-            <GlassCardHeader title="Staff" description="One manager and one warden per hostel" />
+            <GlassCardHeader title="Staff" description={`Up to ${ROLE_LIMITS.manager} active managers and ${ROLE_LIMITS.warden} active wardens per PG`} />
             <div className="space-y-3">
-              <StaffCard role="manager" user={manager} />
-              <StaffCard role="warden" user={warden} />
+              {managers.length ? managers.map((u) => <StaffCard key={u.id} role="manager" user={u} />) : <StaffCard role="manager" user={null} />}
+              {wardens.length ? wardens.map((u) => <StaffCard key={u.id} role="warden" user={u} />) : <StaffCard role="warden" user={null} />}
             </div>
           </GlassCard>
           <GlassCard>

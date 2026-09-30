@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { assertHostelContext, assertWritableContext, errorMessage } from "@/lib/permissions";
+import { assertHostelContext, assertWritableContextFor, errorMessage } from "@/lib/permissions";
 import { createStudentAuthUser, deleteAuthUser } from "@/lib/auth/accounts";
 import { removeFromBucket, uploadToBucket } from "@/lib/storage";
 import { audit } from "@/lib/audit";
@@ -19,6 +19,14 @@ import {
   updateRoomSchema,
   vacateStudentSchema,
 } from "@/lib/validators/warden";
+
+/**
+ * Warden server actions. Every WRITE takes `renderedHostelId` first: the PG the page was rendered
+ * for, bound on the client by useHostelBound(). assertWritableContextFor() refuses the write when
+ * the warden has switched PG since (lib/permissions.ts explains why). Reads (fetchFreeBeds,
+ * searchStudents) do not need it: a stale read cannot land anywhere, and the write it feeds is
+ * checked.
+ */
 
 function flatten(err: { flatten: () => { fieldErrors: Record<string, string[] | undefined> } }) {
   const fe = err.flatten().fieldErrors;
@@ -45,7 +53,7 @@ export interface RegisterStudentResult {
  * wd_register_student RPC (users + students rows, bed occupied, RLS-checked).
  * If the DB half fails the auth user is deleted again (no orphan logins).
  */
-export async function registerStudent(formData: FormData): Promise<ActionResult<RegisterStudentResult>> {
+export async function registerStudent(renderedHostelId: string, formData: FormData): Promise<ActionResult<RegisterStudentResult>> {
   const raw = {
     fullName: formData.get("fullName"),
     phone: formData.get("phone"),
@@ -73,7 +81,7 @@ export async function registerStudent(formData: FormData): Promise<ActionResult<
   let photoPath: string | null = null;
   let idProofPath: string | null = null;
   try {
-    const { user, ctx } = await assertWritableContext("warden");
+    const { user, ctx } = await assertWritableContextFor(renderedHostelId, "warden");
     const hostelId = ctx.hostel.id;
     const rl = await rateLimit(`warden:register:${user.id}`, LIMITS.accountCreatePerUser.max, LIMITS.accountCreatePerUser.windowSeconds);
     if (!rl.allowed) return fail("Too many registrations in a short time. Please wait a bit and try again.");
@@ -171,11 +179,11 @@ export async function searchStudents(input: { query?: string } = {}): Promise<Ac
 
 /* ───────────────────────── rooms (WD-3 / WD-4) ───────────────────────── */
 
-export async function updateRoom(input: { roomId: string; roomNumber: string; capacity: number }): Promise<ActionResult> {
+export async function updateRoom(renderedHostelId: string, input: { roomId: string; roomNumber: string; capacity: number }): Promise<ActionResult> {
   const parsed = updateRoomSchema.safeParse(input);
   if (!parsed.success) return fail("Please check the room details.", flatten(parsed.error));
   try {
-    const { ctx } = await assertWritableContext("warden");
+    const { ctx } = await assertWritableContextFor(renderedHostelId, "warden");
     const supabase = await createClient();
     const { error } = await supabase
       .from("rooms")
@@ -196,11 +204,11 @@ export async function updateRoom(input: { roomId: string; roomNumber: string; ca
   }
 }
 
-export async function reassignBed(input: { studentId: string; bedId: string }): Promise<ActionResult> {
+export async function reassignBed(renderedHostelId: string, input: { studentId: string; bedId: string }): Promise<ActionResult> {
   const parsed = reassignBedSchema.safeParse(input);
   if (!parsed.success) return fail("Pick a free bed.");
   try {
-    const { ctx } = await assertWritableContext("warden");
+    const { ctx } = await assertWritableContextFor(renderedHostelId, "warden");
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("students")
@@ -222,11 +230,11 @@ export async function reassignBed(input: { studentId: string; bedId: string }): 
   }
 }
 
-export async function vacateStudent(input: { studentId: string }): Promise<ActionResult> {
+export async function vacateStudent(renderedHostelId: string, input: { studentId: string }): Promise<ActionResult> {
   const parsed = vacateStudentSchema.safeParse(input);
   if (!parsed.success) return fail("Invalid student.");
   try {
-    const { ctx } = await assertWritableContext("warden");
+    const { ctx } = await assertWritableContextFor(renderedHostelId, "warden");
     const supabase = await createClient();
     const { error } = await supabase.rpc("wd_vacate_student", { p_student_id: parsed.data.studentId });
     if (error) return fail(errorMessage(error));
@@ -243,7 +251,7 @@ export async function vacateStudent(input: { studentId: string }): Promise<Actio
 
 /* ───────────────────────── fees (WD-5) ───────────────────────── */
 
-export async function recordPayment(input: {
+export async function recordPayment(renderedHostelId: string, input: {
   studentId: string;
   periodMonth: string;
   amount: number;
@@ -254,7 +262,7 @@ export async function recordPayment(input: {
   const parsed = recordPaymentSchema.safeParse(input);
   if (!parsed.success) return fail("Please check the payment details.", flatten(parsed.error));
   try {
-    const { user, ctx } = await assertWritableContext("warden");
+    const { user, ctx } = await assertWritableContextFor(renderedHostelId, "warden");
     const rl = await rateLimit(`warden:write:${user.id}`, LIMITS.writePerUser.max, LIMITS.writePerUser.windowSeconds);
     if (!rl.allowed) return fail("Too many operations in a short time. Please slow down and try again.");
     const supabase = await createClient();
@@ -282,11 +290,11 @@ export async function recordPayment(input: {
 
 /* ───────────────────────── leaves (WD-6) ───────────────────────── */
 
-export async function decideLeave(input: { leaveId: string; status: "approved" | "rejected"; note?: string }): Promise<ActionResult> {
+export async function decideLeave(renderedHostelId: string, input: { leaveId: string; status: "approved" | "rejected"; note?: string }): Promise<ActionResult> {
   const parsed = decideLeaveSchema.safeParse(input);
   if (!parsed.success) return fail("Invalid request.", flatten(parsed.error));
   try {
-    const { user, ctx } = await assertWritableContext("warden");
+    const { user, ctx } = await assertWritableContextFor(renderedHostelId, "warden");
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("leaves")
@@ -315,7 +323,7 @@ export async function decideLeave(input: { leaveId: string; status: "approved" |
 
 /* ───────────────────────── visitors (WD-6) ───────────────────────── */
 
-export async function logVisitor(input: {
+export async function logVisitor(renderedHostelId: string, input: {
   studentId: string;
   visitorName: string;
   visitorPhone?: string;
@@ -325,7 +333,7 @@ export async function logVisitor(input: {
   const parsed = logVisitorSchema.safeParse(input);
   if (!parsed.success) return fail("Please check the visitor details.", flatten(parsed.error));
   try {
-    const { user, ctx } = await assertWritableContext("warden");
+    const { user, ctx } = await assertWritableContextFor(renderedHostelId, "warden");
     const supabase = await createClient();
     const checkIn = new Date(parsed.data.checkInAt);
     if (Number.isNaN(checkIn.getTime())) return fail("Pick a valid check-in time.");
@@ -358,11 +366,11 @@ export async function logVisitor(input: {
   }
 }
 
-export async function checkOutVisitor(input: { visitorId: string }): Promise<ActionResult> {
+export async function checkOutVisitor(renderedHostelId: string, input: { visitorId: string }): Promise<ActionResult> {
   const parsed = checkOutVisitorSchema.safeParse(input);
   if (!parsed.success) return fail("Invalid visitor.");
   try {
-    const { ctx } = await assertWritableContext("warden");
+    const { ctx } = await assertWritableContextFor(renderedHostelId, "warden");
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("visitors")

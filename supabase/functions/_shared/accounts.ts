@@ -14,6 +14,7 @@ import { HttpError } from "./http.ts";
 import { generatePassword } from "./password.ts";
 import { serviceClient } from "./supabase.ts";
 import type { UserRole } from "./caller.ts";
+import type { PostgrestLikeError } from "./errors.ts";
 
 export interface CreatedAccount {
   userId: string;
@@ -128,23 +129,63 @@ async function createAuthUser(args: CreateAuthUserArgs): Promise<{ userId: strin
 }
 
 /**
- * Create an owner / manager / warden account: auth user, then the public.users row.
+ * Undo a half-created account and build the error to throw: the one rollback every failure in
+ * [createStaffAccount] goes through.
  *
- * The public.users insert is where the database's own rules fire — app.enforce_role_limits
- * (one active manager and one active warden per hostel) and the users_one_active_staff_per_hostel
- * unique index that settles the race the trigger's count(*) cannot. The service role bypasses
+ * Deleting the auth user is enough to undo everything written after it. public.users.id
+ * references auth.users ON DELETE CASCADE, and staff_hostel_access.user_id references
+ * public.users ON DELETE CASCADE, so the profile row and every access row (including the one
+ * the database wrote for the first PG) go with it.
+ */
+async function rollBack(error: PostgrestLikeError, userId: string): Promise<HttpError> {
+  const { dbError } = await import("./errors.ts");
+  const friendly = dbError(error).message;
+  return rollbackAwareError(friendly, userId, await deleteAuthUser(userId));
+}
+
+/**
+ * Create an owner / manager / warden account: auth user, then the public.users row, then any
+ * extra PG access rows.
+ *
+ * The public.users insert is where the database's own rules fire: the per-PG staff limit (five
+ * active managers and five active wardens, counted as staff WITH ACCESS to the PG, under an
+ * advisory lock that settles the race a bare count(*) cannot), and the AFTER INSERT trigger
+ * that gives a new manager or warden the access row for [hostelId]. The service role bypasses
  * RLS but NOT triggers, so those still decide. If the insert loses, the auth user is rolled
  * back and the rollback's own outcome is reported.
+ *
+ * [extraHostelIds] are then granted in ONE insert, so it is all of them or none. The database
+ * applies the same per-PG limit to every access row, whoever writes it. A refusal there rolls
+ * back exactly like a refused profile row: the database's own sentence (P0001, e.g. "This PG
+ * already has 5 active wardens. Remove one from it first.") reaches the owner, and nothing is
+ * left behind.
  */
 export async function createStaffAccount(args: {
   role: Extract<UserRole, "owner" | "manager" | "warden">;
   fullName: string;
   email: string;
   phone?: string | null;
-  /** owner: null at creation — sa_create_hostel_with_subscription sets it. */
+  /**
+   * owner: null at creation, sa_create_hostel_with_subscription sets it.
+   * manager / warden: the PG they start in (their active PG).
+   */
   hostelId?: string | null;
+  /**
+   * manager / warden only: the OTHER PGs they may switch into. Must not repeat [hostelId]; the
+   * database writes that access row itself, and a second copy would fail on the primary key.
+   * Every id must already be verified as the caller's (requireOwnedHostels): this function
+   * trusts its arguments, and the service role will insert whatever it is given.
+   */
+  extraHostelIds?: readonly string[];
   createdBy: string;
 }): Promise<CreatedAccount> {
+  // Refused here, before any account exists, rather than left to the database. An owner has no
+  // staff access rows by design (owners reach their PGs through hostels.owner_user_id), and the
+  // web twin in lib/auth/accounts.ts refuses the same case. No caller passes it today; this keeps
+  // a future one from creating an auth user only for the insert below to be rejected.
+  if (args.role === "owner" && args.extraHostelIds?.length) {
+    throw new HttpError(400, "An owner account is not given staff PG access.");
+  }
   const email = args.email.trim().toLowerCase();
   const { userId, password } = await createAuthUser({
     role: args.role,
@@ -165,10 +206,20 @@ export async function createStaffAccount(args: {
     must_change_password: true,
     created_by: args.createdBy,
   });
-  if (error) {
-    const { dbError } = await import("./errors.ts");
-    const friendly = dbError(error).message;
-    throw rollbackAwareError(friendly, userId, await deleteAuthUser(userId));
+  if (error) throw await rollBack(error, userId);
+
+  // SORTED, so every concurrent create takes the per-(PG, role) limit locks in the same order.
+  // The database's limit trigger locks row by row; two requests listing the same extra PGs in
+  // opposite orders (one owner on two devices, say) could otherwise deadlock (40P01), and one
+  // would be refused with a generic error. The ids are lowercase (they come from hostels rows),
+  // so this string order is the uuid order owner_set_staff_hostels and enforce_role_limits lock
+  // in. Order carries no meaning here: the active PG is [hostelId], not in this list.
+  const extra = [...(args.extraHostelIds ?? [])].sort();
+  if (extra.length) {
+    const { error: accessError } = await serviceClient()
+      .from("staff_hostel_access")
+      .insert(extra.map((hostelId) => ({ user_id: userId, hostel_id: hostelId, granted_by: args.createdBy })));
+    if (accessError) throw await rollBack(accessError, userId);
   }
   return { userId, loginId: email, password };
 }

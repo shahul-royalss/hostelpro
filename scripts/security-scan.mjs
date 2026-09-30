@@ -82,7 +82,15 @@ const SECRET_PATTERNS = [
 // show-once credentials-dialog tests assert on (owner_staff_test, warden_register_student_test).
 // They exist nowhere but those tests. The env-value check below still runs independently of
 // this list, so even a real secret pasted here would be caught the moment it matched .env.local.
-const ALLOW = /Owner@12345|Manager@12345|Warden@12345|Student@12345|ChangeMe!2026|NewPass@2026|AuditPass1|Tx7-quiet-lamp|Sage-7413-Kite|your-default-host|example\.com|placeholder|PASSWORD_MIN_LENGTH|password:\s*["']?\$\{|p_password|passwordStrength/i;
+// Tq7-mangrove-41 is the same kind of fixture: the temporary password a FAKE super-admin
+// "reset owner password" call returns in super_admin_controls_test.dart. It signs into nothing
+// and appears in no other file (checked with git grep, 2026-09-30).
+// The PEM entry matches ONLY the delimiter used as a .replace("...") argument: that is
+// push-send's importPrivateKey stripping the header and footer from a key it is PASSED, which
+// comes from an environment variable. A real key committed to the repo puts the delimiter
+// alone on its own line, never inside .replace(", so the "Private key block" pattern still
+// catches it. Do not widen this entry to the bare delimiter.
+const ALLOW = /Owner@12345|Manager@12345|Warden@12345|Student@12345|ChangeMe!2026|NewPass@2026|AuditPass1|Tx7-quiet-lamp|Sage-7413-Kite|Tq7-mangrove-41|\.replace\("-----(BEGIN|END) PRIVATE KEY-----"|your-default-host|example\.com|placeholder|PASSWORD_MIN_LENGTH|password:\s*["']?\$\{|p_password|passwordStrength/i;
 
 /**
  * Shape-independent leak check: take the ACTUAL secret values out of .env.local and look for

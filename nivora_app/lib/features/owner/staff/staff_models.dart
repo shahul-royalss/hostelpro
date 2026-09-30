@@ -64,6 +64,13 @@ enum StaffRole implements WireValue {
 /// pass at four — that lock replaced the `users_one_active_staff_per_hostel` unique index,
 /// which could only ever express "at most one". This constant exists so the screen can draw
 /// the limit and disable Add before the round trip; if the two disagree, this one is the bug.
+///
+/// COUNTED BY ACCESS, NOT BY WHERE PEOPLE ARE WORKING. Since `public.staff_hostel_access` a
+/// warden may hold several PGs and work in one at a time. The limit counts every active warden
+/// with ACCESS to a PG, wherever they are working right now, so switching cannot be used to
+/// squeeze a sixth into a PG and taking one PG away from somebody frees a place in it. The
+/// list this screen draws comes from the same set (`owner_hostel_staff`), so the count on the
+/// card is the count the database applies.
 const maxStaffPerRole = 5;
 
 /// Mirrors `public.user_status`.
@@ -88,7 +95,19 @@ enum StaffStatus implements WireValue {
 // THE ROW
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// One manager or warden of one hostel, as `public.users` holds them.
+/// One manager or warden with access to one PG, as `public.owner_hostel_staff()` returns them.
+///
+/// ── WHY AN RPC AND NOT `users` FILTERED BY `hostel_id` ───────────────────────────────────
+///
+/// A warden or manager can now be given access to several of an owner's PGs
+/// (`public.staff_hostel_access`), and `users.hostel_id` only says which ONE they are working
+/// in right now. Filtering on it would show a two-PG warden under whichever PG they happened to
+/// switch to last, and hide them from the other. The RPC lists everybody with ACCESS to the PG,
+/// which is also what the five-per-role limit now counts, so the "2 of 5" on the card and the
+/// database's refusal count the same people.
+///
+/// [hostelIds] is restricted by the server to the CALLER's own PGs, so a person who also works
+/// for somebody else never shows that other owner's buildings here.
 class StaffMember {
   const StaffMember({
     required this.id,
@@ -98,6 +117,10 @@ class StaffMember {
     required this.createdAt,
     this.email,
     this.phone,
+    this.mustChangePassword = false,
+    this.activeHostelId,
+    this.activeHostelName,
+    this.hostelIds = const <String>[],
   });
 
   final String id;
@@ -111,22 +134,36 @@ class StaffMember {
   final String? email;
   final String? phone;
 
+  /// True until they have signed in once and replaced the temporary password.
+  final bool mustChangePassword;
+
+  /// The PG they are working in NOW: `users.hostel_id`. May be another of the owner's PGs than
+  /// the one on screen, because the person switched to it.
+  final String? activeHostelId;
+  final String? activeHostelName;
+
+  /// Every one of the owner's PGs this person may work in, the one on screen included.
+  final List<String> hostelIds;
+
   bool get isActive => status == StaffStatus.active;
 
-  /// Exactly the columns lib/queries/owner.ts `getStaff()` selects, minus `updated_at` which
-  /// nothing on this screen shows.
-  static const columns = 'id, role, full_name, email, phone, status, created_at';
+  /// More than one PG, so deactivating them takes away more than the one on screen.
+  bool get hasSeveralPgs => hostelIds.length > 1;
 
   factory StaffMember.fromJson(Map<String, dynamic> row) {
-    const src = 'users';
+    const src = 'owner_hostel_staff';
     return StaffMember(
-      id: reqString(row, src, 'id'),
+      id: reqString(row, src, 'user_id'),
       role: wireOrThrow(StaffRole.values, row['role'], src, 'role'),
       fullName: reqString(row, src, 'full_name'),
       status: wireOrThrow(StaffStatus.values, row['status'], src, 'status'),
       createdAt: reqTimestamp(row, src, 'created_at'),
       email: optString(row, 'email'),
       phone: optString(row, 'phone'),
+      mustChangePassword: reqBool(row, src, 'must_change_password'),
+      activeHostelId: optString(row, 'active_hostel_id'),
+      activeHostelName: optString(row, 'active_hostel_name'),
+      hostelIds: stringList(row, src, 'hostel_ids'),
     );
   }
 
@@ -138,13 +175,17 @@ class StaffMember {
         createdAt: createdAt,
         email: email,
         phone: phone,
+        mustChangePassword: mustChangePassword,
+        activeHostelId: activeHostelId,
+        activeHostelName: activeHostelName,
+        hostelIds: hostelIds,
       );
 }
 
 /// Who holds a post right now, and who used to.
 extension StaffRoster on List<StaffMember> {
-  /// Everyone who has ever held this post, active first and newest first within that — the
-  /// order `OwnerStaffRepository.staff()` asks the server for.
+  /// Everyone who has ever held this post, active first and by name within that: the order
+  /// `OwnerStaffRepository.staff()` puts the server's rows in.
   List<StaffMember> inRole(StaffRole role) =>
       where((s) => s.role == role).toList(growable: false);
 
@@ -175,6 +216,7 @@ class IssuedStaffCredentials {
     required this.roleLabel,
     required this.loginId,
     required this.password,
+    this.hostelIds,
   });
 
   final String userId;
@@ -188,6 +230,11 @@ class IssuedStaffCredentials {
   final String loginId;
   final String password;
 
+  /// Every PG the new account may work in, the first being where it starts. Null when the
+  /// function that answered predates staff_hostel_access and does not send the field, which is
+  /// how the sheet knows it cannot claim more than the one PG it is sure about.
+  final List<String>? hostelIds;
+
   factory IssuedStaffCredentials.fromJson(Map<String, dynamic> data) {
     const src = 'owner-create-staff';
     return IssuedStaffCredentials(
@@ -196,7 +243,18 @@ class IssuedStaffCredentials {
       roleLabel: reqString(data, src, 'role'),
       loginId: reqString(data, src, 'loginId'),
       password: reqString(data, src, 'password'),
+      hostelIds: _lenientIds(data['hostelIds']),
     );
+  }
+
+  /// READ LENIENTLY ON PURPOSE. This response is the only place the one-time password ever
+  /// appears, and the account already exists by the time it arrives. A strict parse would throw
+  /// on an unexpected shape of this informational field and the owner would never see the
+  /// password. The credential outranks a shape check: anything but a list of strings is null,
+  /// which the sheet already treats as "only sure about the one PG".
+  static List<String>? _lenientIds(Object? raw) {
+    if (raw is! List || raw.any((e) => e is! String)) return null;
+    return List<String>.unmodifiable(raw.cast<String>());
   }
 }
 
@@ -211,6 +269,7 @@ class StaffDraft {
     this.fullName = '',
     this.email = '',
     this.phone = '',
+    this.hostelIds = const <String>[],
   });
 
   final StaffRole role;
@@ -220,17 +279,23 @@ class StaffDraft {
   /// Optional in `createStaffSchema` and in the function's `v.optionalPhone("phone")`.
   final String phone;
 
+  /// The PGs the owner ticked, the one the account starts in FIRST. Empty when the owner has a
+  /// single PG and was never asked, which sends the old single-PG body unchanged.
+  final List<String> hostelIds;
+
   StaffDraft copyWith({
     StaffRole? role,
     String? fullName,
     String? email,
     String? phone,
+    List<String>? hostelIds,
   }) {
     return StaffDraft(
       role: role ?? this.role,
       fullName: fullName ?? this.fullName,
       email: email ?? this.email,
       phone: phone ?? this.phone,
+      hostelIds: hostelIds ?? this.hostelIds,
     );
   }
 
@@ -242,6 +307,7 @@ class StaffDraft {
   ///   email     v.email("email")                                 → trimmed, lowercased
   ///   phone     v.optionalPhone("phone")                         → omitted when blank
   ///   hostelId  v.optionalUuid("hostelId")                       → always sent, see below
+  ///   hostelIds v.optionalUuidList("hostelIds", {max: 20})       → only for two or more PGs
   ///
   /// [hostelId] IS ALWAYS SENT even though the function will fall back to `caller.hostelId`.
   /// An owner may hold several PGs and the switcher decides which one is on screen; letting the
@@ -252,14 +318,36 @@ class StaffDraft {
   /// `hostels.owner_user_id` with the service role and answers "Hostel not found." for a hostel
   /// that is not this caller's — the same message it gives for one that does not exist, so the
   /// endpoint cannot be used to probe which ids are real.
+  ///
+  /// ── [hostelIds], AND WHY `hostelId` STILL TRAVELS WITH IT ─────────────────────────────
+  ///
+  /// With ONE PG chosen the body is exactly what it was before PG access existed: `hostelId`
+  /// names it and `hostelIds` is absent. That is the shape the live Android build sends, and
+  /// the shape the function treats as "exactly as today".
+  ///
+  /// With TWO OR MORE, `hostelIds` carries them all, the starting PG first, and the function
+  /// lets it decide. `hostelId` is sent as well, set to that same first PG, for one reason: a
+  /// function deployed before `hostelIds` existed ignores keys it does not know, and without
+  /// `hostelId` it would fall back to the owner's own `users.hostel_id` and create the account
+  /// in a PG the owner never picked. With it, the worst an old function can do is create the
+  /// account in the right PG only, which the sheet then says (see
+  /// [IssuedStaffCredentials.hostelIds]).
+  ///
+  /// Duplicates are dropped here, keeping the first; the function deduplicates too, and each
+  /// of the ids is checked against `hostels.owner_user_id` there, never trusted from here.
   Map<String, dynamic> toJson(String hostelId) {
     final trimmedPhone = phone.trim();
+    final chosen = <String>[];
+    for (final id in hostelIds) {
+      if (!chosen.contains(id)) chosen.add(id);
+    }
     return {
       'role': role.wire,
       'fullName': fullName.trim(),
       'email': email.trim().toLowerCase(),
       if (trimmedPhone.isNotEmpty) 'phone': trimmedPhone,
-      'hostelId': hostelId,
+      'hostelId': chosen.isEmpty ? hostelId : chosen.first,
+      if (chosen.length > 1) 'hostelIds': chosen,
     };
   }
 }
@@ -361,7 +449,8 @@ final class StaffRejected extends StaffCreateOutcome {
   final String message;
 
   /// Keyed by the flat field names the function accumulates: 'role', 'fullName', 'email',
-  /// 'phone', 'hostelId'. One message per field; the first is the one that explains the others.
+  /// 'phone', 'hostelId', 'hostelIds'. One message per field; the first is the one that explains
+  /// the others.
   final Map<String, String> fieldErrors;
 
   /// True when §4.3 was what refused: this hostel already has an active holder of that role.

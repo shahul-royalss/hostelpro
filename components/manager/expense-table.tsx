@@ -4,6 +4,7 @@ import * as React from "react";
 import { Download, Pencil, Receipt, Trash2 } from "lucide-react";
 import { deleteExpense } from "@/lib/actions/manager";
 import { useAction } from "@/hooks/use-action";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 import { EXPENSE_CATEGORIES, type ExpenseCategory, type ExpenseRow } from "@/lib/types";
 import { formatDate, formatINR, formatPeriodMonth, sumBy, titleCase } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,8 @@ export function ExpenseTable({ rows, month, writable }: { rows: ExpenseRow[]; mo
   }, [rows]);
   const visible = filter === "all" ? rows : rows.filter((r) => r.category === filter);
 
-  const del = useAction(deleteExpense, { onSuccess: () => setDeleting(null) });
+  const remove = useHostelBound(deleteExpense);
+  const del = useAction(remove, { onSuccess: () => setDeleting(null) });
 
   return (
     <GlassCard padded={false}>

@@ -7,7 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../shared/glass/glass.dart';
+import '../owner_providers.dart';
 import '../widgets/states.dart';
+import 'staff_access_sheet.dart';
 import 'staff_credentials_dialog.dart';
 import 'staff_models.dart';
 import 'staff_providers.dart';
@@ -28,6 +30,11 @@ import 'staff_providers.dart';
 ///
 /// NO BROWSER. The whole point of this screen: an owner adding a warden at 9pm does it here,
 /// not on a laptop.
+///
+/// ONE PG OR SEVERAL. An owner with two or more PGs picks which of them the new account may
+/// work in, the PG the sheet was opened for ticked to start with; the account starts in that
+/// one (or, if it was unticked, the first ticked PG by name) and switches between the rest from
+/// the app. An owner with one PG sees what they always saw: the PG as a fact, not a choice.
 Future<bool?> showAddStaffSheet(
   BuildContext context, {
   required String hostelId,
@@ -75,6 +82,13 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
   late StaffRole _role = widget.initialRole;
   bool _busy = false;
 
+  /// The PGs ticked for the new account. Starts on the PG the sheet was opened for, which is
+  /// the one on screen and the one the owner most likely means.
+  late Set<String> _pgs = {widget.hostelId};
+
+  /// True after a tap tried to untick the last PG. See [_togglePg].
+  bool _keepOne = false;
+
   /// Client-side and server-side messages share this map, keyed by the function's own field
   /// names. The sheet cannot tell them apart, which is right — to the owner they are one event.
   Map<String, String> _errors = const {};
@@ -97,12 +111,50 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
     super.dispose();
   }
 
-  StaffDraft get _draft => StaffDraft(
+  StaffDraft _draftFor(List<Hostel> owned) => StaffDraft(
         role: _role,
         fullName: _name.text,
         email: _email.text,
         phone: _phone.text,
+        hostelIds: _orderedPgs(owned),
       );
+
+  /// The ticked PGs, the one the account will START in first, as `hostelIds` is read by the
+  /// function. That is the PG this sheet was opened for when it is still ticked, because it is
+  /// the one on screen; otherwise the first ticked PG in the owner's name order.
+  ///
+  /// EMPTY FOR A SINGLE-PG OWNER, which is what keeps their request byte for byte the body the
+  /// function has always accepted. See [StaffDraft.toJson].
+  List<String> _orderedPgs(List<Hostel> owned) {
+    if (owned.length < 2) return const <String>[];
+    return [
+      if (_pgs.contains(widget.hostelId)) widget.hostelId,
+      for (final h in owned)
+        if (h.id != widget.hostelId && _pgs.contains(h.id)) h.id,
+    ];
+  }
+
+  /// At least one PG stays ticked. An account for no PG would be a login that opens onto
+  /// nothing, and the function refuses an empty list anyway; refusing the tap is cheaper than
+  /// refusing the form after the owner has typed a name and an email into it.
+  void _togglePg(String hostelId) {
+    if (_busy) return;
+    setState(() {
+      if (!_pgs.contains(hostelId)) {
+        _pgs = {..._pgs, hostelId};
+        _keepOne = false;
+      } else if (_pgs.length == 1) {
+        _keepOne = true;
+      } else {
+        _pgs = {..._pgs}..remove(hostelId);
+        _keepOne = false;
+      }
+      // A limit refusal named one of the PGs; the list has changed, so it may no longer apply.
+      _banner = null;
+      _roleLimitReached = false;
+      _failure = null;
+    });
+  }
 
   /// Clears one field's message — it described the value that has just changed.
   void _touched(String field) {
@@ -132,7 +184,8 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
 
   Future<void> _submit() async {
     if (_busy) return;
-    final draft = _draft;
+    final owned = ref.read(myHostelsProvider).value ?? const <Hostel>[];
+    final draft = _draftFor(owned);
 
     // Local validation first, so a typo costs nothing. It does not decide anything the server
     // would not also decide — see validateStaffDraft.
@@ -165,9 +218,23 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
 
       switch (outcome) {
         case StaffCreated(:final credentials):
-          // The list has gained a row and the other role's slot may now be the only free one.
-          ref.invalidate(ownerStaffProvider(widget.hostelId));
+          // Every PG's list, not just this one: the new account appears under each PG it was
+          // given, and the other role's slot may now be the only free one.
+          ref.invalidate(ownerStaffProvider);
           setState(() => _busy = false);
+
+          // WHICH PGs TO NAME. The ones the function says it granted, when it says; a function
+          // older than PG access does not, and then only the first PG is certain, because that
+          // is the one `hostelId` named (see StaffDraft.toJson).
+          final names = {for (final h in owned) h.id: h.name};
+          final asked = draft.hostelIds;
+          final granted = credentials.hostelIds ?? [if (asked.isNotEmpty) asked.first];
+          final grantedNames = [
+            for (final id in granted)
+              if (names[id] != null) names[id]!,
+          ];
+          final shortfall = asked.length > 1 && !granted.toSet().containsAll(asked);
+          final messenger = ScaffoldMessenger.of(context);
 
           // SHOWN FROM HERE, NOT FROM THE SCREEN BEHIND. The password crosses no route
           // boundary: this sheet is still mounted, and it stays mounted underneath the dialog
@@ -177,10 +244,23 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
           await StaffCredentialsDialog.show(
             context,
             credentials: credentials,
-            hostelName: widget.hostelName,
+            hostelName: grantedNames.isEmpty ? widget.hostelName : grantedNames.join(', '),
           );
           if (!mounted) return;
           Navigator.of(context).pop(true);
+          if (shortfall) {
+            // Said after the password is safe, never instead of it. The account works; it just
+            // has fewer PGs than were ticked, and PG access on its card adds the rest.
+            final where = grantedNames.isEmpty ? 'one PG' : grantedNames.join(', ');
+            messenger.showSnackBar(SnackBar(
+              content: Text(
+                'The account was created for $where only. Use PG access on their card to add '
+                'the others.',
+              ),
+              behavior: SnackBarBehavior.floating,
+              duration: Motion.readMessage,
+            ));
+          }
 
         case StaffRejected(:final message, :final fieldErrors, :final roleLimitReached):
           setState(() {
@@ -204,6 +284,15 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
     final t = Theme.of(context);
     final media = MediaQuery.of(context);
     final maxHeight = media.size.height * 0.88 - media.padding.top;
+    // The screen behind already watches this for its header, so it is almost always loaded.
+    // Until it is, the sheet draws today's single-PG fact rather than a picker that would jump.
+    final owned = ref.watch(myHostelsProvider).value ?? const <Hostel>[];
+    final several = owned.length >= 2;
+    final ordered = _orderedPgs(owned);
+    String? startsIn;
+    for (final h in owned) {
+      if (ordered.isNotEmpty && h.id == ordered.first) startsIn = h.name;
+    }
 
     return PopScope(
       // A drag-to-dismiss mid-request would abandon a create that is already in flight and,
@@ -249,8 +338,11 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
             ),
             const SizedBox(height: Space.xxs),
             Text(
-              'Enter the personal details and assign a role. They get their own login for '
-              '${widget.hostelName ?? 'this PG'}.',
+              several
+                  ? 'Enter the personal details, assign a role and choose their PGs. They get '
+                      'one login for all of them.'
+                  : 'Enter the personal details and assign a role. They get their own login for '
+                      '${widget.hostelName ?? 'this PG'}.',
               style: t.textTheme.bodySmall,
             ),
             const SizedBox(height: Space.md),
@@ -346,11 +438,22 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                     ),
                     const SizedBox(height: Space.sm),
 
-                    // The mockup's `ASSIGN TO PROPERTY` control, drawn as a fact rather than a
-                    // dropdown. The sheet is always opened FOR a PG — the caller passes its id
-                    // — so a picker here would be a control with one option that cannot change
-                    // where the account lands.
-                    _AssignedProperty(hostelName: widget.hostelName),
+                    // The mockup's `ASSIGN TO PROPERTY` control. For a single-PG owner it is
+                    // drawn as a fact rather than a dropdown: the sheet is always opened FOR a
+                    // PG, so a picker would be a control with one option that cannot change
+                    // where the account lands. For an owner with two or more it becomes the
+                    // choice it was drawn as, one checkbox per PG.
+                    if (several)
+                      _PropertyPicker(
+                        owned: owned,
+                        selected: _pgs,
+                        enabled: !_busy,
+                        keepOne: _keepOne,
+                        startsIn: startsIn,
+                        onToggle: _togglePg,
+                      )
+                    else
+                      _AssignedProperty(hostelName: widget.hostelName),
 
                     if (_banner != null) ...[
                       const SizedBox(height: Space.md),
@@ -536,6 +639,61 @@ class _AssignedProperty extends StatelessWidget {
   }
 }
 
+/// Which PGs the new login may work in, for an owner who has more than one.
+class _PropertyPicker extends StatelessWidget {
+  const _PropertyPicker({
+    required this.owned,
+    required this.selected,
+    required this.enabled,
+    required this.keepOne,
+    required this.startsIn,
+    required this.onToggle,
+  });
+
+  final List<Hostel> owned;
+  final Set<String> selected;
+  final bool enabled;
+
+  /// A tap tried to untick the last PG.
+  final bool keepOne;
+
+  /// The PG the account will start in, named under the list so "which one will they see first"
+  /// is answered before Create rather than discovered after.
+  final String? startsIn;
+
+  final ValueChanged<String> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('ASSIGNED PGS', style: t.textTheme.labelSmall),
+        const SizedBox(height: Space.xs),
+        StaffPgChecklist(
+          hostels: owned,
+          selected: selected,
+          enabled: enabled,
+          onToggle: onToggle,
+        ),
+        const SizedBox(height: Space.xs),
+        Semantics(
+          liveRegion: keepOne,
+          child: Text(
+            keepOne
+                ? 'Keep at least one PG.'
+                : selected.length > 1 && startsIn != null
+                    ? 'They start in $startsIn and can switch between these PGs in the app.'
+                    : 'Tick more than one to let them switch between PGs in the app.',
+            style: t.textTheme.bodySmall,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// A message about the form as a whole.
 ///
 /// §4.3 gets the warning tone and a next step; everything else is a plain refusal in the same
@@ -576,7 +734,8 @@ class _Banner extends StatelessWidget {
                 if (roleLimitReached) ...[
                   const SizedBox(height: Space.xxs),
                   Text(
-                    'Close this, deactivate the person holding that post, then add the new one.',
+                    'Close this, then deactivate someone in that post or remove their access to '
+                    'that PG. Then add the new one.',
                     style: t.textTheme.bodySmall,
                   ),
                 ],

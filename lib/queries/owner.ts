@@ -252,20 +252,28 @@ export interface AudienceCounts {
   student: number;
 }
 
-/** Active recipients per role — used to compute an announcement's reach. */
+/**
+ * Active recipients per role, used to compute an announcement's reach.
+ *
+ * Staff are counted by ACCESS (owner_hostel_staff), not by users.hostel_id: a warden allowed into
+ * this PG reads its notices whenever they switch to it, so they are part of its audience even
+ * while working in another. Students belong to exactly one hostel and are counted as before.
+ */
 export async function getAudienceCounts(supabase: SupabaseClient, hostelId: string): Promise<AudienceCounts> {
-  const count = async (role: "manager" | "warden" | "student") => {
-    const { count: n } = await supabase
+  const [staffRes, { count: student }] = await Promise.all([
+    supabase.rpc("owner_hostel_staff", { p_hostel_id: hostelId }),
+    supabase
       .from("users")
       .select("id", { count: "exact", head: true })
       .eq("hostel_id", hostelId)
-      .eq("role", role)
+      .eq("role", "student")
       .eq("status", "active")
-      .is("deleted_at", null);
-    return n ?? 0;
-  };
-  const [manager, warden, student] = await Promise.all([count("manager"), count("warden"), count("student")]);
-  return { manager, warden, student };
+      .is("deleted_at", null),
+  ]);
+  // A reach figure is informational: on a failed staff read it shows 0 rather than breaking the page.
+  const staff = (staffRes.error ? [] : (staffRes.data ?? [])) as Pick<OwnerHostelStaffRow, "role" | "status">[];
+  const count = (role: "manager" | "warden") => staff.filter((s) => s.role === role && s.status === "active").length;
+  return { manager: count("manager"), warden: count("warden"), student: student ?? 0 };
 }
 
 export function reachFor(audience: AnnouncementRow["audience"], counts: AudienceCounts): number {
@@ -283,32 +291,90 @@ export function reachFor(audience: AnnouncementRow["audience"], counts: Audience
 
 /* ───────────────────────── Staff & tasks (OW-4) ───────────────────────── */
 
-export type StaffUser = Pick<UserRow, "id" | "role" | "full_name" | "email" | "phone" | "status" | "created_at" | "updated_at">;
+/**
+ * A manager or warden as the owner's staff screen sees them.
+ *
+ * Staff can be allowed into several of the owner's PGs (staff_hostel_access) and work in one at
+ * a time, so "staff of this PG" means staff WITH ACCESS to it, not staff whose users.hostel_id
+ * happens to point at it right now. `active_hostel_*` is where they are working now.
+ */
+export interface StaffUser extends Pick<UserRow, "id" | "full_name" | "email" | "phone" | "status" | "created_at" | "must_change_password"> {
+  role: "manager" | "warden";
+  /** the PG they are working in now (users.hostel_id) */
+  active_hostel_id: string | null;
+  active_hostel_name: string | null;
+  /** every PG they may work in, restricted to the calling owner's own PGs */
+  hostel_ids: string[];
+}
 
-/** Manager + warden accounts of the hostel (active first, newest first). */
+interface OwnerHostelStaffRow {
+  user_id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  role: "manager" | "warden";
+  status: UserRow["status"];
+  created_at: string;
+  must_change_password: boolean;
+  active_hostel_id: string | null;
+  active_hostel_name: string | null;
+  hostel_ids: string[] | null;
+}
+
+/**
+ * Every manager and warden (active and inactive) with access to the PG, via owner_hostel_staff,
+ * which refuses a caller who does not own it. Active first, then the RPC's own order (role, name).
+ *
+ * THROWS on error instead of returning []: an empty list renders "No manager yet" with an Add
+ * button, and an owner who believes that creates a duplicate account. A failed read must look
+ * like a failure.
+ */
 export async function getStaff(supabase: SupabaseClient, hostelId: string): Promise<StaffUser[]> {
-  const { data } = await supabase
-    .from("users")
-    .select("id, role, full_name, email, phone, status, created_at, updated_at")
-    .eq("hostel_id", hostelId)
-    .in("role", ["manager", "warden"])
-    .is("deleted_at", null)
-    .order("status", { ascending: true }) // 'active' < 'inactive'
-    .order("created_at", { ascending: false });
-  return (data ?? []) as StaffUser[];
+  const { data, error } = await supabase.rpc("owner_hostel_staff", { p_hostel_id: hostelId });
+  if (error) throw error;
+  const rows = ((data ?? []) as OwnerHostelStaffRow[]).map<StaffUser>((r) => ({
+    id: r.user_id,
+    role: r.role,
+    full_name: r.full_name,
+    email: r.email,
+    phone: r.phone,
+    status: r.status,
+    created_at: r.created_at,
+    must_change_password: r.must_change_password,
+    active_hostel_id: r.active_hostel_id,
+    active_hostel_name: r.active_hostel_name,
+    hostel_ids: r.hostel_ids ?? [],
+  }));
+  // Array.prototype.sort is stable, so the RPC's role/name order survives within each group.
+  return rows.sort((a, b) => (a.status === b.status ? 0 : a.status === "active" ? -1 : 1));
+}
+
+/** Active managers or wardens with access to the PG: the number the 5-per-role limit counts. */
+export function activeCount(staff: StaffUser[], role: StaffUser["role"]): number {
+  return staff.filter((s) => s.role === role && s.status === "active").length;
+}
+
+/**
+ * The manager a new task goes to, from staff with access to the PG.
+ *
+ * Preference, and why:
+ *  1. one WORKING in this PG right now: they see the task at once, without switching. It also
+ *     keeps task creation working against a database that predates staff_hostel_access, whose
+ *     app.tasks_assignee_guard compared users.hostel_id (the new guard accepts any active
+ *     manager with access).
+ *  2. otherwise the longest-serving active manager with access, so the choice is stable from one
+ *     page load to the next (the same rule st_hostel_contacts uses), not whichever row came back
+ *     first.
+ */
+export function taskManagerFor(staff: StaffUser[], hostelId: string): StaffUser | null {
+  const managers = staff.filter((s) => s.role === "manager" && s.status === "active");
+  const here = managers.filter((m) => m.active_hostel_id === hostelId);
+  const pool = here.length ? here : managers;
+  return [...pool].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))[0] ?? null;
 }
 
 export async function getActiveManager(supabase: SupabaseClient, hostelId: string): Promise<StaffUser | null> {
-  const { data } = await supabase
-    .from("users")
-    .select("id, role, full_name, email, phone, status, created_at, updated_at")
-    .eq("hostel_id", hostelId)
-    .eq("role", "manager")
-    .eq("status", "active")
-    .is("deleted_at", null)
-    .limit(1)
-    .maybeSingle();
-  return (data as StaffUser | null) ?? null;
+  return taskManagerFor(await getStaff(supabase, hostelId), hostelId);
 }
 
 export async function getTasks(supabase: SupabaseClient, hostelId: string): Promise<TaskRow[]> {

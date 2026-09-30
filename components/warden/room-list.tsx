@@ -15,6 +15,7 @@ import { useAction } from "@/hooks/use-action";
 import { updateRoom } from "@/lib/actions/warden";
 import type { FloorRow, RoomOccupancyRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 
 export function RoomList({ floors, rooms, writable }: { floors: FloorRow[]; rooms: RoomOccupancyRow[]; writable: boolean }) {
   const [floor, setFloor] = React.useState<string>("all");
@@ -84,7 +85,8 @@ export function RoomList({ floors, rooms, writable }: { floors: FloorRow[]; room
 export function EditRoomSheet({ room, onOpenChange }: { room: RoomOccupancyRow | null; onOpenChange: (open: boolean) => void }) {
   const [roomNumber, setRoomNumber] = React.useState("");
   const [capacity, setCapacity] = React.useState(3);
-  const { run, pending } = useAction(updateRoom, { onSuccess: () => onOpenChange(false) });
+  const update = useHostelBound(updateRoom);
+  const { run, pending } = useAction(update, { onSuccess: () => onOpenChange(false) });
 
   React.useEffect(() => {
     if (room) {

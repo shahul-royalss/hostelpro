@@ -17,8 +17,14 @@
 //     a log, not in the audit row. Every obstacle in the way of dismissing it is load-bearing,
 //     so each one is tested: the barrier, the back gesture, and the confirmation checkbox.
 //
-// No network: the two writes go through `ownerStaffWritesProvider`, which exists as an
-// interface for exactly this reason, and every read is an overridden provider.
+//  4. ONE PERSON, SEVERAL PGs. A warden or manager can hold access to more than one of the
+//     owner's PGs. The add form sends `hostelIds` only when two or more are ticked and the old
+//     single-PG body otherwise (the live Android build sends that body, and the function must
+//     keep treating it exactly as before). PG access never lets the last PG be unticked. A
+//     member who holds several PGs shows where they are working and what else they hold.
+//
+// No network: the writes go through `ownerStaffWritesProvider`, which exists as an interface
+// for exactly this reason, and every read is an overridden provider.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,6 +33,7 @@ import 'package:mobile/data/models/models.dart';
 import 'package:mobile/features/owner/owner_providers.dart';
 import 'package:mobile/features/owner/staff/add_staff_sheet.dart';
 import 'package:mobile/features/owner/staff/owner_staff_screen.dart';
+import 'package:mobile/features/owner/staff/staff_access_sheet.dart';
 import 'package:mobile/features/owner/staff/staff_credentials_dialog.dart';
 import 'package:mobile/features/owner/staff/staff_models.dart';
 import 'package:mobile/features/owner/staff/staff_providers.dart';
@@ -34,6 +41,8 @@ import 'package:mobile/features/owner/staff/staff_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const _hostelId = '3f1c9e2a-0000-4000-8000-00000000abcd';
+const _lakeviewId = '3f1c9e2a-0000-4000-8000-00000000beef';
+const _hilltopId = '3f1c9e2a-0000-4000-8000-00000000cafe';
 
 final _sunrise = Hostel(
   id: _hostelId,
@@ -47,6 +56,25 @@ final _sunrise = Hostel(
   updatedAt: DateTime.utc(2026, 3, 1),
 );
 
+Hostel _pg(String id, String name) => Hostel(
+      id: id,
+      name: name,
+      ownerUserId: 'owner-1',
+      totalFloors: 2,
+      totalRooms: 8,
+      bedsPerRoomDefault: 2,
+      status: HostelStatus.active,
+      createdAt: DateTime.utc(2026, 3, 1),
+      updatedAt: DateTime.utc(2026, 3, 1),
+    );
+
+/// An owner with three PGs, in the name order `hostelsOwnedBy` asks the server for.
+final _threePgs = [
+  _pg(_hilltopId, 'Hilltop House'),
+  _pg(_lakeviewId, 'Lakeview PG'),
+  _sunrise,
+];
+
 StaffMember _member({
   String id = 'u-1',
   StaffRole role = StaffRole.manager,
@@ -54,6 +82,9 @@ StaffMember _member({
   StaffStatus status = StaffStatus.active,
   String? email = 'ravi@example.com',
   String? phone = '9876543210',
+  String? activeHostelId = _hostelId,
+  String? activeHostelName = 'Sunrise Residency',
+  List<String> hostelIds = const [_hostelId],
 }) {
   return StaffMember(
     id: id,
@@ -63,15 +94,21 @@ StaffMember _member({
     createdAt: DateTime.utc(2026, 5, 12),
     email: email,
     phone: phone,
+    activeHostelId: activeHostelId,
+    activeHostelName: activeHostelName,
+    hostelIds: hostelIds,
   );
 }
 
-/// Stands in for the two writes. Records what it was asked to do, answers what the test set.
+/// Stands in for the three writes. Records what it was asked to do, answers what the test set.
 class _FakeWrites implements OwnerStaffWrites {
-  _FakeWrites({this.outcome, this.throws});
+  _FakeWrites({this.outcome, this.throws, this.grants});
 
   StaffCreateOutcome? outcome;
   Object? throws;
+
+  /// What PG access answers. Null means "every PG sent, the first one active".
+  List<StaffHostelGrant>? grants;
 
   int createCalls = 0;
   String? lastHostelId;
@@ -80,6 +117,10 @@ class _FakeWrites implements OwnerStaffWrites {
   int statusCalls = 0;
   String? lastStatusUserId;
   StaffStatus? lastStatus;
+
+  int accessCalls = 0;
+  String? lastAccessUserId;
+  List<String>? lastAccessHostelIds;
 
   @override
   Future<StaffCreateOutcome> createStaff({
@@ -94,8 +135,7 @@ class _FakeWrites implements OwnerStaffWrites {
   }
 
   @override
-  Future<StaffMember> setStaffStatus({
-    required String hostelId,
+  Future<void> setStaffStatus({
     required String userId,
     required StaffStatus status,
   }) async {
@@ -103,7 +143,22 @@ class _FakeWrites implements OwnerStaffWrites {
     lastStatusUserId = userId;
     lastStatus = status;
     if (throws != null) throw throws!;
-    return _member(id: userId, status: status);
+  }
+
+  @override
+  Future<List<StaffHostelGrant>> setStaffHostels({
+    required String userId,
+    required List<String> hostelIds,
+  }) async {
+    accessCalls++;
+    lastAccessUserId = userId;
+    lastAccessHostelIds = hostelIds;
+    if (throws != null) throw throws!;
+    return grants ??
+        [
+          for (var i = 0; i < hostelIds.length; i++)
+            StaffHostelGrant(hostelId: hostelIds[i], isActive: i == 0),
+        ];
   }
 }
 
@@ -114,10 +169,11 @@ List<Object> _overrides({
   Object? staffError,
   OwnerStaffWrites? writes,
   String? hostelId = _hostelId,
+  List<Hostel>? owned,
 }) {
   return [
     activeHostelIdProvider.overrideWithValue(hostelId),
-    myHostelsProvider.overrideWith((ref) => [_sunrise]),
+    myHostelsProvider.overrideWith((ref) => owned ?? [_sunrise]),
     if (staffError != null)
       ownerStaffProvider.overrideWith(
         (ref, id) => Future<List<StaffMember>>.error(staffError),
@@ -211,6 +267,76 @@ void main() {
       // The function would otherwise fall back to caller.hostelId, which for an owner holding
       // several PGs is whichever they were first attached to — not the one on screen.
       expect(const StaffDraft().toJson(_hostelId)['hostelId'], _hostelId);
+    });
+
+    test('two or more PGs travel as hostelIds, the starting one first and named in hostelId too',
+        () {
+      // hostelId rides along, equal to the first, so a function deployed before hostelIds
+      // (which ignores keys it does not know) still creates the account in the PG the owner
+      // picked rather than falling back to the owner's own users.hostel_id.
+      const draft = StaffDraft(
+        role: StaffRole.warden,
+        fullName: 'Priya Nair',
+        email: 'priya@example.com',
+        hostelIds: [_lakeviewId, _hostelId, _lakeviewId],
+      );
+      expect(draft.toJson(_hostelId), {
+        'role': 'warden',
+        'fullName': 'Priya Nair',
+        'email': 'priya@example.com',
+        'hostelId': _lakeviewId,
+        'hostelIds': [_lakeviewId, _hostelId],
+      });
+    });
+
+    test('ONE chosen PG is the old single-PG body exactly, with no hostelIds key at all', () {
+      // The live Android build sends this shape, and the function treats a body without
+      // hostelIds as "exactly as today". One ticked PG must not change a byte of it.
+      const draft = StaffDraft(
+        role: StaffRole.manager,
+        fullName: 'Ravi',
+        email: 'r@example.com',
+        hostelIds: [_lakeviewId],
+      );
+      final body = draft.toJson(_hostelId);
+      expect(body.containsKey('hostelIds'), isFalse);
+      expect(body['hostelId'], _lakeviewId);
+      expect(body.keys.toSet(), {'role', 'fullName', 'email', 'hostelId'});
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // THE ROW: public.owner_hostel_staff
+  // ───────────────────────────────────────────────────────────────────────────
+  group('StaffMember.fromJson', () {
+    Map<String, dynamic> row({Object? hostelIds = const [_hostelId, _lakeviewId]}) => {
+          'user_id': 'u-1',
+          'full_name': 'Ravi Kulkarni',
+          'email': 'ravi@example.com',
+          'phone': null,
+          'role': 'warden',
+          'status': 'active',
+          'created_at': '2026-05-12T09:00:00+00:00',
+          'must_change_password': false,
+          'active_hostel_id': _lakeviewId,
+          'active_hostel_name': 'Lakeview PG',
+          'hostel_ids': hostelIds,
+        };
+
+    test('reads the RPC columns, user_id as the id and the access list as ids', () {
+      final m = StaffMember.fromJson(row());
+      expect(m.id, 'u-1');
+      expect(m.role, StaffRole.warden);
+      expect(m.activeHostelId, _lakeviewId);
+      expect(m.activeHostelName, 'Lakeview PG');
+      expect(m.hostelIds, [_hostelId, _lakeviewId]);
+      expect(m.hasSeveralPgs, isTrue);
+    });
+
+    test('a null access list is none, but a missing column still names itself', () {
+      expect(StaffMember.fromJson(row(hostelIds: null)).hostelIds, isEmpty);
+      final missing = row()..remove('hostel_ids');
+      expect(() => StaffMember.fromJson(missing), throwsA(isA<RowShapeError>()));
     });
   });
 
@@ -657,7 +783,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.textContaining('deactivate the person holding that post'),
+        find.textContaining('deactivate someone in that post'),
         findsOneWidget,
         reason: 'the rule is only useful with the way out of it attached',
       );
@@ -728,6 +854,289 @@ void main() {
       expect(card(StaffRole.warden).enabled, isTrue);
       expect(card(StaffRole.warden).selected, isTrue);
       expect(card(StaffRole.manager).selected, isFalse);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // ONE PERSON, SEVERAL PGs
+  // ───────────────────────────────────────────────────────────────────────────
+  group('several PGs', () {
+    StaffMember multi({StaffStatus status = StaffStatus.active}) => _member(
+          id: 'u-multi',
+          name: 'Anil Warden',
+          role: StaffRole.warden,
+          status: status,
+          activeHostelId: _lakeviewId,
+          activeHostelName: 'Lakeview PG',
+          hostelIds: const [_hostelId, _lakeviewId, _hilltopId],
+        );
+
+    testWidgets('a member who holds several PGs is listed here, with where they work now',
+        (tester) async {
+      // Working in Lakeview right now, and still on Sunrise's list: users.hostel_id points at
+      // Lakeview, which is exactly the member a `users where hostel_id = Sunrise` read dropped.
+      await _pump(tester, _overrides(staff: [multi()], owned: _threePgs));
+
+      expect(find.text('Anil Warden'), findsOneWidget);
+      expect(find.text('WORKING IN NOW'), findsOneWidget);
+      expect(find.text('Lakeview PG'), findsOneWidget);
+      expect(find.text('OTHER PGS'), findsOneWidget);
+      expect(find.text('Sunrise Residency, Hilltop House'), findsOneWidget);
+      // Counted against Sunrise's five: access is what the limit counts, not where they are.
+      expect(find.text('1 of 5'), findsOneWidget);
+    });
+
+    testWidgets('a deactivated member is not said to be working anywhere', (tester) async {
+      // Their users.hostel_id still names Lakeview, which is where a reactivation lands them,
+      // but "working in now" would be false of somebody who cannot sign in.
+      await _pump(
+        tester,
+        _overrides(staff: [multi(status: StaffStatus.inactive)], owned: _threePgs),
+      );
+
+      expect(find.text('WORKING IN NOW'), findsNothing);
+      expect(find.text('LAST WORKED IN'), findsOneWidget);
+      expect(find.text('Lakeview PG'), findsOneWidget);
+    });
+
+    testWidgets('a single-PG member keeps today\'s card, with no PG lines on it', (tester) async {
+      await _pump(tester, _overrides(staff: [_member()], owned: _threePgs));
+
+      expect(find.text('WORKING IN NOW'), findsNothing);
+      expect(find.text('OTHER PGS'), findsNothing);
+      expect(find.text('PG access'), findsOneWidget, reason: 'the owner has three PGs');
+    });
+
+    testWidgets('PG access is not offered to an owner with one PG', (tester) async {
+      await _pump(tester, _overrides(staff: [_member()]));
+      expect(find.text('PG access'), findsNothing);
+    });
+
+    testWidgets('deactivating a multi-PG member says they lose every PG, not just this one',
+        (tester) async {
+      final writes = _FakeWrites();
+      await _pump(tester, _overrides(staff: [multi()], owned: _threePgs, writes: writes));
+
+      await tester.tap(find.text('Deactivate'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('loses access to all 3 of your PGs'), findsOneWidget);
+      expect(find.textContaining('use PG access instead'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Deactivate'));
+      await _tick(tester);
+      // Account-wide, and no PG in the call: the status is the account's.
+      expect(writes.statusCalls, 1);
+      expect(writes.lastStatusUserId, 'u-multi');
+      expect(writes.lastStatus, StaffStatus.inactive);
+    });
+
+    testWidgets('add-staff with two PGs ticked sends hostelIds, the PG on screen first',
+        (tester) async {
+      final writes = _FakeWrites(
+        outcome: const StaffCreated(IssuedStaffCredentials(
+          userId: 'u-9',
+          name: 'Priya Nair',
+          roleLabel: 'Warden',
+          loginId: 'priya@example.com',
+          password: 'Tx7-quiet-lamp',
+          hostelIds: [_hostelId, _lakeviewId],
+        )),
+      );
+      await _pump(tester, _overrides(writes: writes, owned: _threePgs));
+
+      await tester.tap(find.text('Add warden'));
+      await tester.pumpAndSettle();
+      // The fixed ASSIGNED PROPERTY fact became a choice, with this PG already ticked.
+      expect(find.text('ASSIGNED PROPERTY'), findsNothing);
+      expect(find.text('ASSIGNED PGS'), findsOneWidget);
+      CheckboxListTile box(String name) => tester.widget<CheckboxListTile>(
+            find.widgetWithText(CheckboxListTile, name),
+          );
+      expect(box('Sunrise Residency').value, isTrue);
+      expect(box('Lakeview PG').value, isFalse);
+
+      await tester.tap(find.widgetWithText(CheckboxListTile, 'Lakeview PG'));
+      await tester.pump();
+      await _fillValidForm(tester);
+      await tester.tap(find.text('Create warden account'));
+      await _tick(tester);
+
+      expect(writes.createCalls, 1);
+      expect(writes.lastDraft!.toJson(_hostelId), {
+        'role': 'warden',
+        'fullName': 'Priya Nair',
+        'email': 'priya@example.com',
+        'phone': '98765 43210',
+        'hostelId': _hostelId,
+        'hostelIds': [_hostelId, _lakeviewId],
+      });
+      // The dialog names both PGs the function granted.
+      expect(find.text('Sunrise Residency, Lakeview PG'), findsOneWidget);
+    });
+
+    testWidgets('add-staff with only this PG ticked sends the old single-PG body',
+        (tester) async {
+      final writes = _FakeWrites(
+        outcome: const StaffCreated(IssuedStaffCredentials(
+          userId: 'u-9',
+          name: 'Priya Nair',
+          roleLabel: 'Warden',
+          loginId: 'priya@example.com',
+          password: 'Tx7-quiet-lamp',
+        )),
+      );
+      await _pump(tester, _overrides(writes: writes, owned: _threePgs));
+
+      await tester.tap(find.text('Add warden'));
+      await tester.pumpAndSettle();
+      await _fillValidForm(tester);
+      await tester.tap(find.text('Create warden account'));
+      await _tick(tester);
+
+      expect(writes.lastDraft!.toJson(_hostelId), {
+        'role': 'warden',
+        'fullName': 'Priya Nair',
+        'email': 'priya@example.com',
+        'phone': '98765 43210',
+        'hostelId': _hostelId,
+      });
+    });
+
+    testWidgets('the add form will not let the last PG be unticked', (tester) async {
+      await _pump(tester, _overrides(writes: _FakeWrites(), owned: _threePgs));
+
+      await tester.tap(find.text('Add manager'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(CheckboxListTile, 'Sunrise Residency'));
+      await tester.pump();
+
+      final box = tester.widget<CheckboxListTile>(
+        find.widgetWithText(CheckboxListTile, 'Sunrise Residency'),
+      );
+      expect(box.value, isTrue);
+      expect(find.text('Keep at least one PG.'), findsOneWidget);
+    });
+
+    testWidgets('a single-PG owner keeps the ASSIGNED PROPERTY fact, not a picker',
+        (tester) async {
+      await _pump(tester, _overrides(writes: _FakeWrites()));
+
+      await tester.tap(find.text('Add manager'));
+      await tester.pumpAndSettle();
+      expect(find.text('ASSIGNED PROPERTY'), findsOneWidget);
+      expect(find.byType(CheckboxListTile), findsNothing);
+    });
+
+    testWidgets('PG access keeps at least one PG, and saves exactly what is ticked',
+        (tester) async {
+      final writes = _FakeWrites();
+      final member = _member(
+        id: 'u-5',
+        name: 'Ravi Kulkarni',
+        hostelIds: const [_hostelId, _lakeviewId],
+      );
+      await _pump(tester, _overrides(staff: [member], owned: _threePgs, writes: writes));
+
+      await tester.tap(find.text('PG access'));
+      await tester.pumpAndSettle();
+      expect(find.text('PG ACCESS'), findsOneWidget);
+
+      FilledButton save() => tester.widget<FilledButton>(
+            find.ancestor(of: find.text('Save PG access'), matching: find.byType(FilledButton)),
+          );
+      CheckboxListTile box(String name) => tester.widget<CheckboxListTile>(
+            find.descendant(
+              of: find.byType(StaffAccessSheet),
+              matching: find.widgetWithText(CheckboxListTile, name),
+            ),
+          );
+      Finder tile(String name) => find.descendant(
+            of: find.byType(StaffAccessSheet),
+            matching: find.widgetWithText(CheckboxListTile, name),
+          );
+
+      expect(save().onPressed, isNull, reason: 'nothing has changed yet');
+
+      // Untick Lakeview: one left, and it is the PG they are working in.
+      await tester.tap(tile('Lakeview PG'));
+      await tester.pump();
+      expect(box('Lakeview PG').value, isFalse);
+
+      // The last one will not go.
+      await tester.tap(tile('Sunrise Residency'));
+      await tester.pump();
+      expect(box('Sunrise Residency').value, isTrue);
+      expect(find.textContaining('Keep at least one PG.'), findsOneWidget);
+      expect(save().onPressed, isNotNull);
+
+      await tester.tap(find.text('Save PG access'));
+      await _tick(tester);
+
+      expect(writes.accessCalls, 1);
+      expect(writes.lastAccessUserId, 'u-5');
+      expect(writes.lastAccessHostelIds, [_hostelId]);
+      expect(find.text('PG access saved'), findsOneWidget);
+    });
+
+    testWidgets('PG access says where they land when their current PG is taken away',
+        (tester) async {
+      final writes = _FakeWrites(grants: const [
+        StaffHostelGrant(hostelId: _hilltopId, isActive: true),
+        StaffHostelGrant(hostelId: _hostelId, isActive: false),
+      ]);
+      await _pump(tester, _overrides(staff: [multi()], owned: _threePgs, writes: writes));
+
+      await tester.tap(find.text('PG access'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+        of: find.byType(StaffAccessSheet),
+        matching: find.widgetWithText(CheckboxListTile, 'Lakeview PG'),
+      ));
+      await tester.pump();
+      // Hilltop House is first by name among what is left, which is what the RPC picks.
+      expect(
+        find.text('They are working in Lakeview PG now. Saving moves them to Hilltop House.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Save PG access'));
+      await _tick(tester);
+      expect(writes.lastAccessHostelIds, [_hilltopId, _hostelId]);
+      expect(
+        find.text('PG access saved. Anil Warden is now working in Hilltop House.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a refused PG access change keeps the sheet open and says why', (tester) async {
+      final writes = _FakeWrites(
+        throws: const InvalidInputFailure(
+            'This PG already has 5 active wardens. Remove one from it first.'),
+      );
+      await _pump(
+        tester,
+        _overrides(
+          staff: [_member(role: StaffRole.warden)],
+          owned: _threePgs,
+          writes: writes,
+        ),
+      );
+
+      await tester.tap(find.text('PG access'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+        of: find.byType(StaffAccessSheet),
+        matching: find.widgetWithText(CheckboxListTile, 'Hilltop House'),
+      ));
+      await tester.pump();
+      await tester.tap(find.text('Save PG access'));
+      await _tick(tester);
+
+      expect(
+        find.text('This PG already has 5 active wardens. Remove one from it first.'),
+        findsOneWidget,
+      );
+      expect(find.text('PG ACCESS'), findsOneWidget);
     });
   });
 

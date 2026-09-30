@@ -5,6 +5,7 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/version/update_banner.dart';
+import '../../data/providers.dart';
 import '../../shared/aurora.dart';
 import '../../shared/brow_header.dart';
 import '../../shared/glass/glass.dart';
@@ -98,6 +99,32 @@ class RoleShell extends ConsumerStatefulWidget {
 class _RoleShellState extends ConsumerState<RoleShell> {
   int _index = 0;
 
+  /// Asks, each time the app comes back to the foreground, whether a warden's or a manager's PG
+  /// moved while it was away. See [AuthController.syncActiveHostel] for why: `users.hostel_id`
+  /// is shared by every device on the account, so a switch on the website or a second phone
+  /// moves this phone's PG too, and nothing else would tell it.
+  ///
+  /// Here rather than in either shell because this widget outlives them both: the two shells
+  /// are rebuilt from scratch when the PG changes (see [_shell]), and a listener inside one
+  /// would be torn down by the very event it exists to notice.
+  AppLifecycleListener? _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.role == UserRole.warden || widget.role == UserRole.manager) {
+      _lifecycle = AppLifecycleListener(
+        onResume: () => ref.read(authControllerProvider.notifier).syncActiveHostel(),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _lifecycle?.dispose();
+    super.dispose();
+  }
+
   /// THE ONE MOUNTING POINT FOR THE "A NEW BUILD EXISTS" NOTICE.
   ///
   /// This widget is what the router draws for every one of the five role homes — the three
@@ -114,9 +141,21 @@ class _RoleShellState extends ConsumerState<RoleShell> {
     // badges and a selected index that other screens can move. The placeholder below stays for
     // the roles still to come, and each takes this same one-line exit as it lands. The tab list
     // in [_tabs] remains the readable index of what every role's navigation is.
-    if (widget.role == UserRole.warden) return const WardenShell();
+    //
+    // THE TWO STAFF SHELLS ARE KEYED BY THE PG THEY ARE SHOWING. A warden or manager with access
+    // to several PGs can switch between them, and a switch has to land as a fresh shell: its
+    // TabWarmer warms the NEW PG's tabs (a warmer that has already run would leave every
+    // unvisited tab to load cold), and scroll positions, typed searches and expanded rows that
+    // belonged to the previous PG's lists do not carry over onto another PG's rows. The tab
+    // index and the filters are providers, so where the person was standing survives. A session
+    // refresh that leaves the PG alone keeps the same key and rebuilds nothing.
+    if (widget.role == UserRole.warden || widget.role == UserRole.manager) {
+      final hostelId = ref.watch(currentHostelIdProvider);
+      return widget.role == UserRole.warden
+          ? WardenShell(key: ValueKey<String?>(hostelId))
+          : ManagerShell(key: ValueKey<String?>(hostelId));
+    }
     if (widget.role == UserRole.superAdmin) return const SaShell();
-    if (widget.role == UserRole.manager) return const ManagerShell();
 
     final t = Theme.of(context);
     final session = ref.watch(sessionProvider);

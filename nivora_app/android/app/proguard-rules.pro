@@ -6,14 +6,25 @@
 # exists because something breaks without it — not as a precaution.
 
 # ── Flutter engine ───────────────────────────────────────────────────────────
-# The embedding is entered from native code via JNI, so R8 sees no callers.
--keep class io.flutter.app.** { *; }
--keep class io.flutter.plugin.** { *; }
--keep class io.flutter.embedding.** { *; }
--keep class io.flutter.util.** { *; }
--keep class io.flutter.view.** { *; }
--keep class io.flutter.** { *; }
--keep class io.flutter.plugins.** { *; }
+# NO BLANKET io.flutter KEEP, deliberately. There used to be seven lines here keeping every
+# io.flutter class whole, on the reasoning that the embedding is entered from native code via JNI
+# so R8 sees no callers. That reasoning is right, and the protection already exists without them:
+#
+#   - Every class libflutter.so looks up by name carries class-level @androidx.annotation.Keep in
+#     the shipped embedding (flutter_embedding_release-1.0.0-5d531788...jar, checked 2026-09-30):
+#     FlutterJNI, FlutterOverlaySurface, FlutterMutatorsStack, SurfaceTextureWrapper,
+#     FlutterCallbackInformation, TextureRegistry$ImageConsumer.
+#   - androidx.annotation ships the consumer rule "-keep @androidx.annotation.Keep class * {*;}",
+#     so R8 keeps those classes with every member.
+#   - The one reflective lookup of an app class, Class.forName("...GeneratedPluginRegistrant"),
+#     targets a class the Flutter tool generates with @Keep (see that file).
+#   - Manifest components (MainActivity, the FCM service/receiver) are kept by AAPT's rules.
+#
+# So the blanket lines kept only DEAD embedding classes. That cost DEX size and Play's R8 score,
+# and some of those dead classes contain the deprecated Window.setStatusBarColor calls that
+# Play's edge-to-edge warning counts. If a release build ever crashes with ClassNotFoundException
+# or NoSuchMethodError in io.flutter, the fix is to keep that ONE class, not to bring back
+# io.flutter.**.
 
 # ── Generic and annotation metadata ──────────────────────────────────────────
 # Kept for every library that reflects over types at runtime. This line arrived with Razorpay's

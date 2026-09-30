@@ -15,6 +15,7 @@ import { SegmentedPills } from "@/components/shared/segmented";
 import { Chip, StatusPill } from "@/components/shared/status-pill";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useAction } from "@/hooks/use-action";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 import { recordPayment } from "@/lib/actions/warden";
 import { PAYMENT_MODES, type FeeLedgerRow, type FeeStatus, type PaymentMode } from "@/lib/types";
 import { cn, formatDate, formatINR, formatINRCompact, formatPeriodMonth, toISODate } from "@/lib/utils";
@@ -178,7 +179,8 @@ export function RecordPaymentSheet({ row, period, onOpenChange }: { row: FeeRow 
   const [paidOn, setPaidOn] = React.useState(toISODate());
   const [notes, setNotes] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
-  const { run, pending } = useAction(recordPayment, { onSuccess: () => onOpenChange(false) });
+  const record = useHostelBound(recordPayment);
+  const { run, pending } = useAction(record, { onSuccess: () => onOpenChange(false) });
 
   React.useEffect(() => {
     if (row) {

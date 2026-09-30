@@ -3,13 +3,15 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowLeft, Building2, KeyRound, LogOut, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, Building2, KeyRound, Loader2, LogOut, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/roles";
 import { NAV, isActive } from "./nav-config";
 import { NotificationBell } from "@/components/shared/notification-bell";
 import { UserAvatar } from "@/components/ui/avatar";
 import { signOut } from "@/lib/actions/session";
+import { RenderedHostel } from "./rendered-hostel";
+import { HostelSwitchItems, useHostelSwitch, type SwitchableHostel } from "./hostel-switcher";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +39,10 @@ import {
  *    not depend on the label, the selected pill is absolutely positioned, and
  *    the only thing that differs between selected and unselected is colour and
  *    stroke weight. Nothing in the bar reflows when the route changes.
+ *
+ * It also provides the page's rendered PG to everything inside it (see
+ * rendered-hostel.tsx). This shell is rendered per page by MobilePage, never by
+ * a layout, so the value is always the current page's own.
  */
 export function MobileShell({
   role,
@@ -45,6 +51,10 @@ export function MobileShell({
   avatarName,
   /** Account context for the avatar menu — where a pushed screen can still check which hostel it is looking at. */
   hostelName,
+  /** The PG this page was rendered for, handed to every write by useHostelBound(). */
+  hostelId = null,
+  /** Warden allowed into 2+ PGs: the Switch PG control. Empty = no control. */
+  switchHostels = [],
   unread = 0,
   banner,
   children,
@@ -61,6 +71,8 @@ export function MobileShell({
   subtitle?: React.ReactNode;
   avatarName?: string;
   hostelName?: string | null;
+  hostelId?: string | null;
+  switchHostels?: SwitchableHostel[];
   unread?: number;
   banner?: React.ReactNode;
   children: React.ReactNode;
@@ -73,7 +85,7 @@ export function MobileShell({
   const router = useRouter();
   const items = NAV[role];
 
-  return (
+  const shell = (
     <div className="mx-auto min-h-dvh w-full max-w-[480px]">
       {/* ── Top app bar ─────────────────────────────────────────────────── */}
       <header className="app-bar material-chrome fixed inset-x-0 top-0 z-40 mx-auto flex max-w-[480px] items-center justify-between gap-2 border-b border-separator">
@@ -138,6 +150,13 @@ export function MobileShell({
           </div>
         </div>
         <div className="-mr-3 flex shrink-0 items-center">
+          {/*
+            Tab roots only, like the hostel name itself: a pushed screen belongs to
+            the PG it was opened from, and switching lands on home anyway.
+          */}
+          {!backHref && role === "warden" && switchHostels.length > 1 ? (
+            <SwitchPgButton hostels={switchHostels} currentId={hostelId} />
+          ) : null}
           {actions}
           <NotificationBell initialUnread={unread} />
         </div>
@@ -196,5 +215,29 @@ export function MobileShell({
         </nav>
       )}
     </div>
+  );
+
+  return <RenderedHostel hostelId={hostelId}>{shell}</RenderedHostel>;
+}
+
+/** 44x44 header control listing the warden's PGs (my_staff_hostels). */
+function SwitchPgButton({ hostels, currentId }: { hostels: SwitchableHostel[]; currentId: string | null }) {
+  const { switchTo, pending } = useHostelSwitch("warden", currentId);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Switch PG"
+          aria-busy={pending || undefined}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-navy transition-colors hover:bg-fill-quaternary active:bg-fill-tertiary"
+        >
+          {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowLeftRight className="h-5 w-5" strokeWidth={2} />}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <HostelSwitchItems role="warden" label="Switch PG" hostels={hostels} currentId={currentId} pending={pending} onSwitch={switchTo} />
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

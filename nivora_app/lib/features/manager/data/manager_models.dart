@@ -11,9 +11,9 @@ import '../../../data/models/parse.dart';
 ///
 /// Everything the shared data layer already models — Expense, Revenue, Task, FinanceDay, and
 /// now the mess menu — is used from lib/data/models and NOT redeclared here. What is left is
-/// the two things only this role touches: the staff directory a task's assignment is read
-/// against (public.users, narrowed by RLS to owner/manager/warden), and two derived views over
-/// rows the server already returned.
+/// the two things only this role touches: the staff names a task's assignment is read against
+/// (public.hostel_staff_names: the owner and the wardens and managers of the PG), and two
+/// derived views over rows the server already returned.
 
 /// public.menus — the mess menu — IS NOT DECLARED HERE ANY MORE.
 ///
@@ -47,33 +47,34 @@ enum UserRoleLabel implements WireValue {
   static UserRoleLabel? tryParse(String? v) => wireOrNull(UserRoleLabel.values, v);
 }
 
-/// A colleague, as public.users hands them to a manager.
+/// A colleague's name, as public.hostel_staff_names() hands it to a manager.
 ///
-/// RLS lets a manager read only the owner, the manager and the warden of their own hostel —
-/// never a resident (rls-policies.sql, users_select). This class exists so a task can say
-/// "assigned by Priya Nair" instead of printing a uuid at somebody.
+/// The owner of the PG plus every warden and manager with ACCESS to it, never a resident. This
+/// class exists so a task can say "assigned by Priya Nair" instead of printing a uuid at
+/// somebody.
+///
+/// NAMES ONLY, ON PURPOSE. It used to be a read of public.users filtered by `hostel_id`, which
+/// since staff_hostel_access means "working in this PG right now": a warden with two PGs who
+/// had switched to the other one dropped out, and their tasks here lost their name. The RPC
+/// lists by access and returns the three columns a task line needs, and nothing a manager has
+/// no use for.
 class StaffMember {
   const StaffMember({
     required this.id,
     required this.role,
     required this.fullName,
-    this.phone,
   });
-
-  static const columns = 'id, role, full_name, phone';
 
   final String id;
   final UserRoleLabel role;
   final String fullName;
-  final String? phone;
 
   factory StaffMember.fromJson(Map<String, dynamic> row) {
-    const src = 'users';
+    const src = 'hostel_staff_names';
     return StaffMember(
-      id: reqString(row, src, 'id'),
+      id: reqString(row, src, 'user_id'),
       role: wireOrThrow(UserRoleLabel.values, row['role'], src, 'role'),
       fullName: reqString(row, src, 'full_name'),
-      phone: optString(row, 'phone'),
     );
   }
 }

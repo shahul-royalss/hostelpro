@@ -4,6 +4,7 @@ import * as React from "react";
 import { Download, IndianRupee, Pencil, Trash2 } from "lucide-react";
 import { deleteRevenue } from "@/lib/actions/manager";
 import { useAction } from "@/hooks/use-action";
+import { useHostelBound } from "@/components/shell/rendered-hostel";
 import type { RevenueRow } from "@/lib/types";
 import { formatDate, formatINR, formatPeriodMonth, sumBy, titleCase } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,8 @@ export function RevenueTable({ rows, month, writable }: { rows: RevenueRow[]; mo
   const [deleting, setDeleting] = React.useState<RevenueRow | null>(null);
   const total = sumBy(rows, (r) => r.amount);
 
-  const del = useAction(deleteRevenue, { onSuccess: () => setDeleting(null) });
+  const remove = useHostelBound(deleteRevenue);
+  const del = useAction(remove, { onSuccess: () => setDeleting(null) });
 
   return (
     <GlassCard padded={false}>

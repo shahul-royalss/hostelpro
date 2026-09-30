@@ -241,7 +241,8 @@ export class PermissionError extends Error {
 
 /**
  * Resolve the hostel a given profile row is bound to (Hard rule §3).
- *  • manager / warden / student → users.hostel_id
+ *  • manager / warden / student → users.hostel_id (for staff allowed into several PGs this is
+ *    the ACTIVE one; staff_switch_hostel moves it, and only to a PG in staff_hostel_access)
  *  • owner → active-hostel cookie (validated) or users.hostel_id or first owned hostel
  *  • super_admin → must pass hostelId explicitly (monitoring views)
  *
@@ -396,6 +397,51 @@ export function assertWritable(ctx: HostelContext) {
 /** Convenience for actions: role + hostel + writable in one call. */
 export async function assertWritableContext(...roles: UserRole[]) {
   const res = await assertHostelContext(...roles);
+  assertWritable(res.ctx);
+  return res;
+}
+
+/* ───────────────────────── Stale form guard ───────────────────────── */
+
+export const SWITCHED_PG_MESSAGE = "You switched PG on another device. Reload this page.";
+/**
+ * The owner's wording. An owner's hostel is a cookie on this browser, not a column shared by
+ * devices, so their stale page (updateComplaintStatus) comes from a switch in another tab.
+ */
+export const SWITCHED_HOSTEL_MESSAGE = "You switched hostel in another tab. Reload this page.";
+
+/**
+ * Refuse a write whose page was rendered for a different PG than the one the session is in now.
+ *
+ * WHY. A warden or manager allowed into several PGs works in one at a time: users.hostel_id is
+ * the ACTIVE PG, and every write computes ctx.hostel.id from it at SUBMIT time. That column is
+ * one value shared by every device the account is signed in on. So a weekly menu opened on the
+ * laptop for PG A and saved after the phone switched to PG B would be upserted into PG B,
+ * silently overwriting B's menu with A's. RLS cannot catch it: the write really is inside the
+ * caller's active PG. Only the page knows which PG it was showing.
+ *
+ * `renderedHostelId` is therefore a COMPARISON value and nothing more. It never selects the
+ * hostel a write lands in (that is still ctx.hostel.id, from the verified session), so a client
+ * that lies about it can only get its own write refused. A missing or malformed value is refused
+ * too: a form that cannot say which PG it was built for is exactly the stale case.
+ */
+export function assertRenderedHostel(ctx: HostelContext, renderedHostelId: unknown, role?: UserRole) {
+  if (typeof renderedHostelId !== "string" || renderedHostelId !== ctx.hostel.id) {
+    throw new PermissionError(role === "owner" ? SWITCHED_HOSTEL_MESSAGE : SWITCHED_PG_MESSAGE);
+  }
+}
+
+/**
+ * assertWritableContext() plus the stale form guard. Every warden and manager write goes
+ * through this, with the hostel id the page was rendered for (bound on the client by
+ * useHostelBound(), components/shell/rendered-hostel.tsx).
+ *
+ * The PG check runs BEFORE the writable check on purpose: when the PG changed underneath the
+ * form, "subscription expired" would describe a PG the user is not looking at.
+ */
+export async function assertWritableContextFor(renderedHostelId: unknown, ...roles: UserRole[]) {
+  const res = await assertHostelContext(...roles);
+  assertRenderedHostel(res.ctx, renderedHostelId, res.user.role);
   assertWritable(res.ctx);
   return res;
 }

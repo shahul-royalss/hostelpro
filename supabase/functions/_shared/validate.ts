@@ -134,6 +134,49 @@ export class Validator {
     return v;
   }
 
+  /**
+   * An optional list of ids. Absent (undefined or null) is null, so a client that has never
+   * heard of the field gets exactly the behaviour it had before the field existed. Present, it
+   * must be a non-empty array of at most [max] uuids.
+   *
+   * The ids come back lowercased and de-duplicated in first-seen order. Postgres compares uuids
+   * without regard to case, so "ABC…" and "abc…" are the same row, and the same id twice must
+   * never count as two of anything. Order is kept because a caller may give the first entry a
+   * meaning (owner-create-staff: the PG the account starts in).
+   *
+   * [max] is checked on the raw length, before de-duplication, so the cap also bounds the work
+   * a single request can ask for.
+   */
+  optionalUuidList(
+    field: string,
+    opts: { max: number; message: string; empty: string; tooMany: string },
+  ): string[] | null {
+    const v = this.raw(field);
+    if (v === undefined || v === null) return null;
+    if (!Array.isArray(v)) {
+      this.add(field, opts.message);
+      return null;
+    }
+    if (v.length === 0) {
+      this.add(field, opts.empty);
+      return null;
+    }
+    if (v.length > opts.max) {
+      this.add(field, opts.tooMany);
+      return null;
+    }
+    const ids: string[] = [];
+    for (const item of v) {
+      if (typeof item !== "string" || !UUID_RE.test(item)) {
+        this.add(field, opts.message);
+        return null;
+      }
+      const id = item.toLowerCase();
+      if (!ids.includes(id)) ids.push(id);
+    }
+    return ids;
+  }
+
   /** YYYY-MM-DD, and a real day: "2026-02-31" is rejected, not silently rolled forward. */
   isoDate(field: string, message = "Pick a valid date"): string {
     const v = this.raw(field);

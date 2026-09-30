@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { audit } from "@/lib/audit";
 import { LIMITS, rateLimit } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
-import { assertHostelContext, assertWritableContext, errorMessage } from "@/lib/permissions";
+import { assertHostelContext, assertWritableContextFor, errorMessage } from "@/lib/permissions";
 import { removeFromBucket, signedUrl, uploadToBucket } from "@/lib/storage";
 import { fail, ok, type ActionResult } from "@/lib/types";
 import {
@@ -19,6 +19,13 @@ import {
   type RevenueInput,
   type TaskStatusInput,
 } from "@/lib/validators/manager";
+
+/**
+ * Manager server actions. Every WRITE takes `renderedHostelId` first: the PG the page was rendered
+ * for, bound on the client by useHostelBound(). assertWritableContextFor() refuses the write when
+ * the manager has switched PG since, which is what stops saveMenu() overwriting another PG's week
+ * (lib/permissions.ts explains the failure). getReceiptUrl is a read and does not need it.
+ */
 
 const FINANCE_PATHS = ["/manager", "/manager/expenses", "/manager/revenue", "/owner", "/owner/finance"];
 function revalidateFinance() {
@@ -53,7 +60,7 @@ async function tryUploadReceipt(hostelId: string, file: File | null): Promise<{ 
 
 /* ───────────────────────── Expenses (MG-2) ───────────────────────── */
 
-export async function createExpense(formData: FormData): Promise<ActionResult<{ id: string }>> {
+export async function createExpense(renderedHostelId: string, formData: FormData): Promise<ActionResult<{ id: string }>> {
   const parsed = expenseSchema.safeParse({
     date: formValue(formData, "date"),
     category: formValue(formData, "category"),
@@ -63,7 +70,7 @@ export async function createExpense(formData: FormData): Promise<ActionResult<{ 
   if (!parsed.success) return fail("Please check the form.", parsed.error.flatten().fieldErrors);
 
   try {
-    const { user, ctx } = await assertWritableContext("manager");
+    const { user, ctx } = await assertWritableContextFor(renderedHostelId, "manager");
     const rl = await rateLimit(`manager:write:${user.id}`, LIMITS.writePerUser.max, LIMITS.writePerUser.windowSeconds);
     if (!rl.allowed) return fail("Too many entries in a short time. Please slow down and try again.");
     const { path, warning } = await tryUploadReceipt(ctx.hostel.id, formFile(formData, "receipt"));
@@ -92,7 +99,7 @@ export async function createExpense(formData: FormData): Promise<ActionResult<{ 
   }
 }
 
-export async function updateExpense(formData: FormData): Promise<ActionResult> {
+export async function updateExpense(renderedHostelId: string, formData: FormData): Promise<ActionResult> {
   const parsed = expenseUpdateSchema.safeParse({
     id: formValue(formData, "id"),
     date: formValue(formData, "date"),
@@ -104,7 +111,7 @@ export async function updateExpense(formData: FormData): Promise<ActionResult> {
   if (!parsed.success) return fail("Please check the form.", parsed.error.flatten().fieldErrors);
 
   try {
-    const { user, ctx } = await assertWritableContext("manager");
+    const { user, ctx } = await assertWritableContextFor(renderedHostelId, "manager");
 
     const newFile = formFile(formData, "receipt");
     if (newFile) {
@@ -164,11 +171,11 @@ export async function updateExpense(formData: FormData): Promise<ActionResult> {
 }
 
 /** Soft delete (Hard rule §4.10) — hard deletes are blocked by RLS. */
-export async function deleteExpense(input: { id: string }): Promise<ActionResult> {
+export async function deleteExpense(renderedHostelId: string, input: { id: string }): Promise<ActionResult> {
   const parsed = idSchema.safeParse(input);
   if (!parsed.success) return fail("Invalid request.");
   try {
-    const { ctx } = await assertWritableContext("manager");
+    const { ctx } = await assertWritableContextFor(renderedHostelId, "manager");
     const supabase = await createClient();
     const { error, count } = await supabase
       .from("expenses")
@@ -212,11 +219,11 @@ export async function getReceiptUrl(input: { id: string }): Promise<ActionResult
 
 /* ───────────────────────── Revenue (MG-3) ───────────────────────── */
 
-export async function createRevenue(input: RevenueInput): Promise<ActionResult<{ id: string }>> {
+export async function createRevenue(renderedHostelId: string, input: RevenueInput): Promise<ActionResult<{ id: string }>> {
   const parsed = revenueSchema.safeParse(input);
   if (!parsed.success) return fail("Please check the form.", parsed.error.flatten().fieldErrors);
   try {
-    const { user, ctx } = await assertWritableContext("manager");
+    const { user, ctx } = await assertWritableContextFor(renderedHostelId, "manager");
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("revenues")
@@ -239,11 +246,11 @@ export async function createRevenue(input: RevenueInput): Promise<ActionResult<{
   }
 }
 
-export async function updateRevenue(input: RevenueInput & { id: string }): Promise<ActionResult> {
+export async function updateRevenue(renderedHostelId: string, input: RevenueInput & { id: string }): Promise<ActionResult> {
   const parsed = revenueUpdateSchema.safeParse(input);
   if (!parsed.success) return fail("Please check the form.", parsed.error.flatten().fieldErrors);
   try {
-    const { ctx } = await assertWritableContext("manager");
+    const { ctx } = await assertWritableContextFor(renderedHostelId, "manager");
     const supabase = await createClient();
     const { error, count } = await supabase
       .from("revenues")
@@ -264,11 +271,11 @@ export async function updateRevenue(input: RevenueInput & { id: string }): Promi
   }
 }
 
-export async function deleteRevenue(input: { id: string }): Promise<ActionResult> {
+export async function deleteRevenue(renderedHostelId: string, input: { id: string }): Promise<ActionResult> {
   const parsed = idSchema.safeParse(input);
   if (!parsed.success) return fail("Invalid request.");
   try {
-    const { ctx } = await assertWritableContext("manager");
+    const { ctx } = await assertWritableContextFor(renderedHostelId, "manager");
     const supabase = await createClient();
     const { error, count } = await supabase
       .from("revenues")
@@ -293,11 +300,11 @@ export async function deleteRevenue(input: { id: string }): Promise<ActionResult
  * RLS + `tasks_before_update` trigger only allow the status column to change;
  * `tasks_after_change` notifies the owner.
  */
-export async function updateTaskStatus(input: TaskStatusInput): Promise<ActionResult> {
+export async function updateTaskStatus(renderedHostelId: string, input: TaskStatusInput): Promise<ActionResult> {
   const parsed = taskStatusSchema.safeParse(input);
   if (!parsed.success) return fail("Invalid request.");
   try {
-    const { user, ctx } = await assertWritableContext("manager");
+    const { user, ctx } = await assertWritableContextFor(renderedHostelId, "manager");
     const supabase = await createClient();
     const { error, count } = await supabase
       .from("tasks")
@@ -321,11 +328,11 @@ export async function updateTaskStatus(input: TaskStatusInput): Promise<ActionRe
 /* ───────────────────────── Mess menu (MG-4) ───────────────────────── */
 
 /** Upsert the whole weekly grid on (hostel_id, day_of_week, meal). */
-export async function saveMenu(cells: MenuCellInput[]): Promise<ActionResult> {
+export async function saveMenu(renderedHostelId: string, cells: MenuCellInput[]): Promise<ActionResult> {
   const parsed = menuSchema.safeParse(cells);
   if (!parsed.success) return fail("Please check the menu — one of the cells is too long.");
   try {
-    const { user, ctx } = await assertWritableContext("manager");
+    const { user, ctx } = await assertWritableContextFor(renderedHostelId, "manager");
     const supabase = await createClient();
     const rows = parsed.data.map((c) => ({
       hostel_id: ctx.hostel.id,

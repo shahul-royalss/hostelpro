@@ -50,6 +50,16 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- NFC STAYS OPTIONAL WHATEVER A LIBRARY SAYS. NFC comes from Razorpay (standard-core asks for
+         the NFC permission for tap-to-pay cards) and is optional today only because Razorpay's own
+         manifest says required="false". If a Razorpay release ever flipped that to true, Google Play
+         would silently stop offering Nivora to every phone without NFC, which is many budget
+         phones in India, with no build error to warn anyone. tools:replace makes this line win
+         the manifest merge. Nivora itself never uses NFC. -->
+    <uses-feature
+        android:name="android.hardware.nfc"
+        android:required="false"
+        tools:replace="android:required" />
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
     <!-- ── THE SESSION MUST NOT LEAVE THE PHONE ────────────────────────────────────────────
          Android Auto Backup is ON BY DEFAULT. With it on,

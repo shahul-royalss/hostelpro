@@ -6,6 +6,51 @@ Play counts the characters *inside* the tags, not the tags themselves.
 
 ---
 
+## v1.1.0 (versionCode 7) — staff across several PGs, and the first production release
+
+`nivora_app/pubspec.yaml:19` says `version: 1.1.0+7`. Built on 2026-09-30 by
+`nivora_app/scripts/release.sh` (analyzer clean, 1,458 tests passed) and checked independently:
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `dist/NIVORA-1.1.0.aab` (upload this) | 66,416,290 | `2daac0451fb2ca3123fe097162e0565d6bd2aeded0a2d9166734f0957f7e16c2` |
+| `dist/NIVORA-1.1.0.apk` (arm64, to install) | 25,290,785 | `7c373e9e9d44ec68f5fd3f6ab7ac69a97500729f0801ae46e3fa06984102cc48` |
+| `dist/NIVORA-1.1.0-universal.apk` (any CPU) | 68,849,239 | `d0967f8c89f1e160ebfc8507007eba30de95e1b69c5df5fe0012f4b3e4dc441c` |
+
+Package `com.nivorasr.app`, versionCode 7, versionName 1.1.0, targetSdk 36, the same 10 permissions
+as versionCode 6, no AD_ID, every arm64 and x86_64 library 16 KB aligned, signed with the upload key
+(`24:23:97` … `FB:64:65`). Camera and NFC are both declared optional, so no phone is filtered out for
+lacking either.
+
+**Do not install or upload it before the multi-PG database migration is live.** This build reads
+`public.owner_hostel_staff`, `public.my_staff_hostels`, `public.staff_switch_hostel` and
+`public.owner_set_staff_hostels`, which `db/migrations/2026-09-30-multi-pg-staff-access.sql`
+creates. Without them the owner's Staff screen and Tasks screen fail to load. The order is in
+[play-console-submission.md, Step 4](play-console-submission.md#step-4--versioncode-7-and-production).
+
+**Release name:** `1.1.0 (7)`
+
+```
+<en-US>
+Nivora runs a PG or hostel end to end.
+
+• Owners: every property in one place, staff logins for one PG or several, rent and payment history, expense charts, and tasks for your manager.
+• Wardens: rooms and beds, resident registration, fees at the desk, complaints and leave.
+• Managers: daily and monthly expenses, the mess menu, and your assigned jobs.
+• Residents: rent, receipts, UPI payment, complaints and notices.
+
+New: staff who work in several PGs tap Switch PG to move between them.
+</en-US>
+```
+
+**491 characters** inside the tags, **498** if every line break becomes CRLF on paste, against Play's
+500 (counted in Python on 2026-09-30). That is close, so recount after any edit. It keeps the full
+description of the app because this is the release production users will see first: nobody in
+production ever had versionCode 6, so a "what changed" list alone would describe nothing to them. The
+owners line lost "(5 managers and 5 wardens each)" and "monthly" to make room for the new line.
+
+---
+
 ## v1.0.0 (versionCode 6) — first release
 
 `nivora_app/pubspec.yaml:19` says `version: 1.0.0+6`. The bundle that went up is

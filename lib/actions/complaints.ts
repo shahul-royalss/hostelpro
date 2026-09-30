@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { assertWritableContext, errorMessage } from "@/lib/permissions";
+import { assertWritableContextFor, errorMessage } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
 import { fail, ok, type ActionResult, type ComplaintStatus } from "@/lib/types";
 
@@ -18,8 +18,12 @@ const updateSchema = z.object({
  * move a complaint through open → in_progress → resolved and/or add a note.
  * RLS: complaints_update (owner | warden of the hostel, writable subscription).
  * Trigger: writes complaint_events + notifies the student.
+ *
+ * `renderedHostelId` is the PG the page was rendered for (stale form guard, see
+ * assertWritableContextFor). The warden needs it because switching PG moves every device at
+ * once; the owner passes it too, which also catches an owner who switched hostel in another tab.
  */
-export async function updateComplaintStatus(input: {
+export async function updateComplaintStatus(renderedHostelId: string, input: {
   complaintId: string;
   status: ComplaintStatus;
   resolutionNote?: string | null;
@@ -27,7 +31,7 @@ export async function updateComplaintStatus(input: {
   const parsed = updateSchema.safeParse(input);
   if (!parsed.success) return fail("Invalid request.", parsed.error.flatten().fieldErrors);
   try {
-    const { user, ctx } = await assertWritableContext("owner", "warden");
+    const { user, ctx } = await assertWritableContextFor(renderedHostelId, "owner", "warden");
     const supabase = await createClient();
     const patch: Record<string, unknown> = { status: parsed.data.status, updated_by: user.id };
     if (parsed.data.resolutionNote !== undefined) patch.resolution_note = parsed.data.resolutionNote || null;

@@ -47,7 +47,11 @@ export interface Caller {
    * nothing about the person. See _shared/verification.ts.
    */
   emailVerifiedAt: string | null;
-  /** users.hostel_id — the tenant the account is bound to. null for super_admin. */
+  /**
+   * users.hostel_id: the tenant the account is working in. For a warden or manager given
+   * several PGs this is the ACTIVE one, which they move with staff_switch_hostel; the PGs they
+   * may move to live in public.staff_hostel_access. null for super_admin.
+   */
   hostelId: string | null;
   /** The verified bearer token, for RPCs that must run as this person. */
   jwt: string;

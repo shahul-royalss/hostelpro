@@ -36,7 +36,7 @@ import '../widgets/states.dart';
 /// manager on assignment and the owner when the status moves, which is why nothing here sends a
 /// message of its own.
 ///
-/// READS:  public.tasks (tasksProvider), public.users (ownerStaffProvider).
+/// READS:  public.tasks (tasksProvider), public.owner_hostel_staff (ownerStaffProvider).
 /// WRITES: public.tasks, through TaskRepository.
 class OwnerTasksScreen extends ConsumerWidget {
   const OwnerTasksScreen({super.key});
@@ -338,6 +338,9 @@ class _AssignTaskSheetState extends ConsumerState<_AssignTaskSheet> {
     final staff = ref.watch(ownerStaffProvider(widget.hostelId));
     // THE PICKER IS THE DATABASE'S OWN SET. app.tasks_assignee_guard refuses anyone who is not
     // an active manager of this hostel, so offering anybody else would be offering a refusal.
+    // "Of this hostel" means WITH ACCESS to it since staff_hostel_access: the list comes from
+    // owner_hostel_staff, so a manager who holds this PG and another one is offered here even
+    // while they are working in the other.
     final managers = [
       for (final member in staff.value ?? const <StaffMember>[])
         if (member.role == StaffRole.manager && member.isActive) member,

@@ -36,8 +36,12 @@
  * grant a power the policies withhold, so the set of callers here is the set the schema
  * already recognises.
  *
- * The hostel is NOT accepted from the client. A warden belongs to exactly one hostel, so
- * requireOwnHostel() takes users.hostel_id, and the target student is then loaded with BOTH
+ * The hostel is NOT accepted from the client. A warden works in exactly one hostel at a time
+ * (users.hostel_id, their active PG, even when the owner has given them several to switch
+ * between), so requireOwnHostel() takes users.hostel_id and re-checks the warden still has
+ * access to it (the service role below skips the RLS policies that scope a warden everywhere
+ * else, so nothing downstream would notice a stale active PG), and the target student is then
+ * loaded with BOTH
  * `id = studentId` AND `hostel_id = <that hostel>`. A warden pointing this at a resident of
  * another PG gets the same "not found" a nonexistent id gets — one message for both, so the
  * endpoint is not an oracle for which student ids exist on the platform.

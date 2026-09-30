@@ -2,20 +2,21 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { assertHostelContext, assertWritableContext, errorMessage } from "@/lib/permissions";
+import { assertHostelContext, assertWritableContext, errorMessage, type HostelContext } from "@/lib/permissions";
 import { createStaffAccount, regeneratePassword, setAccountStatus } from "@/lib/auth/accounts";
 import { signedUrl } from "@/lib/storage";
 import { fail, ok, type ActionResult, type AnnouncementAudience } from "@/lib/types";
-import { ROLE_LABEL } from "@/lib/roles";
+import { ROLE_LABEL, ROLE_LIMITS } from "@/lib/roles";
 import { audit } from "@/lib/audit";
 import { LIMITS, rateLimit } from "@/lib/rate-limit";
-import { getActiveManager, getStudentById, type StudentProfileRow } from "@/lib/queries/owner";
+import { activeCount, getActiveManager, getStaff, getStudentById, type StudentProfileRow } from "@/lib/queries/owner";
 import {
   announcementIdSchema,
   createAnnouncementSchema,
   createStaffSchema,
   createTaskSchema,
   hostelRulesSchema,
+  staffHostelsSchema,
   staffIdSchema,
   staffStatusSchema,
   studentIdSchema,
@@ -26,7 +27,9 @@ import {
 /**
  * Owner server actions. Every write:
  *   validate (zod) → assertWritableContext('owner') → RLS client → revalidate.
- * hostel_id is always ctx.hostel.id (never trusted from the client).
+ * hostel_id is always ctx.hostel.id (never trusted from the client). The one exception is staff
+ * PG access (createStaff / setStaffHostels), where the owner picks PGs: those ids are accepted
+ * only when they are in the owner's own hostel list, and the database checks them again.
  */
 
 function firstIssue(fieldErrors: Record<string, string[] | undefined>, fallback: string) {
@@ -102,10 +105,29 @@ export interface StaffCredentials {
 }
 
 /**
- * Create the hostel's Manager or Warden. The DB trigger enforces "max 1 active"
- * (Hard rule §4.3) and returns a friendly message; the auth user is rolled back on failure.
+ * The owner's own PGs, as a set, from the hostel context (hostels where owner_user_id is the
+ * caller, read under RLS). Every "is this PG yours?" check in this file asks this set, and
+ * createStaffAccount / owner_set_staff_hostels ask the database again on their own.
  */
-export async function createStaff(input: { role: "manager" | "warden"; fullName: string; email: string; phone?: string }): Promise<ActionResult<StaffCredentials>> {
+function ownedHostelIds(ctx: HostelContext): Set<string> {
+  return new Set(ctx.hostels.map((h) => h.id));
+}
+
+/**
+ * Create a Manager or Warden, allowed into one or more of the owner's PGs. The DB trigger
+ * enforces five active of each per PG (Hard rule §4.3) and returns a friendly message; the auth
+ * user is rolled back on failure.
+ *
+ * `hostelIds` absent means the current PG only, exactly as before multi-PG staff. When present,
+ * the first id is where the new account starts working, and every id must be the caller's own.
+ */
+export async function createStaff(input: {
+  role: "manager" | "warden";
+  fullName: string;
+  email: string;
+  phone?: string;
+  hostelIds?: string[];
+}): Promise<ActionResult<StaffCredentials>> {
   const parsed = createStaffSchema.safeParse(input);
   if (!parsed.success) {
     const fe = parsed.error.flatten().fieldErrors;
@@ -117,18 +139,28 @@ export async function createStaff(input: { role: "manager" | "warden"; fullName:
     if (!rl.allowed) return fail("Too many account operations in a short time. Please wait a bit and try again.");
     const supabase = await createClient();
 
-    // Friendly pre-check (the trigger is the real guard)
-    const { count } = await supabase
-      .from("users")
-      .select("id", { count: "exact", head: true })
-      .eq("hostel_id", ctx.hostel.id)
-      .eq("role", parsed.data.role)
-      .eq("status", "active")
-      .is("deleted_at", null);
-    // Five each since 2026-09-12, matching app.enforce_role_limits and the mobile app's
-    // owner-create-staff Edge Function. The trigger is the rule; this is the early message.
-    if ((count ?? 0) >= 5) {
-      return fail(`This PG already has 5 active ${parsed.data.role}s. Deactivate one first.`);
+    const owned = ownedHostelIds(ctx);
+    const hostelIds = [...new Set(parsed.data.hostelIds ?? [ctx.hostel.id])];
+    if (hostelIds.some((id) => !owned.has(id))) return fail("You can only give access to your own PGs.");
+
+    // A suspended PG is refused here, by name, before any account exists. ctx.hostels carries each
+    // PG's status but not its subscription state, so an EXPIRED (read-only) extra PG is left to the
+    // database: the staff_hostel_access guard refuses it with a P0001 sentence that createStaffAccount
+    // passes through after rolling the half-made account back.
+    const suspended = ctx.hostels.find((h) => hostelIds.includes(h.id) && h.status === "suspended");
+    if (suspended) return fail(`${suspended.name} is suspended, so no one can be given access to it.`);
+
+    // Friendly pre-check, per chosen PG (the database is the real guard). Five each since
+    // 2026-09-12, counted as active staff WITH ACCESS to the PG, matching app.enforce_role_limits
+    // and the mobile app's owner-create-staff Edge Function.
+    const limit = ROLE_LIMITS[parsed.data.role];
+    const perPg = await Promise.all(
+      hostelIds.map(async (id) => ({ id, active: activeCount(await getStaff(supabase, id), parsed.data.role) })),
+    );
+    const full = perPg.find((p) => p.active >= limit);
+    if (full) {
+      const name = ctx.hostels.find((h) => h.id === full.id)?.name ?? "This PG";
+      return fail(`${name} already has ${limit} active ${parsed.data.role}s. Remove one from it first.`);
     }
 
     const created = await createStaffAccount({
@@ -136,11 +168,11 @@ export async function createStaff(input: { role: "manager" | "warden"; fullName:
       fullName: parsed.data.fullName,
       email: parsed.data.email,
       phone: parsed.data.phone || null,
-      hostelId: ctx.hostel.id,
+      hostelIds,
       createdBy: user.id,
     });
 
-    await audit("owner.staff.create", { targetType: "user", targetId: created.userId, hostelId: ctx.hostel.id, meta: { role: parsed.data.role } });
+    await audit("owner.staff.create", { targetType: "user", targetId: created.userId, hostelId: ctx.hostel.id, meta: { role: parsed.data.role, hostelIds } });
     revalidatePath("/owner/staff");
     revalidatePath("/owner");
     return ok(
@@ -158,18 +190,37 @@ export async function createStaff(input: { role: "manager" | "warden"; fullName:
   }
 }
 
-/** Ensure the target user is a manager/warden of the active hostel (RLS-visible). */
-async function loadStaffUser(userId: string, hostelId: string) {
+/**
+ * Ensure the target user is one of THIS owner's managers/wardens: a live manager/warden account
+ * with an access row for at least one of the owner's PGs.
+ *
+ * It deliberately no longer requires users.hostel_id to be the owner's CURRENT PG. That column
+ * is where the staff member is working right now, and they may have switched to another of the
+ * owner's PGs; the owner must still be able to reset their password or deactivate them from any
+ * PG they share.
+ *
+ * Both reads run under the owner's RLS session, and each is a check in its own right:
+ *  • users_select only shows an owner the staff rows whose active PG is one of theirs;
+ *  • staff_hostel_access only shows an owner the rows for their own PGs, and the query is pinned
+ *    to those ids as well.
+ * The admin-client helpers the callers then use (regeneratePassword, setAccountStatus) act on the
+ * id returned here and nothing else.
+ */
+async function loadStaffUser(userId: string, ownedIds: Set<string>) {
+  if (ownedIds.size === 0) return null;
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("users")
-    .select("id, role, full_name, email, status")
-    .eq("id", userId)
-    .eq("hostel_id", hostelId)
-    .in("role", ["manager", "warden"])
-    .is("deleted_at", null)
-    .maybeSingle();
-  return (data as { id: string; role: "manager" | "warden"; full_name: string; email: string | null; status: "active" | "inactive" } | null) ?? null;
+  const [{ data: member }, { data: access }] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, role, full_name, email, status")
+      .eq("id", userId)
+      .in("role", ["manager", "warden"])
+      .is("deleted_at", null)
+      .maybeSingle(),
+    supabase.from("staff_hostel_access").select("hostel_id").eq("user_id", userId).in("hostel_id", [...ownedIds]).limit(1),
+  ]);
+  if (!member || !access?.length) return null;
+  return member as { id: string; role: "manager" | "warden"; full_name: string; email: string | null; status: "active" | "inactive" };
 }
 
 export async function resetStaffPassword(input: { userId: string }): Promise<ActionResult<StaffCredentials>> {
@@ -179,8 +230,8 @@ export async function resetStaffPassword(input: { userId: string }): Promise<Act
     const { user, ctx } = await assertWritableContext("owner");
     const rl = await rateLimit(`owner:staff:${user.id}`, LIMITS.accountCreatePerUser.max, LIMITS.accountCreatePerUser.windowSeconds);
     if (!rl.allowed) return fail("Too many account operations in a short time. Please wait a bit and try again.");
-    const staff = await loadStaffUser(parsed.data.userId, ctx.hostel.id);
-    if (!staff) return fail("Staff member not found in this hostel.");
+    const staff = await loadStaffUser(parsed.data.userId, ownedHostelIds(ctx));
+    if (!staff) return fail("That staff member is not yours.");
     const password = await regeneratePassword(staff.id);
     await audit("owner.staff.password_reset", { targetType: "user", targetId: staff.id, hostelId: ctx.hostel.id, meta: { role: staff.role } });
     return ok(
@@ -197,15 +248,56 @@ export async function setStaffStatus(input: { userId: string; status: "active" |
   if (!parsed.success) return fail("Invalid request.");
   try {
     const { ctx } = await assertWritableContext("owner");
-    const staff = await loadStaffUser(parsed.data.userId, ctx.hostel.id);
-    if (!staff) return fail("Staff member not found in this hostel.");
+    const staff = await loadStaffUser(parsed.data.userId, ownedHostelIds(ctx));
+    if (!staff) return fail("That staff member is not yours.");
     if (staff.status === parsed.data.status) return ok(undefined);
-    // Role-limit trigger fires on reactivation and returns a friendly error if the slot is taken.
+    // Account-wide on purpose: deactivating takes away EVERY PG (users.status gates them all);
+    // taking away one PG is setStaffHostels(). The role-limit trigger fires on reactivation and
+    // returns a friendly error if one of their PGs is already full.
     await setAccountStatus(staff.id, parsed.data.status);
     await audit("owner.staff.status", { targetType: "user", targetId: staff.id, hostelId: ctx.hostel.id, meta: { role: staff.role, status: parsed.data.status } });
     revalidatePath("/owner/staff");
     revalidatePath("/owner");
     return ok(undefined, parsed.data.status === "inactive" ? `${ROLE_LABEL[staff.role]} deactivated` : `${ROLE_LABEL[staff.role]} reactivated`);
+  } catch (e) {
+    return fail(errorMessage(e));
+  }
+}
+
+/**
+ * Replace the PGs a manager/warden may work in (owner_set_staff_hostels).
+ *
+ * The RPC is the guard, run as the owner's own session: it refuses a PG the caller does not own,
+ * a staff member who is not theirs, and a PG already at its five-per-role limit, and when their
+ * current PG is removed it moves them to the first remaining one by name. The checks here only
+ * turn the common mistakes into a message before the round trip.
+ */
+export async function setStaffHostels(input: { userId: string; hostelIds: string[] }): Promise<ActionResult<{ hostelIds: string[]; activeHostelId: string | null }>> {
+  const parsed = staffHostelsSchema.safeParse(input);
+  if (!parsed.success) {
+    const fe = parsed.error.flatten().fieldErrors;
+    return fail(firstIssue(fe, "Choose at least one PG."), fe as Record<string, string[]>);
+  }
+  try {
+    const { user, ctx } = await assertWritableContext("owner");
+    const rl = await rateLimit(`owner:staff:${user.id}`, LIMITS.accountCreatePerUser.max, LIMITS.accountCreatePerUser.windowSeconds);
+    if (!rl.allowed) return fail("Too many account operations in a short time. Please wait a bit and try again.");
+    const owned = ownedHostelIds(ctx);
+    const hostelIds = [...new Set(parsed.data.hostelIds)];
+    if (hostelIds.some((id) => !owned.has(id))) return fail("You can only give access to your own PGs.");
+    const staff = await loadStaffUser(parsed.data.userId, owned);
+    if (!staff) return fail("That staff member is not yours.");
+
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("owner_set_staff_hostels", { p_user_id: staff.id, p_hostel_ids: hostelIds });
+    if (error) return fail(errorMessage(error));
+    const rows = (data ?? []) as { hostel_id: string; is_active: boolean }[];
+    const activeHostelId = rows.find((r) => r.is_active)?.hostel_id ?? null;
+    // No audit() here: the RPC records owner.staff.hostels itself, with the before and after
+    // lists, and only when something actually changed.
+    revalidatePath("/owner/staff");
+    revalidatePath("/owner");
+    return ok({ hostelIds: rows.map((r) => r.hostel_id), activeHostelId }, "PG access saved");
   } catch (e) {
     return fail(errorMessage(e));
   }
@@ -223,7 +315,7 @@ export async function createTask(input: { title: string; description?: string; d
     const { user, ctx } = await assertWritableContext("owner");
     const supabase = await createClient();
     const manager = await getActiveManager(supabase, ctx.hostel.id);
-    if (!manager) return fail("Add a manager first — tasks are assigned to the active manager.");
+    if (!manager) return fail("Add a manager first. Tasks go to an active manager of this PG.");
 
     const { data, error } = await supabase
       .from("tasks")
