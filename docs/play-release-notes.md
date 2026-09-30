@@ -25,9 +25,8 @@ lacking either.
 This build reads `public.owner_hostel_staff`, `public.my_staff_hostels`,
 `public.staff_switch_hostel` and `public.owner_set_staff_hostels`. They have been live since
 2026-09-30, when `db/migrations/2026-09-30-multi-pg-staff-access.sql` was applied, so the build is
-safe to install and upload. The Edge Function redeploy that completes multi-PG account creation is
-the one backend step left; see
-[play-console-submission.md, Step 4](play-console-submission.md#step-4--versioncode-7-and-production).
+safe to install and upload. The Edge Functions that create multi-PG accounts were redeployed the
+same day; see [play-console-submission.md, Step 4](play-console-submission.md#step-4--versioncode-7-and-production).
 
 **Release name:** `1.1.0 (7)`
 

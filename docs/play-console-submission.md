@@ -100,7 +100,7 @@ once Console has parsed the upload, not when the upload bar fills.
 and the release notes are in [play-release-notes.md](play-release-notes.md). It adds staff access
 to several PGs, with a Switch PG control for wardens and managers.
 
-**A. The backend. Three of the four steps were done on 2026-09-30; one is yours.**
+**A. The backend. All four steps were done on 2026-09-30.**
 
 1. **Done.** `db/migrations/2026-09-30-multi-pg-staff-access.sql` was applied to the live project
    and recorded in `supabase_migrations.schema_migrations` as `20260930120000 multi_pg_staff_access`.
@@ -110,20 +110,22 @@ to several PGs, with a Switch PG control for wardens and managers.
 2. **Done.** Checked afterwards on live: every existing owner, staff member and resident resolves to
    the same PG and sees the same staff and contact card as before; anonymous callers get 401 from the
    new RPCs and from `staff_hostel_access`.
-3. **Yours: redeploy the five Edge Functions that share the changed files.** The permission system
-   refuses production deploys from Claude, so this is run from your own terminal, in the repository:
+3. **Done (by the owner, from their terminal).** The five Edge Functions that share the changed
+   files were redeployed with the Supabase CLI, since the permission system refuses production
+   deploys from Claude:
 
    ```bash
    npx supabase login
    npx supabase functions deploy owner-create-staff warden-register-student warden-student-credentials complaint-photo sa-create-owner --project-ref nimxvgzscbanhtvgnjll
    ```
 
-   Do not add `--no-verify-jwt`: all five must keep checking the caller's token. If the deploy asks for
-   Docker, add `--use-api`. If `npx` fails with a certificate error, Norton is intercepting TLS: in
-   PowerShell run `$env:NODE_EXTRA_CA_CERTS="C:\ProgramData\Norton\Antivirus\wscert.pem"` first.
-   Until this is done, the live versions (from before the change) keep working: creating a one-PG
-   warden or manager works as before, and an owner who ticks several PGs gets the account on the
-   first one plus a message to add the rest from **PG access** on the staff card.
+   Now live: owner-create-staff v14, warden-register-student v13, warden-student-credentials v12,
+   complaint-photo v12, sa-create-owner v12, all with verify_jwt on. The deployed source of every
+   one was compared with the repository byte for byte (every file identical, the file set exactly
+   each function's imports). Each also answered a request carrying only the public anon token from
+   its own code ("Your session has expired"), which proves the new code boots and still refuses
+   anyone who is not a signed-in user. Use the same command after any change to `_shared/`, and never
+   add `--no-verify-jwt`.
 4. **Done.** `main` was pushed as `74beedf`; Vercel reported the production deploy successful and the
    live pages answer. The website does not call Edge Functions, so it did not wait for step 3.
 
