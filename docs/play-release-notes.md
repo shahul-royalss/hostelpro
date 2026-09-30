@@ -22,10 +22,11 @@ as versionCode 6, no AD_ID, every arm64 and x86_64 library 16 KB aligned, signed
 (`24:23:97` … `FB:64:65`). Camera and NFC are both declared optional, so no phone is filtered out for
 lacking either.
 
-**Do not install or upload it before the multi-PG database migration is live.** This build reads
-`public.owner_hostel_staff`, `public.my_staff_hostels`, `public.staff_switch_hostel` and
-`public.owner_set_staff_hostels`, which `db/migrations/2026-09-30-multi-pg-staff-access.sql`
-creates. Without them the owner's Staff screen and Tasks screen fail to load. The order is in
+This build reads `public.owner_hostel_staff`, `public.my_staff_hostels`,
+`public.staff_switch_hostel` and `public.owner_set_staff_hostels`. They have been live since
+2026-09-30, when `db/migrations/2026-09-30-multi-pg-staff-access.sql` was applied, so the build is
+safe to install and upload. The Edge Function redeploy that completes multi-PG account creation is
+the one backend step left; see
 [play-console-submission.md, Step 4](play-console-submission.md#step-4--versioncode-7-and-production).
 
 **Release name:** `1.1.0 (7)`
