@@ -134,12 +134,12 @@ final class PluginDocumentCapture implements DocumentCapture {
           // rare: the first "Don't Allow" already reports permanentlyDenied, because iOS never
           // shows the camera prompt a second time.
           ? (defaultTargetPlatform == TargetPlatform.iOS
-              ? 'Nivora cannot open the camera. Turn it on in Settings → Apps → Nivora → Camera '
-                  '(on iOS 17 or earlier, Settings → Nivora → Camera), then try again. You can '
-                  'also choose an existing photo.'
-              : 'Nivora cannot open the camera. Turn it on in Settings → Apps → Nivora → '
+              ? 'Apnivaas cannot open the camera. Turn it on in Settings → Apps → Apnivaas → '
+                  'Camera (on iOS 17 or earlier, Settings → Apnivaas → Camera), then try again. '
+                  'You can also choose an existing photo.'
+              : 'Apnivaas cannot open the camera. Turn it on in Settings → Apps → Apnivaas → '
                   'Permissions → Camera, then try again. You can also choose an existing photo.')
-          : 'Nivora needs the camera to take this photo. You can also choose an existing photo '
+          : 'Apnivaas needs the camera to take this photo. You can also choose an existing photo '
               'instead.',
     );
   }

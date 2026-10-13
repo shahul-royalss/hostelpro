@@ -239,7 +239,9 @@ class _NivoraAppState extends ConsumerState<NivoraApp> {
 
     final router = ref.watch(routerProvider);
     return MaterialApp.router(
-      title: 'Nivora',
+      // The Android recents label. Title case, exactly as the logo writes it, and identical to
+      // app_name in res/values/strings.xml and CFBundleDisplayName in ios/Runner/Info.plist.
+      title: 'Apnivaas',
       debugShowCheckedModeBanner: false,
       routerConfig: router,
       // BOTH SCHEMES, FOLLOWING THE OS. This was pinned to dark for one build, and the reason is
@@ -363,7 +365,7 @@ class _BrokenScreen extends StatelessWidget {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'The rest of Nivora is still working. Use the bar at the bottom to go to '
+                  'The rest of Apnivaas is still working. Use the bar at the bottom to go to '
                   'another tab, and come back to this one in a moment.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 14, height: 1.4, color: Color(0xFFA2A6AB)),
@@ -409,7 +411,7 @@ class StartupFailure extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('Nivora could not start',
+                const Text('Apnivaas could not start',
                     style:
                         TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: _ink)),
                 const SizedBox(height: 8),

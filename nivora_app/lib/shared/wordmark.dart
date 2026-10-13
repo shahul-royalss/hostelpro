@@ -10,6 +10,11 @@ import 'package:path_parsing/path_parsing.dart';
 
 /// The NIVORA signature, and the machinery to draw it as if it were being written.
 ///
+/// HISTORICAL. The product is called Apnivaas from 1.2.0 and nothing in lib/ draws this outline
+/// any more (the masthead uses [NivoraTypeMark] below; the launch animation is the Apnivaas
+/// video). It stays only because test/startup_test.dart still pumps [NivoraWordmark]; delete
+/// the outline, [NivoraWordmark] and the path_parsing dependency together once nothing does.
+///
 /// ── WHY THE PATH DATA IS A STRING HERE ────────────────────────────────────────────────────
 ///
 /// This is the same outline the website draws on its sign-in screen, carried verbatim so the two
@@ -283,15 +288,27 @@ class _WordmarkPainter extends CustomPainter {
       old.progress != progress || old.color != color || old.strokeWidth != strokeWidth;
 }
 
-/// THE BRAND, SET AS TYPE — the masthead's second line and the splash's resting state.
+/// THE BRAND, SET AS TYPE — the masthead's second line under the greeting.
 ///
-/// [NivoraWordmark] above traces an outline and exists for animation. This is the same mark as
-/// TYPE: the display face at the lockup's own tracking. Asked for by the product owner as
-/// "simply elegant typographic which represents our logo / brand", and it is the right call for
-/// a masthead — a traced path has to be redrawn on every rebuild, where this is a Text.
+/// Asked for by the product owner as "simply elegant typographic which represents our logo /
+/// brand", and it is the right call for a masthead — a traced path has to be redrawn on every
+/// rebuild, where this is a Text. ([NivoraWordmark] above is the OLD product's traced
+/// signature: nothing in lib/ draws it any more.)
 ///
-/// The tracking is what makes it a mark rather than a word. 4 at this size is wide enough to
-/// read as a logotype without the letters losing their relationship to each other.
+/// ── "Apnivaas", IN TITLE CASE, BECAUSE THAT IS HOW THE LOGO WRITES IT ────────────────────
+///
+/// The product was renamed from Nivora to Apnivaas in 1.2.0. The old mark was set in capitals
+/// at a wide 4.0 tracking, and that tracking was what made six capitals read as a logotype.
+/// The new logo sets its name in title case with ordinary geometric-sans spacing, and the
+/// owner's rule is that the name is written exactly like the logo everywhere — never
+/// "APNIVAAS". Lower-case letters spread four points apart stop reading as a word at all, so the
+/// tracking comes down to a hair: enough that the line still reads as a signature rather than
+/// as a sentence, not so much that "nivaas" falls apart. Bold (700) rather than the old 800:
+/// the logo's letters are a firm medium, and 800 at 15 in lower case clogs the counters of
+/// "a" and "p". Both weights are bundled (core/theme/typography.dart), so nothing downloads.
+///
+/// The type mark is narrower than the old one (eight mostly lower-case letters at 0.6 against
+/// six capitals at 4.0), so no masthead that fitted before can overflow now.
 class NivoraTypeMark extends StatelessWidget {
   const NivoraTypeMark({
     super.key,
@@ -300,8 +317,12 @@ class NivoraTypeMark extends StatelessWidget {
     this.letterSpacing = tracking,
   });
 
-  /// The lockup's own tracking.
-  static const tracking = 4.0;
+  /// The product name, exactly as the logo writes it.
+  static const name = 'Apnivaas';
+
+  /// The resting tracking. The masthead's entrance adds [BrowEntrance.eyebrowSpread] to this
+  /// and lets it settle back, which is what the eyebrow above it does too.
+  static const tracking = 0.6;
 
   /// Null takes the surrounding ink, which is what a masthead on a brow wants.
   final Color? color;
@@ -314,11 +335,11 @@ class NivoraTypeMark extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return Text(
-      'NIVORA',
+      name,
       style: (t.textTheme.labelLarge ?? const TextStyle()).copyWith(
         color: color,
         fontSize: fontSize,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w700,
         letterSpacing: letterSpacing,
         height: 1,
       ),

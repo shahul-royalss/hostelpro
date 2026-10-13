@@ -221,7 +221,7 @@ void main() {
       await tester.tap(find.text('I do not agree'));
       await tester.pump();
 
-      expect(find.text('NIVORA cannot be used without agreeing'), findsOneWidget);
+      expect(find.text('Apnivaas cannot be used without agreeing'), findsOneWidget);
       expect(store.writes, 0, reason: 'declining must never write an acceptance');
       expect(find.text(_behindTheGate), findsNothing);
     });
@@ -279,7 +279,7 @@ void main() {
       await tester.tap(find.text('I do not agree'));
       await tester.pump();
 
-      expect(find.text('NIVORA cannot be used without agreeing'), findsOneWidget);
+      expect(find.text('Apnivaas cannot be used without agreeing'), findsOneWidget);
       expect(pushStarts(), 0);
     });
 
@@ -481,7 +481,116 @@ void main() {
           reason: 'the app records acceptances against $kLegalVersion but the web pages publish '
               '${match.group(1)} — one of them is showing text the other never agreed to');
     });
+
+    // The label is what a person actually reads ("This version: 2026-10-12, effective 12 October
+    // 2026"), and until 2026-10-12 nothing checked it, so a bump could move the version and leave
+    // the label naming the previous date. The format rule rides along: the web pages parse the
+    // same string for their "Last updated" line and print "Invalid Date" for anything that is not
+    // a plain YYYY-MM-DD date.
+    test('kLegalVersionLabel is kLegalVersion written out', () {
+      final date = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(kLegalVersion);
+      expect(date, isNotNull,
+          reason: 'kLegalVersion must be a plain YYYY-MM-DD date — app/legal/layout.tsx parses it');
+      const months = [
+        'January', 'February', 'March', 'April', 'May', 'June', //
+        'July', 'August', 'September', 'October', 'November', 'December',
+      ];
+      final day = int.parse(date!.group(3)!);
+      final month = months[int.parse(date.group(2)!) - 1];
+      expect(kLegalVersionLabel, '$day $month ${date.group(1)}');
+    });
+
+    // The operator facts are mirrored by hand (legal_documents.dart says so), and a mirror nobody
+    // checks is a second source of truth. The operator in particular is the party to the Terms:
+    // an app naming one entity and the website another would leave nobody sure who agreed with
+    // whom.
+    test('the operator, the product name and the contacts match lib/legal-config.ts', () {
+      final config = File('../lib/legal-config.ts').readAsStringSync();
+      String field(String name) {
+        final m = RegExp('$name:\\s*"([^"]*)"').firstMatch(config);
+        expect(m, isNotNull,
+            reason: 'lib/legal-config.ts no longer has a LEGAL.$name this test can read');
+        return m!.group(1)!;
+      }
+
+      expect(kOperatorName, field('operatorName'));
+      expect(kLegalProductName, field('productName'));
+      expect(kGrievanceOfficer, field('grievanceOfficer'));
+      expect(kGrievanceEmail, field('grievanceEmail'));
+      expect(kPostalAddress, field('postalAddress'));
+      expect(kGoverningLaw, field('governingLaw'));
+      expect(kJurisdiction, field('jurisdiction'));
+    });
   });
+
+  // ═════════════════════════════════════════════════════════════════════════════════════════
+  //
+  // THE NAMES IN THE DOCUMENTS. Version 2026-10-12 renamed the product Nivora → Apnivaas and
+  // named ShaReshi Tech as the operator. The old name surviving in one paragraph would mean
+  // people agreeing to a document about an app they do not have; the operator missing from one
+  // document would leave it naming nobody responsible. Case-sensitive on purpose: the support
+  // mailbox, support@nivora.dhrishtaerf.org, is printed in both documents and stays — old builds
+  // carry it in their own bundled copy, so it must keep working for good.
+  group('the documents carry the current names', () {
+    test('no bundled document says Nivora any more', () {
+      final stale = [
+        for (final doc in kLegalDocuments)
+          for (final text in _textOf(doc))
+            if (text.contains('NIVORA') || text.contains('Nivora')) '${doc.id}: $text',
+      ];
+      expect(stale, isEmpty);
+    });
+
+    test('both documents name the product and the operator', () {
+      for (final doc in kLegalDocuments) {
+        final texts = _textOf(doc).toList();
+        expect(texts.any((t) => t.contains(kLegalProductName)), isTrue,
+            reason: '${doc.id} never names the app it is about');
+        expect(texts.any((t) => t.contains(kOperatorName)), isTrue,
+            reason: '${doc.id} never names the operator responsible for it');
+      }
+    });
+
+    test('the published pages read the name from lib/legal-config.ts, not a hosting setting', () {
+      // The web pages took the product name from NEXT_PUBLIC_APP_NAME until 2026-10-12, which let
+      // a Vercel setting rewrite the published legal text with no commit and no version bump.
+      final pages = Directory('../app/legal')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.tsx'))
+          .toList();
+      expect(pages, isNotEmpty, reason: 'app/legal is not where this test expects it');
+      for (final page in pages) {
+        final source = page.readAsStringSync();
+        expect(source.contains('process.env'), isFalse,
+            reason: '${page.path} reads an environment variable into the legal text');
+        expect(source.contains('NIVORA'), isFalse, reason: '${page.path} still says NIVORA');
+      }
+    });
+  });
+}
+
+/// Every string a reader can see in [doc]. A switch over the sealed [LegalBlock], so a block type
+/// added later fails to compile here instead of being skipped by the checks above.
+Iterable<String> _textOf(LegalDocument doc) sync* {
+  yield doc.title;
+  yield doc.tagline;
+  for (final section in doc.sections) {
+    yield section.heading;
+    for (final block in section.blocks) {
+      switch (block) {
+        case Para(:final text):
+          yield text;
+        case Bullets(:final items):
+          yield* items;
+        case Rows(:final entries):
+          for (final e in entries) {
+            yield e.term;
+            yield e.detail;
+          }
+      }
+    }
+  }
 }
 
 /// Fails every read until [healthy] is set. Written here rather than in fake_consent.dart

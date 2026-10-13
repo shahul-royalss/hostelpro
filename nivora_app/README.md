@@ -1,6 +1,7 @@
 # mobile
 
-Nivora — PG management
+Apnivaas (called Nivora until 1.2.0) — PG management. The Dart package stays `mobile` and the
+applicationId / bundle id stays `com.nivorasr.app`; only the name people see changed.
 
 ## Getting Started
 

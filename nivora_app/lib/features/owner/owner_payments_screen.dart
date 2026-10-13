@@ -344,7 +344,7 @@ class _PaymentCard extends StatelessWidget {
         'owner' => 'Owner',
         'manager' => 'Manager',
         'warden' => 'Warden',
-        'super_admin' => 'Nivora',
+        'super_admin' => 'Apnivaas',
         _ => wire,
       };
 }

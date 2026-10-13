@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/features/auth/email_verification_service.dart';
 
 import 'support/fake_verification.dart';
+import 'fake_consent.dart';
+import 'package:mobile/features/legal/legal_providers.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/boot/splash_gate.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
@@ -126,6 +128,11 @@ void main() {
           // verification service on build. Without an override that provider reaches for
           // Supabase.instance, which no widget test initialises.
           emailVerificationServiceProvider.overrideWithValue(FakeVerification()),
+          verificationSendLogProvider.overrideWithValue(MemorySendLog()),
+          // Consent comes FIRST after sign-in now, so it wraps this screen too. These tests are
+          // about the password change, so the person has already agreed;
+          // role_routing_test.dart covers the gate itself.
+          legalConsentStoreProvider.overrideWithValue(FakeConsentStore.accepted()),
           authControllerProvider.overrideWith(() {
             auth = _ScriptedAuth(
               AuthSignedIn(sessionFor(

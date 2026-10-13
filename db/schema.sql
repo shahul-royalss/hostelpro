@@ -760,7 +760,7 @@ begin
   -- email-verification, which has just read GoTrue's own record of the link being consumed,
   -- whereas a human editing a row through PostgREST has read nothing.
   elsif new.email_verified_at is distinct from old.email_verified_at and not app.is_service_role() then
-    raise exception 'Email verification cannot be granted by hand — it is earned by opening the link Nivora emails to the address.'
+    raise exception 'Email verification cannot be granted by hand — it is earned by opening the confirmation link emailed to the address.'
       using errcode = '42501';
   end if;
 
@@ -1420,6 +1420,8 @@ end $$;
 -- SUPER ADMIN HOSTEL CONTROLS — suspend / reactivate, cancel the plan, rename.
 -- Each refuses everyone but the Super Admin with 42501 (coalesced: a NULL must not fail open),
 -- audits, and notifies the owner. Full reasoning: db/migrations/2026-09-16-sa-hostel-controls.sql.
+-- The notification bodies name no product: builds called Nivora (1.0.0, 1.1.0) and Apnivaas
+-- (1.2.0 on) read the same rows. See db/migrations/2026-10-12-brand-free-server-messages.sql.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Suspension is about the account, not the plan; lifting it returns the hostel read-only if the
@@ -1479,8 +1481,8 @@ begin
       else                                     'Hostel is read-only'
     end,
     case v_result
-      when 'suspended' then format('Nivora has suspended %s. Your team can still open the app and read records, but nothing can be added or changed until it is reactivated. Contact Nivora support.', v_hostel.name)
-      when 'readonly'  then format('%s is not suspended, but its plan has ended, so it is read-only until the plan is renewed. Contact Nivora support to renew.', v_hostel.name)
+      when 'suspended' then format('%s has been suspended. Your team can still open the app and read records, but nothing can be added or changed until it is reactivated. Contact support.', v_hostel.name)
+      when 'readonly'  then format('%s is not suspended, but its plan has ended, so it is read-only until the plan is renewed. Contact support to renew.', v_hostel.name)
       else                  format('%s is active again. Your team can add and change records as usual.', v_hostel.name)
     end,
     '/owner'
@@ -1548,7 +1550,7 @@ begin
   insert into public.notifications (hostel_id, user_id, type, title, body, link)
   values (
     p_hostel_id, v_hostel.owner_user_id, 'subscription', 'Plan cancelled',
-    format('Nivora has cancelled the plan for %s. From today your team can still read records, but nothing can be added or changed until a new plan starts. Reason: %s', v_hostel.name, v_reason),
+    format('The plan for %s has been cancelled. From today your team can still read records, but nothing can be added or changed until a new plan starts. Reason: %s', v_hostel.name, v_reason),
     '/owner'
   );
 
@@ -1600,7 +1602,7 @@ begin
   insert into public.notifications (hostel_id, user_id, type, title, body, link)
   values (
     p_hostel_id, v_hostel.owner_user_id, 'system', 'Hostel renamed',
-    format('Nivora has renamed %s to %s. Your team will see the new name the next time they open the app.', v_hostel.name, v_name),
+    format('%s has been renamed to %s. Your team will see the new name the next time they open the app.', v_hostel.name, v_name),
     '/owner'
   );
 

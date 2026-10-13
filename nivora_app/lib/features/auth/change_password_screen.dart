@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'verify_email_screen.dart';
-
 import '../../core/auth/auth_controller.dart';
 // For [roleHome] — the role → home mapping, which mirrors the web app's lib/roles.ts and must
 // exist in exactly one place. router.dart imports this file back; Dart resolves the cycle, and
@@ -11,7 +9,8 @@ import '../../core/auth/auth_controller.dart';
 // landing the same person in two different places.
 import '../../core/router/router.dart';
 import '../../core/theme/tokens.dart';
-import '../../shared/glass/glass.dart';
+import '../../shared/beam_card.dart';
+import 'auth_band_layout.dart';
 // The policy, the validator and the meter, shared with the recovery-link screen so the three
 // places this app sets a password cannot drift into three different rules.
 import 'password_policy.dart';
@@ -141,8 +140,8 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
       // password back to type the old one. It names the only cause it can prove (no answer
       // arrived) and gives the one action that settles it.
       debugPrint('changePassword threw: ${e.runtimeType} $e\n$stack');
-      message = 'Nivora did not get an answer to that, so it cannot say whether your password '
-          'changed — try the new one when you sign in.';
+      message = 'Apnivaas did not get an answer to that, so it cannot say whether your '
+          'password changed — try the new one when you sign in.';
     } finally {
       // ALWAYS, on every path out of the await. This is the line that makes "permanently
       // disabled" impossible rather than merely unlikely.
@@ -158,39 +157,28 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     }
 
     // ═══ SUCCESS HAS TO ARRIVE SOMEWHERE ═══
-    // It did not, and not because anything failed. `resolveRedirect` has no arm for a signed-in
-    // user sitting on /change-password: with the flag cleared this route is not the splash, not
-    // public and not another role's subtree, so the honest answer to "where should the router
-    // send them" is null — STAY PUT. The router was never going to move anybody off this screen,
-    // whatever the controller re-resolved. So the screen leaves under its own power.
+    //
+    // TWO CASES, and the router decides which one this is — the screen does not.
+    //
+    // A STAFF ACCOUNT THAT STILL OWES ITS EMAIL PROOF never sees the rest of this method. The
+    // controller re-resolved the profile row before `changePassword` returned, the router's
+    // refresh listener re-ran `resolveRedirect`, and with `needsPasswordChange` now false its
+    // verification arm sent this route to /verify-email — usually before the confirmation
+    // below has drawn a frame, and that is fine: the next screen is the next step. There is
+    // deliberately NO Navigator.push of the verify screen here any more. It used to be, and a
+    // pushed screen is thrown away by anything that rebuilds the stack — signing out and back
+    // in, killing the app, the emailed link arriving on Android — after which the account sat
+    // on its dashboard unverified. The gate is a routing rule now (see core/router/router.dart),
+    // so it cannot be dropped, and this screen has nothing to push.
+    //
+    // EVERYONE ELSE — a verified account, a resident, a phone-number login — stays here,
+    // because `resolveRedirect` has no arm for a signed-in user sitting on /change-password
+    // with nothing owed: it is not the splash, not public and not another role's subtree, so
+    // the router's honest answer is STAY PUT. For them the screen confirms and then leaves
+    // under its own power.
     setState(() => _done = true);
     await Future<void>.delayed(_confirmationHold);
     if (!mounted) return;
-
-    // ── AND THEN THE EMAIL, BEFORE THE DASHBOARD ────────────────────────────────────────────
-    //
-    // The product owner's sequence, in their words: after a new user "gives current and new
-    // password it has to show one dialog to verify their email before entering into the
-    // dashboard". This is that moment, and it is the right one — a temporary password read out
-    // by a warden is the weaker secret, so asking somebody to prove an address while they still
-    // hold it proves very little.
-    //
-    // WHY HERE AND NOT IN THE ROUTER. A redirect on needsEmailVerification would have gated
-    // every session at every launch, not just a new account finishing setup — a much broader
-    // change than was asked for, and one that turns the home screen's existing dismissible
-    // banner into a wall for people who have been using the app for weeks.
-    //
-    // IT CANNOT TRAP A RESIDENT WHO SIGNS IN WITH A PHONE NUMBER. needsEmailVerification is
-    // false whenever the address is unreachable, which is exactly the synthetic
-    // `<digits>@student.hostelpro.local` case those accounts get.
-    // `now` rather than `session`: the method already has one in scope from before the await,
-    // and that one is stale — the controller re-resolved the profile row when the password
-    // changed, so this must be the read taken after it.
-    final now = ref.read(sessionProvider);
-    if (now != null && now.needsEmailVerification) {
-      await Navigator.of(context).push(VerifyEmailScreen.route(blocking: true));
-      if (!mounted) return;
-    }
 
     _leave();
   }
@@ -204,7 +192,8 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
   /// A null destination means the phase is no longer a plain signed-in session — the account
   /// owes a second factor, or the session ended while the form was open. Every one of those
   /// phases is one `resolveRedirect` DOES divert on, so the router is already moving and the
-  /// right thing to do here is nothing.
+  /// right thing to do here is nothing. And if something IS still owed — the email proof —
+  /// `go(home)` is simply redirected to /verify-email, so asking for home can never skip it.
   void _leave() {
     final home = _home ?? _homeFromPhase();
     if (home == null) return;
@@ -224,184 +213,176 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     // it from the database: a client-supplied "this is forced" would skip reauthentication.
     final forced = session?.needsPasswordChange ?? true;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(Space.xl),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: GlassCard(
-                padding: const EdgeInsets.all(Space.xl),
-                // The whole card is replaced rather than a banner being added above the form.
-                // A confirmation sitting on top of the fields that produced it leaves the
-                // person looking at a form they have already submitted and wondering whether
-                // to submit it again — and this one is a farewell, not a status line.
-                child: _done
-                    ? const _Confirmation()
-                    : Form(
-                      key: _form,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // The design's wordmark step (4:69, 24/ExtraBold) — the same mark, at the
-                          // same size, as the splash and the sign-in screen this user just came
-                          // through.
-                          Text(
-                            'NIVORA',
-                            style: t.textTheme.displayMedium,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: Space.md),
-                          Text(
-                            forced ? 'Set your password' : 'Change your password',
-                            // 20/700, the design's heading step.
-                            style: t.textTheme.titleLarge,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: Space.xxs),
-                          Text(
-                            forced
-                                ? 'Your account was created with a temporary password. Choose your own to continue.'
-                                : 'Choose a new password for your account.',
-                            style: t.textTheme.bodyMedium,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: Space.xl),
-
-                          // Asked either way, because GoTrue refuses the change without it — see
-                          // the header. The LABEL differs, and that is the part that stops it
-                          // reading as a bug: on a forced change the person is holding a slip of
-                          // paper with a temporary password on it, and "Current password" invites
-                          // them to look for one they never chose.
-                          TextFormField(
-                            controller: _current,
-                            enabled: !_busy,
-                            obscureText: _obscure,
-                            autofillHints: const [AutofillHints.password],
-                            textInputAction: TextInputAction.next,
-                            decoration: InputDecoration(
-                              labelText: forced ? 'Temporary password' : 'Current password',
-                              helperText: forced
-                                  ? 'The one you were given, to confirm it is you.'
-                                  : null,
-                              prefixIcon: const Icon(Icons.lock_outline_rounded),
-                            ),
-                            validator: (v) => (v == null || v.isEmpty)
-                                ? (forced
-                                    ? 'Enter the temporary password you were given'
-                                    : 'Enter your current password')
-                                : null,
-                          ),
-                          const SizedBox(height: Space.sm),
-
-                          TextFormField(
-                            controller: _next,
-                            enabled: !_busy,
-                            obscureText: _obscure,
-                            autofillHints: const [AutofillHints.newPassword],
-                            textInputAction: TextInputAction.next,
-                            decoration: InputDecoration(
-                              labelText: 'New password',
-                              prefixIcon: const Icon(Icons.lock_reset_rounded),
-                              // The helper line that used to sit here — "At least 8 characters,
-                              // with a letter and a number" — is gone because the meter below
-                              // says the same thing and then keeps saying it as the password is
-                              // typed. Two statements of one rule is one too many, and the static
-                              // one is the one that never updates.
-                              suffixIcon: IconButton(
-                                tooltip: _obscure ? 'Show password' : 'Hide password',
-                                icon: Icon(_obscure
-                                    ? Icons.visibility_outlined
-                                    : Icons.visibility_off_outlined),
-                                onPressed: () => setState(() => _obscure = !_obscure),
-                              ),
-                            ),
-                            validator: validateNewPassword,
-                          ),
-                          const SizedBox(height: Space.xs),
-                          // Listens to the field's own controller rather than a setState on every
-                          // keystroke, so typing a password rebuilds the meter and nothing else —
-                          // not the form, not the other two fields.
-                          ValueListenableBuilder<TextEditingValue>(
-                            valueListenable: _next,
-                            builder: (context, value, _) => PasswordStrengthMeter(password: value.text),
-                          ),
-                          const SizedBox(height: Space.sm),
-                          TextFormField(
-                            controller: _confirm,
-                            enabled: !_busy,
-                            obscureText: _obscure,
-                            autofillHints: const [AutofillHints.newPassword],
-                            textInputAction: TextInputAction.done,
-                            onFieldSubmitted: (_) => _submit(forced: forced),
-                            decoration: const InputDecoration(
-                              labelText: 'Confirm new password',
-                              prefixIcon: Icon(Icons.check_circle_outline_rounded),
-                            ),
-                            validator: (v) =>
-                                v != _next.text ? "Passwords don't match" : null,
-                          ),
-
-                          if (_error != null) ...[
-                            const SizedBox(height: Space.sm),
-                            // context.tones.error, not NivoraColors.error: the canonical red is a
-                            // GRAPHIC colour and measures 4.05:1 on this card, below AA for type.
-                            // See the header of tokens.dart.
-                            Semantics(
-                              liveRegion: true,
-                              child: Text(
-                                _error!,
-                                style: t.textTheme.bodyMedium
-                                    ?.copyWith(color: context.tones.error),
-                              ),
-                            ),
-                          ],
-
-                          const SizedBox(height: Space.xl),
-                          FilledButton(
-                            onPressed: _busy ? null : () => _submit(forced: forced),
-                            child: _busy
-                                ? SizedBox(
-                                    width: IconSize.md,
-                                    height: IconSize.md,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: Strokes.glyph,
-                                        color: t.colorScheme.onPrimary),
-                                  )
-                                : const Text('Save password'),
-                          ),
-                          const SizedBox(height: Space.xxs),
-                          // The way out. Without this the screen is a trap for anyone who cannot
-                          // complete it right now — the exact failure this file replaced.
-                          //
-                          // AND IT IS NO LONGER SWITCHED OFF BY `_busy`. It used to be, which meant
-                          // the one state where a person most needs a door — a submit that has not
-                          // come back — was the one state with no door in it: three locked fields, a
-                          // dead button and a spinner. Everything below this await is deadlined, so
-                          // the wait is bounded, but "bounded" is not "brief" and a bounded trap is
-                          // still a trap. Signing out mid-flight is safe: the controller's next
-                          // resolve finds no current user and republishes signed-out, so a request
-                          // that lands afterwards cannot pull anybody back in.
-                          TextButton(
-                            onPressed: () =>
-                                ref.read(authControllerProvider.notifier).signOut(),
-                            child: const Text('Sign out'),
-                          ),
-                        ],
-                      ),
-                    ),
-              ),
-            ),
+    // ── 1.2.0: THE SIGN-IN SCREEN'S LAYOUT, COMPACT ─────────────────────────────────────────
+    //
+    // This used to be a plain page with the wordmark inside a card that was 644 dp tall on a
+    // 360x640 phone (834 dp at text scale 1.4): it sat at the top, Save landed on the bottom
+    // edge and Sign out was off the screen — on the first screen a brand-new account meets. It
+    // also changed the look abruptly one step after the sign-in screen. It now uses the same
+    // band-anchored layout as sign-in ([AuthBandLayout]), compact: the heading moves out of the
+    // card onto the band, the in-card wordmark is gone, and the card starts higher. At 360x640
+    // and text scale 1.0 every control, Save and Sign out included, is on screen.
+    return AuthBandLayout(
+      compact: true,
+      masthead: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            forced ? 'Set your password' : 'Change your password',
+            // 20/700, the design's heading step.
+            style: t.textTheme.titleLarge?.copyWith(color: onAuthBand),
+            textAlign: TextAlign.center,
           ),
-        ),
+          const SizedBox(height: Space.xxs),
+          Text(
+            forced
+                ? 'Your account was created with a temporary password. Choose your own to continue.'
+                : 'Choose a new password for your account.',
+            style: t.textTheme.bodyMedium?.copyWith(color: onAuthBand.withValues(alpha: 0.76)),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+      card: BeamCard(
+        padding: const EdgeInsets.all(Space.xl),
+        // The whole card is replaced rather than a banner being added above the form. A
+        // confirmation sitting on top of the fields that produced it leaves the person looking
+        // at a form they have already submitted and wondering whether to submit it again — and
+        // this one is a farewell, not a status line.
+        child: _done ? const _Confirmation() : _formBody(t, forced),
       ),
     );
   }
 
+  Widget _formBody(ThemeData t, bool forced) {
+    return Form(
+      key: _form,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Asked either way, because GoTrue refuses the change without it — see the header.
+          // The LABEL differs, and that is the part that stops it reading as a bug: on a forced
+          // change the person is holding a slip of paper with a temporary password on it, and
+          // "Current password" invites them to look for one they never chose.
+          TextFormField(
+            controller: _current,
+            enabled: !_busy,
+            obscureText: _obscure,
+            autofillHints: const [AutofillHints.password],
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+              labelText: forced ? 'Temporary password' : 'Current password',
+              helperText: forced ? 'The one you were given, to confirm it is you.' : null,
+              // Two lines, not one with an ellipsis: on a 360 dp phone the sentence was cut to
+              // "The one you were given, to confirm it…", which is half an instruction.
+              helperMaxLines: 2,
+              prefixIcon: const Icon(Icons.lock_outline_rounded),
+            ),
+            validator: (v) => (v == null || v.isEmpty)
+                ? (forced
+                    ? 'Enter the temporary password you were given'
+                    : 'Enter your current password')
+                : null,
+          ),
+          const SizedBox(height: Space.sm),
+
+          TextFormField(
+            controller: _next,
+            enabled: !_busy,
+            obscureText: _obscure,
+            autofillHints: const [AutofillHints.newPassword],
+            textInputAction: TextInputAction.next,
+            // Keeps the strength meter in view while the password is being typed — it is the
+            // thing that answers "is this one good enough".
+            scrollPadding: keepVisibleBelow(context, Space.xs + 64),
+            decoration: InputDecoration(
+              labelText: 'New password',
+              prefixIcon: const Icon(Icons.lock_reset_rounded),
+              // The helper line that used to sit here — "At least 8 characters, with a letter
+              // and a number" — is gone because the meter below says the same thing and then
+              // keeps saying it as the password is typed. Two statements of one rule is one too
+              // many, and the static one is the one that never updates.
+              suffixIcon: IconButton(
+                tooltip: _obscure ? 'Show password' : 'Hide password',
+                icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                onPressed: () => setState(() => _obscure = !_obscure),
+              ),
+            ),
+            validator: validateNewPassword,
+          ),
+          const SizedBox(height: Space.xs),
+          // Listens to the field's own controller rather than a setState on every keystroke, so
+          // typing a password rebuilds the meter and nothing else — not the form, not the other
+          // two fields.
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _next,
+            builder: (context, value, _) => PasswordStrengthMeter(password: value.text),
+          ),
+          const SizedBox(height: Space.sm),
+          TextFormField(
+            controller: _confirm,
+            enabled: !_busy,
+            obscureText: _obscure,
+            autofillHints: const [AutofillHints.newPassword],
+            textInputAction: TextInputAction.done,
+            onFieldSubmitted: (_) => _submit(forced: forced),
+            // Save AND Sign out stay above the keyboard while the last field is being typed.
+            scrollPadding: keepVisibleBelow(context, Space.xl + 48 + Space.xxs + 40),
+            decoration: const InputDecoration(
+              labelText: 'Confirm new password',
+              prefixIcon: Icon(Icons.check_circle_outline_rounded),
+            ),
+            validator: (v) => v != _next.text ? "Passwords don't match" : null,
+          ),
+
+          if (_error != null) ...[
+            const SizedBox(height: Space.sm),
+            // context.tones.error, not NivoraColors.error: the canonical red is a GRAPHIC colour
+            // and measures 4.05:1 on this card, below AA for type. See the header of tokens.dart.
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                _error!,
+                style: t.textTheme.bodyMedium?.copyWith(color: context.tones.error),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: Space.xl),
+          FilledButton(
+            onPressed: _busy ? null : () => _submit(forced: forced),
+            child: _busy
+                ? SizedBox(
+                    width: IconSize.md,
+                    height: IconSize.md,
+                    child: CircularProgressIndicator(
+                        strokeWidth: Strokes.glyph, color: t.colorScheme.onPrimary),
+                  )
+                : const Text('Save password'),
+          ),
+          const SizedBox(height: Space.xxs),
+          // The way out. Without this the screen is a trap for anyone who cannot complete it
+          // right now — the exact failure this file replaced.
+          //
+          // AND IT IS NO LONGER SWITCHED OFF BY `_busy`. It used to be, which meant the one
+          // state where a person most needs a door — a submit that has not come back — was the
+          // one state with no door in it: three locked fields, a dead button and a spinner.
+          // Everything below this await is deadlined, so the wait is bounded, but "bounded" is
+          // not "brief" and a bounded trap is still a trap. Signing out mid-flight is safe: the
+          // controller's next resolve finds no current user and republishes signed-out, so a
+          // request that lands afterwards cannot pull anybody back in.
+          TextButton(
+            onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-/// THE CONFIRMATION THE OWNER ASKED FOR, IN THE PLACE THE FORM WAS.
+// THE CONFIRMATION THE OWNER ASKED FOR, IN THE PLACE THE FORM WAS.
 ///
 /// "it is not showing any confirmation screen and it has to take me from there to my dashboard"
 /// — one sentence naming both halves of what was missing. This is the first half; [_leave] is
@@ -434,14 +415,9 @@ class _Confirmation extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // The same wordmark at the same size as the form this replaces, so the card reads
-            // as the same card answering, rather than as a different screen arriving.
-            Text(
-              'NIVORA',
-              style: t.textTheme.displayMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: Space.xl),
+            // No wordmark here any more: the heading on the band above stays where it was, so
+            // the card reads as the same card answering rather than as a different screen
+            // arriving.
             Center(
               child: Container(
                 width: Space.huge,

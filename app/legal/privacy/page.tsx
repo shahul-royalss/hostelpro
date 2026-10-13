@@ -30,12 +30,13 @@ const PLACEHOLDERS_UNSET = !isConfigured;
 // there, which explains why bumping it re-asks every user for their agreement.
 const UPDATED = LEGAL_VERSION;
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
+// From lib/legal-config.ts, never from NEXT_PUBLIC_APP_NAME — see the note in ../layout.tsx.
+// This text is what people are recorded as agreeing to; only git and a version bump change it.
+const APP_NAME = LEGAL.productName;
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description:
-    "How NIVORA collects, stores, shares, protects and deletes the personal data of hostel residents, guardians, visitors and staff — and your rights under India's DPDP Act 2023.",
+  description: `How ${LEGAL.productName} collects, stores, shares, protects and deletes the personal data of hostel residents, guardians, visitors and staff — and your rights under India's DPDP Act 2023.`,
 };
 
 /**
@@ -144,7 +145,9 @@ export default function PrivacyPolicyPage() {
             on its own — platform staff accounts, the security log and security alerts —{" "}
             {APP_NAME} is the Data Fiduciary. This deployment is operated by{" "}
             <strong>{CONTACT.operatorName}</strong>, contactable at{" "}
-            <a href={"mailto:" + CONTACT.email}>{CONTACT.email}</a>.
+            <a href={"mailto:" + CONTACT.email}>{CONTACT.email}</a>. Wherever this policy says
+            that {APP_NAME} does something, or says &ldquo;we&rdquo; or &ldquo;us&rdquo;, it means{" "}
+            {CONTACT.operatorName}.
           </p>
           <p>
             How accounts work matters for privacy, because it changes who put your data into the

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GlassCard } from "@/components/shared/glass-card";
 import { StatusPill } from "@/components/shared/status-pill";
+import { LEGAL } from "@/lib/legal-config";
 import { confirmTotpEnrollment, disableTotp, startTotpEnrollment, type MfaStatus } from "@/lib/actions/mfa";
 
 /**
@@ -79,7 +80,7 @@ export function MfaManage({ status, required }: { status: MfaStatus; required: b
 
         {required && !status.enrolled ? (
           <p className="mt-4 rounded-control bg-red-soft px-3 py-2 text-[13px] text-red">
-            Two-factor authentication is required for your role. Set it up to continue using NIVORA.
+            Two-factor authentication is required for your role. Set it up to continue using {LEGAL.productName}.
           </p>
         ) : null}
 
@@ -155,7 +156,7 @@ export function MfaManage({ status, required }: { status: MfaStatus; required: b
       </GlassCard>
 
       <p className="text-[12px] text-muted">
-        Lost your device? Ask your administrator to reset your password — that does not remove 2FA; contact NIVORA support to
+        Lost your device? Ask your administrator to reset your password — that does not remove 2FA; contact {LEGAL.productName} support to
         remove a lost authenticator.
       </p>
     </div>

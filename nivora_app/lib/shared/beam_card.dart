@@ -81,9 +81,13 @@ class _BeamCardState extends State<BeamCard> with SingleTickerProviderStateMixin
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: r,
-          // Near-opaque, deliberately: this is the surface the form's labels and inputs sit on,
-          // and it is what keeps them measurable against a ground that is now glowing. The
-          // aurora shows THROUGH the card only as much as the alpha allows.
+          // FULLY OPAQUE (1.2.0). It was 92%, on the reasoning that the aurora should show
+          // through a little. What actually showed through was the brand band's EDGE: the
+          // sign-in card rides the seam, so at 8% the band's curve crossed the first input
+          // field — at a different height on every phone (y 421–447 through a field spanning
+          // 383–443 on a 412x915). A line through a text field reads as a rendering fault, not
+          // as glass. This is the surface the form's labels and inputs sit on, and nothing may
+          // draw through it.
           //
           // THE CARD IS `surface`, NOT `surfaceContainer`. In the dark theme those are a rung
           // apart and either would have read as a card, so the wrong one went in unnoticed. In
@@ -91,7 +95,7 @@ class _BeamCardState extends State<BeamCard> with SingleTickerProviderStateMixin
           // violet-tinted ground it rendered the sign-in card as a grey slab instead of the
           // white card the scheme specifies. `surface` is the card in both themes by
           // definition — it is what GlassWeight.thin returns — so it is what this paints.
-          color: t.colorScheme.surface.withValues(alpha: 0.92),
+          color: t.colorScheme.surface,
           border: Border.all(color: t.colorScheme.outlineVariant),
           boxShadow: [
             BoxShadow(

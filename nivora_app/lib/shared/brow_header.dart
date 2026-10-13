@@ -84,7 +84,8 @@ abstract final class BrowInk {
   /// The title. 7.43:1 on [bright].
   static const title = Colors.white;
 
-  /// The eyebrow and the NIVORA signature: the gold taken 60% of the way to the cream ink, #E3D5BB.
+  /// The eyebrow and the Apnivaas signature: the gold taken 60% of the way to the cream ink,
+  /// #E3D5BB.
   /// Gold itself is 4.56:1 on brandDeep but only 3.32:1 on [bright], which is fine for a line
   /// and not for 10px type. 5.15:1 on [bright].
   static final eyebrow = Color.lerp(NivoraColors.gold, NivoraColors.onSurface, 0.6)!;
@@ -368,13 +369,27 @@ class BrowBackdropPainter extends CustomPainter {
   bool shouldRepaint(BrowBackdropPainter oldDelegate) => false;
 }
 
-/// The Nivora mark as a whisper: the arched doorway, the diagonal, and the tower with its 2x2
-/// windows, one of them lit. Drawn in a 100x92 unit box, the mark's own proportions.
+/// The Apnivaas mark as a whisper: the A, drawn as the folded ribbon it is in the logo, with
+/// the house's 2x2 windows under its apex, one of them lit. Drawn in a 100x92 unit box.
+///
+/// ── IT WAS THE NIVORA HOUSE UNTIL 1.2.0 ──────────────────────────────────────────────────
+///
+/// The product was renamed and its logo replaced, and this watermark is the logo, so it changed
+/// with it: the arched doorway and the tower became the A-house. What did NOT change is
+/// everything the rest of this file and its test rely on — the same 100x92 box in the same
+/// place ([rectFor]), the same 6% lines, and one lit pane at the same 12% resting glow
+/// ([litPane]), which [BrowLightPainter] lights during the entrance. The 2x2 grid of windows is
+/// the one detail both marks share, which is why the lit window survives the redraw unchanged.
+///
+/// The right leg runs past the trailing edge, as the old tower did: [rectFor] bleeds 14% of the
+/// box off-screen so it reads as a building beside the header rather than a logo placed inside
+/// it. The windows sit under the apex, well inside the visible part.
 ///
 /// IT LIVES IN THE DARK HALF, AND THAT IS A CONTRAST RULE, NOT TASTE. A title can run under it
 /// on a narrow phone. Kept to the trailing edge, its top-left corner sits at least halfway down
 /// the gradient, and at 6% (lines) and 12% (window) nothing it paints there is lighter than
-/// [BrowInk.bright] — so every ratio in this file's header still holds on top of it.
+/// [BrowInk.bright] — so every ratio in this file's header still holds on top of it. Every point
+/// below is inside the unit box, so that corner is still the lightest ground it touches.
 abstract final class BrowMotif {
   static const _unitW = 100.0;
   static const _unitH = 92.0;
@@ -391,10 +406,21 @@ abstract final class BrowMotif {
     return Rect.fromLTWH(size.width - w * 0.86, size.height - h - size.height * 0.04, w, h);
   }
 
-  /// The lit pane: top-right of the grid, as on the mark.
+  /// The window grid under the apex: four 6-unit panes with a 2-unit gap, centred on x = 50.
+  static const _paneLeft = 43.0;
+  static const _paneTop = 56.0;
+  static const _pane = 6.0;
+  static const _paneStep = 8.0;
+
+  /// The lit pane: top-right of the grid.
   static Rect litPane(Rect motif) {
     final s = motif.height / _unitH;
-    return Rect.fromLTWH(motif.left + 87 * s, motif.top + 30 * s, 6 * s, 6 * s);
+    return Rect.fromLTWH(
+      motif.left + (_paneLeft + _paneStep) * s,
+      motif.top + _paneTop * s,
+      _pane * s,
+      _pane * s,
+    );
   }
 
   static void paintStructure(Canvas canvas, Size size) {
@@ -404,27 +430,21 @@ abstract final class BrowMotif {
     double y(double v) => r.top + v * s;
     final ink = Colors.white.withValues(alpha: BrowInk.motifStrokeAlpha);
 
+    // Both legs are bands of the same width, so each inner edge runs parallel to its outer edge
+    // (a slope of about 0.45 units across per unit down on every one of the four).
     final lines = Path()
-      // The arch over the doorway, running into the diagonal.
-      ..moveTo(x(2), y(92))
-      ..lineTo(x(2), y(36))
-      ..cubicTo(x(2), y(16), x(16), y(6), x(30), y(6))
-      ..cubicTo(x(40), y(6), x(47), y(12), x(52), y(20))
-      ..lineTo(x(74), y(61))
-      // The door.
-      ..moveTo(x(8), y(92))
-      ..lineTo(x(8), y(52))
-      ..cubicTo(x(8), y(43), x(13), y(38), x(19), y(38))
-      ..cubicTo(x(25), y(38), x(30), y(43), x(30), y(52))
-      ..lineTo(x(30), y(92))
-      // The underside of the diagonal, parallel to its top.
-      ..moveTo(x(34), y(46))
-      ..lineTo(x(59), y(92))
-      // The tower and its slanted roof.
-      ..moveTo(x(74), y(92))
-      ..lineTo(x(74), y(22))
-      ..lineTo(x(98), y(8))
-      ..lineTo(x(98), y(92));
+      // The outside of the A: up the left leg, over the rounded apex, down the right leg.
+      ..moveTo(x(4), y(92))
+      ..lineTo(x(41), y(9))
+      ..cubicTo(x(44), y(2), x(56), y(2), x(59), y(9))
+      ..lineTo(x(96), y(92))
+      // The inside of the A, which is also the roof of the house the windows belong to.
+      ..moveTo(x(24), y(92))
+      ..lineTo(x(50), y(34))
+      ..lineTo(x(76), y(92))
+      // The fold, where the ribbon turns over the apex and comes down as the right leg.
+      ..moveTo(x(50), y(34))
+      ..lineTo(x(63), y(18));
     canvas.drawPath(
       lines,
       Paint()
@@ -435,10 +455,14 @@ abstract final class BrowMotif {
         ..strokeJoin = StrokeJoin.round,
     );
 
+    // The three unlit panes. The fourth, top-right, is [litPane]: [BrowLightPainter] draws it.
     final fill = Paint()..color = ink;
-    canvas.drawCircle(Offset(x(25), y(68)), math.max(1.0, 1.3 * s), fill);
-    for (final (u, v) in const [(79.0, 30.0), (79.0, 38.0), (87.0, 38.0)]) {
-      canvas.drawRect(Rect.fromLTWH(x(u), y(v), 6 * s, 6 * s), fill);
+    for (final (u, v) in const [
+      (_paneLeft, _paneTop),
+      (_paneLeft, _paneTop + _paneStep),
+      (_paneLeft + _paneStep, _paneTop + _paneStep),
+    ]) {
+      canvas.drawRect(Rect.fromLTWH(x(u), y(v), _pane * s, _pane * s), fill);
     }
   }
 }
@@ -542,7 +566,7 @@ class BrowLightPainter extends CustomPainter {
 /// Plays one line's part of the entrance around whatever [builder] draws.
 ///
 /// [builder] receives the extra tracking the eyebrow is still carrying (0 for the other lines
-/// and whenever nothing is animating), so a widget that is not a [BrowText] — the NIVORA
+/// and whenever nothing is animating), so a widget that is not a [BrowText] — the Apnivaas
 /// signature — can take part in the same settle.
 class BrowReveal extends StatelessWidget {
   const BrowReveal({super.key, required this.line, required this.builder});
@@ -698,7 +722,7 @@ class BrowTitleBlock extends StatelessWidget {
   })  : _mastheadName = null,
         leadingExtent = 0;
 
-  /// The dashboard treatment: the greeting and the NIVORA signature centred on the SCREEN, with
+  /// The dashboard treatment: the greeting and the Apnivaas signature centred on the SCREEN, with
   /// [leading] (the account avatar) at the start and an empty box of [leadingExtent] opposite it,
   /// so the block is not pushed off-centre by exactly one avatar. No leading, no box.
   const BrowTitleBlock.masthead({

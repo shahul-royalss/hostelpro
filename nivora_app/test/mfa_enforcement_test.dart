@@ -38,6 +38,9 @@ void main() {
         status: 'active',
         mustChangePassword: mustChangePassword,
         email: 'test@example.com',
+        // Verified: these tests are about the second factor. An owner with an unproved address is
+        // held on /verify-email after MFA (router_redirect_test.dart covers that order).
+        emailVerifiedAt: DateTime.utc(2026, 1, 1),
       );
 
   /// The roles Postgres refuses at aal1. Mirrors app.mfa_required_roles().

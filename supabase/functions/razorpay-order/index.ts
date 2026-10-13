@@ -175,10 +175,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // student-facing RPC for this (SECURITY DEFINER, scoped to the caller's own hostel) — a
     // direct select on public.hostels is not something a resident's policies allow.
     // A hostel with no readable contact row is not a reason to refuse a payment, so this
-    // degrades to the product name rather than throwing.
+    // degrades to the product name rather than throwing. The product is Apnivaas since 1.2.0
+    // (it was Nivora). This is the one server string that names it on purpose: it is the label
+    // at the top of a payment sheet, where the person paying needs a name they recognise rather
+    // than a generic word, and it is only used when the hostel's own name cannot be read.
     const { data: contactRow } = await supabase.rpc("st_hostel_contacts").maybeSingle();
     const hostelName =
-      (contactRow as { hostel_name?: string } | null)?.hostel_name?.trim() || "NIVORA";
+      (contactRow as { hostel_name?: string } | null)?.hostel_name?.trim() || "Apnivaas";
 
     // ── 4. Reuse an order the student already has open ───────────────────────
     // Dismissing the native sheet and tapping Pay again must not mint a new order every time.

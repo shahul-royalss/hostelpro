@@ -1,25 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   The Android launch window, i.e. what is on screen between the launcher tap and Flutter's
-  first frame.
+  first frame (and, on Android 12+, the colour of the system splash — see values-v31/).
 
-  IT IS A SINGLE COLOUR ON PURPOSE, AND THAT COLOUR IS THE DESIGN'S GROUND. Flutter's first
-  frame is the splash screen, which paints #0B0D0F, so anything else here is a flash. There
-  was one: this file used to be a <layer-list> holding @android:color/white, and the
-  drawable-v21/ copy that actually won on every supported device held
-  ?android:colorBackground, which resolves to WHITE under LaunchTheme's Theme.Light parent.
-  A light-mode phone opened Nivora with a white rectangle that snapped to near-black.
-
-  The -v21 variant is deleted rather than fixed: it only existed because ?android: attributes
-  needed API 21, and minSdk has been above that for years, so it was the live file and this
-  one was dead. One file now, correct on every API level.
+  IT IS A SINGLE COLOUR ON PURPOSE, AND THAT COLOUR IS THE LAUNCH GROUND, @color/splash_ground:
+  the warm beige the Apnivaas launch animation is drawn on, measured off the shipped WebP. The
+  Flutter splash paints the same value first and the animation's opening quarter-second is
+  empty ground, so the window, the system splash and the first frame meet without a seam.
 
   A <color> root rather than a <layer-list> also matters on Android 12+, where the system
-  splash screen adopts windowBackground when — and only when — it is a single colour. A
-  layer-list falls back to the theme's colorBackground, which is the white this removes.
+  splash screen adopts windowBackground only when it is a single colour (values-v31 sets
+  windowSplashScreenBackground explicitly as well, so the two cannot drift).
 
-  If a logo is ever added here it must be a <layer-list> again, and windowSplashScreenBackground
-  must then be set explicitly in values-v31/ to keep Android 12 from falling back to white.
+  The drawable-night/ copy is identical: main.dart pins the app to its light theme, so a phone
+  in dark mode still launches into the same beige.
 -->
 <color xmlns:android="http://schemas.android.com/apk/res/android"
-    android:color="@color/nivora_ground_light" />
+    android:color="@color/splash_ground" />

@@ -2,6 +2,7 @@ import * as React from "react";
 import { AlertTriangle, CalendarClock, Lock } from "lucide-react";
 import type { HostelContext } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { LEGAL } from "@/lib/legal-config";
 
 /**
  * Persistent renewal banner (Hard rule §4.4).
@@ -16,7 +17,7 @@ export function SubscriptionBanner({ ctx, role, className }: { ctx: HostelContex
   if (hostel.status === "suspended") {
     return (
       <Banner tone="red" icon={Lock} className={className}>
-        <strong>This hostel is suspended.</strong> All changes are disabled — please contact NIVORA support.
+        <strong>This hostel is suspended.</strong> All changes are disabled — please contact {LEGAL.productName} support.
       </Banner>
     );
   }
@@ -24,7 +25,7 @@ export function SubscriptionBanner({ ctx, role, className }: { ctx: HostelContex
     return (
       <Banner tone="red" icon={Lock} className={className}>
         <strong>Subscription expired — read-only mode.</strong> You can view everything, but no changes can be saved until
-        the subscription is renewed{role === "owner" ? ". Contact NIVORA to renew." : " by the owner."}
+        the subscription is renewed{role === "owner" ? `. Contact ${LEGAL.productName} to renew.` : " by the owner."}
       </Banner>
     );
   }

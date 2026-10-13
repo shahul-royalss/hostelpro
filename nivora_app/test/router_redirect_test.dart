@@ -11,13 +11,23 @@ import 'package:mobile/core/router/router.dart';
 /// inside a provider where no test could reach it. It is a pure function now, and the case that
 /// shipped broken is the first assertion below.
 void main() {
-  NivoraSession sessionFor(UserRole role, {bool mustChangePassword = false}) => NivoraSession(
+  // VERIFIED BY DEFAULT. Since 1.2.0 an owner, manager, warden or super admin with an unproved
+  // address is held on /verify-email wherever they try to go, so a fixture that wants to reach a
+  // role home has to be a verified account. The gate itself is asserted with verified: false.
+  NivoraSession sessionFor(
+    UserRole role, {
+    bool mustChangePassword = false,
+    bool verified = true,
+    String email = 'test@example.com',
+  }) =>
+      NivoraSession(
         userId: '00000000-0000-0000-0000-000000000001',
         role: role,
         fullName: 'Test User',
         status: 'active',
         mustChangePassword: mustChangePassword,
-        email: 'test@example.com',
+        email: email,
+        emailVerifiedAt: verified ? DateTime.utc(2026, 1, 1) : null,
       );
 
   const loading = AsyncLoading<AuthPhase>();
@@ -234,5 +244,67 @@ void main() {
     }
     expect(resolveRedirect(phase: enrol, here: mfaEnrolRoute), isNull);
     expect(appRoutes, contains(mfaEnrolRoute));
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // THE EMAIL-VERIFICATION GATE (1.2.0)
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  //
+  // The bug this replaces: the verify screen was a one-off push after the first password change,
+  // so signing out and back in, or restarting the app, went straight to the dashboard unproved.
+  // The rule now lives HERE, in the one function every navigation goes through, so there is no
+  // route that skips it — and these cases are the routes a person could try.
+  group('owners and staff with an unproved address are held on /verify-email', () {
+    const gated = [UserRole.owner, UserRole.manager, UserRole.warden, UserRole.superAdmin];
+
+    for (final role in gated) {
+      final phase = AsyncData<AuthPhase>(AuthSignedIn(sessionFor(role, verified: false)));
+
+      test('${role.name}: a cold start (splash) lands on /verify-email, not the dashboard', () {
+        expect(resolveRedirect(phase: phase, here: splashRoute), verifyEmailRoute);
+      });
+
+      test('${role.name}: going straight to their own home is turned back to /verify-email', () {
+        expect(resolveRedirect(phase: phase, here: roleHome[role]!), verifyEmailRoute);
+      });
+
+      test('${role.name}: the login screen (signing in again) also lands on /verify-email', () {
+        expect(resolveRedirect(phase: phase, here: loginRoute), verifyEmailRoute);
+      });
+
+      test('${role.name}: on /verify-email they stay there', () {
+        expect(resolveRedirect(phase: phase, here: verifyEmailRoute), isNull);
+      });
+    }
+
+    test('an owed password change comes FIRST; the gate waits for it (no redirect loop)', () {
+      final phase = AsyncData<AuthPhase>(
+        AuthSignedIn(sessionFor(UserRole.owner, verified: false, mustChangePassword: true)),
+      );
+      expect(resolveRedirect(phase: phase, here: roleHome[UserRole.owner]!), changePasswordRoute);
+      expect(resolveRedirect(phase: phase, here: verifyEmailRoute), changePasswordRoute);
+      expect(resolveRedirect(phase: phase, here: changePasswordRoute), isNull);
+    });
+
+    test('once proved, /verify-email lets go and sends the person home', () {
+      final phase = AsyncData<AuthPhase>(AuthSignedIn(sessionFor(UserRole.warden)));
+      expect(resolveRedirect(phase: phase, here: verifyEmailRoute), roleHome[UserRole.warden]);
+    });
+  });
+
+  group('residents are never held by it (they get the banner only)', () {
+    test('a resident with an unproved real email reaches their home', () {
+      final phase = AsyncData<AuthPhase>(
+        AuthSignedIn(sessionFor(UserRole.student, verified: false, email: 'resident@example.com')),
+      );
+      expect(resolveRedirect(phase: phase, here: splashRoute), roleHome[UserRole.student]);
+    });
+
+    test('a phone-login resident (hidden student address) reaches their home', () {
+      final phase = AsyncData<AuthPhase>(AuthSignedIn(
+        sessionFor(UserRole.student, verified: false, email: '9000000001@$studentLoginDomain'),
+      ));
+      expect(resolveRedirect(phase: phase, here: splashRoute), roleHome[UserRole.student]);
+    });
   });
 }

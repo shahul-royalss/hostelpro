@@ -63,7 +63,7 @@ class OwnerPgListScreen extends ConsumerWidget {
                   EmptyNote(
                     icon: Icons.apartment_rounded,
                     title: 'No PG on your account yet',
-                    message: 'Nivora registers a PG against your account before it appears '
+                    message: 'Apnivaas registers a PG against your account before it appears '
                         'here. Contact your account manager if you were expecting one.',
                   ),
                 ],

@@ -92,7 +92,7 @@ final class DashboardRepository extends Repository {
         return SaStats.fromJson(rpcRowOrRefusal(
           data,
           'rpc_sa_dashboard',
-          refusal: 'Platform figures are only visible to a Nivora super admin.',
+          refusal: 'Platform figures are only visible to an Apnivaas super admin.',
           // THE LINE THAT MAKES THE REFUSAL HONEST. Zero rows here is a refusal only if the
           // question was asked with a credential that was alive when the answer arrived; a
           // dead one is sent as `anon`, which this function refuses in exactly the same shape.

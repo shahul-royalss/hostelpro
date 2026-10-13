@@ -154,7 +154,7 @@ extension SaHostelWritability on SaHostelRow {
   /// Null when the hostel is writable.
   String? get readOnlyReason {
     if (hostelStatus == HostelStatus.suspended) {
-      return 'Suspended by Nivora. Staff can read but cannot record anything.';
+      return 'Suspended by Apnivaas. Staff can read but cannot record anything.';
     }
     if (hostelStatus == HostelStatus.readonly) {
       return 'Marked read-only. Staff can read but cannot record anything.';
@@ -300,7 +300,7 @@ class SaScreen extends StatelessWidget {
             // generous. The block's default leadingExtent is exactly this width, so the
             // greeting stays centred on the screen.
             padding: const EdgeInsets.all(Space.xs),
-            child: AccountAvatar(name: subtitle ?? 'Nivora', size: AvatarSize.header),
+            child: AccountAvatar(name: subtitle ?? 'Apnivaas', size: AvatarSize.header),
           ),
         ),
       ),
@@ -1036,7 +1036,7 @@ class SaError extends StatelessWidget {
   return switch (failure) {
     OfflineFailure() => (
       title: 'No connection',
-      next: 'This phone cannot reach Nivora. Reconnect, then pull down to refresh.',
+      next: 'This phone cannot reach Apnivaas. Reconnect, then pull down to refresh.',
       canRetry: true,
     ),
     // ═══ READ THE NOTE BEFORE REWORDING THIS ═══
@@ -1081,7 +1081,7 @@ class SaError extends StatelessWidget {
       canRetry: false,
     ),
     ServerFailure() => (
-      title: 'Nivora is struggling',
+      title: 'Apnivaas is struggling',
       next: 'The server did not answer in time. Try again in a moment.',
       canRetry: true,
     ),

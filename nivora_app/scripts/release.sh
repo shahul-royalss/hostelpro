@@ -304,11 +304,14 @@ verify_apk() {
     *) die "$label is not signed with the upload key (debug fallback?)" ;;
   esac
 
-  # 2. Named Nivora. It shipped once as "mobile" — the Flutter PROJECT name, straight to the
-  #    launcher, because android:label was never changed.
+  # 2. Named Apnivaas. It shipped once as "mobile" — the Flutter PROJECT name, straight to the
+  #    launcher, because android:label was never changed — and from 1.0.0 to 1.1.0 as "Nivora".
+  #    Title case, exactly as the logo writes it (res/values/strings.xml app_name). Only the
+  #    NAME changed in 1.2.0: the signer check above stays CN=HostelPro, because the upload key
+  #    cannot change, and the applicationId stays com.nivorasr.app.
   case "$badging" in
-    *"application-label:'Nivora'"*) ;;
-    *) die "$label: launcher label is not Nivora" ;;
+    *"application-label:'Apnivaas'"*) ;;
+    *) die "$label: launcher label is not Apnivaas" ;;
   esac
 
   # 3. EVERY ABI DIRECTORY IN THE FILE MUST CARRY libflutter.so.
@@ -417,6 +420,11 @@ mkdir -p "$DIST"
 # last decade, and it is a third of the size. The universal build is kept beside it under a name
 # that says what it is for, so "which file do I send someone" has an obvious answer and the
 # fallback still exists for an old 32-bit handset.
+#
+# The NIVORA- prefix is a file name on the build machine, not the product name (Apnivaas since
+# 1.2.0): docs/play-console-submission.md and docs/play-release-notes.md point at
+# dist/NIVORA-<version>.aab, and nobody outside this machine ever sees it. Rename it only
+# together with those docs.
 cp "$APK_ARM64" "$DIST/NIVORA-$VERSION.apk"
 cp "$APK"       "$DIST/NIVORA-$VERSION-universal.apk"
 cp "$AAB"       "$DIST/NIVORA-$VERSION.aab"

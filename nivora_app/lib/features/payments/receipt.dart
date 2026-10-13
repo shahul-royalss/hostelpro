@@ -214,7 +214,7 @@ class Receipt {
   /// of them can tell which is which without opening any.
   String get fileStem {
     final safe = reference.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '');
-    return 'nivora-receipt-$periodMonth-${safe.isEmpty ? 'rent' : safe}';
+    return 'apnivaas-receipt-$periodMonth-${safe.isEmpty ? 'rent' : safe}';
   }
 }
 

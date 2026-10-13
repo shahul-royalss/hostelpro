@@ -3,10 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/theme/tokens.dart';
-import '../../shared/aurora.dart';
 import '../../shared/beam_card.dart';
-import '../../shared/brow.dart';
 import '../../shared/glass/glass.dart';
+import 'auth_band_layout.dart';
 
 /// Sign in — `screen-signin`, node 4:60.
 ///
@@ -23,11 +22,17 @@ import '../../shared/glass/glass.dart';
 /// which already carries 4:77 and 4:83 verbatim.
 ///
 /// NOT changed, deliberately: everything about what this screen DOES. The 15-second deadline
-/// on each network step and the "The Nivora server is not responding right now" sentence both
+/// on each network step and the server-not-responding sentence ([serverNotResponding]) both
 /// live in [AuthController] and were added to fix a real field failure — a wedged backend
 /// completes the TLS handshake and then answers nothing, so the button span forever and the
 /// person holding the phone could not tell a dead server from a slow one. This is a restyle.
 /// It does not get to touch that.
+///
+/// ── 1.2.0: ANCHORED TO THE BAND ──────────────────────────────────────────────────────────
+///
+/// The group is no longer centred in whatever space the keyboard leaves; it is placed from the
+/// window height by [AuthBandLayout], so opening the keyboard or showing an error moves
+/// nothing above the button. The why, with the measurements, is on that class.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
   @override
@@ -178,7 +183,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // nothing for them to fix by typing, so the sentence points at the one thing that is
     // actually wrong.
     if (auth.hasError) {
-      return 'We could not reach Nivora to check your session. Your details are safe — check '
+      return 'We could not reach Apnivaas to check your session. Your details are safe — check '
           'your connection and sign in again.';
     }
     return null;
@@ -193,217 +198,165 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // flight so a stale reason cannot sit under a spinner.
     final error = _error ?? (busy ? null : _arrivalMessage());
 
-    return Scaffold(
-      // TRANSPARENT so the aurora underneath is the ground. Scaffold would otherwise paint its
-      // own opaque background over it and the glow would never be seen.
-      backgroundColor: Colors.transparent,
-      body: AuroraField(
-        child: BrandBrow(
-        // A LITTLE TALLER THAN THE DEFAULT BROW, because this screen has no header and no
-        // tabs — the masthead IS its top content, and the band has to be deep enough to hold it
-        // and still have the card's top edge land inside the colour.
-        //
-        // 46%, and it is not a free choice — it is a consequence of the card being centred.
-        //
-        // With the group top-aligned, 34% was right: the masthead sat in the top third and the
-        // brow covered it. The product owner asked for the CARD to sit in the middle, so the
-        // whole group moved down — and a brow still ending at 34% would have left "Welcome
-        // back" in white type on the light ground below it, which is invisible rather than
-        // merely ugly. The band has to reach past the masthead's new bottom edge.
-        //
-        // The two numbers are therefore coupled, and anyone changing the alignment below has to
-        // change this with it.
-        height: MediaQuery.sizeOf(context).height * 0.46,
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, box) => SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: Space.xl),
-            // CENTRED IN THE VIEWPORT, NOT TOP-ALIGNED. The first cut of this screen pinned
-            // the group to the top and left 42% of the page empty below the card — which is
-            // the same fault the brow was added to fix, moved from the top of the screen to
-            // the bottom of it. minHeight makes the column fill a short screen and scroll on
-            // a very short one.
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: box.maxHeight),
-              child: Column(
-              // ── CENTRED AT REST; THE KEYBOARD LIFTS IT BY SCROLLING ────────────────────
-              //
-              // The card was pinned near the top by a flat 6% spacer, so on a tall phone it sat
-              // high with a third of the screen empty beneath it. Centring the group is the
-              // whole fix, and the two behaviours the owner asked for both fall out of it
-              // rather than needing to be built:
-              //
-              //   AT REST the column is exactly viewport-height (minHeight below), so
-              //   MainAxisAlignment.center puts the masthead-and-card group in the middle at
-              //   any screen size, with no magic offsets to retune per device.
-              //
-              //   WHEN TYPING Scaffold shrinks the body by the keyboard's height, so
-              //   box.maxHeight drops, the content becomes TALLER than the viewport, and
-              //   centring stops applying — the column is simply its natural height inside a
-              //   scroll view. Flutter then scrolls the focused field into view on its own.
-              //   That is "it goes up only when the user wants to type", implemented by not
-              //   fighting the framework, and it cannot crash because there is no arithmetic
-              //   on viewInsets to get wrong and no fixed offset to overshoot a notch with.
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // ── THE MASTHEAD, ON THE BROW ────────────────────────────────────────────
-                //
-                // These three lines used to be the first three rows INSIDE the card, which
-                // left the top 45% of this screen empty and the card floating in the middle
-                // of it. The competitor teardown in design-competitor/ is unambiguous that
-                // this is the single thing making their sign-in screen look designed and ours
-                // look assembled: they put their mark on the colour and let the card hold only
-                // the form. Same content, moved forty percent up the page.
-                //
-                // White rather than the theme's ink, because the brow is #4D2896 in BOTH
-                // themes — 10.20:1 for white on it, and it is the one surface a light phone
-                // and a dark phone render identically.
-                // 4:69 — the design's wordmark, 24/ExtraBold. displayMedium is that step, and
-                // it is the same mark at the same size the splash opens with, so the launch
-                // animation resolves INTO this screen rather than being replaced by a
-                // different logo.
-                Text(
-                  'NIVORA',
-                  style: t.textTheme.displayMedium?.copyWith(color: _onBrow),
-                  textAlign: TextAlign.center,
+    // ROOM FOR TWO LINES OF ERROR, KEPT WHETHER OR NOT ONE IS SHOWING. An error that appears
+    // or disappears must not move the button the user is about to press again: the common
+    // refusals ("That login or password is not right.", "Cannot reach Apnivaas. Check your
+    // connection and try again.") fit in two lines of the running-text step on a 360 dp phone,
+    // so they land in space that was already there. Only a longer message — the server-down
+    // paragraph — grows the card, and it grows DOWNWARD: the anchored layout means nothing
+    // above it moves either way.
+    final bodyStyle = t.textTheme.bodyMedium;
+    final errorSlot = MediaQuery.textScalerOf(context).scale(bodyStyle?.fontSize ?? 13) *
+        (bodyStyle?.height ?? 1.4) *
+        2;
+
+    return AuthBandLayout(
+      // ── THE MASTHEAD, ON THE BAND ────────────────────────────────────────────────────────
+      //
+      // These three lines used to be the first three rows INSIDE the card, which left the top
+      // 45% of this screen empty and the card floating in the middle of it. The competitor
+      // teardown in design-competitor/ is unambiguous that this is the single thing making
+      // their sign-in screen look designed and ours look assembled: they put their mark on the
+      // colour and let the card hold only the form.
+      masthead: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 4:69 — the design's wordmark step, 24/ExtraBold. The product's name exactly as the
+          // logo writes it: title case, never capitals.
+          Text(
+            'Apnivaas',
+            style: t.textTheme.displayMedium?.copyWith(color: onAuthBand),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: Space.md),
+          // 4:73. titleLarge is the design's 20/700 heading; headlineMedium is the same
+          // metrics with TABULAR figures, which is a stat card's slot, not a sentence's.
+          Text('Welcome back',
+              style: t.textTheme.titleLarge?.copyWith(color: onAuthBand),
+              textAlign: TextAlign.center),
+          const SizedBox(height: Space.xxs),
+          // 4:74 — body 13/400. 76% white on the band is 7.06:1, so the subtitle can be
+          // quieter than the heading without dropping under AA.
+          Text('Sign in to your PG workspace',
+              style: t.textTheme.bodyMedium?.copyWith(color: onAuthBand.withValues(alpha: 0.76)),
+              textAlign: TextAlign.center),
+        ],
+      ),
+      card: BeamCard(
+        padding: const EdgeInsets.all(Space.xl),
+        child: Form(
+          key: _form,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                controller: _id,
+                enabled: !busy,
+                autofillHints: const [AutofillHints.username],
+                // Neither strictly email nor strictly phone: both are valid logins.
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                // Keeps the password field, the error room and Sign in above the keyboard when
+                // this field is scrolled into view — on a 360x640 phone Sign in sat UNDER the
+                // keyboard with the focus here.
+                scrollPadding: keepVisibleBelow(
+                  context,
+                  Space.sm + 56 + Space.xs + errorSlot + Space.sm + 48 + Space.md,
                 ),
-                const SizedBox(height: Space.md),
-                // 4:73. titleLarge is the design's 20/700 heading; headlineMedium is the same
-                // metrics with TABULAR figures, which is a stat card's slot, not a sentence's.
-                Text('Welcome back',
-                    style: t.textTheme.titleLarge?.copyWith(color: _onBrow),
-                    textAlign: TextAlign.center),
-                const SizedBox(height: Space.xxs),
-                // 4:74 — body 13/400. 76% white on the brow is 7.06:1, so the subtitle can be
-                // quieter than the heading without dropping under AA.
-                Text('Sign in to your PG workspace',
-                    style: t.textTheme.bodyMedium
-                        ?.copyWith(color: _onBrow.withValues(alpha: 0.76)),
-                    textAlign: TextAlign.center),
-                const SizedBox(height: Space.xxl),
-                // THE CARD RIDES THE SEAM. Nothing here positions it to: the brow's flat edge
-                // is 30% of the screen and this column reaches it naturally, so the overlap
-                // holds on a short phone and a tall one without a magic offset.
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 420),
-                    child: BeamCard(
-                      padding: const EdgeInsets.all(Space.xl),
-                      child: Form(
-                        key: _form,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                      TextFormField(
-                        controller: _id,
-                        enabled: !busy,
-                        autofillHints: const [AutofillHints.username],
-                        // Neither strictly email nor strictly phone: both are valid logins.
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(
-                          labelText: 'Email or phone number',
-                          prefixIcon: Icon(Icons.person_outline_rounded),
-                        ),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Enter your email or phone number'
-                            : null,
-                      ),
-                      const SizedBox(height: Space.sm),
-                      TextFormField(
-                        controller: _pw,
-                        enabled: !busy,
-                        obscureText: _obscure,
-                        autofillHints: const [AutofillHints.password],
-                        textInputAction: TextInputAction.done,
-                        onFieldSubmitted: (_) => _submit(),
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          prefixIcon: const Icon(Icons.lock_outline_rounded),
-                          suffixIcon: IconButton(
-                            tooltip: _obscure ? 'Show password' : 'Hide password',
-                            icon: Icon(_obscure
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined),
-                            onPressed: () => setState(() => _obscure = !_obscure),
-                          ),
-                        ),
-                        validator: (v) =>
-                            (v == null || v.isEmpty) ? 'Enter your password' : null,
-                      ),
-                      if (error != null) ...[
-                        const SizedBox(height: Space.sm),
-                        // Announced to a screen reader, and never a driver message.
-                        //
-                        // Two corrections here. The colour is `context.tones.error`, the
-                        // theme-resolved TEXT red, not NivoraColors.error — that one is the
-                        // canonical graphic red and measures 4.05:1 on this card, which is
-                        // below AA for type; tokens.dart says in as many words not to set
-                        // small text in it. And the size is the design's running text (13)
-                        // rather than its metadata step (11), because the longest thing this
-                        // line ever says is the two-sentence server-down message and 11px is
-                        // not a size to read a paragraph at.
-                        Semantics(
-                          liveRegion: true,
-                          child: Text(
-                            error,
-                            style: t.textTheme.bodyMedium
-                                ?.copyWith(color: context.tones.error),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: Space.xl),
-                      FilledButton(
-                        onPressed: busy ? null : _submit,
-                        child: busy
-                            ? SizedBox(
-                                width: IconSize.md,
-                                height: IconSize.md,
-                                // onPrimary, not the theme's progress colour: the default is
-                                // the gold, and gold on the cream button is a pairing you
-                                // cannot see. In BOTH themes onPrimary is the same value the
-                                // filled button already uses for its label.
-                                child: CircularProgressIndicator(
-                                    strokeWidth: Strokes.glyph,
-                                    color: t.colorScheme.onPrimary),
-                              )
-                            : const Text('Sign in'),
-                      ),
-                      const SizedBox(height: Space.xs),
-                      // HERE, not behind a signed-in settings screen. A person who has
-                      // forgotten their password is standing on THIS screen and cannot get
-                      // past it; a recovery link anywhere else is a door on the inside of a
-                      // locked room.
-                      TextButton(
-                        onPressed: busy ? null : _forgotPassword,
-                        child: const Text('Forgot your password?'),
-                      ),
-                      // 4:86 puts a gold "Contact your hostel admin" here. It is a STATEMENT
-                      // in this build, not the design's link: gold means interactive
-                      // everywhere else in this app, and there is nothing a signed-out client
-                      // could open — the app holds no support address, and a user with no
-                      // session cannot be shown their own hostel's contact details. A control
-                      // that cannot act is worse than a plain sentence.
-                      Text('Accounts are created by your administrator.',
-                          style: t.textTheme.bodySmall, textAlign: TextAlign.center),
-                          ],
-                        ),
-                      ),
-                    ),
+                decoration: const InputDecoration(
+                  // 'Email or phone', not '… phone number': the longer label was cut to
+                  // 'Email or phone num…' at text scale 1.4 on a 360 dp phone, and a label
+                  // that is cut off is a label nobody can read. The validator below still
+                  // says "phone number" in full, where the line is free to wrap.
+                  labelText: 'Email or phone',
+                  prefixIcon: Icon(Icons.person_outline_rounded),
+                ),
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Enter your email or phone number'
+                    : null,
+              ),
+              const SizedBox(height: Space.sm),
+              TextFormField(
+                controller: _pw,
+                enabled: !busy,
+                obscureText: _obscure,
+                autofillHints: const [AutofillHints.password],
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _submit(),
+                scrollPadding: keepVisibleBelow(
+                  context,
+                  Space.xs + errorSlot + Space.sm + 48 + Space.md,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  prefixIcon: const Icon(Icons.lock_outline_rounded),
+                  suffixIcon: IconButton(
+                    tooltip: _obscure ? 'Show password' : 'Hide password',
+                    icon: Icon(
+                        _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                    onPressed: () => setState(() => _obscure = !_obscure),
                   ),
                 ),
-              ],
+                validator: (v) => (v == null || v.isEmpty) ? 'Enter your password' : null,
               ),
-            ),
-            ),
+              const SizedBox(height: Space.xs),
+              // Announced to a screen reader, and never a driver message.
+              //
+              // Two corrections here. The colour is `context.tones.error`, the theme-resolved
+              // TEXT red, not NivoraColors.error — that one is the canonical graphic red and
+              // measures 4.05:1 on this card, which is below AA for type; tokens.dart says in
+              // as many words not to set small text in it. And the size is the design's
+              // running text (13) rather than its metadata step (11), because the longest
+              // thing this line ever says is the two-sentence server-down message and 11px is
+              // not a size to read a paragraph at.
+              ConstrainedBox(
+                constraints: BoxConstraints(minHeight: errorSlot),
+                child: error == null
+                    ? const SizedBox.shrink()
+                    : Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          error,
+                          style: bodyStyle?.copyWith(color: context.tones.error),
+                        ),
+                      ),
+              ),
+              const SizedBox(height: Space.sm),
+              FilledButton(
+                onPressed: busy ? null : _submit,
+                child: busy
+                    ? SizedBox(
+                        width: IconSize.md,
+                        height: IconSize.md,
+                        // onPrimary, not the theme's progress colour: the default is the
+                        // gold, and gold on the cream button is a pairing you cannot see. In
+                        // BOTH themes onPrimary is the same value the filled button already
+                        // uses for its label.
+                        child: CircularProgressIndicator(
+                            strokeWidth: Strokes.glyph, color: t.colorScheme.onPrimary),
+                      )
+                    : const Text('Sign in'),
+              ),
+              const SizedBox(height: Space.xs),
+              // HERE, not behind a signed-in settings screen. A person who has forgotten their
+              // password is standing on THIS screen and cannot get past it; a recovery link
+              // anywhere else is a door on the inside of a locked room.
+              TextButton(
+                onPressed: busy ? null : _forgotPassword,
+                child: const Text('Forgot your password?'),
+              ),
+              // 4:86 puts a gold "Contact your hostel admin" here. It is a STATEMENT in this
+              // build, not the design's link: gold means interactive everywhere else in this
+              // app, and there is nothing a signed-out client could open — a user with no
+              // session cannot be shown their own hostel's contact details. A control that
+              // cannot act is worse than a plain sentence.
+              Text('Accounts are created by your administrator.',
+                  style: t.textTheme.bodySmall, textAlign: TextAlign.center),
+            ],
           ),
-        ),
         ),
       ),
     );
   }
 }
-
-/// Text on the brow. White in both themes, because the brow is the same #4D2896 in both.
-const _onBrow = Color(0xFFFFFFFF);

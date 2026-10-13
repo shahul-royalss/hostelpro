@@ -92,8 +92,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       default:
         // Named actions, so an old build calling `send` or `check` gets a sentence instead of a
         // silent 400. Those two moved to GoTrue; there is nothing here to route them to.
+        //
+        // No product name in it: it is read inside whatever build is calling, and since the
+        // 1.2.0 rename those are called Nivora or Apnivaas depending on the version. "Update the
+        // app" is true for every one of them that could ever get here.
         return fail(
-          "Unknown action. This version of Nivora verifies email addresses with a link — update the app.",
+          "Unknown action. Email addresses are now verified with a link — update the app.",
           400,
         );
     }

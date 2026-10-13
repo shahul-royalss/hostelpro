@@ -1127,7 +1127,7 @@ class AuthController extends AsyncNotifier<AuthPhase> {
       return 'Too many attempts. Wait a minute and try again.';
     }
     if (m.contains('network') || m.contains('failed host lookup')) {
-      return 'Cannot reach Nivora. Check your connection and try again.';
+      return 'Cannot reach Apnivaas. Check your connection and try again.';
     }
     // A gateway 5xx means the request reached Supabase's edge and the service behind it did
     // not answer. That is an outage, not a credential problem, and saying so saves the user
@@ -1185,7 +1185,7 @@ class AuthController extends AsyncNotifier<AuthPhase> {
 /// is ours, wait" from "your password is wrong", which is the distinction a person needs before
 /// they start changing things that were never broken.
 const serverNotResponding =
-    'The Nivora server is not responding right now. This is not a problem with your '
+    'The Apnivaas server is not responding right now. This is not a problem with your '
     'password. Please try again in a few minutes.';
 
 /// THE SENTENCE THE LOGIN SCREEN SHOWS WHEN THE ROUTER PUT SOMEBODY THERE.
@@ -1206,7 +1206,7 @@ const serverNotResponding =
 String? signOutMessage(SignOutReason? reason) => switch (reason) {
       SignOutReason.sessionExpired => sessionCouldNotBeRenewed,
       SignOutReason.sessionMissing =>
-        'Nivora could not read the sign-in saved on this phone, so it has been cleared. Sign in '
+        'Apnivaas could not read the sign-in saved on this phone, so it has been cleared. Sign in '
             'again — nothing is wrong with your account.',
       SignOutReason.userInitiated || null => null,
     };
@@ -1217,7 +1217,7 @@ String? signOutMessage(SignOutReason? reason) => switch (reason) {
 /// the same event seen from two places — the router got there first, or a screen's read did.
 /// Both say the same three things: your sign-in ran out, your account is fine, sign in again.
 const sessionCouldNotBeRenewed =
-    'Your sign-in expired and Nivora could not renew it. Nothing is wrong with your account or '
+    'Your sign-in expired and Apnivaas could not renew it. Nothing is wrong with your account or '
     'your password — sign in again to carry on.';
 
 /// WHAT A FAILED TOKEN REFRESH SHOULD DO TO THE APP. Null means "nothing".

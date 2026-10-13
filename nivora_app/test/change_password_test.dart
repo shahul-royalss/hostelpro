@@ -7,6 +7,9 @@ import 'package:mobile/core/auth/session.dart';
 import 'package:mobile/core/router/router.dart';
 import 'package:mobile/core/theme/theme.dart';
 import 'package:mobile/features/auth/change_password_screen.dart';
+import 'package:mobile/features/legal/legal_providers.dart';
+
+import 'fake_consent.dart';
 
 /// Every account this platform creates — an owner made by the super admin, staff made by an
 /// owner, a student made by a warden — arrives with `must_change_password = true`. The router
@@ -32,13 +35,22 @@ void main() {
         status: 'active',
         mustChangePassword: mustChangePassword,
         email: 'owner@example.com',
+        // Verified: these tests are about the password form. The verification gate that follows
+        // a password change for an unverified owner is covered in change_password_finishes_test
+        // and router_redirect_test.
+        emailVerifiedAt: DateTime.utc(2026, 1, 1),
       );
 
   Future<void> pump(WidgetTester tester, AuthPhase phase) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          splashGateProvider.overrideWith(OpenSplashGate.new),authControllerProvider.overrideWith(() => _StubAuth(phase))],
+          splashGateProvider.overrideWith(OpenSplashGate.new),
+          // Consent comes first after sign-in and wraps this screen; these tests are about the
+          // form, so the person has already agreed. role_routing_test.dart covers the gate.
+          legalConsentStoreProvider.overrideWithValue(FakeConsentStore.accepted()),
+          authControllerProvider.overrideWith(() => _StubAuth(phase)),
+        ],
         child: Consumer(
           builder: (context, ref, _) => MaterialApp.router(
             routerConfig: ref.watch(routerProvider),

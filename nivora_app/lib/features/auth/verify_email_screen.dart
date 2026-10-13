@@ -6,31 +6,68 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/auth/session.dart';
 import '../../core/config/env.dart';
 import '../../core/theme/tokens.dart';
 import '../../shared/glass/glass.dart';
+// For [kGrievanceEmail]: the support mailbox the legal documents name, in exactly one place.
+import '../legal/legal_documents.dart';
 import 'email_verification_service.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 // VERIFY YOUR EMAIL — a link, opened somewhere else
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 //
-// ── IT IS A SCREEN YOU CAN LEAVE, AND THAT IS THE DECISION ───────────────────────────────
+// ── 1.2.0: FOR STAFF IT IS THE ROUTER'S GATE; FOR RESIDENTS IT IS STILL A DETOUR ────────
 //
-// This is pushed, not routed, and it has a working back button. That is deliberate and it is
-// the whole design decision restated in one property: verification is a REQUIREMENT, not a
-// TRAP. `resolveRedirect()` in core/router/router.dart does not divert on
-// [NivoraSession.needsEmailVerification], the way it does on `needsPasswordChange`, because a
-// forced password change can always be completed by the person standing there and a forced
-// email verification cannot — the link may be going to a typo'd address, or to a mailbox on a
-// phone the resident does not have with them. Trapping them here would mean an unusable app
-// with no way back, at a hostel desk, over a mail server nobody present controls.
+// Until 1.2.0 this screen was only ever PUSHED — from the home-screen banner, and once at the
+// end of a forced password change — on the reasoning that verification was a requirement and
+// not a trap. The push after the password change was the flaw: anything that rebuilt the
+// screen stack threw it away — signing out and back in, killing the app, or on Android the
+// emailed link itself arriving as a navigation to '/' — and the account landed on its
+// dashboard with only a banner. Staff accounts were reaching the product unverified.
 //
-// What holds the requirement instead is the server: `requireVerifiedEmail()` refuses the one
-// action where an unproved address becomes credentials in a stranger's inbox — creating
-// another account. Everything else keeps working, with the banner asking until it is done.
+// So, by the product owner's decision for 1.2.0, it has two modes:
 //
-// ── 2026-09-01: THE LINK OPENS NIVORA. IT DOES NOT OPEN A WEB PAGE ANY MORE ──────────────
+//   · THE GATE ([blocking] true). /verify-email in core/router/router.dart builds it, and
+//     `resolveRedirect()` sends every signed-in route there while
+//     [NivoraSession.mustVerifyEmail] holds: an owner, manager, warden or super admin whose
+//     address can receive mail and has never been proved — existing accounts included, on their
+//     next sign-in. A rule the router re-evaluates on every navigation cannot be thrown away.
+//     There is no back and no "later"; the one exit is Sign out, and the screen says who can
+//     fix a wrong address, because a typo is the one thing the person holding the phone cannot
+//     fix from here. A verified re-read of the profile row is what releases it: [reload()]
+//     republishes the session and the router sends the account home.
+//   · THE DETOUR ([blocking] false), pushed from [VerifyEmailBanner] for a resident with a real
+//     address. Proving it changes nothing on the server for them, so it stays a requirement and
+//     not a trap: a back button and "I will do this later".
+//
+// What holds the requirement on the server is unchanged: `requireVerifiedEmail()` refuses the
+// one action where an unproved address becomes credentials in a stranger's inbox — creating
+// another account. The router gate is UX, not a security boundary.
+//
+// ── 1.2.0: ASK FIRST, AND DO NOT MAIL ON EVERY MOUNT ─────────────────────────────────────
+//
+// As the gate this screen mounts on every cold start and every sign-in until the proof lands,
+// and it used to send a link the moment it opened. Each send kills the previous link, so the
+// person who tapped their link — which cold-starts the app and mounts this gate — would have
+// been mailed a fresh one while the proof was being read, killing the link in their hand. So on
+// mount it now:
+//
+//   1. asks the server, quietly, whether the address is ALREADY proved
+//      ([EmailVerificationRecheck]); if it is, the re-read republishes the session and the
+//      router releases the account without a single mail being sent;
+//   2. sends automatically only if this phone has not sent a link to this address within
+//      [autoSendWindow] (ten minutes), remembered by [VerificationSendLog]. Inside the window
+//      it says when the waiting link was sent and arms "Send it again" for whatever is left of
+//      the server's 60 s limit.
+//
+// The app reads nothing it did not write to make that decision — never the clipboard, never
+// the mail. On Android the emailed link no longer reaches go_router at all
+// (flutter_deeplinking_enabled is false in AndroidManifest.xml, as it already was on iOS);
+// supabase_flutter still receives the code and exchanges it.
+//
+// ── 2026-09-01: THE LINK OPENS THE APP. IT DOES NOT OPEN A WEB PAGE ANY MORE ────────────
 //
 // What the owner reported: tapping the link opened hostelpro-three.vercel.app and showed "Page
 // not found — That link doesn't exist, or you don't have access to it". What the owner asked
@@ -40,7 +77,7 @@ import 'email_verification_service.dart';
 // Those turn out to be the same fix. The redirect is now a custom scheme,
 // `com.nivorasr.app://verify-email` ([Env.emailConfirmRedirectUrl]), matched by a VIEW
 // intent-filter in AndroidManifest.xml. The app pins AuthFlowType.pkce, so it — and only it —
-// holds the verifier for a link it asked for; the link therefore lands in Nivora, Nivora
+// holds the verifier for a link it asked for; the link therefore lands in the app, the app
 // exchanges what GoTrue appends, and the person is SIGNED IN BY THE LINK. That sign-in is the
 // proof, exactly as asked. A browser holds no verifier and never could complete it, which is
 // why deploying the missing web page would not have been the fix.
@@ -67,7 +104,7 @@ import 'email_verification_service.dart';
 //     failures; the resume check does not — see [EmailVerificationRecheck].
 //
 // The re-check is shared with [VerifyEmailBanner], so a user who never opens this screen — who
-// just taps the link in their inbox and returns to Nivora — sees the banner disappear anyway.
+// just taps the link in their inbox and returns to the app — sees the banner disappear anyway.
 //
 // ── THE FIELD THAT IS NOT HERE ANY MORE ──────────────────────────────────────────────────
 //
@@ -109,14 +146,14 @@ import 'email_verification_service.dart';
 class VerifyEmailScreen extends ConsumerStatefulWidget {
   const VerifyEmailScreen({super.key, this.blocking = false});
 
-  /// Whether this is the GATE a new account passes through, or the optional detour offered by
-  /// the home screen's banner.
+  /// Whether this is the router's GATE (the /verify-email route, for staff), or the optional
+  /// detour the home-screen banner pushes for a resident.
   ///
   /// An explicit flag rather than `Navigator.canPop()`, and that was a real bug rather than a
-  /// style preference: pushed from the change-password screen there IS something to pop back
-  /// to, so inferring from the stack offered "I will do this later" on the one path where
-  /// later is not on offer — and popping it returned to a screen whose very next line sends
-  /// the user to their dashboard. The gate would have been a suggestion.
+  /// style preference: when this screen was pushed from the change-password screen there WAS
+  /// something to pop back to, so inferring from the stack offered "I will do this later" on
+  /// the one path where later was not on offer. The route passes true; the banner passes
+  /// nothing.
   final bool blocking;
 
   static Route<bool> route({bool blocking = false}) => MaterialPageRoute<bool>(
@@ -175,8 +212,19 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
   Duration _ticked = Duration.zero;
   Timer? _ticker;
 
-  /// The automatic first send has happened (or been started). See [build].
-  bool _autoSent = false;
+  /// The opening sequence has been started. See [build] and [_open].
+  bool _opened = false;
+
+  /// The opening sequence is RUNNING: the quiet re-check, then the decision whether to send.
+  /// "Send it again" is held off while it runs, so a tap cannot race the automatic send into
+  /// two mails — the second of which would kill the first.
+  bool _opening = false;
+
+  /// When the link this screen is waiting on was sent, if it was sent BEFORE this screen opened
+  /// — an earlier launch, an earlier sign-in. Null when this screen sent it, or sent nothing.
+  /// Shown, because "sent a link" with no time on it reads as "just now" and sends people
+  /// looking for a mail that arrived ten minutes ago.
+  DateTime? _sentEarlierAt;
 
   @override
   void initState() {
@@ -228,7 +276,51 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
     });
   }
 
-  bool get _canResend => !_sending && !_checking && _cooldown == Duration.zero;
+  bool get _canResend => !_opening && !_sending && !_checking && _cooldown == Duration.zero;
+
+  /// What happens when the screen first has an address: ASK, then decide whether to MAIL.
+  ///
+  /// 1. The quiet re-check. If the address is already proved — the link was opened on a laptop,
+  ///    or the tap that cold-started this app already did it — the re-check's reload()
+  ///    republishes the verified session, the router releases the account, and no mail is sent.
+  ///    Silent on failure, like every quiet check: a dropped request here is not news, and the
+  ///    decision below still runs.
+  /// 2. A link sent from this phone within [autoSendWindow] is left alone. Sending another would
+  ///    kill it — only the newest link works — and spend the project's mail allowance on a link
+  ///    the person very probably already has. The screen says when it went, and "Send it again"
+  ///    is armed for whatever is left of the server's 60 s rule.
+  /// 3. Otherwise, send. The person did not come here to press "Send" for the one thing this
+  ///    screen exists to do.
+  Future<void> _open(String address) async {
+    setState(() => _opening = true);
+
+    final proved = await ref.read(emailVerificationRecheckProvider).run();
+    if (!mounted) return;
+    if (proved) {
+      setState(() {
+        _opening = false;
+        _verified = true;
+        _sentTo ??= address;
+      });
+      return;
+    }
+
+    final last = await ref.read(verificationSendLogProvider).lastSent(address);
+    if (!mounted) return;
+    final now = DateTime.now();
+    if (last != null && sentRecently(last, now)) {
+      setState(() {
+        _opening = false;
+        _sentTo = address;
+        _sentEarlierAt = last;
+        _armCooldown(kVerificationResendInterval - now.difference(last));
+      });
+      return;
+    }
+
+    setState(() => _opening = false);
+    await _send();
+  }
 
   /// One 1s timer for the whole countdown, started only while one is running and cancelled the
   /// moment it reaches zero. A `setState` every second forever would keep the screen awake for
@@ -268,10 +360,15 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
 
     try {
       final outcome = await ref.read(emailVerificationServiceProvider).sendLink(address);
+      // Remembered BEFORE the mounted check: the mail has gone whether or not this screen is
+      // still here to say so, and the next mount must know not to kill it. Not awaited — a
+      // slow disk is no reason to hold the button.
+      unawaited(ref.read(verificationSendLogProvider).record(outcome.email, DateTime.now()));
       if (!mounted) return;
       setState(() {
         _sending = false;
         _sentTo = outcome.email;
+        _sentEarlierAt = null;
         _armCooldown(outcome.resendAfter);
       });
     } on VerificationFailure catch (f) {
@@ -283,6 +380,16 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
         // A throttle carries GoTrue's own wait. Arming from it means the button comes back
         // exactly when the server would start saying yes, rather than when we guessed.
         if (f.retryAfter != null) _armCooldown(f.retryAfter!);
+      });
+    } catch (e, stack) {
+      // The failure nobody anticipated. As the router's gate this screen has nothing behind
+      // it, so an error escaping here would leave "Sending…" on a dead button forever. Name
+      // the only thing that is certain — no link went — and give the button back.
+      debugPrint('verification send threw: ${e.runtimeType} $e\n$stack');
+      if (!mounted) return;
+      setState(() {
+        _sending = false;
+        _error = 'Apnivaas could not send the link just now. Please try again in a few minutes.';
       });
     }
   }
@@ -330,6 +437,15 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
         // setting that may be perfectly correct.
         _notYetCount = 0;
       });
+    } catch (e, stack) {
+      // Same reason as in [_send]: a gate may not end on a spinner that never stops.
+      debugPrint('verification check threw: ${e.runtimeType} $e\n$stack');
+      if (!mounted) return;
+      setState(() {
+        _checking = false;
+        _error = 'Apnivaas could not check your address just now. Please try again.';
+        _notYetCount = 0;
+      });
     }
   }
 
@@ -339,22 +455,22 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
     final session = ref.watch(sessionProvider);
     final address = _sentTo ?? session?.email ?? '';
 
-    // THE AUTOMATIC FIRST SEND, and why it is here rather than in initState().
+    // THE OPENING SEQUENCE ([_open]: re-check, then maybe send), and why it starts here
+    // rather than in initState().
     //
-    // The user arrived by deliberately tapping "Verify now", so asking them to tap "Send" for
-    // what they just asked for is a step with no decision in it. But the address comes from the
-    // session, and the session is an AsyncNotifier: on a cold start it can still be resolving
-    // when the first frame is built. A post-frame callback from initState therefore fired with
-    // NO ADDRESS and mailed the empty string — caught by a test, not by a person, which is the
-    // only reason it is not in a release.
+    // The address comes from the session, and the session is an AsyncNotifier: on a cold start
+    // it can still be resolving when the first frame is built. A post-frame callback from
+    // initState once fired with NO ADDRESS and mailed the empty string — caught by a test, not
+    // by a person, which is the only reason it never reached a release.
     //
-    // So the trigger is the arrival of the address, not the arrival of the frame. `_autoSent`
+    // So the trigger is the arrival of the address, not the arrival of the frame. `_opened`
     // makes it once-only; the work is deferred out of build() because starting a request during
     // a build is how you get a setState-during-build crash.
-    if (!_autoSent && (session?.email ?? '').isNotEmpty) {
-      _autoSent = true;
+    final email = session?.email ?? '';
+    if (!_opened && email.isNotEmpty) {
+      _opened = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _send();
+        if (mounted) _open(email);
       });
     }
 
@@ -382,25 +498,60 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
     );
   }
 
-  Widget _done(ThemeData t) => GlassCard(
-        padding: const EdgeInsets.all(Space.xl),
-        child: StateBody(
-          icon: Icons.mark_email_read_rounded,
-          title: 'Email verified',
-          message: 'Thanks — ${_sentTo ?? 'your address'} is confirmed. You can create and '
-              'manage accounts as normal.',
-          tone: context.tones.success,
-          action: FilledButton(
-            // Pops when this was PUSHED from the home-screen banner. As the gate route it is
-            // the only thing on the stack and there is nothing to pop to — the redirect
-            // releases them the moment reload() lands a verified session, so this only needs
-            // to not throw.
-            onPressed: () =>
-                Navigator.of(context).canPop() ? Navigator.of(context).pop(true) : null,
-            child: const Text('Done'),
-          ),
+  Widget _done(ThemeData t) {
+    final staff = NivoraSession.verificationGatedRoles.contains(ref.read(sessionProvider)?.role);
+    return GlassCard(
+      padding: const EdgeInsets.all(Space.xl),
+      child: StateBody(
+        icon: Icons.mark_email_read_rounded,
+        title: 'Email verified',
+        // "Create and manage accounts" is a staff sentence — it is the one thing the proof
+        // unlocks on the server — so a resident is thanked without being told about powers
+        // they do not have.
+        message: 'Thanks — ${_sentTo ?? 'your address'} is confirmed.'
+            '${staff ? ' You can create and manage accounts as normal.' : ''}',
+        tone: context.tones.success,
+        action: FilledButton(
+          // Pops when this was PUSHED from the home-screen banner. As the router's gate there is
+          // nothing to pop to: the redirect releases the account the moment a re-read lands a
+          // verified session — which has normally happened before this panel is even read. If
+          // that re-read was dropped, this asks for it again, so the button is never inert.
+          onPressed: () {
+            final navigator = Navigator.of(context);
+            if (navigator.canPop()) {
+              navigator.pop(true);
+            } else {
+              ref.read(authControllerProvider.notifier).reload();
+            }
+          },
+          child: const Text('Done'),
         ),
-      );
+      ),
+    );
+  }
+
+  /// "less than a minute ago", "1 minute ago", "7 minutes ago". Only ever shown for a link
+  /// inside [autoSendWindow], so minutes are the only unit it needs.
+  static String _ago(Duration age) {
+    final minutes = age.inMinutes;
+    if (minutes < 1) return 'less than a minute ago';
+    return minutes == 1 ? '1 minute ago' : '$minutes minutes ago';
+  }
+
+  String _whatHappened(String address) {
+    if (address.isEmpty) {
+      return 'Apnivaas is sending a confirmation link to the address on your account.';
+    }
+    if (_opening) return 'Checking whether $address is already confirmed…';
+    final earlier = _sentEarlierAt;
+    if (earlier != null) {
+      return 'Apnivaas sent a confirmation link to $address '
+          '${_ago(DateTime.now().difference(earlier))}. That link still works.';
+    }
+    if (_sentTo != null) return 'Apnivaas sent a confirmation link to $address';
+    if (_sending) return 'Sending a confirmation link to $address…';
+    return 'The confirmation link goes to $address';
+  }
 
   Widget _form(ThemeData t, String address) {
     final cooldown = _cooldown;
@@ -417,10 +568,11 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
           Text('Check your email',
               style: t.textTheme.titleLarge, textAlign: TextAlign.center),
           const SizedBox(height: Space.xxs),
+          // WHAT HAS ACTUALLY HAPPENED, and nothing more. "Sent" is said only once a send has
+          // succeeded — or a recent one from this phone is known, with its age — so the person
+          // never goes looking for a mail that was never sent.
           Text(
-            address.isEmpty
-                ? 'Nivora is sending a confirmation link to the address on your account.'
-                : 'Nivora sent a confirmation link to $address',
+            _whatHappened(address),
             style: t.textTheme.bodyMedium,
             textAlign: TextAlign.center,
           ),
@@ -430,8 +582,8 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
           // the instruction has to include the return trip, which is the step people skip.
           //
           // SINCE THE DEEP LINK IT HAS TWO CASES, AND IT MAY NOT TELL ONLY THE HAPPY ONE. On
-          // this phone the link opens Nivora and signs the person in, and that is the whole
-          // proof. On a laptop — or any device without Nivora — the browser cannot open a
+          // this phone the link opens the app and signs the person in, and that is the whole
+          // proof. On a laptop — or any device without the app — the browser cannot open a
           // custom scheme and lands on a web page instead, and no browser could ever complete
           // the exchange anyway because it holds no PKCE verifier. That case is named here
           // rather than discovered, and it is named as SURVIVABLE, because it is: the proof was
@@ -442,9 +594,9 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
           // was localhost; predicting a failure that has been fixed teaches the next person to
           // ignore a page that is, on an expired link, telling them the truth.
           Text(
-            'Open that email and tap the link. On this phone it opens Nivora and signs you in — '
-            'that sign-in is the proof, and there is nothing more to do. Opened on a laptop or '
-            'another device it lands on a web page instead: come back to Nivora and tap the '
+            'Open that email and tap the link. On this phone it opens Apnivaas and signs you in '
+            '— that sign-in is the proof, and there is nothing more to do. Opened on a laptop or '
+            'another device it lands on a web page instead: come back to Apnivaas and tap the '
             'button below, which finishes it just as well.',
             style: t.textTheme.bodyMedium,
             textAlign: TextAlign.center,
@@ -466,7 +618,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
             if (_operatorFault) ...[
               const SizedBox(height: Space.xs),
               Text(
-                'This is a setting on the Nivora project, not something you can fix from here. '
+                'This is a setting on the Apnivaas project, not something you can fix from here. '
                 'Nothing you do in the app will work until an administrator changes it.',
                 style: t.textTheme.bodySmall,
                 textAlign: TextAlign.center,
@@ -477,7 +629,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
             Semantics(
               liveRegion: true,
               child: Text(
-                'Not confirmed yet. Open the newest email from Nivora and tap the link — check '
+                'Not confirmed yet. Open the newest email from Apnivaas and tap the link — check '
                 'your spam folder if it is not in the inbox. Only the newest link works, so if '
                 'you tapped an older one, send a new email and use that.',
                 style: t.textTheme.bodyMedium?.copyWith(color: context.tones.warning),
@@ -498,7 +650,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
             if (_notYetCount >= 2) ...[
               const SizedBox(height: Space.sm),
               Text(
-                'If this keeps happening it is usually one setting on the Nivora project, not '
+                'If this keeps happening it is usually one setting on the Apnivaas project, not '
                 'something you can fix from here. ${Env.emailRedirectSetupHint}',
                 style: t.textTheme.bodySmall,
                 textAlign: TextAlign.center,
@@ -537,12 +689,12 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
 
           // THE WAY OUT, AND IT CHANGES MEANING WITH THE CONTEXT.
           //
-          // From the home-screen banner this is a real "later": the app is usable unverified and
-          // nobody should be nagged into a dead end. As the GATE — a new account that has just
-          // set its password — there is nothing behind this screen, and "later" would either do
-          // nothing (a broken button) or have to let them past, which is the one thing the gate
-          // exists to prevent. Signing out is the honest alternative: a real action that always
-          // works, with the account waiting when the mail arrives.
+          // From the home-screen banner this is a real "later": a resident's app is fully usable
+          // unverified and nobody should be nagged into a dead end. As the router's GATE there is
+          // nothing behind this screen, and "later" would either do nothing (a broken button) or
+          // have to let them past, which is the one thing the gate exists to prevent. Signing
+          // out is the honest alternative: a real action that always works, with the account
+          // waiting when the mail arrives.
           if (!widget.blocking)
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -553,6 +705,19 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
               onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
               child: const Text('Sign out'),
             ),
+
+          // WHO FIXES A WRONG ADDRESS. The one failure nobody on this screen can repair: the
+          // link is going to a typo, and only someone with edit rights over this account can
+          // change it — the PG owner for staff and residents, Apnivaas support for an owner.
+          // Said here, in both modes, because a gate whose only exit is Sign out must at least
+          // say where the door to the fix is. The mailbox is the one the legal documents name.
+          const SizedBox(height: Space.xs),
+          Text(
+            'Wrong address? Ask your PG owner to correct it. '
+            'Owners: contact Apnivaas support at $kGrievanceEmail.',
+            style: t.textTheme.bodySmall,
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
@@ -568,10 +733,16 @@ Future<bool> openEmailVerification(BuildContext context) async {
 /// The persistent ask, shown above every role's content until the address is proved.
 ///
 /// It is a BANNER and not a blocking dialog because of the decision at the top of this file:
-/// the account works, and this is the one outstanding thing. It draws nothing at all when the
-/// session has no reachable address — a resident who signs in with a phone number is never
-/// asked for a proof they cannot produce, and that exemption is carved by ADDRESS rather than
-/// by role, so a student whose warden collected a real email is asked exactly like an owner.
+/// for a resident the account works, and this is the one outstanding thing. It draws nothing at
+/// all when the session has no reachable address — a resident who signs in with a phone number
+/// is never asked for a proof they cannot produce, and that exemption is carved by ADDRESS
+/// rather than by role, so a student whose warden collected a real email is asked.
+///
+/// SINCE 1.2.0 A STAFF ACCOUNT NEVER SEES IT. An unverified owner, manager, warden or super
+/// admin is held on the /verify-email gate by the router and never reaches a home screen, so
+/// in practice this is the residents' banner. It still keys on
+/// [NivoraSession.needsEmailVerification] rather than on role, so it can never disagree with
+/// the gate about who owes a proof.
 ///
 /// IT IS STATEFUL FOR ONE REASON: the resume re-check. A link is opened outside the app, and
 /// the user who taps it in their inbox and comes straight back to their home screen never opens
@@ -627,8 +798,11 @@ class _VerifyEmailBannerState extends ConsumerState<VerifyEmailBanner>
         eyebrow: 'Verify your email',
         icon: Icons.mark_email_unread_rounded,
         tone: context.tones.warning,
-        message: 'Open the link Nivora emails to ${session.email} to create or manage '
-            'accounts. Everything else keeps working.',
+        // Not "to create or manage accounts": since 1.2.0 the people who read this are
+        // residents, and that is a staff power. What is true for everyone is that the address
+        // is confirmed as theirs.
+        message: 'Open the link Apnivaas emails to ${session.email} to confirm it is yours. '
+            'Everything else keeps working.',
         action: SizedBox(
           width: double.infinity,
           child: FilledButton(

@@ -50,12 +50,17 @@ const mfaRoute = '/mfa';
 const mfaEnrolRoute = '/mfa-setup';
 const changePasswordRoute = '/change-password';
 
-/// The gate a brand-new account passes through after setting its own password.
+/// THE EMAIL-VERIFICATION GATE (1.2.0). A real routing rule, not a screen something pushes.
 ///
-/// Only ever reached when [NivoraSession.needsEmailVerification] is true, which is false for
-/// every resident whose login is a phone number — their synthetic `<digits>@student.hostelpro.local`
-/// address cannot receive mail, and gating them on it would lock them out of a product they can
-/// otherwise use perfectly. See isReachableLoginAddress.
+/// [resolveRedirect] sends every signed-in route here while [NivoraSession.mustVerifyEmail] is
+/// true — a staff account (owner, manager, warden, super admin) whose address can receive mail
+/// and has never been proved — and sends it home the moment a re-read profile row carries the
+/// proof. Existing unverified staff meet it on their next sign-in exactly like new ones.
+///
+/// Residents are never held here: proving their address changes nothing on the server, so they
+/// keep the home-screen banner only. Nor is anyone whose address cannot receive mail — the
+/// synthetic `<digits>@student.hostelpro.local` phone logins — because a proof that cannot be
+/// produced would be a permanent lockout. See isReachableLoginAddress.
 const verifyEmailRoute = '/verify-email';
 
 /// EVERY PATH THIS APP REGISTERS, AND THE SCREEN BEHIND IT.
@@ -80,21 +85,44 @@ final appScreens = <String, WidgetBuilder>{
   mfaRoute: (_) => const MfaScreen(),
   // The ONLY destination this app draws for AuthNeedsMfaEnrolment. See [mfaEnrolRoute].
   mfaEnrolRoute: (_) => const SecurityScreen(required: true),
-  changePasswordRoute: (_) => const ChangePasswordScreen(),
-  verifyEmailRoute: (_) => const VerifyEmailScreen(),
+  // ── CONSENT IS THE FIRST SCREEN AFTER SIGN-IN (1.2.0) ─────────────────────────────────────
+  //
+  // Every destination a signed-in user can reach from here down is wrapped in [ConsentGate]:
+  // the forced password change, the email-verification gate and the five role homes. So the
+  // order after authentication is
+  //
+  //     sign-in → second factor (/mfa or /mfa-setup) → Terms & Privacy → set password
+  //             → verify email → home
+  //
+  // and a brand-new account reads what is kept about it before it is asked for anything else.
+  // The product owner asked for exactly that ("at the start, one time"); until 1.2.0 the gate
+  // wrapped only the role homes, which made it the LAST step for a new account — after the
+  // password change and the verification — and is why it looked as if it never appeared.
+  //
+  // The second-factor routes stay OUTSIDE it on purpose. Until the second factor is presented
+  // the session is not the account's yet (aal1 for an owner who has a factor), and the consent
+  // read and write are made AS the account; asking somebody to agree to anything before we
+  // know who they are would record an agreement against a session that has not finished
+  // signing in. MFA is part of signing in; consent is the first thing after it.
+  //
+  // Push registration starts on acceptance (see consent_gate.dart), so for a new account it now
+  // starts at this point rather than on the dashboard. That is the order the Privacy Policy
+  // describes: agree first, then this handset's token is sent.
+  //
+  // NOTE WHAT THIS DOES NOT TOUCH. [resolveRedirect] below has no consent arm. Consent is
+  // fetched rather than carried in the session row, and folding a fetched condition into a pure
+  // routing function would have made test/router_redirect_test.dart's every-phase-against-
+  // every-route matrix depend on data it cannot see. Wrapping each signed-in builder gives the
+  // same order with none of that. See features/legal/consent_gate.dart.
+  changePasswordRoute: (_) => const ConsentGate(child: ChangePasswordScreen()),
+  // BLOCKING: as the gate route there is nothing behind this screen, so it offers Sign out
+  // rather than "later", and the back gesture does not walk through it.
+  verifyEmailRoute: (_) => const ConsentGate(child: VerifyEmailScreen(blocking: true)),
   // One shell per role. Each owns its own navigation, because forcing five roles through one
   // tab bar is what makes an operational tool feel like an admin template.
   //
-  // WRAPPED IN [ConsentGate], and this is the whole of the signed-in surface: every role's
-  // subtree renders through its role home, so one wrapper here covers all five without a
-  // redirect arm. The pre-app obligations above — change password, second-factor enrolment —
-  // are deliberately OUTSIDE it: somebody forced to change a temporary password must not have
-  // to accept a privacy policy before they are allowed to secure their own account.
-  //
-  // NOTE WHAT THIS DOES NOT TOUCH. [resolveRedirect] below is unchanged. Consent is fetched
-  // rather than carried in the session row, and folding a fetched condition into a pure
-  // routing function would have made test/router_redirect_test.dart's every-phase-against-
-  // every-route matrix depend on data it cannot see. See features/legal/consent_gate.dart.
+  // Every role's subtree renders through its role home, so one wrapper per home covers all
+  // five without a redirect arm.
   for (final entry in roleHome.entries)
     entry.value: (_) => ConsentGate(child: RoleShell(role: entry.key)),
 };
@@ -172,6 +200,28 @@ String? _decide({
       return changePasswordRoute;
     }
 
+    // ── THEN AN UNPROVED STAFF ADDRESS (1.2.0) ───────────────────────────────────────────
+    //
+    // Every signed-in route goes to /verify-email while [NivoraSession.mustVerifyEmail] holds,
+    // and nothing but a re-read profile row carrying the proof lets the account out. This rule
+    // is the fix for the verification bypass: the verify screen used to be a one-time
+    // Navigator.push at the end of the forced password change, and anything that rebuilt the
+    // stack threw it away — signing out and back in, killing the app, or (on Android) the
+    // emailed link itself arriving as a navigation to '/'. Each of those landed the account on
+    // its dashboard with only a banner. A rule evaluated on every navigation cannot be thrown
+    // away, so all three now land here.
+    //
+    // `!needsPasswordChange` IS REQUIRED, not tidiness. The arm above lets an owed password
+    // change sit on /change-password and falls through to here; without the guard this arm
+    // would answer /verify-email, the arm above would answer /change-password, and go_router
+    // would bounce between the two until it gave up and drew the error page — which is exactly
+    // what the prototype of this rule did. Password first, then the address: a temporary
+    // password read out by somebody else is the weaker secret, so the address is proved by
+    // the person who has just chosen their own.
+    if (!session.needsPasswordChange && session.mustVerifyEmail) {
+      return here == verifyEmailRoute ? null : verifyEmailRoute;
+    }
+
     // TOTAL, not `roleHome[...]!`. The bang could not fire today — NivoraSession.fromRow throws
     // on a role this build cannot name, so an unknown role never becomes an AuthSignedIn — but
     // it is the wrong shape of code to leave in a redirect callback. An exception thrown in here
@@ -182,6 +232,11 @@ String? _decide({
 
     // Anything that is not a real destination for a signed-in user sends them home. The
     // splash is listed first because it is the one every cold start passes through.
+    //
+    // /verify-email is in this list ONLY because nothing is owed by the time control gets
+    // here: an account that still owes the proof was answered by the arm above and never
+    // reaches this line. This is the release — the re-read that lands a verified session
+    // re-runs the redirect with `here == verifyEmailRoute`, and this sends the account home.
     if (here == splashRoute ||
         here == mfaRoute ||
         here == mfaEnrolRoute ||

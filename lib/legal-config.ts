@@ -4,8 +4,8 @@
  * The privacy policy, terms and account-deletion pages are all public URLs that a Play reviewer
  * fetches WITHOUT signing in, and Play requires the policy to identify the operator and give a
  * contact that actually works. Until the placeholders below are replaced, those pages render a
- * visible "not ready to publish" notice — which is deliberate: shipping a policy that says
- * "NIVORA" reads to a reviewer as an unfinished app.
+ * visible "not ready to publish" notice — which is deliberate: shipping a policy that names no
+ * responsible operator reads to a reviewer as an unfinished app.
  *
  * These are real-world facts about the business, so they cannot be derived from the codebase.
  * Replace every value marked PLACEHOLDER, then `isConfigured` flips to true on its own and the
@@ -16,11 +16,30 @@
  */
 
 export const LEGAL = {
-  /** Registered legal name of the entity operating NIVORA. */
-  operatorName: "NIVORA",
+  /**
+   * The entity that operates the product and is the party to the Terms — the developer name on
+   * the Google Play listing. NEVER the product name: Play's User Data policy wants the privacy
+   * policy to name the entity on the listing, and the DPDP Act wants a Data Fiduciary to
+   * identify itself. Until 2026-10-12 this said "NIVORA", which was neither.
+   *
+   * Printed as the operator on the privacy policy, as the party bound by the terms, and in the
+   * copyright line of every legal page. Changing it changes both documents' wording, so it is a
+   * version bump (LEGAL_VERSION below). If the registered form of the name carries a suffix
+   * (a proprietorship's trade name, "LLP", "Private Limited"), it goes here exactly as registered.
+   */
+  operatorName: "ShaReshi Tech",
 
-  /** Trading name shown to users. Safe to leave as-is. */
-  productName: "NIVORA",
+  /**
+   * The product's name as users see it, title case exactly as in the logo: "Apnivaas" — never
+   * "APNIVAAS" or "ApniVaas". It was "Nivora" until version 2026-10-12.
+   *
+   * The legal pages read THIS, not NEXT_PUBLIC_APP_NAME. An environment variable is set in a
+   * hosting dashboard and fixed at build time, so reading it let a Vercel setting rewrite every
+   * published legal page without a commit and without a version bump — text that people are
+   * recorded as having agreed to must only ever change in git, together with LEGAL_VERSION.
+   * Mirrored as `kLegalProductName` in nivora_app/lib/features/legal/legal_documents.dart.
+   */
+  productName: "Apnivaas",
 
   /** Monitored mailbox for privacy, grievance and data-deletion requests. */
   grievanceEmail: "support@nivora.dhrishtaerf.org",
@@ -76,8 +95,16 @@ export const LEGAL = {
  * row must land BEFORE an app build carrying that string, because `accept_legal_terms()`
  * refuses a version it has never heard of and at the gate the only thing a user may do is
  * agree.
+ *
+ * IT MUST STAY A PLAIN YYYY-MM-DD DATE. app/legal/layout.tsx formatDate() parses it for the
+ * "Last updated" line, and a suffix such as "2026-10-12b" renders there as "Invalid Date".
+ *
+ * 2026-10-12: the product was renamed Nivora → Apnivaas and ShaReshi Tech is named as the
+ * operator. The row is db/migrations/2026-10-12-legal-version-apnivaas.sql, and it must be on
+ * the live database BEFORE the website is pushed or any app build carrying this string reaches
+ * anybody — see docs/play-console-submission.md, Step 5, for the whole order.
  */
-export const LEGAL_VERSION = "2026-09-13";
+export const LEGAL_VERSION = "2026-10-12";
 
 /**
  * Android application id, so the deletion page can name the app Play users installed.

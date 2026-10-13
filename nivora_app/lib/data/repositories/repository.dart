@@ -75,7 +75,7 @@ abstract base class Repository {
 AppFailure? credentialFailure(SessionStanding standing, String context) => switch (standing) {
       SessionStanding.live => null,
       SessionStanding.none => SignedOutFailure(
-          'You are not signed in any more, so Nivora asked the server as nobody. Sign in again '
+          'You are not signed in any more, so Apnivaas asked the server as nobody. Sign in again '
           'to see this.',
           technical: '$context: this client held NO session, so the request either went out '
               'under the anon key (supabase AuthHttpClient fills the Authorization header with '

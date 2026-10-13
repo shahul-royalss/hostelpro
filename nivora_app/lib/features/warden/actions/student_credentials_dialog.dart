@@ -149,7 +149,7 @@ class _StudentCredentialsDialogState extends State<StudentCredentialsDialog> {
                   icon: Icons.warning_amber_rounded,
                   tone: NivoraColors.warning,
                   child: Text(
-                    'This password is shown once and is stored nowhere — not in Nivora, '
+                    'This password is shown once and is stored nowhere — not in Apnivaas, '
                     'not in the audit log. Copy it now. If it is lost, only the owner can '
                     'issue a new one.',
                     style: t.textTheme.bodySmall,

@@ -1,11 +1,20 @@
-# Play Console — releasing Nivora as a new app
+# Play Console — releasing Apnivaas (formerly Nivora) as a new app
 
 Everything Console will ask for on the new app, in the order to do it, plus the two things outside
 Play that this release depends on.
 
-**App name:** Nivora · **Package:** `com.nivorasr.app` · **On the closed track:** `1.0.0 (6)` ·
-**Next upload:** `dist/NIVORA-1.1.0.aab`, versionCode 7, release name `1.1.0 (7)`
-([Step 4](#step-4--versioncode-7-and-production))
+**App name:** Apnivaas from 1.2.0; it was Nivora until then · **Package:** `com.nivorasr.app`, which
+never changes · **On the closed track:** `1.0.0 (6)` · **Next uploads:** `dist/NIVORA-1.1.0.aab`,
+versionCode 7, release name `1.1.0 (7)` ([Step 4](#step-4--versioncode-7-and-production)), then
+`dist/NIVORA-1.2.0.aab`, versionCode 8, release name `1.2.0 (8)`
+([Step 5](#step-5--versioncode-8-the-apnivaas-release)). Step 5 says when 7 can be skipped.
+
+> **The rename (2026-10-12).** The product is now called **Apnivaas**, and the developer shown on
+> the listing, **ShaReshi Tech**, is the operator named in the Terms and the Privacy Policy. Only
+> names changed. The package, the upload key, the demo logins (`demo.*@nivora.app`), the
+> `hostelpro-three.vercel.app` legal URLs and the support mailbox all stay as they are. Instructions
+> below that were carried out before the rename keep the old name where it describes what was done
+> then.
 
 > **This is a new Play Console app (2026-09-19).** Until 2026-09-13 this page drove a listing locked
 > to `com.srnivora.app`. That listing is abandoned: nothing was ever released from it, and nothing
@@ -37,8 +46,9 @@ again.
 
 Play Console → **Home → Create app**.
 
-- **App name:** `Nivora`. **Default language:** English (United States), the one language the
-  release notes declare ([play-release-notes.md](play-release-notes.md)).
+- **App name:** `Apnivaas`. The app was created as `Nivora` on 2026-09-19, and Step 5 renames it on
+  the store listing. **Default language:** English (United States), the one language the release
+  notes declare ([play-release-notes.md](play-release-notes.md)).
 - Answer the remaining questions and accept the declarations yourself.
 
 There is no package field on that form. A new app takes its package from the first bundle uploaded
@@ -166,6 +176,168 @@ it, and it gives the testers a few days on the multi-PG screens before productio
 `drop trigger if exists users_zz_demo_review_email_verified on public.users; drop function if exists app.demo_review_email_verified();`
 Keep the demo accounts themselves: every future update is reviewed by signing in with them.
 
+## Step 5 — versionCode 8, the Apnivaas release
+
+`dist/NIVORA-1.2.0.aab`, versionCode 8 (`version: 1.2.0+8`), release name `1.2.0 (8)`. The release
+notes are in [play-release-notes.md](play-release-notes.md), and so are the sizes and hashes once it
+is built. It renames the product to Apnivaas and replaces the icons. It adds a launch animation on a
+fresh start, and makes email confirmation a gate for owners, managers, wardens and super admins. The
+one-time Terms and Privacy screen moves to the start, and the build carries legal version
+**`2026-10-12`**.
+
+> **THE ORDER BELOW IS THE POINT OF THIS STEP.** A 1.2.0 build asks everybody to agree to version
+> `2026-10-12`, and `accept_legal_terms()` refuses any version that is not in `public.legal_versions`.
+> If a 1.2.0 build reaches anybody before that row is on live, every one of its users is stuck on
+> the consent screen. That means a tester, a reviewer, an APK handed round, or your own phone. Agree
+> fails with `22023 Unknown legal document version 2026-10-12.` and Sign out is the only way off.
+> Nothing in the app or in `release.sh` can detect this. Older builds (1.0.0, 1.1.0) record against
+> `2026-09-13` and are unaffected by every step here.
+
+**7 or straight to 8.** If `1.1.0 (7)` is not on the closed track yet, skip it, because 1.2.0
+contains everything 7 does. Use 8 wherever Step 4 B and D say 7. If 7 is already up or in review,
+leave it alone and put 8 on top. Once 8 is up, 7 has no further use.
+
+**A. Checks that change nothing (any time, before B).**
+
+1. Read-only, on live: the legal versions, and the staff accounts the email gate will hold.
+
+   ```sql
+   select version, effective_at from public.legal_versions order by version;
+   -- before B1: 2026-09-02, 2026-09-04, 2026-09-12, 2026-09-13
+
+   select role, count(*) from public.users
+    where role in ('owner', 'manager', 'warden', 'super_admin') and status = 'active'
+      and coalesce(email, '') <> '' and lower(email) not like '%@student.hostelpro.local'
+      and email_verified_at is null
+    group by role order by role;
+   ```
+
+   Every account the second query counts is held on the verify-email screen at its first sign-in
+   to 1.2.0, until it opens the emailed link. It can only sign out. Before 1.2.0 reaches those
+   people, tell them. Make sure confirmation mail actually goes out (Supabase Dashboard →
+   **Authentication → Emails** and the SMTP settings). Make sure `com.nivorasr.app://verify-email`
+   is in the redirect list ([below](#1-the-supabase-redirect-url-do-this-before-anyone-verifies-an-email)).
+   If the mail does not arrive, the gate locks those accounts out. Residents are never held.
+2. The review logins must still be stamped, or a reviewer is held on that screen too:
+
+   ```sql
+   select email, role, status, email_verified_at is not null as verified
+     from public.users where lower(email) like 'demo.%@nivora.app' order by email;
+   ```
+
+   `demo.owner`, `demo.manager` and `demo.warden1` must be `active` and `verified = true`. The
+   Demo PG trigger (Step 4 E) re-stamps them if their address is ever changed, so keep it until
+   1.2.0 has passed review.
+3. Supabase Dashboard → **Authentication → Emails**: the confirmation and password-reset templates,
+   and the SMTP sender name, are not in this repository. Wherever they say Nivora, change them to
+   Apnivaas when you push the website (C).
+
+**B. The backend, in this order.**
+
+1. **Apply `db/migrations/2026-10-12-legal-version-apnivaas.sql` to `nimxvgzscbanhtvgnjll` and run
+   the check at its foot:** five rows, the newest `2026-10-12`. **Nothing in C, D, E or F may happen
+   before this.**
+2. Apply `db/migrations/2026-10-12-brand-free-server-messages.sql`, after running its `.test.sql`
+   as that file says; its `.down.sql` puts the previous text back. It rewords server messages so
+   they name no app, which reads correctly in Nivora and Apnivaas builds alike, so it is not ordered
+   against C to F.
+3. **The owner redeploys the changed Edge Functions** from their own terminal. The permission
+   system refuses production deploys from Claude (Step 4 A3). That is every function whose code
+   changed (`email-verification`, `razorpay-order`), plus every function whose imports reach a
+   changed file in `supabase/functions/_shared/` (`caller.ts`, `tenant.ts`, `verification.ts`,
+   also pulled in through `accounts.ts` and `audit.ts`). The list as of 2026-10-13:
+
+   ```bash
+   npx supabase login
+   npx supabase functions deploy complaint-photo email-verification mobile-auth owner-create-staff razorpay-order sa-create-owner sa-owner-account warden-register-student warden-student-credentials --project-ref nimxvgzscbanhtvgnjll
+   ```
+
+   Not `push-send`, `razorpay-webhook` or `storage-erasure`: none of them imports a changed file. Never add
+   `--no-verify-jwt`; only `razorpay-webhook` takes it, and it is not in this list. If anything
+   under `supabase/functions/` changes again before the deploy, work the list out again. Check the
+   deployed source against the repository as in Step 4 A3. Like B2, this names no app and is not
+   ordered against the rest.
+
+**C. The website (after B1).**
+
+1. Push `main`; Vercel builds it. The legal pages then publish version `2026-10-12`, the name
+   Apnivaas and the operator ShaReshi Tech. They take the product name from `lib/legal-config.ts`
+   now, and nothing on the site reads the `NEXT_PUBLIC_APP_NAME` hosting variable any more.
+   Changing that variable does nothing, and it can be deleted from the Vercel project.
+2. Signed out, open `/legal/privacy`, `/legal/terms` and `/legal/account-deletion` on
+   `https://hostelpro-three.vercel.app`. Each must show "Apnivaas", "ShaReshi Tech" and "Last
+   updated 12 October 2026". The deletion page must still print `com.nivorasr.app`.
+
+**D. Build 1.2.0.** It may be built at any time, but it must not be installed on any phone, yours
+included, before B1.
+
+1. `nivora_app/scripts/release.sh`. It refuses a launcher label that is not `Apnivaas` and an
+   upload key that is not `CN=HostelPro`.
+2. Fill in the sizes and hashes in [play-release-notes.md](play-release-notes.md), and check the
+   artifact as in [Verifying the artifact](#verifying-the-artifact-before-you-upload-it). The
+   badging line must say `versionCode='8' versionName='1.2.0'`, and the permission list must be the
+   same ten.
+3. Install it and walk the first run once. The launch animation plays, then sign-in and the code
+   for an owner. **Terms and Privacy** comes next, before anything else. Then a forced password
+   change if one is owed, the verify-email screen for an unconfirmed staff address, and the home
+   screen.
+
+**E. The store listing (after B1 and C).** Turn on **Publishing overview → Managed publishing**
+first. Without it, each change goes live the moment it is approved, so the listing would say
+Apnivaas while every installed phone still says Nivora. With it, the listing and the build go live
+together when you press Publish.
+
+1. **Main store listing.** App name `Apnivaas` (30 characters at most; no ALL CAPS, emoji, "best"
+   or "#1"). The short description has no brand and stays. Full description: paste
+   `docs/store-listing/full-description-without-push.txt` (3,580 of 4,000 characters) until a
+   notification has been seen arriving on a phone, then `full-description.txt` (3,835).
+2. **Graphics.** App icon `public/store/icon-512.png` (512×512, 32-bit, fully opaque, square
+   corners; Play applies its own mask). Feature graphic `public/store/feature-graphic-1024x500.png`
+   (24-bit, no alpha). Re-render the 4 phone and 4 tablet screenshots after the in-app rename
+   (`nivora_app/test/_storeshot.dart` writes them to `dist/store-listing/`); the old owner shot
+   shows "NIVORA" in its header.
+3. **App content → App access.** Replace the "Any other information" text of all four sets with the
+   blocks [below](#app-access--what-to-enter-in-console). Only their first word changed (Apnivaas
+   for Nivora). The usernames and the order of screens they describe are the same.
+4. **Contact details.** The email stays `support@nivora.dhrishtaerf.org`. If an Apnivaas-named
+   address is wanted, add it as an alias of the same mailbox and receive a test message before
+   switching it here and in `lib/legal-config.ts`; a switch there is a wording change and a legal
+   version bump.
+5. **No change** to Data safety, the privacy-policy and deletion URLs, content rating, target
+   audience, ads or financial features. A rename collects nothing new and adds no permission;
+   confirm the second part on the built APK (D2).
+
+**F. Release (after B1, C and E).**
+
+1. **Closed testing** → the existing track → **Create new release** → upload
+   `dist/NIVORA-1.2.0.aab` → release name `1.2.0 (8)`, notes from
+   [play-release-notes.md](play-release-notes.md) → **Next → Save → Send changes for review**. With
+   Managed publishing on, press **Publish** once the release and the listing are both approved.
+2. **Production**, once production access is granted, exactly as Step 4 D with versionCode 8. Use a
+   staged rollout this time. The email gate holds every unconfirmed staff account at its next
+   sign-in, so a slow start shows whether confirmation mail is arriving before everybody depends
+   on it.
+
+**G. After 1.2.0 is live on Play.**
+
+1. Point the in-app update banner at it. Older builds read this row and offer the update in their
+   own wording ("Nivora 1.2.0 is available"), which is fine:
+
+   ```sql
+   update public.app_releases
+      set version_name = '1.2.0', version_code = 8,
+          download_url = 'https://play.google.com/store/apps/details?id=com.nivorasr.app',
+          size_bytes = null, sha256 = null,  -- these describe a downloadable APK; a store page is not one
+          mandatory = false, notes = null
+    where channel = 'android';
+   ```
+
+   Never set `mandatory = true` for this release. It makes the banner blocking on every older phone,
+   and the old builds keep working against this backend, so nothing justifies forcing them.
+2. Keep `support@nivora.dhrishtaerf.org` working for good: 1.0.0 and 1.1.0 print it in their
+   bundled privacy policy, and a mailbox that stops answering loses deletion and grievance requests
+   silently.
+
 ---
 
 ## Warning 1 — the advertising ID declaration
@@ -215,7 +387,9 @@ Play Console → the new app → **Test and release → Testing → Closed testi
 **Testers** tab. The same steps work on Internal testing if you use that track as well:
 
 1. Select the email list you already created — email lists belong to the developer account and can
-   be ticked on any track — or **Create email list** → name it `Nivora testers`.
+   be ticked on any track — or **Create email list** → name it `Apnivaas testers`.
+   The list on this account was created as `Nivora testers`. Testers never see a list's name, so
+   it can stay.
 2. Add `codewithshahul@gmail.com` — the account that owns this Play Console. It is allowed to be
    its own tester, and it should be the first one. This is a personal account, so add at least 11
    more Google accounts: 12 have to opt in and stay opted in for the 14 days.
@@ -225,8 +399,8 @@ Play Console → the new app → **Test and release → Testing → Closed testi
 4. **Save.**
 
 Then **Copy link** (it goes live on this tab once the release is rolled out), open it in a browser
-signed in as that account, and accept the invitation. Only after accepting does Nivora appear in
-the Play Store — and the phone must be signed into the Play Store with the *same* account. Give it
+signed in as that account, and accept the invitation. Only after accepting does the app appear
+in the Play Store — and the phone must be signed into the Play Store with the *same* account. Give it
 a few minutes to propagate before concluding it has failed. The link belongs to the new app, so
 anyone who accepted an invitation to the old listing has to accept this one too.
 
@@ -257,13 +431,14 @@ the record of what was given and as the answer sheet for the next time Console a
 | Content rating | Fill in the questionnaire (it is free and instant) | — |
 | Target audience | 18+; this is an operational tool for PG owners and residents | — |
 | News app | No | — |
-| Financial features | **"My app doesn't provide any financial features."** Rent for accommodation is paid to the hostel through Razorpay; Nivora offers no loans, banking, investment, crypto or money transfer, and holds no balance. Separately, because rent pays for a **physical service**, Play's billing requirement does not apply | [data-safety.md §5](data-safety.md) |
+| Financial features | **"My app doesn't provide any financial features."** Rent for accommodation is paid to the hostel through Razorpay; Apnivaas offers no loans, banking, investment, crypto or money transfer, and holds no balance. Separately, because rent pays for a **physical service**, Play's billing requirement does not apply | [data-safety.md §5](data-safety.md) |
 | Government apps | No | — |
 | Health | No | — |
-| Data deletion | The in-app route and the web route both exist. The web page `/legal/account-deletion` prints the Android package from `ANDROID_PACKAGE`, now `com.nivorasr.app` (`lib/legal-config.ts:96`, shown at `app/legal/account-deletion/page.tsx:142`). The live site changes only when the website is pushed, so check that the page shows `com.nivorasr.app` before entering the URL on any submission. It did on 2026-09-20, re-checked signed out, and the URL is in the form | [account-deletion.md](account-deletion.md) |
+| Data deletion | The in-app route and the web route both exist. The web page `/legal/account-deletion` prints the Android package from `ANDROID_PACKAGE`, now `com.nivorasr.app` (`lib/legal-config.ts:123`, shown at `app/legal/account-deletion/page.tsx:150`). The live site changes only when the website is pushed, so check that the page shows `com.nivorasr.app` before entering the URL on any submission. It did on 2026-09-20, re-checked signed out, and the URL is in the form | [account-deletion.md](account-deletion.md) |
 
-The legal version stays 2026-09-13 (`lib/legal-config.ts:80`): neither the privacy policy nor the
-terms names the package, so the package change did not touch them.
+The legal version is `2026-10-12` from 1.2.0 (`LEGAL_VERSION`, `lib/legal-config.ts:107`). The
+rename changed the wording of both documents, so it needed a bump ([Step 5](#step-5--versioncode-8-the-apnivaas-release)).
+The package change of 2026-09-13 did not, because neither document names the package.
 
 ### App access — what to enter in Console
 
@@ -274,7 +449,9 @@ One short set per account is easier for a reviewer than one long block, and safe
 an unstated length limit.
 
 The four sets below went in on 2026-09-19. They stay here as the text to paste again on the next
-release, and because a changed password or a changed account means editing them first.
+release, and because a changed password or a changed account means editing them first. For 1.2.0
+each block starts "Apnivaas is invitation-only" instead of "Nivora is invitation-only", and nothing
+else in them changed. Paste all four again in [Step 5](#step-5--versioncode-8-the-apnivaas-release) E3.
 
 **Before submitting, sign in to each account yourself** on a phone, with the exact password you will
 type into Console. That is standing procedure for every submission, not a one-off. All four accounts
@@ -318,7 +495,7 @@ re-checked on 2026-09-14 and the four logins confirmed active on 2026-09-20:
 Username: `demo.warden1@nivora.app`
 
 ```text
-Nivora is invitation-only software for PG and hostel operators in India. Accounts are created by an
+Apnivaas is invitation-only software for PG and hostel operators in India. Accounts are created by an
 administrator, so there is no sign-up. Sign in with the email above in the single "Email or phone
 number" field. On first launch, tap Skip on the intro screens. After signing in, tap "Agree and
 continue" on the one-time Terms and Privacy screen. Android may ask to allow notifications; either
@@ -337,7 +514,7 @@ than reporting a wrong password.
 Username: `9000000001` (a phone number, not an email)
 
 ```text
-Nivora is invitation-only software for PG and hostel operators in India. Residents are registered
+Apnivaas is invitation-only software for PG and hostel operators in India. Residents are registered
 by their hostel, so there is no sign-up. Type the 10-digit phone number above into the single "Email
 or phone number" field; do not type an email for this account. On first launch, tap Skip on the
 intro screens. After signing in, tap "Agree and continue" on the one-time Terms and Privacy screen.
@@ -370,23 +547,28 @@ get past two-step verification to reach the staff screen:
    `owner-create-staff`.
 3. The dialog shows the email and a **Temporary password**, once. Copy it, tick **I have saved these
    credentials**, and tap **Done**.
-4. Sign out, then sign in as `demo.manager@nivora.app` with the temporary password. The app makes you
-   set a new password (`nivora_app/lib/core/router/router.dart:171`). Choose the one you will type
-   into Console.
+4. Sign out, then sign in as `demo.manager@nivora.app` with the temporary password. From 1.2.0 the
+   Terms and Privacy screen comes first. After it, the app makes you set a new password
+   (`resolveRedirect` in `nivora_app/lib/core/router/router.dart`). Choose the one you will type into
+   Console.
 
-**The demo manager is exempt from email verification, because of the Demo PG trigger above.** After
-a new staff account's first password change, the app opens a verify-email screen that cannot be
-dismissed (`nivora_app/lib/features/auth/change_password_screen.dart:190-191`). It opens only while
-`email_verified_at` is empty (`nivora_app/lib/core/auth/session.dart:126`), and nobody reads mail
-sent to `nivora.app`. The trigger stamps that column when `owner-create-staff` inserts the manager's
-row, so the screen never opens. For the same reason, `requireVerifiedEmail()`
-(`supabase/functions/_shared/verification.ts:108`) will not refuse this account if it ever creates
-accounts. If the verify-email screen does open, one of three things is wrong: the address is not
-exactly `demo.<x>@nivora.app`, the account is not in Demo PG, or the trigger has been dropped. Fix
-that before submitting.
+**The demo staff logins are exempt from email verification, because of the Demo PG trigger
+above.** From 1.2.0, verification is a gate. The app holds every owner, manager, warden or super
+admin whose address can receive mail and whose `email_verified_at` is empty on a verify-email screen
+that cannot be dismissed. It does this at every sign-in and every cold start, not only after the
+first password change as in 1.0.0 and 1.1.0 (`NivoraSession.mustVerifyEmail` in
+`nivora_app/lib/core/auth/session.dart`, applied by `resolveRedirect` in
+`nivora_app/lib/core/router/router.dart`). Nobody reads mail sent to `nivora.app`. The trigger
+stamps that column when `owner-create-staff` inserts the manager's row, and the owner and warden
+rows were stamped already, so the screen never opens for any of the three. For the same reason,
+`requireVerifiedEmail()` (`supabase/functions/_shared/verification.ts`) will not refuse these
+accounts if they create accounts. If the verify-email screen does open for a demo login, one of
+three things is wrong: the address is not exactly `demo.<x>@nivora.app`, the account is not in Demo
+PG, or the trigger has been dropped. Fix that before submitting. [Step 5](#step-5--versioncode-8-the-apnivaas-release)
+A2 has the query that checks all three.
 
 ```text
-Nivora is invitation-only software for PG and hostel operators in India. Staff accounts are created
+Apnivaas is invitation-only software for PG and hostel operators in India. Staff accounts are created
 by the hostel owner, so there is no sign-up. Sign in with the email above in the single "Email or
 phone number" field. On first launch, tap Skip on the intro screens. After signing in, tap "Agree
 and continue" on the one-time Terms and Privacy screen. Android may ask to allow notifications;
@@ -410,7 +592,7 @@ Google requires review logins to be reusable, and the owner role always asks for
 code, so the reviewer needs a key that works every time. If the enrolment ever has to be done again,
 on this account or on a demo owner for a later release, that is:
 
-1. Sign in to Nivora as the demo owner, on an account with no second factor yet. The app opens the
+1. Sign in to Apnivaas as the demo owner, on an account with no second factor yet. The app opens the
    two-step verification setup screen.
 2. It shows a QR code and, under **SETUP KEY**, the same key as text with a Copy button. Copy the
    text key.
@@ -423,7 +605,7 @@ This key protects only the demo owner account, which holds fabricated data. **Ne
 real owner.**
 
 ```text
-Nivora is invitation-only software for PG and hostel operators in India. Owner accounts are created
+Apnivaas is invitation-only software for PG and hostel operators in India. Owner accounts are created
 by the platform administrator, so there is no sign-up. Sign in with the email above in the single
 "Email or phone number" field. On first launch, tap Skip on the intro screens.
 
@@ -540,8 +722,9 @@ hash means `dist/` was rebuilt, and every one of those checks has to be run agai
 
 When a rebuild *is* wanted — any code change, which also means raising the `+N` in
 `nivora_app/pubspec.yaml` — `scripts/release.sh` refuses to stage anything that fails its own gates:
-the upload key (`CN=HostelPro`, not a debug fallback), the launcher label (`Nivora` — it once
-shipped as "mobile", the Flutter project name), `libflutter.so` in every ABI directory, a versionCode
+the upload key (`CN=HostelPro`, not a debug fallback), the launcher label (`Apnivaas` from 1.2.0,
+`Nivora` before that — it once shipped as "mobile", the Flutter project name), `libflutter.so` in
+every ABI directory, a versionCode
 matching `pubspec.yaml`, and no service-role key or Razorpay secret anywhere in the bundle, in
 either of the two encodings a Dart snapshot uses. It does not check the package name.
 

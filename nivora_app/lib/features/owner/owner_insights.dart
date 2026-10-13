@@ -159,7 +159,7 @@ List<AttentionItem> attentionItems(HostelStats s) {
             : days <= 0
                 ? 'Subscription ends today'
                 : 'Subscription ends in ${countLabel(days, 'day')}',
-        detail: 'Nivora renews subscriptions — contact your account manager to extend it.',
+        detail: 'Apnivaas renews subscriptions — contact your account manager to extend it.',
         severe: false,
       );
     case SubscriptionState.expired:
@@ -169,7 +169,7 @@ List<AttentionItem> attentionItems(HostelStats s) {
             ? 'No subscription on this PG'
             : 'Subscription expired ${countLabel(-days, 'day')} ago',
         detail: 'The PG is read-only until it is renewed: staff can look, but nothing can be '
-            'recorded. Contact Nivora to restore it.',
+            'recorded. Contact Apnivaas to restore it.',
         severe: true,
       );
   }
@@ -194,17 +194,17 @@ List<AttentionItem> attentionItems(HostelStats s) {
   return switch (failure) {
     OfflineFailure() => (
         title: 'No connection',
-        next: 'Your phone cannot reach Nivora right now. Reconnect, then pull down to refresh.',
+        next: 'Your phone cannot reach Apnivaas right now. Reconnect, then pull down to refresh.',
         canRetry: true,
       ),
     AccessDeniedFailure() => (
         title: 'Not your PG',
-        next: 'This PG is not registered to your account. Ask Nivora to check who owns it.',
+        next: 'This PG is not registered to your account. Ask Apnivaas to check who owns it.',
         canRetry: false,
       ),
     ReadOnlyFailure() => (
         title: 'Subscription lapsed',
-        next: 'Reading still works; recording does not. Contact Nivora to renew.',
+        next: 'Reading still works; recording does not. Contact Apnivaas to renew.',
         canRetry: false,
       ),
     NotFoundFailure() => (
@@ -227,7 +227,7 @@ List<AttentionItem> attentionItems(HostelStats s) {
         canRetry: false,
       ),
     ServerFailure() => (
-        title: 'Nivora is struggling',
+        title: 'Apnivaas is struggling',
         next: 'The server did not answer in time. Try again in a moment.',
         canRetry: true,
       ),

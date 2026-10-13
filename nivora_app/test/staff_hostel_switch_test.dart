@@ -343,7 +343,7 @@ void main() {
       expect(fakes.auth.republishCalls, 1);
       expect(
         find.text(
-          'Your PG was changed, but Nivora could not reload it. Check your connection '
+          'Your PG was changed, but Apnivaas could not reload it. Check your connection '
           'and tap the PG again.',
         ),
         findsOneWidget,

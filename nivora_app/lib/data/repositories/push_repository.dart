@@ -36,7 +36,7 @@ final class PushRepository extends Repository {
             'p_platform': platform,
           });
         },
-        unresolved: 'Nivora could not confirm this phone for notifications. It will try again '
+        unresolved: 'Apnivaas could not confirm this phone for notifications. It will try again '
             'the next time you open the app.',
       );
 

@@ -317,7 +317,7 @@ AppFailure staffFailureFrom(FunctionException error) {
   // No response at all. Nothing was created, so this is safe to retry.
   if (error is FunctionsFetchException || error.status == 0) {
     return OfflineFailure(
-      'Cannot reach Nivora. Check your connection and try again.',
+      'Cannot reach Apnivaas. Check your connection and try again.',
       technical: error.toString(),
     );
   }
@@ -336,7 +336,7 @@ AppFailure staffFailureFrom(FunctionException error) {
     // features/auth/email_verification_service.dart, which was added after this exact confusion
     // cost a live debugging session.
     404 when message == null => NotFoundFailure(
-        'Staff accounts cannot be managed on this server yet. Nothing was changed. Ask Nivora '
+        'Staff accounts cannot be managed on this server yet. Nothing was changed. Ask Apnivaas '
             'to enable it.',
         technical: 'the staff Edge Function answered 404 with no body — it is not deployed on '
             'this project, so nothing decided that a PG was missing. $error',
@@ -355,7 +355,7 @@ AppFailure staffFailureFrom(FunctionException error) {
     // to do about it. That is more useful than anything this file could invent, so it is passed
     // through verbatim.
     _ => ServerFailure(
-        message ?? 'Nivora could not finish creating that account. Refresh the staff list '
+        message ?? 'Apnivaas could not finish creating that account. Refresh the staff list '
             'before trying again.',
         technical: error.toString(),
       ),

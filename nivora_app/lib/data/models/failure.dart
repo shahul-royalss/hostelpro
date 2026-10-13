@@ -124,7 +124,7 @@ sealed class AppFailure implements Exception {
 
     if (_looksOffline(error)) {
       return OfflineFailure(
-        'Cannot reach Nivora. Check your connection and try again.',
+        'Cannot reach Apnivaas. Check your connection and try again.',
         technical: error.toString(),
       );
     }
@@ -162,9 +162,9 @@ sealed class AppFailure implements Exception {
     String? unresolved,
   }) {
     final message = sideEffect == SideEffect.unknown
-        ? 'The Nivora server stopped responding before it confirmed this, so nobody can say '
+        ? 'The Apnivaas server stopped responding before it confirmed this, so nobody can say '
             'yet whether it went through. ${unresolved ?? 'Check before doing it again.'}'
-        : 'The Nivora server is not responding right now. Your connection is fine — this '
+        : 'The Apnivaas server is not responding right now. Your connection is fine — this '
             'usually clears in a few minutes.';
     return ServerFailure(
       message,
@@ -195,12 +195,12 @@ sealed class AppFailure implements Exception {
       // gotrue wraps the transport error's own text, so the offline sniffer still works on it.
       if (_looksOffline(e.message)) {
         return OfflineFailure(
-          'Cannot reach Nivora. Check your connection and try again.',
+          'Cannot reach Apnivaas. Check your connection and try again.',
           technical: 'auth refresh could not reach the server: ${e.message}',
         );
       }
       return ServerFailure(
-        'Nivora is having trouble right now. Try again in a moment.',
+        'Apnivaas is having trouble right now. Try again in a moment.',
         technical: 'auth refresh failed and is retryable: ${e.message} (${e.statusCode})',
       );
     }
@@ -232,7 +232,7 @@ sealed class AppFailure implements Exception {
   /// What an expired credential says, in every role's words, because it is the same sentence
   /// for all five: nothing is wrong with the account and nothing is wrong with the phone.
   static const _signInAgain =
-      'Your sign-in expired, so Nivora could not ask the server on your behalf. Nothing is '
+      'Your sign-in expired, so Apnivaas could not ask the server on your behalf. Nothing is '
       'wrong with your account — sign in again to carry on.';
 
   static AppFailure _fromPostgrest(PostgrestException e) {
@@ -352,7 +352,7 @@ sealed class AppFailure implements Exception {
         // PostgREST reports transport-level trouble here too; a 5xx is worth retrying.
         if (code != null && code.startsWith('5')) {
           return ServerFailure(
-            'Nivora is having trouble right now. Try again in a moment.',
+            'Apnivaas is having trouble right now. Try again in a moment.',
             technical: '${e.code}: ${e.message}',
           );
         }

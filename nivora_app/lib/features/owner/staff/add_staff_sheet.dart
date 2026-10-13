@@ -482,7 +482,7 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                     const SizedBox(height: Space.xs),
                     Text(
                       'A temporary password is generated on the server and shown to you once. '
-                      'Nivora never stores it.',
+                      'Apnivaas never stores it.',
                       style: t.textTheme.bodySmall,
                       textAlign: TextAlign.center,
                     ),

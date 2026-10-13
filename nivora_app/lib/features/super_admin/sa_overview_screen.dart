@@ -153,7 +153,7 @@ class _Platform extends ConsumerWidget {
           right: SaKpiTile(
             label: 'Hostels',
             value: count(stats.totalHostels),
-            semantics: 'Hostels on Nivora: ${count(stats.totalHostels)}',
+            semantics: 'Hostels on Apnivaas: ${count(stats.totalHostels)}',
           ),
         ),
         const SizedBox(height: Space.xs),

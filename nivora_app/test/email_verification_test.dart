@@ -126,6 +126,7 @@ Future<void> _pumpScreen(
   WidgetTester tester,
   FakeVerification fake, {
   _StubAuth? auth,
+  VerificationSendLog? sendLog,
 }) async {
   tester.view.physicalSize = const Size(1000, 2400);
   tester.view.devicePixelRatio = 1;
@@ -135,6 +136,9 @@ Future<void> _pumpScreen(
     ProviderScope(
       overrides: [
         emailVerificationServiceProvider.overrideWithValue(fake),
+        // In memory, and fresh per test: the real log is a file, and what one test "sent" must
+        // never decide whether the next one sends.
+        verificationSendLogProvider.overrideWithValue(sendLog ?? MemorySendLog()),
         authControllerProvider.overrideWith(
           () => auth ?? _StubAuth(const AuthSignedIn(_unverified)),
         ),
@@ -165,6 +169,7 @@ Future<void> _pumpBanner(
     ProviderScope(
       overrides: [
         emailVerificationServiceProvider.overrideWithValue(fake ?? FakeVerification()),
+        verificationSendLogProvider.overrideWithValue(MemorySendLog()),
         authControllerProvider.overrideWith(
           () => auth ?? _StubAuth(AuthSignedIn(session)),
         ),
@@ -223,34 +228,33 @@ void main() {
   // 1. ROUTING — verified and unverified route IDENTICALLY
   // ═══════════════════════════════════════════════════════════════════════════════════════
 
-  group('routing does not divert on an unproved address', () {
-    test('an unverified account is sent to its role home, exactly like a verified one', () {
-      final home = roleHome[UserRole.owner]!;
-
+  group('routing HOLDS an owner or staff member with an unproved address (1.2.0)', () {
+    // THIS GROUP USED TO ASSERT THE OPPOSITE — "an unverified account is sent to its role home,
+    // exactly like a verified one" — and that was the reported bug: the verify screen was a
+    // one-off push after the first password change, so signing out and back in, or restarting,
+    // went straight to the dashboard unproved. The owner's decision for 1.2.0: owners, managers,
+    // wardens and super admins verify before they use the app. The way out of a typo'd address
+    // is the screen's own "Sign out" and the line telling them who can correct it.
+    test('an unverified owner is sent to /verify-email, a verified one to their home', () {
       expect(
-        resolveRedirect(
-          phase: const AsyncData(AuthSignedIn(_unverified)),
-          here: splashRoute,
-        ),
-        home,
+        resolveRedirect(phase: const AsyncData(AuthSignedIn(_unverified)), here: splashRoute),
+        verifyEmailRoute,
       );
       expect(
-        resolveRedirect(
-          phase: AsyncData(AuthSignedIn(_verified)),
-          here: splashRoute,
-        ),
-        home,
-        reason: 'proving the address must not change where the user lands',
+        resolveRedirect(phase: AsyncData(AuthSignedIn(_verified)), here: splashRoute),
+        roleHome[UserRole.owner]!,
       );
     });
 
-    test('and it STAYS there — nothing pulls it onto a verification screen', () {
+    test('and it STAYS on /verify-email — the dashboard turns it back', () {
       final home = roleHome[UserRole.owner]!;
       expect(
         resolveRedirect(phase: const AsyncData(AuthSignedIn(_unverified)), here: home),
+        verifyEmailRoute,
+      );
+      expect(
+        resolveRedirect(phase: const AsyncData(AuthSignedIn(_unverified)), here: verifyEmailRoute),
         isNull,
-        reason: 'verification is a requirement, not a trap: the link may be going to a '
-            'typo\'d address, and a redirect would be an app with no way back',
       );
     });
 
@@ -360,14 +364,60 @@ void main() {
       expect(find.textContaining('code'), findsNothing);
     });
 
-    testWidgets('"I have opened the link" asks the SERVER, and a proof clears the screen',
+    testWidgets('an address already proved elsewhere is noticed on open — and no mail is sent',
         (tester) async {
+      // The screen is the router's gate now, so it opens on every cold start of an unverified
+      // account — including the one a tapped link causes. Mailing first would kill the very link
+      // being honoured. It asks first, and a proof releases the person without a tap.
       final fake = FakeVerification()..verified = true;
       final auth = _StubAuth(
         const AuthSignedIn(_unverified),
         afterReload: AuthSignedIn(_verified),
       );
       await _pumpScreen(tester, fake, auth: auth);
+
+      expect(fake.sends, 0);
+      expect(auth.reloads, 1);
+      expect(find.text('Email verified'), findsOneWidget);
+    });
+
+    testWidgets('a link this phone sent minutes ago is not killed by a fresh one on open',
+        (tester) async {
+      // Only the newest link works. Reopening the gate (a restart, a sign-out and back) inside the
+      // window must not send another and silently void the one in the inbox.
+      final fake = FakeVerification();
+      final log = MemorySendLog({
+        _unverified.email!.toLowerCase(): DateTime.now().subtract(const Duration(minutes: 2)),
+      });
+      await _pumpScreen(tester, fake, sendLog: log);
+
+      expect(fake.sends, 0, reason: 'a link went out 2 minutes ago; it is still the newest');
+      expect(_openedButton(), findsOneWidget);
+    });
+
+    testWidgets('a link sent longer ago than the window is replaced on open', (tester) async {
+      final fake = FakeVerification();
+      final log = MemorySendLog({
+        _unverified.email!.toLowerCase():
+            DateTime.now().subtract(autoSendWindow + const Duration(minutes: 1)),
+      });
+      await _pumpScreen(tester, fake, sendLog: log);
+
+      expect(fake.sends, 1);
+      expect(log.writes, 1, reason: 'the new send is remembered for the next open');
+    });
+
+    testWidgets('"I have opened the link" asks the SERVER, and a proof clears the screen',
+        (tester) async {
+      final fake = FakeVerification();
+      final auth = _StubAuth(
+        const AuthSignedIn(_unverified),
+        afterReload: AuthSignedIn(_verified),
+      );
+      await _pumpScreen(tester, fake, auth: auth);
+      // The link is opened on another device AFTER the screen is up. (Proved before it opened is
+      // its own case below: the screen's first re-check notices that by itself.)
+      fake.verified = true;
 
       await tester.tap(_openedButton());
       await _settle(tester);
@@ -564,8 +614,9 @@ void main() {
       // not mean the person has nothing to confirm. It usually means a link is sitting in their
       // inbox and they tapped the button before reading it. Disabling the confirm button would
       // be refusing the answer because we would not repeat the question.
-      final fake = FakeVerification(resendAfter: const Duration(seconds: 60))..verified = true;
+      final fake = FakeVerification(resendAfter: const Duration(seconds: 60));
       await _pumpScreen(tester, fake);
+      fake.verified = true; // opened elsewhere while the countdown runs
 
       expect(_resendButton(), findsNothing, reason: 'resend really is throttled');
       expect(tester.widget<FilledButton>(_openedButton()).onPressed, isNotNull);
@@ -655,7 +706,7 @@ void main() {
 
       // The instruction that remains says what to DO — including the return trip, which is the
       // step people skip — without predicting how the landing page will behave.
-      expect(find.textContaining('come back to Nivora'), findsOneWidget);
+      expect(find.textContaining('come back to Apnivaas'), findsOneWidget);
     });
 
     testWidgets('a check that comes back "not yet" opens nothing and points at no panel',
@@ -912,9 +963,9 @@ void main() {
         (tester) async {
       await _pumpScreen(tester, FakeVerification());
 
-      expect(find.textContaining('opens Nivora and signs you in'), findsOneWidget);
+      expect(find.textContaining('opens Apnivaas and signs you in'), findsOneWidget);
       expect(find.textContaining('laptop'), findsOneWidget);
-      expect(find.textContaining('come back to Nivora'), findsOneWidget);
+      expect(find.textContaining('come back to Apnivaas'), findsOneWidget);
 
       // The escape for the other device is the button, and it is on the screen from the start
       // rather than appearing only once something has already gone wrong.

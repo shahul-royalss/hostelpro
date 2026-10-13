@@ -172,7 +172,7 @@ Future<CheckoutOutcome> _openSheet(CheckoutOrder order) {
       // refuses a mismatch, so this line cannot overcharge or undercharge even if it were wrong.
       'amount': order.amountPaise,
       'currency': order.currency,
-      'name': order.hostelName.isEmpty ? 'Nivora' : order.hostelName,
+      'name': order.hostelName.isEmpty ? 'Apnivaas' : order.hostelName,
       'description': 'Rent · ${order.periodMonth}',
       'prefill': {
         'name': order.prefillName,
@@ -291,7 +291,7 @@ class _PayRentButtonState extends ConsumerState<PayRentButton> {
         ),
         const SizedBox(height: Space.xs),
         Text(
-          'UPI, cards, net banking and wallets. Nivora never sees your card or UPI details.',
+          'UPI, cards, net banking and wallets. Apnivaas never sees your card or UPI details.',
           style: t.textTheme.bodySmall,
           textAlign: TextAlign.center,
         ),

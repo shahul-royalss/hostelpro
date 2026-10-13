@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
+import { LEGAL } from "@/lib/legal-config";
 import "./globals.css";
 
 const inter = Inter({
@@ -9,7 +10,17 @@ const inter = Inter({
   display: "swap",
 });
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
+/**
+ * The product name comes from the legal config, NOT from NEXT_PUBLIC_APP_NAME.
+ *
+ * It used to be `process.env.NEXT_PUBLIC_APP_NAME ?? "…"`, which meant a Vercel setting that
+ * nobody reviews — and that is inlined at build time, so it outlives the code that set the
+ * fallback — decided what every tab, the installed PWA and the published privacy policy called
+ * the product. The legal pages print this same name, so changing it is a legal-version bump
+ * (lib/legal-config.ts explains the three places that move together); a dashboard variable must
+ * not be able to do it on its own.
+ */
+const APP_NAME = LEGAL.productName;
 
 export const metadata: Metadata = {
   // Private workspace — keep every screen out of search indexes (checklist §17).

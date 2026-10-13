@@ -245,7 +245,7 @@ Future<void> _resetPassword(BuildContext context, SaHostelRow hostel) async {
       hostelId: hostel.hostelId,
       title: 'Reset ${hostel.ownerName}\'s password?',
       body: [
-        'Nivora issues a new temporary password for $login. It is shown to you once and stored '
+        'Apnivaas issues a new temporary password for $login. It is shown to you once and stored '
             'nowhere, so be ready to pass it on.',
         '${hostel.ownerName} must choose their own password when they sign in with it, and is '
             'signed out on every device now. It is their login for every hostel they own.',
@@ -276,7 +276,7 @@ Future<void> _changeEmail(BuildContext context, SaHostelRow hostel) {
         '${hostel.ownerName} will sign in with the new address instead of '
             '${hostel.ownerEmail ?? 'the current one'}.',
         'They are signed out on every device now, and must verify the new address before '
-            'Nivora treats it as theirs.',
+            'Apnivaas treats it as theirs.',
       ],
       fieldLabel: 'New email',
       hint: 'owner@example.com',

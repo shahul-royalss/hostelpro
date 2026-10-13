@@ -58,9 +58,14 @@ const FONT = {
 /**
  * The strings the app actually needs. Keep this list short — every entry becomes path data
  * in the client bundle, so adding one has a real byte cost (see the size report on stdout).
+ *
+ * There is deliberately no product wordmark here any more. The old one traced the previous
+ * name in Caveat and was drawn on the sign-in card; the product is now Apnivaas and its
+ * wordmark is part of the logo artwork (public/brand/apnivaas-lockup.png, shown by
+ * components/auth/auth-card.tsx). A handwritten tracing of the name in a stock font would be a
+ * second, unofficial logo — do not add one back.
  */
 const ENTRIES = [
-  { key: "nivora", text: "NIVORA", note: "product wordmark" },
   { key: "welcome", text: "Welcome", note: "auth / onboarding greeting" },
 ];
 

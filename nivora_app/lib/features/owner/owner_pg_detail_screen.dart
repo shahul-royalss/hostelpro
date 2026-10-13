@@ -128,7 +128,7 @@ class _Floors extends StatelessWidget {
           EmptyNote(
             icon: Icons.meeting_room_outlined,
             title: 'No rooms set up yet',
-            message: 'Nivora scaffolds the floors, rooms and beds when a PG is created. '
+            message: 'Apnivaas scaffolds the floors, rooms and beds when a PG is created. '
                 'You can also map the building yourself.',
             action: OutlinedButton.icon(
               onPressed: () =>

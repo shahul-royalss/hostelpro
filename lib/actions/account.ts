@@ -106,11 +106,17 @@ export async function requestAccountDeletion(input: {
       try {
         // The PG is named because a warden or owner may look after several: without it, a shared
         // warden could not tell which building's resident is asking.
+        //
+        // No product name in the sentence. This row is read by every client on the shared
+        // backend, including installed builds that still call the app by its old name, and the
+        // database's request_account_deletion() writes the same notification for the app's own
+        // request path — the two should read the same, and neither should name a brand that is
+        // wrong in half the places it is shown.
         const body =
           user.full_name +
           " at " +
           ctx.hostel.name +
-          " asked for their NIVORA account and personal data to be deleted." +
+          " asked for their account and personal data to be deleted." +
           (reason ? ' Reason: "' + reason.slice(0, REASON_IN_NOTIFICATION) + '"' : "") +
           " Verify who they are in person before acting.";
         const { error } = await createAdminClient()

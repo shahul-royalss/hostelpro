@@ -2,6 +2,7 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,25 +18,40 @@ import 'legal_screen.dart';
 /// STANDS BETWEEN A SIGNED-IN USER AND THE PRODUCT UNTIL THEY HAVE AGREED TO THE DOCUMENTS.
 ///
 /// ═══ WHY THIS IS A REQUIREMENT AND NOT A PREFERENCE ═══
-/// NIVORA holds residents' names, phone numbers, permanent addresses, guardian contact details,
-/// government-ID scans and a payment ledger. Google Play will not list an app that handles
-/// personal data without a publicly reachable privacy policy, and the DPDP Act 2023 requires
-/// notice and consent before that processing begins. The listing is rejected without the URL;
-/// the processing is unlawful without the consent. This widget is the second half.
+/// Apnivaas holds residents' names, phone numbers, permanent addresses, guardian contact
+/// details, government-ID scans and a payment ledger. Google Play will not list an app that
+/// handles personal data without a publicly reachable privacy policy, and the DPDP Act 2023
+/// requires notice and consent before that processing begins. The listing is rejected without
+/// the URL; the processing is unlawful without the consent. This widget is the second half.
 ///
-/// ═══ WHERE IT SITS, AND WHY NOT IN THE ROUTER ═══
-/// It wraps each role home in `appScreens` (core/router/router.dart), which is the whole of the
-/// signed-in surface: all five role subtrees render through `RoleShell`, and the pre-app
-/// obligations — change password, second-factor enrolment — are separate routes that
-/// deliberately stay OUTSIDE it. Somebody forced to change a temporary password should not have
-/// to agree to a privacy policy first to be allowed to secure their account.
+/// ═══ WHERE IT SITS: THE FIRST SCREEN AFTER SIGN-IN (1.2.0) ═══
+/// It wraps EVERY signed-in destination in `appScreens` (core/router/router.dart): the forced
+/// password change, the email-verification gate and the five role homes. The second-factor
+/// routes (/mfa, /mfa-setup) stay outside it, because the second factor is part of signing in.
+/// So after authentication a person meets, in order:
+///
+///     Terms & Privacy (this) → set password (if owed) → verify email (if owed) → home
+///
+/// Until 1.2.0 it wrapped only the role homes, on the reasoning that somebody forced to change
+/// a temporary password should be allowed to secure their account before agreeing to anything.
+/// The cost of that order was that for a brand-new account this screen came LAST — after the
+/// password change and the verification — and the product owner, asking for a privacy note "at
+/// the start, one time", reasonably concluded it never appeared. Notice before processing is
+/// also the order the DPDP Act describes: the password change and the verification mail are
+/// processing of this person's data, so the notice now comes first. The one-per-version rule is
+/// unchanged; the 1.2.0 legal version bump is what shows it once to every existing account.
+///
+/// Each wrapped route is its own instance, so a person who agrees on /change-password and is
+/// then routed to /verify-email meets a NEW gate. [_acceptedThisRunProvider] is what lets that
+/// second gate pass at once, even if the re-read after the agreement failed — see below.
 ///
 /// It is NOT an arm in `resolveRedirect`, and that was a considered choice. Consent state is
 /// fetched, not carried in the session row, so a redirect arm would have to either block
 /// sign-in on an extra round trip or invent a spinner route to wait on. More importantly,
 /// `resolveRedirect` is a pure function with an exhaustive every-phase-against-every-route
 /// matrix in test/router_redirect_test.dart; adding a fetched condition to it would have made
-/// that matrix's meaning depend on data it cannot see. The router is untouched by this feature.
+/// that matrix's meaning depend on data it cannot see. The router decides WHICH screen; this
+/// wrapper, around each of them, decides whether the agreement comes first.
 ///
 /// ═══ THE FOUR STATES ARE FOUR STATES ═══
 /// The house rule (see data/models/failure.dart) is that LOADING, EMPTY, FAILED and REFUSED
@@ -62,16 +78,48 @@ class ConsentGate extends ConsumerStatefulWidget {
   ConsumerState<ConsentGate> createState() => _ConsentGateState();
 }
 
-class _ConsentGateState extends ConsumerState<ConsentGate> {
-  /// Set the moment the server confirms an acceptance, so the person goes straight in.
-  ///
-  /// WHY NOT JUST INVALIDATE AND RE-READ. Invalidating alone would send someone who has just
-  /// successfully agreed back through a network read that can itself fail — and being shown
-  /// "we could not check whether you agreed" one second after agreeing is the app calling the
-  /// user a liar. The server said yes; that is the answer. The provider is invalidated as well,
-  /// so every later build reads the durable fact rather than this flag.
-  bool _acceptedNow = false;
+/// Acceptances the server has confirmed during THIS run of the app, as `userId|version`.
+///
+/// WHY NOT JUST INVALIDATE AND RE-READ. Invalidating alone would send someone who has just
+/// successfully agreed back through a network read that can itself fail — and being shown "we
+/// could not check whether you agreed" one second after agreeing is the app calling the user a
+/// liar. The server said yes; that is the answer. The provider is invalidated as well, so every
+/// later launch reads the durable fact rather than this memo.
+///
+/// WHY A PROVIDER AND NOT A FIELD ON THE STATE. Since 1.2.0 the gate wraps several routes, and
+/// a person who agrees on /change-password is routed to /verify-email and then home — each a
+/// different gate instance. A field would be forgotten at the first hop, and a failed re-read
+/// would then show the next gate's "cannot check" screen to somebody who agreed seconds ago.
+/// Scoped to the ProviderScope rather than static, so a test's fresh scope starts empty, and
+/// keyed by user so a different account on the same handset is asked for its own agreement.
+final _acceptedThisRunProvider =
+    NotifierProvider<_AcceptedThisRun, Set<String>>(_AcceptedThisRun.new);
 
+class _AcceptedThisRun extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => const <String>{};
+
+  void add(String key) => state = {...state, key};
+}
+
+String _acceptanceKey(String userId) => '$userId|$kLegalVersion';
+
+/// Where this acceptance was given, as `legal_acceptances.surface` records it.
+///
+/// It used to be the literal 'android', so every acceptance made on an iPhone was recorded as
+/// made on Android — and "where were you when you agreed" is the first question asked when an
+/// acceptance is ever disputed. Read from the platform this build is running on.
+String consentSurface([TargetPlatform? platform]) =>
+    switch (platform ?? defaultTargetPlatform) {
+      TargetPlatform.iOS => 'ios',
+      TargetPlatform.android => 'android',
+      TargetPlatform.macOS => 'macos',
+      TargetPlatform.windows => 'windows',
+      TargetPlatform.linux => 'linux',
+      TargetPlatform.fuchsia => 'fuchsia',
+    };
+
+class _ConsentGateState extends ConsumerState<ConsentGate> {
   bool _busy = false;
   AppFailure? _writeError;
 
@@ -80,7 +128,7 @@ class _ConsentGateState extends ConsumerState<ConsentGate> {
     super.initState();
     // ═══ PUSH STARTS BEHIND THIS GATE, NOT AT SIGN-IN ═══
     //
-    // Starting push sends this handset's FCM token to Nivora and, on Android 13 and later, puts
+    // Starting push sends this handset's FCM token to Apnivaas and, on Android 13 and later, puts
     // the system notification dialog on screen. Both are processing the Privacy Policy
     // describes, so neither may happen before the person has agreed to it — and a permission
     // dialog drawn over documents they have not yet read asks the question in the wrong order.
@@ -101,7 +149,12 @@ class _ConsentGateState extends ConsumerState<ConsentGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (_acceptedNow) return widget.child;
+    // 0. AGREED DURING THIS RUN — on this gate or on the one in front of the previous route.
+    final session = ref.watch(sessionProvider);
+    if (session != null &&
+        ref.watch(_acceptedThisRunProvider).contains(_acceptanceKey(session.userId))) {
+      return widget.child;
+    }
 
     final consent = ref.watch(legalConsentProvider);
 
@@ -153,14 +206,19 @@ class _ConsentGateState extends ConsumerState<ConsentGate> {
       _writeError = null;
     });
     try {
+      // Read before the await: the session is what the acceptance is ABOUT, and the write is
+      // made as this session's user on the server.
+      final userId = ref.read(sessionProvider)?.userId;
       await ref.read(legalConsentStoreProvider).accept(
             version: kLegalVersion,
-            surface: 'android',
+            surface: consentSurface(),
           );
       if (!mounted) return;
       // Order matters: mark accepted BEFORE invalidating, so the rebuild the invalidation
       // triggers already knows the answer and never flashes the gate again.
-      setState(() => _acceptedNow = true);
+      if (userId != null) {
+        ref.read(_acceptedThisRunProvider.notifier).add(_acceptanceKey(userId));
+      }
       // Started here as well as from the listener, because the re-read the invalidation below
       // triggers can itself fail — and the agreement it would confirm has already been recorded.
       _startPush();
@@ -213,7 +271,7 @@ class _CheckFailed extends ConsumerWidget {
                 : 'Cannot check your agreement',
             message: canRetry || failure.needsSignIn
                 ? failure.message
-                : '${failure.message}\n\nNIVORA cannot let you in until it can confirm that '
+                : '${failure.message}\n\nApnivaas cannot let you in until it can confirm that '
                     'you have agreed to the Terms of Use and Privacy Policy.',
             action: canRetry
                 ? FilledButton(onPressed: onRetry, child: const Text('Try again'))
@@ -245,6 +303,33 @@ class _ConsentPromptState extends ConsumerState<_ConsentPrompt> {
   /// Which document is on screen. Both are here in full; this chooses which one is showing.
   int _index = 0;
 
+  /// The documents' scroll position, so switching document can start the new one at its top.
+  final _scroll = ScrollController();
+
+  /// Measures the introduction that scrolls away above the document switcher.
+  final _introKey = GlobalKey();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Switch document, and show the new one from its first line.
+  ///
+  /// Without this, somebody halfway down the Terms who switched to the Privacy Policy landed
+  /// halfway down the Privacy Policy, reading a section with no idea what came before it. The
+  /// jump is to just under the introduction — the switcher pinned at the top, the new
+  /// document's title directly beneath it — and only if the reader had scrolled past that
+  /// point; somebody still reading the introduction is left where they are.
+  void _show(int index) {
+    setState(() => _index = index);
+    final intro = _introKey.currentContext?.size?.height;
+    if (intro != null && _scroll.hasClients && _scroll.offset > intro) {
+      _scroll.jumpTo(intro);
+    }
+  }
+
   /// Ticked by the person, not by us. An unticked box is the default on purpose: a pre-ticked
   /// consent is not consent, and every regulator that has written about it says so.
   bool _agreed = false;
@@ -270,41 +355,68 @@ class _ConsentPromptState extends ConsumerState<_ConsentPrompt> {
 
     final document = kLegalDocuments[_index];
 
+    // ── THE INTRODUCTION SCROLLS WITH THE DOCUMENTS (1.2.0) ─────────────────────────────────
+    //
+    // The heading, the introduction and the switcher used to be a FIXED block above the
+    // document list, with the agree bar pinned below it. Measured on a 360x640 phone that left
+    // about 150 dp for the documents themselves — and about 10 dp at text scale 1.4, which is
+    // a screen asking somebody to agree to text they physically cannot read. Now the heading
+    // and introduction are the first thing IN the scroll view and leave as the reader scrolls;
+    // only the two-way switcher stays pinned (so the other document is always one tap away),
+    // and the agree bar stays below.
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.xs),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('BEFORE YOU START', style: t.textTheme.labelSmall),
-              const SizedBox(height: Space.xxs),
-              Text('Please read and agree', style: t.textTheme.titleLarge),
-              const SizedBox(height: Space.xxs),
-              Text(
-                'NIVORA keeps personal information about you and, if you are staff, about the '
-                'residents you look after. These two documents say exactly what is kept, who '
-                'can see it and how long it is held. You can read them again at any time from '
-                'the header of any screen.',
-                style: t.textTheme.bodyMedium,
+        Expanded(
+          child: CustomScrollView(
+            controller: _scroll,
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  key: _introKey,
+                  padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.xs),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('BEFORE YOU START', style: t.textTheme.labelSmall),
+                      const SizedBox(height: Space.xxs),
+                      Text('Please read and agree', style: t.textTheme.titleLarge),
+                      const SizedBox(height: Space.xxs),
+                      Text(
+                        'Apnivaas keeps personal information about you and, if you are staff, '
+                        'about the residents you look after. These two documents say exactly '
+                        'what is kept, who can see it and how long it is held. You can read them '
+                        'again at any time from the header of any screen.',
+                        style: t.textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: Space.sm),
-              SegmentedButton<int>(
-                segments: [
-                  for (var i = 0; i < kLegalDocuments.length; i++)
-                    ButtonSegment<int>(value: i, label: Text(kLegalDocuments[i].title)),
-                ],
-                selected: {_index},
-                onSelectionChanged: (s) => setState(() => _index = s.first),
-                showSelectedIcon: false,
+              // Pinned, and sized by its child — so a larger text size grows it rather than
+              // clipping the labels. Painted on the page's own ground so the document text
+              // scrolling underneath it is hidden, not overprinted.
+              PinnedHeaderSliver(
+                child: ColoredBox(
+                  color: t.scaffoldBackgroundColor,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(Space.md, Space.xs, Space.md, Space.xs),
+                    child: SegmentedButton<int>(
+                      segments: [
+                        for (var i = 0; i < kLegalDocuments.length; i++)
+                          ButtonSegment<int>(value: i, label: Text(kLegalDocuments[i].title)),
+                      ],
+                      selected: {_index},
+                      onSelectionChanged: (s) => _show(s.first),
+                      showSelectedIcon: false,
+                    ),
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(Space.md, Space.sm, Space.md, Space.md),
+                sliver: SliverToBoxAdapter(child: LegalDocumentView(document: document)),
               ),
             ],
-          ),
-        ),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(Space.md, Space.sm, Space.md, Space.md),
-            children: [LegalDocumentView(document: document)],
           ),
         ),
         _AgreeBar(
@@ -438,7 +550,7 @@ class _DeclinedNotice extends ConsumerWidget {
           badge: 'NOT AGREED',
           tone: NivoraColors.warning,
           child: StateBody(
-            title: 'NIVORA cannot be used without agreeing',
+            title: 'Apnivaas cannot be used without agreeing',
             message:
                 'That is a genuine choice, and nothing has been recorded. But the app keeps '
                 'personal information about you in order to work at all, and it may not do '

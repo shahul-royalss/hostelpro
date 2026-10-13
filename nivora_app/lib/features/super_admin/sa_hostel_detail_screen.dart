@@ -156,7 +156,7 @@ class _Detail extends ConsumerWidget {
                   const SizedBox(width: Space.xs),
                   Expanded(
                     child: Text(
-                      'On Nivora since ${dateLabel(hostel.createdAt.toLocal())}',
+                      'On Apnivaas since ${dateLabel(hostel.createdAt.toLocal())}',
                       style: t.textTheme.bodySmall,
                     ),
                   ),

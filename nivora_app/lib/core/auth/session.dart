@@ -120,10 +120,48 @@ class NivoraSession {
   ///
   /// A resident who signs in with a phone number is not held to this, and the exemption is
   /// carved by ADDRESS rather than by role: a student whose warden collected a real email is
-  /// asked exactly like an owner is. Deliberately NOT a routing gate — see
-  /// [resolveRedirect] in core/router/router.dart for why this shows a banner instead of
-  /// trapping the user on a screen.
+  /// asked exactly like an owner is. This is the question the BANNER asks. Whether the router
+  /// holds the account on the verification screen is the narrower [mustVerifyEmail].
   bool get needsEmailVerification => emailIsReachable && emailVerifiedAt == null;
+
+  /// The roles the router HOLDS on /verify-email until the address is proved.
+  ///
+  /// The staff roles, and only them, because they are the accounts whose address is a
+  /// credential channel for OTHER people: an owner's, manager's or warden's verified address is
+  /// what the server's `requireVerifiedEmail()` checks before it lets them create an account
+  /// whose temporary password ends up in somebody's inbox, and it is where their own password
+  /// reset goes. An unproved staff address is a door into a whole PG.
+  ///
+  /// RESIDENTS ARE DELIBERATELY NOT HERE (product owner, 1.2.0). Proving a resident's address
+  /// changes nothing on the server — no policy and no Edge Function reads it for them — so a
+  /// gate would be all cost: a typo'd address, or a mailbox on a phone they did not bring to
+  /// the desk, would lock somebody out of their own rent receipts for nothing. They keep the
+  /// banner ([needsEmailVerification]) and nothing more.
+  static const verificationGatedRoles = {
+    UserRole.owner,
+    UserRole.manager,
+    UserRole.warden,
+    UserRole.superAdmin,
+  };
+
+  /// THE HARD GATE (1.2.0): a staff account whose address can receive mail and has never been
+  /// proved. [resolveRedirect] in core/router/router.dart sends every signed-in route to
+  /// /verify-email while this is true — at every sign-in and every cold start, for accounts
+  /// that existed before the gate as much as for new ones — and releases the account the moment
+  /// a re-read profile row carries `email_verified_at`.
+  ///
+  /// It is a GATE and not the old one-time push for a reason that cost a release: the push
+  /// after a forced password change was thrown away by anything that rebuilt the screen stack —
+  /// signing out and in again, killing the app, or the emailed link itself on Android — and the
+  /// account landed on its dashboard with only a banner. A rule the router re-evaluates on every
+  /// navigation cannot be thrown away.
+  ///
+  /// Still keyed on ADDRESS as well as role: an address that cannot receive mail (none at all,
+  /// or the synthetic phone-login namespace) can never be proved, and gating on it would be a
+  /// permanent lockout. The Play-review demo accounts are stamped verified by a database
+  /// trigger (db/migrations/2026-09-13-demo-review-skip-email-verification.sql), so they pass.
+  bool get mustVerifyEmail =>
+      verificationGatedRoles.contains(role) && needsEmailVerification;
 
   static NivoraSession fromRow(Map<String, dynamic> row) {
     final role = UserRole.tryParse(row['role'] as String?);

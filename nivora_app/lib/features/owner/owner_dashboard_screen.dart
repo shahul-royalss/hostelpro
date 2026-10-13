@@ -66,7 +66,7 @@ class OwnerDashboardScreen extends ConsumerWidget {
             icon: Icons.apartment_rounded,
             title: 'No PG on your account yet',
             message:
-                'Nivora sets up a PG against your account before it appears here. '
+                'Apnivaas sets up a PG against your account before it appears here. '
                 'Contact your account manager if you were expecting one.',
           ),
         ),

@@ -100,7 +100,7 @@ final class ImageReceiptExporter implements ReceiptExporter {
       path = file.path;
     } catch (_) {
       return const ReceiptExportFailed(
-        'Nivora could not save the receipt to this phone. Free up some storage and try again.',
+        'Apnivaas could not save the receipt to this phone. Free up some storage and try again.',
       );
     }
 
@@ -148,7 +148,7 @@ final class ImageReceiptExporter implements ReceiptExporter {
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       if (data == null) {
         throw const _CaptureFailure(
-          'Nivora could not turn this receipt into an image. Try again in a moment.',
+          'Apnivaas could not turn this receipt into an image. Try again in a moment.',
         );
       }
       return data.buffer.asUint8List();

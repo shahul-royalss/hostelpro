@@ -422,7 +422,7 @@ void main() {
       // The one sentence a warden needs when the spinner stops: whether to do it again.
       final registrations = _FakeRegistrations(
         error: const OfflineFailure(
-          'Cannot reach Nivora. The resident was NOT registered — check your connection and '
+          'Cannot reach Apnivaas. The resident was NOT registered — check your connection and '
           'try again.',
         ),
       );

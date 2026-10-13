@@ -165,7 +165,7 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
       final started = await ref.read(mfaServiceProvider).begin(
             // The web action's exact friendly name, so one account enrolled from either client
             // shows the same label in the authenticator app and in the Supabase dashboard.
-            friendlyName: session == null ? null : 'NIVORA (${session.role.wire})',
+            friendlyName: session == null ? null : 'Apnivaas (${session.role.wire})',
           );
       if (!mounted) return;
       _enrolCode.clear();
@@ -209,7 +209,7 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
         // the way out appears in the same frame as the sentence saying it worked.
         _confirmed = true;
         _note = 'Two-factor authentication is on. You have been signed out on your other '
-            'devices — sign in again there and Nivora will ask for a code.';
+            'devices — sign in again there and Apnivaas will ask for a code.';
       });
       ref.invalidate(mfaStateProvider);
     } on MfaFailure catch (f) {
@@ -290,7 +290,7 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
       _busy = false;
       if (phase is AuthNeedsMfaEnrolment) {
         _leaveError =
-            'Two-factor authentication is on, but Nivora could not confirm that with the '
+            'Two-factor authentication is on, but Apnivaas could not confirm that with the '
             'server. Check your connection and tap Continue again.';
       }
     });
@@ -400,9 +400,9 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
                 icon: Icons.lock_outline_rounded,
                 tone: NivoraColors.warning,
                 message: session == null
-                    ? 'Nivora requires two-factor authentication on this account, so this is '
+                    ? 'Apnivaas requires two-factor authentication on this account, so this is '
                         'the only screen it can open. Set it up below, or sign out.'
-                    : 'Nivora requires two-factor authentication on ${session.role.label} '
+                    : 'Apnivaas requires two-factor authentication on ${session.role.label} '
                         'accounts, so this is the only screen it can open. Set it up below, '
                         'or sign out.',
               )
@@ -421,7 +421,7 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
                   children: [
                     FilledButton(
                       onPressed: _busy ? null : _leaveRequired,
-                      child: _busy ? const _ButtonSpinner() : const Text('Continue to Nivora'),
+                      child: _busy ? const _ButtonSpinner() : const Text('Continue to Apnivaas'),
                     ),
                     // Beside the button that produced it. A Continue that spins and returns you
                     // to the screen you were on, saying nothing, is the shape of bug this whole
@@ -474,7 +474,8 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
                         child: StateBody(
                           icon: Icons.shield_outlined,
                           title: 'Checking your security settings',
-                          message: 'Asking Nivora whether an authenticator app is already set up.',
+                          message:
+                              'Asking Apnivaas whether an authenticator app is already set up.',
                         ),
                       ),
                       error: (e, _) => _Failed(
@@ -483,7 +484,7 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
                             // Anything that reached here without being mapped is still a real
                             // failure; it just has no sentence of its own yet.
                             : const MfaFailure(
-                                'Nivora could not read your security settings. Try again.',
+                                'Apnivaas could not read your security settings. Try again.',
                               ),
                         onRetry: () => ref.invalidate(mfaStateProvider),
                         onSignOut: _signOut,
@@ -559,7 +560,7 @@ class _OffCard extends StatelessWidget {
           const SizedBox(height: Space.xxs),
           Text(
             'Right now your password is the only thing between someone and this account. '
-            'Add an authenticator app and Nivora will also ask for a 6-digit code each time '
+            'Add an authenticator app and Apnivaas will also ask for a 6-digit code each time '
             'you sign in.',
             style: t.textTheme.bodyMedium,
           ),
@@ -637,7 +638,7 @@ class _OnCard extends StatelessWidget {
             )
           else ...[
             Text(
-              'Enter the code your authenticator app is showing now. Nivora checks it before '
+              'Enter the code your authenticator app is showing now. Apnivaas checks it before '
               'removing the app, so a phone someone else is holding cannot switch this off.',
               style: t.textTheme.bodySmall,
             ),
@@ -717,7 +718,7 @@ class _EnrolPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('1. Add Nivora to your authenticator app', style: t.textTheme.titleMedium),
+          Text('1. Add Apnivaas to your authenticator app', style: t.textTheme.titleMedium),
           const SizedBox(height: Space.xxs),
           Text(
             'Google Authenticator, Authy, 1Password — any app that makes 6-digit codes.',
@@ -881,9 +882,9 @@ class _SavedKeyWarning extends StatelessWidget {
           const SizedBox(width: Space.xs),
           Expanded(
             child: Text(
-              'This key is shown once. Nivora cannot show it again — starting setup over issues '
-              'a different one. If you lose both the key and the phone, ask your administrator, '
-              'because nobody can read it back to you.',
+              'This key is shown once. Apnivaas cannot show it again — starting setup over '
+              'issues a different one. If you lose both the key and the phone, ask your '
+              'administrator, because nobody can read it back to you.',
               style: t.textTheme.bodySmall,
             ),
           ),
@@ -1065,7 +1066,7 @@ class _Footnote extends StatelessWidget {
     final t = Theme.of(context);
     return Text(
       'Codes are made by your authenticator app, not sent by SMS, so they keep working with no '
-      'signal. Nivora holds no copy of your key and cannot recover it for you.',
+      'signal. Apnivaas holds no copy of your key and cannot recover it for you.',
       style: t.textTheme.bodySmall,
     );
   }
@@ -1101,7 +1102,7 @@ class _LegalLink extends StatelessWidget {
                     Text('Terms & Privacy', style: t.textTheme.titleSmall),
                     const SizedBox(height: Space.xxs),
                     Text(
-                      'What Nivora keeps about you, who can see it, and how long it is held. '
+                      'What Apnivaas keeps about you, who can see it, and how long it is held. '
                       'Version $kLegalVersion.',
                       style: t.textTheme.bodySmall,
                     ),

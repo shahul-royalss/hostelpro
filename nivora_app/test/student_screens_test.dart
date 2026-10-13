@@ -483,7 +483,7 @@ void main() {
     );
 
     expect(find.byType(ErrorNote), findsOneWidget);
-    expect(find.text('Nivora is busy'), findsOneWidget);
+    expect(find.text('Apnivaas is busy'), findsOneWidget);
     // And it must not be mistaken for the "no ledger row for you this month" state, which is a
     // real and completely different answer.
     expect(find.text('No rent record yet'), findsNothing);

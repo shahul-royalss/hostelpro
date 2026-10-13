@@ -374,7 +374,9 @@
 .brandName {
   font-size: 13px;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  /* Was 0.12em, set for an all-capitals wordmark. The name is now printed in title case, as
+     the logo spells it, and wide tracking on lowercase letters only looks like a typo. */
+  letter-spacing: 0.01em;
   line-height: 1.1;
   color: rgb(var(--brand-navy));
 }

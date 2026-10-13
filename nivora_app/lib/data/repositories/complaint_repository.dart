@@ -62,7 +62,7 @@ final class ComplaintActor {
         'manager' => 'Manager',
         'warden' => 'Warden',
         'student' => 'Resident',
-        'super_admin' => 'Nivora support',
+        'super_admin' => 'Apnivaas support',
         _ => '',
       };
 }

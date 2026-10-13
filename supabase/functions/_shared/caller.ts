@@ -207,7 +207,13 @@ export async function requireSession(req: Request): Promise<{ caller: Caller; mu
     throw new HttpError(500, "Could not verify your account. Please try again.");
   }
   const profile = data as ProfileRow | null;
-  if (!profile) throw new HttpError(403, "Your account is not set up. Contact NIVORA support.");
+  // No product name in this sentence, or in any other a person can read from these functions.
+  // The app was renamed (Nivora -> Apnivaas, 1.2.0), and every build ever installed shares this
+  // one backend: a phone still on 1.0.0 or 1.1.0 is called Nivora on its home screen, a phone on
+  // 1.2.0 is called Apnivaas, and both print this text verbatim. Naming either is wrong on the
+  // other. "Support" is the address in the app's own legal and help screens, whichever name
+  // those carry.
+  if (!profile) throw new HttpError(403, "Your account is not set up. Contact support.");
   if (profile.status !== "active" || profile.deleted_at) throw new HttpError(403, "Your account is inactive.");
 
   return {
@@ -298,7 +304,8 @@ async function requireAssurance(caller: Caller): Promise<void> {
     // unanswerable question is safe here in a way it would not be on the client: enrolment runs
     // against GoTrue directly and does not pass through these functions, so nobody is stranded.
     console.error("[nivora] factor lookup failed:", e instanceof Error ? e.message : String(e));
-    throw new HttpError(403, "Nivora could not confirm your two-factor status. Please sign in again.");
+    // Brand-free for the reason at requireSession(): old and new builds both print it.
+    throw new HttpError(403, "Could not confirm your two-factor status. Please sign in again.");
   }
 
   if (!hasVerifiedFactor) {

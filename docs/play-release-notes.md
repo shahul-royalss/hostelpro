@@ -6,6 +6,61 @@ Play counts the characters *inside* the tags, not the tags themselves.
 
 ---
 
+## v1.2.0 (versionCode 8) — the Apnivaas name, the email gate and the one-time Terms screen
+
+`nivora_app/pubspec.yaml:19` says `version: 1.2.0+8`. **Not built yet.** Fill in the table from the
+`nivora_app/scripts/release.sh` run, as for 1.1.0 below. The files keep the `NIVORA-` prefix: that is
+a file name on the build machine, not the product name (`release.sh:424-427`), and nobody outside
+that machine sees it.
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `dist/NIVORA-1.2.0.aab` (upload this) | *after the build* | *after the build* |
+| `dist/NIVORA-1.2.0.apk` (arm64, to install) | *after the build* | *after the build* |
+| `dist/NIVORA-1.2.0-universal.apk` (any CPU) | *after the build* | *after the build* |
+
+What a user meets in this build:
+
+- **The product is called Apnivaas.** The launcher label, the icons, the launch animation and every
+  screen say so. The package is still `com.nivorasr.app`, so it updates the installed app in place:
+  accounts, data, ratings and the testing track are untouched.
+- **Everyone is asked once to agree to the renamed Terms and Privacy Policy** (legal version
+  `2026-10-12`), and that screen now comes first after sign-in and the second factor, before
+  anything else.
+- **Owners, managers and wardens with an unconfirmed email address must confirm it** before they
+  get in, on their next sign-in. Super admins are held the same way. Residents still see only the
+  banner.
+
+**This build must not reach anybody, testers included, before
+`db/migrations/2026-10-12-legal-version-apnivaas.sql` is on the live database.** Without that row,
+Agree fails with `22023 Unknown legal document version 2026-10-12.` and Sign out is the only way
+off the screen. The whole order is
+[play-console-submission.md, Step 5](play-console-submission.md#step-5--versioncode-8-the-apnivaas-release).
+
+**Release name:** `1.2.0 (8)`
+
+```
+<en-US>
+Nivora is now Apnivaas: new name, new icon, same account and records.
+
+• Owners: every PG in one place, staff logins, rent, expense charts and tasks.
+• Wardens: rooms, beds, residents, fees at the desk, complaints and leave.
+• Managers: expenses, mess menu and assigned jobs.
+• Residents: rent, receipts, UPI payment, complaints and notices.
+
+New: staff in several PGs tap Switch PG. Owners and staff confirm their email once. Everyone agrees once to the renamed Terms and Privacy Policy.
+</en-US>
+```
+
+**488 characters** inside the tags, **495** if every line break becomes CRLF on paste, against Play's
+500 (counted in Python on 2026-10-13). That leaves 5 to spare, so recount after any edit. It still
+describes the whole app, for the reason 1.1.0's block did: unless 1.1.0 (7) reached production
+first, this is the first release production users see. The first line uses the old name on purpose,
+because testers know the app as Nivora. If 1.1.0 (7) did reach production first, Switch PG is old
+news there and its sentence can go.
+
+---
+
 ## v1.1.0 (versionCode 7) — staff across several PGs, and the first production release
 
 `nivora_app/pubspec.yaml:19` says `version: 1.1.0+7`. Built on 2026-09-30 by

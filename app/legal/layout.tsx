@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LEGAL } from "@/lib/legal-config";
 import { cn } from "@/lib/utils";
 
 /**
@@ -13,7 +14,14 @@ import { cn } from "@/lib/utils";
  * visitor — which is what the Play Console requires of a privacy policy URL.
  */
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
+/**
+ * The product name, from lib/legal-config.ts — NOT from NEXT_PUBLIC_APP_NAME. These pages are
+ * the text people are recorded as having agreed to, so their wording may only change in git,
+ * together with LEGAL_VERSION. An environment variable is set in the hosting dashboard and
+ * fixed at build time; reading one here let a Vercel setting rewrite every legal page with no
+ * commit and no version bump. The four pages under this layout follow the same rule.
+ */
+const APP_NAME = LEGAL.productName;
 
 export const metadata: Metadata = {
   // The rest of the app is deliberately noindex (private workspace). The legal
@@ -81,8 +89,11 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
               Sign in
             </Link>
           </div>
-          <p className="mt-4 text-caption uppercase tracking-[0.05em] text-muted/80">
-            © {new Date().getFullYear()} {APP_NAME}. Accounts are created by your hostel
+          {/* The copyright belongs to the operator — a legal entity — not to the product name.
+              No `uppercase` on this line: it would print the operator as "SHARESHI TECH", and a
+              name is written as it is registered. */}
+          <p className="mt-4 text-caption text-muted/80">
+            © {new Date().getFullYear()} {LEGAL.operatorName}. Accounts are created by your hostel
             administrator — there is no public sign-up.
           </p>
         </div>
@@ -118,7 +129,9 @@ export function DocHeader({
 }) {
   return (
     <div className="mb-8">
-      <span className="label-caps">{APP_NAME}</span>
+      {/* `normal-case` overrides the eyebrow's uppercase: the product is written "Apnivaas",
+          exactly as in its logo, and never "APNIVAAS". */}
+      <span className="label-caps normal-case">{APP_NAME}</span>
       <h1 className="mt-1 text-title text-navy md:text-[32px] md:leading-10">{title}</h1>
       <p className="mt-3 max-w-2xl text-[15px] leading-7 text-charcoal/90">{summary}</p>
       <p className="mt-4 text-sm text-muted">

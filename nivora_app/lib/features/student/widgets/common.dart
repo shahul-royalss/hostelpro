@@ -30,11 +30,11 @@ import '../../../shared/sign_in_again.dart';
   return switch (failure) {
     OfflineFailure() => (
         title: 'No connection',
-        next: 'Your phone cannot reach Nivora. Check your Wi-Fi or mobile data and try again.',
+        next: 'Your phone cannot reach Apnivaas. Check your Wi-Fi or mobile data and try again.',
         canRetry: true,
       ),
     ServerFailure() => (
-        title: 'Nivora is busy',
+        title: 'Apnivaas is busy',
         next: 'The server did not answer in time. Try again in a moment.',
         canRetry: true,
       ),

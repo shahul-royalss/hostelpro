@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ROLE_HOME, type UserRole } from "@/lib/roles";
 import { audit } from "@/lib/audit";
+import { LEGAL } from "@/lib/legal-config";
 import type { HostelRow, SubscriptionStatus, UserRow } from "@/lib/types";
 
 export const ACTIVE_HOSTEL_COOKIE = "hp_active_hostel";
@@ -388,7 +389,7 @@ export async function assertHostelContext(...roles: UserRole[]) {
 export function assertWritable(ctx: HostelContext) {
   if (!ctx.writable) {
     if (ctx.hostel.status === "suspended") {
-      throw new PermissionError("This hostel is suspended. Contact NIVORA support.");
+      throw new PermissionError(`This hostel is suspended. Contact ${LEGAL.productName} support.`);
     }
     throw new PermissionError("Subscription expired — the hostel is read-only until it is renewed.");
   }

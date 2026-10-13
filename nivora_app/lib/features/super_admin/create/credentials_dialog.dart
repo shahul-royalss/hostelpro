@@ -166,7 +166,7 @@ class _CredentialsDialogState extends State<CredentialsDialog> {
                       const SizedBox(width: Space.xs),
                       Expanded(
                         child: Text(
-                          'This password is shown once and is stored nowhere — not in Nivora, '
+                          'This password is shown once and is stored nowhere — not in Apnivaas, '
                           'not in the audit log. Copy it now. If it is lost, the only fix is '
                           'to issue a new one.',
                           style: t.textTheme.bodySmall,

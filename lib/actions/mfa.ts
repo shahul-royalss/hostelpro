@@ -8,6 +8,7 @@ import { fail, ok, type ActionResult } from "@/lib/types";
 import { LIMITS, rateLimit } from "@/lib/rate-limit";
 import { audit } from "@/lib/audit";
 import { ROLE_HOME } from "@/lib/roles";
+import { LEGAL } from "@/lib/legal-config";
 
 /**
  * Two-factor authentication (TOTP) via Supabase Auth MFA (checklist §3, §30).
@@ -60,7 +61,14 @@ export async function startTotpEnrollment(): Promise<ActionResult<{ factorId: st
     for (const f of factors?.totp ?? []) {
       if (f.status !== "verified") await supabase.auth.mfa.unenroll({ factorId: f.id });
     }
-    const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: `NIVORA (${user.role})` });
+    // The label this factor carries in the account's factor list. Factors enrolled before the
+    // rename keep their old label; nothing looks factors up by it (the stale-factor sweep above
+    // goes by status), so the two names can coexist. The Flutter app enrols with the same label
+    // (security_screen.dart).
+    const { data, error } = await supabase.auth.mfa.enroll({
+      factorType: "totp",
+      friendlyName: `${LEGAL.productName} (${user.role})`,
+    });
     if (error || !data) return fail(errorMessage(error ?? new Error("Could not start enrolment.")));
     return ok({ factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret, uri: data.totp.uri });
   } catch (e) {

@@ -433,7 +433,7 @@ final class SaRepository extends Repository implements SaPlatformWrites, SaHoste
 
     if (error is FunctionsFetchException || error.status == 0) {
       return OfflineFailure(
-        'Cannot reach Nivora. The owner\'s login was not changed — check your connection and '
+        'Cannot reach Apnivaas. The owner\'s login was not changed — check your connection and '
         'try again.',
         technical: error.toString(),
       );
@@ -470,7 +470,7 @@ final class SaRepository extends Repository implements SaPlatformWrites, SaHoste
           technical: error.toString(),
         ),
       _ => ServerFailure(
-          message ?? 'Nivora could not finish changing that login. Check the owner\'s details '
+          message ?? 'Apnivaas could not finish changing that login. Check the owner\'s details '
               'before trying again.',
           technical: error.toString(),
         ),
@@ -614,7 +614,7 @@ final class SaRepository extends Repository implements SaPlatformWrites, SaHoste
 
     if (error is FunctionsFetchException || error.status == 0) {
       return OfflineFailure(
-        'Cannot reach Nivora. Check your connection and try again.',
+        'Cannot reach Apnivaas. Check your connection and try again.',
         technical: error.toString(),
       );
     }
@@ -655,7 +655,7 @@ final class SaRepository extends Repository implements SaPlatformWrites, SaHoste
       // says what to do about it, which is more useful than anything this file could invent —
       // so it is passed through verbatim.
       _ => ServerFailure(
-          message ?? 'Nivora could not finish creating that hostel. Check the hostels list '
+          message ?? 'Apnivaas could not finish creating that hostel. Check the hostels list '
               'before trying again.',
           technical: error.toString(),
         ),

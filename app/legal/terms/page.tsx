@@ -30,12 +30,13 @@ const PLACEHOLDERS_UNSET = !isConfigured;
 // there, which explains why bumping it re-asks every user for their agreement.
 const UPDATED = LEGAL_VERSION;
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
+// From lib/legal-config.ts, never from NEXT_PUBLIC_APP_NAME — see the note in ../layout.tsx.
+// This text is what people are recorded as agreeing to; only git and a version bump change it.
+const APP_NAME = LEGAL.productName;
 
 export const metadata: Metadata = {
   title: "Terms of Use",
-  description:
-    "The terms on which NIVORA is provided to hostel and PG operators and to the staff and residents whose accounts they issue — including acceptable use, what happens when a subscription lapses, and limitation of liability.",
+  description: `The terms on which ${LEGAL.productName} is provided to hostel and PG operators and to the staff and residents whose accounts they issue — including acceptable use, what happens when a subscription lapses, and limitation of liability.`,
 };
 
 /** Rendered per-request so middleware's CSP nonce reaches the script tags — see
@@ -116,7 +117,8 @@ export default function TermsOfUsePage() {
             These terms are an agreement between <strong>{OPERATOR.legalName}</strong> (&ldquo;we&rdquo;,
             &ldquo;us&rdquo;), which provides this service, and you — whether you are the{" "}
             <strong>hostel or PG operator</strong> that subscribes to {APP_NAME}, or an owner,
-            manager, warden or resident given an account by that operator.
+            manager, warden or resident given an account by that operator. Wherever these terms
+            say that {APP_NAME} does something, they mean {OPERATOR.legalName}.
           </p>
           <p>
             Using the app means accepting them. If you do not accept them you cannot use the app,

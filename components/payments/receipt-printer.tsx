@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { formatDate, formatINR, formatPeriodMonth } from "@/lib/utils";
+import { LEGAL } from "@/lib/legal-config";
 import styles from "./receipt-printer.module.css";
 
 /**
@@ -146,13 +147,17 @@ export function ReceiptPrinter({
           <div className={styles.content}>
             <div className={styles.head}>
               <div className={styles.brand}>
-                <div className={styles.brandName}>NIVORA</div>
+                {/* The product name from the legal config, spelled as the logo spells it. */}
+                <div className={styles.brandName}>{LEGAL.productName}</div>
                 <div className={styles.brandSub}>
                   {hostelName ? `${hostelName} · Rent receipt` : "Rent receipt"}
                 </div>
               </div>
+              {/* The initial of the product name in a tile, a stand-in for the logo at a size
+                  where the real mark would be a smudge on thermal paper. Derived from the name,
+                  not typed, so it follows a rename on its own instead of being left behind. */}
               <div className={styles.mark} aria-hidden>
-                N
+                {LEGAL.productName.charAt(0)}
               </div>
             </div>
 

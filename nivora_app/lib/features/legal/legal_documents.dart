@@ -31,22 +31,29 @@
 /// DEPLOYMENT ORDER IS NOT OPTIONAL: the migration that publishes a version row must land
 /// BEFORE an app build carrying that version string reaches anybody. `accept_legal_terms()`
 /// refuses a version it has never heard of, and at the gate the only thing a user may do is
-/// accept — so the wrong order locks every account out of the product. The row for the version
-/// below is db/migrations/2026-09-04-legal-version-bump.sql; the rule it has to satisfy is
-/// db/migrations/2026-09-02-legal-consent.sql §4.
+/// accept — so the wrong order locks every account out of the product: Agree fails with 22023
+/// "Unknown legal document version" and Sign out is the only way off the screen. The row for the
+/// version below is db/migrations/2026-10-12-legal-version-apnivaas.sql; the rule it has to
+/// satisfy is db/migrations/2026-09-02-legal-consent.sql §4.
 ///
 /// test/legal_consent_test.dart asserts (1) and (2) against each other, so the pair cannot
-/// drift silently. Nothing in Dart can check (3) — that one is the deployment order above.
+/// drift silently, and also checks [kLegalVersionLabel] against [kLegalVersion] and the
+/// operator constants below against their web twins. Nothing in Dart can check (3) — that one is
+/// the deployment order above.
 library;
 
 /// The published version of the Terms of Use + Privacy Policy pair that this build shows.
 ///
 /// One string covers BOTH documents: they are presented together and agreed to together, so
-/// there is no state in which a person is half-agreed.
-const kLegalVersion = '2026-09-13';
+/// there is no state in which a person is half-agreed. A plain YYYY-MM-DD date, always — the web
+/// pages parse the same string for their "Last updated" line.
+///
+/// 2026-10-12 renamed the product Nivora → Apnivaas and named ShaReshi Tech as the operator.
+/// Nothing else in either document changed.
+const kLegalVersion = '2026-10-12';
 
 /// Human-readable form of [kLegalVersion], for the "last updated" line.
-const kLegalVersionLabel = '13 September 2026';
+const kLegalVersionLabel = '12 October 2026';
 
 const kTermsUrl = 'https://hostelpro-three.vercel.app/legal/terms';
 const kPrivacyUrl = 'https://hostelpro-three.vercel.app/legal/privacy';
@@ -64,7 +71,14 @@ const kDeletionUrl = 'https://hostelpro-three.vercel.app/legal/account-deletion'
 /// satisfies both without publishing somebody's name and street address to the open web, where
 /// they would outlive the person holding the job. Do not put a personal name or a residential
 /// address back into these constants.
-const kOperatorName = 'NIVORA';
+///
+/// THE OPERATOR IS AN ENTITY, THE PRODUCT IS A NAME, and the two are not interchangeable.
+/// [kOperatorName] is the party to the Terms and the developer name on the Play listing; Play's
+/// User Data policy wants the privacy policy to name that entity, and until 2026-10-12 this said
+/// 'NIVORA', which is neither. [kLegalProductName] is what the app is called, written exactly as
+/// in the logo — never upper-cased. Both mirror `LEGAL.operatorName` / `LEGAL.productName`.
+const kOperatorName = 'ShaReshi Tech';
+const kLegalProductName = 'Apnivaas';
 const kGrievanceOfficer = 'The Grievance Officer';
 const kGrievanceEmail = 'support@nivora.dhrishtaerf.org';
 const kPostalAddress = 'Chittoor, Andhra Pradesh, India';
@@ -148,23 +162,33 @@ const kLegalDocuments = <LegalDocument>[kPrivacyPolicy, kTermsOfUse];
 // The in-app "Delete my account and data" control (features/legal/account_deletion.dart, added
 // 2026-09-13) is named below from version 2026-09-13, which changed this text anyway to correct
 // the permission list and to describe what Razorpay's in-app checkout handles.
+//
+// Version 2026-10-12 changed the product's name (Nivora → Apnivaas, through [kLegalProductName])
+// and named the operator, ShaReshi Tech, in section 1 and beside the terms' contact details. No
+// claim about data changed with it, which is what that version's legal_versions summary says.
 
 const kPrivacyPolicy = LegalDocument(
   id: 'privacy',
   title: 'Privacy Policy',
-  tagline: 'What NIVORA holds about you, why, who can see it, and how to have it erased.',
+  tagline: 'What $kLegalProductName holds about you, why, who can see it, and how to have it '
+      'erased.',
   url: kPrivacyUrl,
   sections: [
     LegalSection(
       heading: 'Who this policy is from, and how accounts work',
       blocks: [
         Para(
-          'NIVORA is software used by a hostel or PG operator to run their building. The '
-          'operator decides what to collect about you and why; NIVORA stores and processes it '
-          'on their instructions. In the language of the Digital Personal Data Protection Act '
-          '2023 your hostel is the Data Fiduciary and NIVORA is the Data Processor. So a '
-          'request to see, correct or erase your data is answered by your hostel first. For '
-          'platform staff accounts and the security log, NIVORA is the Data Fiduciary itself.',
+          '$kLegalProductName is software used by a hostel or PG operator to run their building. '
+          'The operator decides what to collect about you and why; $kLegalProductName stores and '
+          'processes it on their instructions. In the language of the Digital Personal Data '
+          'Protection Act 2023 your hostel is the Data Fiduciary and $kLegalProductName is the '
+          'Data Processor. So a request to see, correct or erase your data is answered by your '
+          'hostel first. For platform staff accounts and the security log, $kLegalProductName is '
+          'the Data Fiduciary itself.',
+        ),
+        Para(
+          '$kLegalProductName is operated by $kOperatorName. Wherever this policy says that '
+          '$kLegalProductName does something, or says we or us, it means $kOperatorName.',
         ),
         Para(
           'Nobody signs themselves up. The platform creates hostel owners, an owner creates '
@@ -172,7 +196,7 @@ const kPrivacyPolicy = LegalDocument(
           'the phone number their hostel registered, which is why changing it is something '
           'staff do rather than a profile edit. Everyone is given a temporary password and must '
           'set their own at first sign-in; passwords are hashed by the sign-in service and are '
-          'never seen by NIVORA, by your hostel or by us.',
+          'never seen by $kLegalProductName, by your hostel or by us.',
         ),
         Para(
           'That is why this policy matters more than it would for an app you chose to install: '
@@ -254,19 +278,22 @@ const kPrivacyPolicy = LegalDocument(
       blocks: [
         Bullets([
           'No date of birth and no age. The system has no such field.',
-          'No card number, UPI ID, CVV or bank account is ever received or stored by NIVORA. '
+          'No card number, UPI ID, CVV or bank account is ever received or stored by '
+              '$kLegalProductName. '
               'Where rent is paid online those details are typed into Razorpay\'s checkout, which '
               'on Android runs inside this app, and go to Razorpay (see Razorpay below). What '
               'comes back is a reference saying a payment of a stated amount succeeded.',
           'No location, contacts, calendar, microphone or biometrics. The Android app declares '
-              'ten permissions and no others. Four are NIVORA\'s own: internet access; the ability '
+              'ten permissions and no others. Four are $kLegalProductName\'s own: internet access; '
+              'the ability '
               'to tell whether you are online; the camera, used only when you choose to take a '
               'photo of an identity document, a resident or a receipt; and permission to show '
               'notifications. Four more are added by the libraries that deliver notifications and '
               'run the app: waking the device, vibrating, receiving a message, and an internal '
               'permission only this app can hold. The last two come from Razorpay\'s checkout: '
-              'NFC, so a payment card can be tapped, and a basic phone-state permission; NIVORA '
-              'reads neither. The advertising-ID permission is removed from the app explicitly.',
+              'NFC, so a payment card can be tapped, and a basic phone-state permission; '
+              '$kLegalProductName reads neither. The advertising-ID permission is removed from the '
+              'app explicitly.',
           'No advertising, no advertising identifier and no profiling. Nothing here is used to '
               'build a picture of you or to make an automated decision about you.',
           // NOT "there is no third-party tracking code in the app". That sentence was true of the
@@ -281,8 +308,8 @@ const kPrivacyPolicy = LegalDocument(
           // it reaches us.
           'No analytics, session replay or crash reporting of our own, no advertising, and no '
               'tracking across other apps or sites. Razorpay\'s checkout runs its own device and '
-              'session checks while a payment is open, for its own fraud prevention; NIVORA '
-              'receives none of it.',
+              'session checks while a payment is open, for its own fraud prevention; '
+              '$kLegalProductName receives none of it.',
           'No marketing cookies. The only cookies are the session cookies that keep you signed '
               'in, read by the server alone.',
           'No SMS, no marketing email and no mailing list. The only emails sent are the ones '
@@ -308,7 +335,8 @@ const kPrivacyPolicy = LegalDocument(
         ),
         Para(
           'A note on Aadhaar. Aadhaar is governed by its own law and UIDAI guidance restricts '
-          'holding copies of the Aadhaar letter. NIVORA does not require Aadhaar and does not '
+          'holding copies of the Aadhaar letter. $kLegalProductName does not require Aadhaar and '
+          'does not '
           'treat it differently from any other document; if your hostel asks for an ID you may '
           'offer a different one, or a masked Aadhaar where that is accepted. A hostel can also '
           'record the document type and skip the scan entirely — the system works with no image '
@@ -332,13 +360,15 @@ const kPrivacyPolicy = LegalDocument(
               'and gets no notice from the app.',
           'Staff and owners — their employment or commercial relationship with the hostel, and '
               'administration of the subscription.',
-          'The security log — NIVORA\'s own interest in keeping the system secure and being '
-              'able to investigate a compromised account. It exists for that and nothing else.',
+          'The security log — $kLegalProductName\'s own interest in keeping the system secure '
+              'and being able to investigate a compromised account. It exists for that and '
+              'nothing else.',
         ]),
         Para(
           'Where consent is the basis it can be withdrawn, though withdrawing it may mean the '
           'hostel can no longer accommodate you, because it can no longer keep the record it '
-          'needs to. There is no profiling and no automated decision-making in NIVORA.',
+          'needs to. There is no profiling and no automated decision-making in '
+          '$kLegalProductName.',
         ),
       ],
     ),
@@ -418,7 +448,8 @@ const kPrivacyPolicy = LegalDocument(
           'claim otherwise — it claims these measures are in the product today.',
         ),
         Para(
-          'If personal data is exposed, NIVORA tells the affected hostel without delay and '
+          'If personal data is exposed, $kLegalProductName tells the affected hostel without '
+          'delay and '
           'helps them notify the Data Protection Board of India and the people affected, as the '
           'Act requires of them.',
         ),
@@ -533,7 +564,8 @@ const kPrivacyPolicy = LegalDocument(
         Para(
           'Hostel and PG residents in India are sometimes under eighteen. The Act requires a '
           'parent or guardian to consent for a child, and prohibits tracking, behavioural '
-          'monitoring and advertising directed at children. NIVORA does none of those things '
+          'monitoring and advertising directed at children. $kLegalProductName does none of '
+          'those things '
           'for anybody of any age, so those prohibitions are met by the way the product is '
           'built rather than by a promise.',
         ),
@@ -573,16 +605,17 @@ const kPrivacyPolicy = LegalDocument(
 const kTermsOfUse = LegalDocument(
   id: 'terms',
   title: 'Terms of Use',
-  tagline: 'The rules for using NIVORA, and what each side is responsible for.',
+  tagline: 'The rules for using $kLegalProductName, and what each side is responsible for.',
   url: kTermsUrl,
   sections: [
     LegalSection(
       heading: 'Who these terms bind',
       blocks: [
         Para(
-          'These terms are between $kOperatorName, which provides this service, and you — '
-          'whether you are a hostel owner who subscribes to it, a manager or warden given an '
-          'account by an owner, or a resident given an account by a warden.',
+          'These terms are between $kOperatorName (we, us), which provides this service, and '
+          'you — whether you are a hostel owner who subscribes to it, a manager or warden given '
+          'an account by an owner, or a resident given an account by a warden. Wherever these '
+          'terms say that $kLegalProductName does something, they mean $kOperatorName.',
         ),
         Para(
           'Using the app means accepting them. If you do not accept them you cannot use the '
@@ -594,7 +627,7 @@ const kTermsOfUse = LegalDocument(
       heading: 'What the service does',
       blocks: [
         Para(
-          'NIVORA records and organises the running of a hostel or PG: rooms and beds, '
+          '$kLegalProductName records and organises the running of a hostel or PG: rooms and beds, '
           'residents, rent due and rent received, complaints, leave, visitors, notices, meals, '
           'staff tasks and expenses. It is delivered as a website and an Android app, and needs '
           'an internet connection.',
@@ -603,7 +636,7 @@ const kTermsOfUse = LegalDocument(
           'It is a record-keeping tool. It is not an accounting package, not a legal or tax '
           'adviser, and not a substitute for the agreement between you and your hostel. The '
           'rent, the deposit, the notice period and the house rules are matters between the '
-          'resident and the operator; NIVORA only records what they tell it.',
+          'resident and the operator; $kLegalProductName only records what they tell it.',
         ),
       ],
     ),
@@ -667,10 +700,11 @@ const kTermsOfUse = LegalDocument(
           'Removing accounts for staff who leave.',
         ]),
         Para(
-          'What you enter stays yours. You grant NIVORA only the permission needed to store it, '
-          'show it to the people entitled to see it, and back it up. It is never sold, never '
-          'shared with an advertiser and never used to train anything. NIVORA processes '
-          'resident data only on the hostel\'s instructions — so a hostel that records data it '
+          'What you enter stays yours. You grant $kLegalProductName only the permission needed to '
+          'store it, show it to the people entitled to see it, and back it up. It is never sold, '
+          'never shared with an advertiser and never used to train anything. $kLegalProductName '
+          'processes resident data only on the hostel\'s instructions — so a hostel that records '
+          'data it '
           'had no lawful basis to hold, and is challenged over it, answers for that itself.',
         ),
       ],
@@ -688,8 +722,8 @@ const kTermsOfUse = LegalDocument(
         ),
         Para(
           'Rent is either recorded at the desk by a warden, or paid online through Razorpay on '
-          'Razorpay\'s own checkout under Razorpay\'s terms. NIVORA never takes, holds, '
-          'transfers or refunds money, and never sees a card number, UPI ID, CVV or bank '
+          'Razorpay\'s own checkout under Razorpay\'s terms. $kLegalProductName never takes, '
+          'holds, transfers or refunds money, and never sees a card number, UPI ID, CVV or bank '
           'account.',
         ),
         Para(
@@ -743,6 +777,7 @@ const kTermsOfUse = LegalDocument(
           '$kJurisdiction.',
         ),
         Rows([
+          (term: 'Operator', detail: kOperatorName),
           (term: 'Email', detail: kGrievanceEmail),
           (term: 'Post', detail: kPostalAddress),
         ]),

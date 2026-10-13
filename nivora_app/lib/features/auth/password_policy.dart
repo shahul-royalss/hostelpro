@@ -128,6 +128,10 @@ class PasswordStrengthMeter extends StatelessWidget {
 
   final String password;
 
+  /// The narrowest meter that still puts the label beside the hint. Below it — a phone-width
+  /// card — the label is stacked above the hint instead.
+  static const _sideBySideMinWidth = 340.0;
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
@@ -189,20 +193,39 @@ class PasswordStrengthMeter extends StatelessWidget {
               ],
             ),
             const SizedBox(height: Space.xs),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(hint, style: t.textTheme.bodySmall),
-                ),
-                const SizedBox(width: Space.xs),
-                // labelSmall is the design's chip step, 10/600. A TextStyle cannot uppercase, so
-                // the string does.
-                Text(
+            // SIDE BY SIDE WHERE THERE IS ROOM, STACKED WHERE THERE IS NOT. On a 360 dp phone the
+            // card leaves the meter about 264 dp, and 'PASSWORD STRENGTH' beside the hint
+            // squeezed the hint into a four-line column a word or two wide. Below
+            // [_sideBySideMinWidth] the label goes above the hint and the hint gets the full
+            // width; on anything wider the original row is kept.
+            LayoutBuilder(
+              builder: (context, box) {
+                // labelSmall is the design's chip step, 10/600. A TextStyle cannot uppercase,
+                // so the string does.
+                final labelText = Text(
                   label.toUpperCase(),
                   style: t.textTheme.labelSmall?.copyWith(color: accent),
-                ),
-              ],
+                );
+                final hintText = Text(hint, style: t.textTheme.bodySmall);
+                if (box.maxWidth < _sideBySideMinWidth) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      labelText,
+                      const SizedBox(height: Space.xxs),
+                      hintText,
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: hintText),
+                    const SizedBox(width: Space.xs),
+                    labelText,
+                  ],
+                );
+              },
             ),
           ],
         ),

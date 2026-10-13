@@ -49,3 +49,28 @@ class FakeVerification implements EmailVerificationService {
     return SendOutcome(email: email, resendAfter: resendAfter);
   }
 }
+
+/// The send log, in memory: what the verify screen remembers about the links this phone has
+/// asked for, without a disk.
+///
+/// Every test that mounts the verify screen should install one, so that what one test "sent"
+/// can never decide whether the next one sends. [seed] plays a link sent on an EARLIER launch.
+class MemorySendLog implements VerificationSendLog {
+  MemorySendLog([Map<String, DateTime>? seed]) : entries = {...?seed};
+
+  final Map<String, DateTime> entries;
+  int reads = 0;
+  int writes = 0;
+
+  @override
+  Future<DateTime?> lastSent(String address) async {
+    reads++;
+    return entries[address.trim().toLowerCase()];
+  }
+
+  @override
+  Future<void> record(String address, DateTime at) async {
+    writes++;
+    entries[address.trim().toLowerCase()] = at;
+  }
+}

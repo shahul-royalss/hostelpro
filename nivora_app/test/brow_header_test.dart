@@ -277,7 +277,7 @@ void main() {
       expect(find.byType(AccountAvatar), findsOneWidget);
       expect(find.byType(MastheadBlock), findsOneWidget);
       _expectLegible(_inkOf(tester, 'Hello Priya'), _titleBar, 'greeting');
-      _expectLegible(_inkOf(tester, 'NIVORA'), _lineBar, 'signature');
+      _expectLegible(_inkOf(tester, 'Apnivaas'), _lineBar, 'signature');
       expect(tester.binding.hasScheduledFrame, isFalse);
     });
   });
@@ -459,7 +459,7 @@ void main() {
   group('nothing overflows at 320dp', () {
     const longEyebrow = 'SUPER ADMIN · PLATFORM CONSOLE FOR EVERY HOSTEL';
     const longTitle = 'Subscriptions for every hostel on the platform, lapsed ones included';
-    const longSubtitle = 'One subscription per hostel, renewed by the owner or by Nivora on request';
+    const longSubtitle = 'One subscription per hostel, renewed by the owner or by Apnivaas on request';
 
     final screens = <String, Widget>{
       'SaScreen with two actions': SaScreen(

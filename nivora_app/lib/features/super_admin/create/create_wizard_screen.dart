@@ -709,9 +709,9 @@ class _ReviewStep extends ConsumerWidget {
     return _StepShell(
       title: 'Review & create',
       description: newOwner
-          ? 'On submit Nivora creates the owner login, the hostel, its floors, rooms and beds, '
+          ? 'On submit Apnivaas creates the owner login, the hostel, its floors, rooms and beds, '
               'and the subscription.'
-          : 'On submit Nivora creates the hostel, its floors, rooms and beds, and the '
+          : 'On submit Apnivaas creates the hostel, its floors, rooms and beds, and the '
               'subscription, under the selected owner.',
       children: [
         _ReviewSection(

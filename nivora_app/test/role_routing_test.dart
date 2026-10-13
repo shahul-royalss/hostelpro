@@ -49,13 +49,23 @@ class _OfflineMfa implements MfaService {
 }
 
 void main() {
-  NivoraSession sessionFor(UserRole role, {bool mustChangePassword = false}) => NivoraSession(
+  // VERIFIED BY DEFAULT. Since 1.2.0 an owner, manager, warden or super admin with an unproved
+  // address is held on /verify-email wherever they try to go, so a fixture that wants to reach a
+  // role home has to be a verified account. The gate itself is asserted with verified: false.
+  NivoraSession sessionFor(
+    UserRole role, {
+    bool mustChangePassword = false,
+    bool verified = true,
+    String email = 'test@example.com',
+  }) =>
+      NivoraSession(
         userId: '00000000-0000-0000-0000-000000000001',
         role: role,
         fullName: 'Test User',
         status: 'active',
         mustChangePassword: mustChangePassword,
-        email: 'test@example.com',
+        email: email,
+        emailVerifiedAt: verified ? DateTime.utc(2026, 1, 1) : null,
       );
 
   /// [consent] is the state of this user's agreement to the legal documents.

@@ -468,7 +468,7 @@ class WardenScreen extends StatelessWidget {
             // corners are dead and the real target is smaller than its box — which is why it is
             // generous. The disc grew from 32 on 2026-09-12; see AvatarSize.header.
             padding: const EdgeInsets.all(Space.xs),
-            child: AccountAvatar(name: name.isEmpty ? 'Nivora' : name, size: AvatarSize.header),
+            child: AccountAvatar(name: name.isEmpty ? 'Apnivaas' : name, size: AvatarSize.header),
           ),
         ),
       ),

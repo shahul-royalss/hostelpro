@@ -163,7 +163,7 @@ class _StaffCredentialsDialogState extends State<StaffCredentialsDialog> {
                             Expanded(
                               child: Text(
                                 'This password is shown once and is stored nowhere — not in '
-                                'Nivora, not in the audit log. Copy it now. If it is lost, the '
+                                'Apnivaas, not in the audit log. Copy it now. If it is lost, the '
                                 'account has to be replaced.',
                                 style: t.textTheme.bodySmall,
                               ),

@@ -167,7 +167,7 @@ final class ComplaintPhotos {
 
     if (error is FunctionsFetchException || error.status == 0) {
       return OfflineFailure(
-        'Cannot reach Nivora, so the photo could not be attached. Check your connection.',
+        'Cannot reach Apnivaas, so the photo could not be attached. Check your connection.',
         technical: error.toString(),
       );
     }
@@ -221,7 +221,7 @@ final class ComplaintPhotos {
           technical: error.toString(),
         ),
       _ => ServerFailure(
-          message ?? 'Nivora could not attach that photo. You can send the complaint without '
+          message ?? 'Apnivaas could not attach that photo. You can send the complaint without '
               'one.',
           technical: error.toString(),
         ),

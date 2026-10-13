@@ -25,9 +25,15 @@
  * So creation still confirms at GoTrue (that flag now means only "the temporary password
  * works"), and the PROOF lives in `public.users.email_verified_at`, which starts NULL for every
  * account that has ever existed. The account can sign in and run the PG; what it cannot do
- * until it verifies is MINT ANOTHER ACCOUNT — see requireVerifiedEmail() and its four call
+ * until it verifies is MINT ANOTHER ACCOUNT — see requireVerifiedEmail() and its five call
  * sites. That is the one action where an unproved address turns into credentials in a
  * stranger's inbox, which is why it is the action that is gated.
+ *
+ * (Since app 1.2.0 the app ALSO holds owners, managers, wardens and super admins at a blocking
+ * verification screen until they verify. That is a client-side gate in front of this one, not
+ * a replacement for it: builds 1.0.0 and 1.1.0 stay installed and only show a banner, and a
+ * request made without the app at all never meets the app's screen. This check stays the
+ * boundary.)
  *
  * ═══ 2026-09-01: A LINK, NOT A CODE — AND WHY THAT CHANGED THIS FILE ═══
  *
@@ -94,8 +100,9 @@ export function isReachableAddress(email: string | null | undefined): boolean {
  * UNCHANGED BY THE MOVE TO LINKS, deliberately. This is the security boundary: it reads
  * `public.users.email_verified_at` from the profile row requireCaller() already resolved with
  * the service client, and it is called by sa-create-owner, owner-create-staff and
- * warden-register-student before any of them mints an account. How the proof was earned is not
- * its business; that it exists, is.
+ * warden-register-student before any of them mints an account, and by sa-owner-account and
+ * warden-student-credentials before either hands out a new password or moves a login to a new
+ * address. How the proof was earned is not its business; that it exists, is.
  *
  * A resident whose only login id is the synthetic phone address passes, because there is
  * nothing they could ever do to prove it; that exemption is carved by ADDRESS and not by role,
@@ -104,15 +111,36 @@ export function isReachableAddress(email: string | null | undefined): boolean {
  * The SENTENCE changed, because it has to describe an action the user can actually take. It
  * used to say "enter the 6-digit code"; there is no code and no field to type it into any more,
  * and an instruction that names a control which does not exist is worse than no instruction.
+ *
+ * ── 2026-10-12: IT CHANGED AGAIN, FOR THE SAME REASON ──
+ *
+ * It said "Open Nivora, tap the banner at the top of your home screen ... Come back to Nivora".
+ * Both halves stopped being true for some of the people who read it:
+ *
+ *   · the app was renamed Apnivaas in 1.2.0, but 1.0.0 and 1.1.0 stay installed and are still
+ *     called Nivora — one server, two names, and the sentence reaches both;
+ *   · 1.2.0 holds an unverified owner, manager, warden or super admin at a blocking verification
+ *     screen, so they never see a home screen, let alone a banner on it. The old builds still
+ *     have the banner and nothing else.
+ *
+ * So it names neither the product nor a control. What is left is true on every build: open the
+ * newest link (each new one kills the last), the app can send another, and coming back to the
+ * app is what makes it notice — both the banner and the 1.2.0 screen re-check when the app
+ * returns to the foreground. It also says "changing anyone's login" now, because two of the five
+ * callers reset a password or move a login rather than create an account.
+ *
+ * Keep the words 'subscription', 'suspended', 'read-only' and 'expired' OUT of it: the Flutter
+ * repositories treat a 403 containing any of them as a billing refusal, and this is not one.
  */
 export function requireVerifiedEmail(caller: Caller): void {
   if (!isReachableAddress(caller.email)) return;
   if (caller.emailVerifiedAt) return;
   throw new HttpError(
     403,
-    "Verify your email address before creating accounts. Open Nivora, tap the banner at the top " +
-      "of your home screen, and open the confirmation link we email to " +
-      (caller.email ?? "your address") + ". Come back to Nivora afterwards and it will update.",
+    "Verify your email address before creating accounts or changing anyone's login. Open the " +
+      "newest confirmation link we emailed to " + (caller.email ?? "your address") +
+      " — if you cannot find it, the app can send a new one. Come back to the app afterwards " +
+      "and it will update.",
   );
 }
 

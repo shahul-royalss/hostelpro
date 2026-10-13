@@ -30,6 +30,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
+import 'package:mobile/core/boot/splash_gate.dart';
 import 'package:mobile/core/boot/startup.dart';
 import 'package:mobile/features/splash/splash_screen.dart';
 import 'package:mobile/shared/wordmark.dart';
@@ -73,31 +74,13 @@ void main() {
     await tester.pump();
 
     expect(find.byType(SplashScreen), findsOneWidget);
-    // THE MARK IS TYPE AGAIN, so this looks for the letters rather than for a CustomPaint.
-    //
-    // The splash drew NivoraWordmark — a traced outline — until the opening was rebuilt as the
-    // N assembling into NIVORA. Asserting the old widget here would now be asserting the
-    // implementation of a screen this test is not about; what it actually cares about is that
-    // an initialisation which never finishes leaves the BRAND on screen rather than Android's
-    // flat window.
-    //
-    // Both halves of the lockup, because the mark alone is also what is on screen at frame zero
-    // of a working opening — finding only that would pass on a splash whose second phase never
-    // ran. IVORA is inside a zero-width clip on this frame, which keeps it in the tree.
-    //
-    // The N is an Image now rather than a Text: it is the real drawn mark, a house with an
-    // arched door and one lit window, not the letter set in Inter. Asserting the asset PATH is
-    // the point — a splash that silently lost the artwork and fell back to a letter would
-    // otherwise still pass.
-    // Unwrapped, because `cacheHeight:` on the Image wraps the provider in a ResizeImage —
-    // which is the decode-at-display-size optimisation and would otherwise make this cast
-    // throw. The nesting is the thing being relied on, so the test says so rather than
-    // reaching for `toString().contains`.
-    final mark = tester.widget<Image>(find.byType(Image));
-    final provider = mark.image;
-    final asset = provider is ResizeImage ? provider.imageProvider : provider;
-    expect((asset as AssetImage).assetName, 'assets/brand_mark.png');
-    expect(find.text('IVORA'), findsOneWidget);
+    // THE LAUNCH ANIMATION IS ON SCREEN, by asset path. A splash that silently lost the artwork
+    // would otherwise still pass: what this test cares about is that an initialisation which
+    // never finishes leaves the BRAND on screen rather than Android's flat window. The WebP never
+    // decodes in a test, so the path is what can be asserted; its frames are checked from its
+    // bytes in splash_asset_bytes_test.dart.
+    final image = tester.widget<Image>(find.byType(Image));
+    expect((image.image as AssetImage).assetName, kSplashAnimationAsset);
     // The whole point: an initialisation that never finishes leaves the BRAND on screen, not
     // Android's flat window. Before this change there was no frame at all to hold it.
     expect(tester.takeException(), isNull);
@@ -134,7 +117,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Nivora could not start'), findsOneWidget);
+      expect(find.text('Apnivaas could not start'), findsOneWidget);
       // The raw message, for the person the screenshot gets sent to.
       expect(find.textContaining('SocketException'), findsOneWidget);
 
@@ -160,7 +143,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Try again'), findsNothing);
-      expect(find.text('Nivora could not start'), findsOneWidget);
+      expect(find.text('Apnivaas could not start'), findsOneWidget);
     });
   });
 

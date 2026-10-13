@@ -174,13 +174,11 @@ Future<void> _shootLayout(WidgetTester tester) async {
 void main() {
   testWidgets('layout', _shootLayout);
 
-  // THE OPENING, AT REST. Shot at splashMinimum so this is the frame the wordmark FINISHES on
-  // — the one the product owner photographed off his phone and said was not centred. Rendering
-  // it here is how that gets looked at without a device and without racing a 1,500ms animation
-  // against a one-second adb screencap.
+  // THE OPENING. Images do not decode in tests, so this frames the launch ground and the
+  // layout around the animation, not the animation itself.
   testWidgets('splash', (t) async => _shootPlain(
       t, 'splash', const ProviderScope(child: SplashScreen()), NivoraTheme.light(),
-      settle: splashMinimum));
+      settle: splashAnimationLength));
 
   testWidgets('onboarding', (t) async => _shootPlain(
       t, 'onboarding', OnboardingScreen(onDone: () {}), NivoraTheme.light()));

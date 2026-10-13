@@ -79,7 +79,7 @@ class CheckoutRepository {
         // Explicitly reassuring: this failure happened BEFORE any order existed, so there is
         // nothing outstanding and nothing to reconcile. A resident who fears a half-made
         // payment will otherwise refresh, retry, and pay twice.
-        'Cannot reach Nivora, so the payment was not started. Nothing has been charged. '
+        'Cannot reach Apnivaas, so the payment was not started. Nothing has been charged. '
         'Check your connection and try again.',
         technical: error.toString(),
       );

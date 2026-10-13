@@ -1,4 +1,4 @@
-Nivora runs a paying-guest accommodation or hostel end to end — the rooms, the residents, the rent, the complaints and the day-to-day money — from one app, on the phone already in your pocket.
+Apnivaas runs a paying-guest accommodation or hostel end to end — the rooms, the residents, the rent, the complaints and the day-to-day money — from one app, on the phone already in your pocket.
 
 It is built for how a PG in India is actually staffed. The owner, the manager, the warden at the desk and the resident in the room each sign in to the same app and each see a different thing, so nobody is handed a tool meant for somebody else's job.
 
@@ -51,12 +51,12 @@ Everything you would otherwise have to ask somebody for.
 
 PAYMENTS
 
-Rent can be paid inside the app through Razorpay — UPI, card or netbanking — at hostels that have set up online payment. Card numbers and UPI IDs are typed into Razorpay's own checkout and never reach Nivora. Cash collected at the desk is recorded by the warden as a cash entry, so both halves of the ledger live in the same place.
+Rent can be paid inside the app through Razorpay — UPI, card or netbanking — at hostels that have set up online payment. Card numbers and UPI IDs are typed into Razorpay's own checkout and never reach Apnivaas. Cash collected at the desk is recorded by the warden as a cash entry, so both halves of the ledger live in the same place.
 
 
 PRIVACY, PLAINLY
 
-Nivora holds real information about real people — names, phone numbers, photographs, identity documents — so it is worth saying what it does not do. There is no advertising and no advertising identifier. There is no analytics vendor, no crash reporter and no session replay. Nothing you type is used to build a profile of you, and nothing is sold. The full privacy policy is linked below, and the app shows it to you before you agree to it.
+Apnivaas holds real information about real people — names, phone numbers, photographs, identity documents — so it is worth saying what it does not do. There is no advertising and no advertising identifier. There is no analytics vendor, no crash reporter and no session replay. Nothing you type is used to build a profile of you, and nothing is sold. The full privacy policy is linked below, and the app shows it to you before you agree to it.
 
 
 HOW ACCOUNTS WORK
@@ -64,4 +64,4 @@ HOW ACCOUNTS WORK
 Nobody signs themselves up. An owner's account is created for them, the owner creates the manager and warden accounts, and a warden registers each resident. Residents sign in with their phone number; staff sign in with an email address. If you are a resident and cannot sign in, your hostel's warden is the person who can help — not us. You can ask for your account and data to be deleted from your profile at any time.
 
 
-Nivora is made in India, for Indian PGs and hostels. Amounts are in rupees and dates follow the Indian day.
+Apnivaas is made in India, for Indian PGs and hostels. Amounts are in rupees and dates follow the Indian day.

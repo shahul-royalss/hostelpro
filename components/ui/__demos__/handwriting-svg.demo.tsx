@@ -12,9 +12,13 @@ import * as React from "react";
 import { HandwritingSvg } from "@/components/ui/handwriting-svg";
 import { HANDWRITING_PATHS } from "@/lib/handwriting-paths";
 
-/** The product wordmark, drawn once on a splash or auth screen. */
+/**
+ * A word drawn once on a splash or auth screen. Not the product name: that is part of the logo
+ * artwork now (public/brand/apnivaas-lockup.png), and gen-handwriting-path.mjs says why it must
+ * not come back as a font tracing.
+ */
 export function WordmarkDemo() {
-  return <HandwritingSvg name="nivora" className="h-20 w-auto text-navy" duration={2.4} />;
+  return <HandwritingSvg name="welcome" className="h-20 w-auto text-navy" duration={2.4} />;
 }
 
 /**
@@ -36,7 +40,7 @@ export function ReplayDemo() {
   return (
     <div className="flex flex-col items-start gap-4 p-8">
       <HandwritingSvg
-        name="nivora"
+        name="welcome"
         fill={false}
         strokeWidth={2}
         replayKey={run}
@@ -51,7 +55,7 @@ export function ReplayDemo() {
 
 /** Finished immediately — for anywhere the mark must be visible before hydration. */
 export function StaticDemo() {
-  return <HandwritingSvg name="nivora" animate={false} className="h-10 w-auto" />;
+  return <HandwritingSvg name="welcome" animate={false} className="h-10 w-auto" />;
 }
 
 /** Raw path data, for an outline generated outside the committed set. */

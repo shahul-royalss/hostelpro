@@ -109,8 +109,8 @@ class _UpdateBar extends ConsumerWidget {
     // (info blue); a mandatory one is something to act on now (the warning gold).
     final tone = blocking ? context.tones.warning : context.tones.info;
     final label = blocking
-        ? 'Update required — Nivora ${release.versionName}'
-        : 'Nivora ${release.versionName} is available';
+        ? 'Update required — Apnivaas ${release.versionName}'
+        : 'Apnivaas ${release.versionName} is available';
 
     return Material(
       color: t.colorScheme.surface,
@@ -202,7 +202,9 @@ class _UpdateSheet extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            status == UpdateStatus.required ? 'Update required' : 'A new Nivora is ready',
+            status == UpdateStatus.required
+                ? 'Update required'
+                : 'A new version of Apnivaas is ready',
             style: t.textTheme.titleLarge,
           ),
           const SizedBox(height: Space.xs),
@@ -260,7 +262,7 @@ class _UpdateSheet extends ConsumerWidget {
             'build published from the release script, so the normal case is that it just '
             'replaces this app and your data stays.\n\n'
             'If you see "App not installed", the file you downloaded was signed with a '
-            'different key — usually a test build. Do not keep retrying: uninstall Nivora '
+            'different key — usually a test build. Do not keep retrying: uninstall Apnivaas '
             'first, then install the downloaded file. You will have to sign in again '
             'afterwards, and nothing kept on the server is lost.',
             style: t.textTheme.bodyMedium?.copyWith(color: context.tones.muted),

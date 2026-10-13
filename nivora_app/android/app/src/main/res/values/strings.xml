@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The launcher label. "mobile" was the Flutter project name leaking to users. -->
-    <string name="app_name">Nivora</string>
+    <!-- The launcher label. "mobile" was the Flutter project name leaking to users.
+         Title case, exactly as the logo writes it. scripts/release.sh refuses any APK whose
+         label is not exactly this, so change both together or the release gate fails. -->
+    <string name="app_name">Apnivaas</string>
 </resources>

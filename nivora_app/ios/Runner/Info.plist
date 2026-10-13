@@ -9,9 +9,11 @@
 	<!-- "Mobile" is the Dart package name leaking onto a home screen. Android already fixed this
 	     in strings.xml; iOS was left behind, so the icon, the app switcher, Settings and the
 	     share sheet all said Mobile. The display name is independent of the package name — do
-	     NOT rename the package to match. -->
+	     NOT rename the package to match. Nor the bundle identifier: the product is called
+	     Apnivaas, but com.nivorasr.app is the App Store Connect record and the email-link scheme
+	     below, and it never changes. -->
 	<key>CFBundleDisplayName</key>
-	<string>Nivora</string>
+	<string>Apnivaas</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -19,7 +21,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Nivora</string>
+	<string>Apnivaas</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -105,9 +107,9 @@
 		<string>kotakbank</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>NIVORA uses the camera so a warden can photograph a resident's ID proof or a maintenance issue while standing in front of it, instead of finding the file later.</string>
+	<string>Apnivaas uses the camera so a warden can photograph a resident's ID proof or a maintenance issue while standing in front of it, instead of finding the file later.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>NIVORA opens your photo library so you can attach an existing photo of an ID proof, a paid receipt, or a maintenance issue to a resident's record or a complaint.</string>
+	<string>Apnivaas opens your photo library so you can attach an existing photo of an ID proof, a paid receipt, or a maintenance issue to a resident's record or a complaint.</string>
 	<!-- WITHOUT THIS, SAVING A RECEIPT KILLS THE APP. It is a different key from the one above:
 	     that one is for READING the library, this one is for ADDING to it. The rent receipt is
 	     shared as a PNG (lib/features/payments/receipt_export.dart), and share_plus hands an image
@@ -116,7 +118,7 @@
 	     The receipt screen tells residents to "save it to your phone from the same menu", so this
 	     is the path a resident is sent down, not an edge case. -->
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>NIVORA saves your rent receipt to Photos when you choose Save Image from the share menu, so you have proof of payment on your phone.</string>
+	<string>Apnivaas saves your rent receipt to Photos when you choose Save Image from the share menu, so you have proof of payment on your phone.</string>
 	<!-- WITHOUT THIS, EVERY TESTFLIGHT BUILD STOPS AT "MISSING COMPLIANCE" until someone answers
 	     Apple's export questions by hand in App Store Connect, and no tester can install it. The
 	     answer is genuinely NO: all network traffic is HTTPS to Supabase and Razorpay, and the

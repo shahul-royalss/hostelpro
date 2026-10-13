@@ -232,7 +232,7 @@ void main() {
     });
 
     test('the filename is derived from the reference, and is filesystem-safe', () {
-      expect(_deskReceipt.fileStem, 'nivora-receipt-2026-08-$_feeRowId');
+      expect(_deskReceipt.fileStem, 'apnivaas-receipt-2026-08-$_feeRowId');
     });
   });
 
@@ -318,7 +318,7 @@ void main() {
 
     testWidgets('a failure says what happened and what to do', (tester) async {
       final exporter = _FakeExporter(
-        const ReceiptExportFailed('Nivora could not save the receipt to this phone.'),
+        const ReceiptExportFailed('Apnivaas could not save the receipt to this phone.'),
       );
       await _showReceiptScreen(tester, _deskReceipt, exporter: exporter);
 
@@ -326,7 +326,7 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.text('Nivora could not save the receipt to this phone.'), findsOneWidget);
+      expect(find.text('Apnivaas could not save the receipt to this phone.'), findsOneWidget);
     });
 
     testWidgets('closing the share sheet is not an error and is not reported as one',

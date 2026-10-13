@@ -288,7 +288,7 @@ class MobileAuthEndpoint {
       'Verification is temporarily unavailable. Please try again in a minute.';
 
   static const unreachable =
-      'Cannot reach Nivora. Check your connection and try again.';
+      'Cannot reach Apnivaas. Check your connection and try again.';
 
   static const sessionEnded = 'Your session has ended. Sign in again to continue.';
 }

@@ -37,7 +37,10 @@ const PLACEHOLDERS_UNSET = !isConfigured;
 // there, which explains why bumping it re-asks every user for their agreement.
 const UPDATED = LEGAL_VERSION;
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
+// From lib/legal-config.ts, never from NEXT_PUBLIC_APP_NAME — see the note in ../layout.tsx.
+// Play requires this page to name the app (and the developer) shown on the store listing, so
+// the name must not depend on a hosting setting that can drift from the listing unseen.
+const APP_NAME = LEGAL.productName;
 
 /*
  * Imported, never re-declared. This page published "app.hostelpro.twa" — a package the project's
@@ -53,8 +56,7 @@ const COMPLETE_DAYS = 30;
 
 export const metadata: Metadata = {
   title: "Delete your account and data",
-  description:
-    "How to ask for your NIVORA account and personal data to be deleted, what is erased, what has to be kept and why, and how long it takes.",
+  description: `How to ask for your ${LEGAL.productName} account and personal data to be deleted, what is erased, what has to be kept and why, and how long it takes.`,
 };
 
 const SECTIONS = [
@@ -136,7 +138,13 @@ export default async function AccountDeletionPage() {
         <Section id="app" title="1. The app this applies to">
           <ul>
             <li>
-              <strong>App:</strong> {APP_NAME} — hostel and PG management software.
+              <strong>App:</strong> {APP_NAME} — hostel and PG management software. It was called
+              Nivora before version 1.2.0; the app, the package and your account are the same.
+            </li>
+            <li>
+              {/* The developer name on the Play listing. Play asks that a deletion page name the
+                  app or the developer as the listing shows them; it names both. */}
+              <strong>Developer:</strong> {LEGAL.operatorName}
             </li>
             <li>
               <strong>Android package:</strong> <code>{ANDROID_PACKAGE}</code>

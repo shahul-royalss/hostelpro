@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, FileText, ShieldCheck, UserMinus } from "lucide-react";
 import { Callout, DocHeader } from "./layout";
-import { LEGAL_VERSION } from "@/lib/legal-config";
+import { LEGAL, LEGAL_VERSION } from "@/lib/legal-config";
 
 // The publication date of the Terms + Privacy pair, and the string an in-app acceptance is
 // recorded against. It lives in lib/legal-config.ts so that this page, its three siblings, the
@@ -10,12 +10,12 @@ import { LEGAL_VERSION } from "@/lib/legal-config";
 // there, which explains why bumping it re-asks every user for their agreement.
 const UPDATED = LEGAL_VERSION;
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
+// From lib/legal-config.ts, never from NEXT_PUBLIC_APP_NAME — see the note in ./layout.tsx.
+const APP_NAME = LEGAL.productName;
 
 export const metadata: Metadata = {
   title: "Legal",
-  description:
-    "Privacy Policy, Terms of Use and data deletion request for NIVORA — hostel and PG management software.",
+  description: `Privacy Policy, Terms of Use and data deletion request for ${LEGAL.productName} — hostel and PG management software.`,
 };
 
 /** Rendered per-request so middleware's CSP nonce reaches the script tags — see

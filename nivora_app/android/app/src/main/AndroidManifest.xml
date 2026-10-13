@@ -104,6 +104,21 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!--
+              FLUTTER'S OWN DEEP-LINK ROUTING IS OFF, as ios/Runner/Info.plist already has it.
+
+              With it on (the engine's default), the email link below, tapped while the app is
+              running, was handed to go_router as a navigation to '/' (the link has an empty path).
+              That replaced the whole screen stack - including the blocking "verify your email"
+              screen - and the redirect then sent the person home unverified. The link does not need
+              Flutter's router at all: supabase_flutter receives the code through app_links either way
+              and signs the person in, and the router's verification rule does the rest.
+              Notification taps never navigate (lib/core/notify/push_service.dart), so nothing else
+              relied on it.
+            -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="false" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
@@ -152,6 +167,19 @@
                 <data android:scheme="com.nivorasr.app" android:host="verify-email"/>
             </intent-filter>
         </activity>
+        <!--
+          THE STATUS-BAR ICON AND ACCENT for notifications FCM shows by itself (app in the
+          background). Android draws a notification's small icon as a pure white silhouette, so the
+          full-colour launcher icon came out as a solid white blob; ic_stat_apnivaas is the A-house
+          as that silhouette. lib/core/notify/push_service.dart uses the same icon for notifications
+          the app shows itself.
+        -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_apnivaas" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

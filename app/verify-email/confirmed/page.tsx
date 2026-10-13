@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 };
 
 /**
- * Where the confirmation link in a NIVORA verification email lands.
+ * Where the confirmation link in the app's verification email lands.
  *
  * ═══ THIS PAGE DECIDES NOTHING ═══
  *
@@ -33,8 +33,19 @@ export const metadata: Metadata = {
  * GoTrue reports a dead link on the QUERY STRING rather than by refusing to redirect -
  * `?error=access_denied&error_code=otp_expired` - exactly as the reset-password callback
  * documents. That is the one thing worth branching on here: a person who clicked an hour-old
- * link and is told "confirmed" would go back to the app, find the banner still there, and have
- * no way to tell which of the two screens was lying.
+ * link and is told "confirmed" would go back to the app, find it still asking, and have no way
+ * to tell which of the two screens was lying.
+ *
+ * ═══ WHY THE COPY NAMES NO APP AND NO BANNER ═══
+ *
+ * Every installed build sends people here, and they do not agree on two things. The name: builds
+ * from before the rename are still called by the old name on the phone, while this page now
+ * wears the new logo — "open Apnivaas" would send someone looking for an icon they do not have.
+ * The prompt: older builds remind with a banner on the home screen; 1.2.0 holds owners, managers
+ * and wardens on a "Verify your email" screen until the address is confirmed (residents keep the
+ * banner). So the instructions say "the app", and name both buttons — the banner's "Verify now"
+ * and the screen's "Send it again" — instead of promising a banner a gated user never sees, or
+ * saying "keep using the app in the meantime" to someone the app is deliberately not letting in.
  *
  * ═══ MIDDLEWARE ═══
  *
@@ -69,12 +80,13 @@ export default async function EmailConfirmedPage({
             <TriangleAlert className="h-6 w-6" strokeWidth={1.75} aria-hidden />
           </div>
           <p className="text-sm text-muted">
-            Open NIVORA on your phone, tap <strong>Verify now</strong> on the banner at the top of
-            your home screen, and use the newest email it sends you. Only the most recent link
-            works.
+            Open the app on your phone and ask for a new email: tap <strong>Send it again</strong>{" "}
+            on the <strong>Verify your email</strong> screen, or <strong>Verify now</strong> on the
+            reminder at the top of your home screen. Then use the newest email. Only the most recent
+            link works.
           </p>
           <p className="text-caption text-muted/80">
-            Nothing has changed on your account, and you can keep using NIVORA in the meantime.
+            Nothing has changed on your account. Your email address is simply not confirmed yet.
           </p>
         </div>
       </AuthCard>
@@ -91,8 +103,9 @@ export default async function EmailConfirmedPage({
           <MailCheck className="h-6 w-6" strokeWidth={1.75} aria-hidden />
         </div>
         <p className="text-sm text-muted">
-          You can close this page and go back to NIVORA. It checks again every time you return to
-          the app, so the reminder will be gone.
+          You can close this page and go back to the app on your phone. It checks again when you
+          return to it, so it will stop asking you to confirm your email. If it still asks, tap{" "}
+          <strong>I have opened the link</strong>.
         </p>
         <p className="text-caption text-muted/80">
           You do not need to sign in here. This page only confirms the address.

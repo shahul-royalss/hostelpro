@@ -270,7 +270,7 @@ void main() {
 
     // The factor is named exactly as lib/actions/mfa.ts names it, so one account enrolled from
     // either client shows one label in the authenticator app.
-    expect(fake.lastFriendlyName, 'NIVORA (owner)');
+    expect(fake.lastFriendlyName, 'Apnivaas (owner)');
 
     // The key, in full, next to the QR rather than behind a "can't scan?" link.
     expect(find.text(fake.issued.single), findsOneWidget);
@@ -575,7 +575,7 @@ void main() {
       expect(find.text('Required'), findsNothing);
       expect(find.textContaining('the only screen it can open'), findsNothing);
 
-      final continueButton = find.widgetWithText(FilledButton, 'Continue to Nivora');
+      final continueButton = find.widgetWithText(FilledButton, 'Continue to Apnivaas');
       expect(continueButton, findsOneWidget);
 
       await tester.ensureVisible(continueButton);
@@ -612,7 +612,7 @@ void main() {
       expect(find.text('Required'), findsNothing);
       expect(find.text('ON'), findsOneWidget);
 
-      final continueButton = find.widgetWithText(FilledButton, 'Continue to Nivora');
+      final continueButton = find.widgetWithText(FilledButton, 'Continue to Apnivaas');
       expect(continueButton, findsOneWidget);
       await tester.ensureVisible(continueButton);
       await tester.tap(continueButton);
@@ -629,7 +629,7 @@ void main() {
       final fake = _FakeMfa(enrolled: true);
       final auth = await _pumpRequired(tester, fake, reloadMoves: false);
 
-      final continueButton = find.widgetWithText(FilledButton, 'Continue to Nivora');
+      final continueButton = find.widgetWithText(FilledButton, 'Continue to Apnivaas');
       await tester.ensureVisible(continueButton);
       await tester.tap(continueButton);
       await _settle(tester);
@@ -659,7 +659,7 @@ void main() {
       await _settle(tester);
 
       expect(find.text('OFF'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Continue to Nivora'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Continue to Apnivaas'), findsNothing);
       expect(find.text('Required'), findsOneWidget);
       expect(find.widgetWithText(TextButton, 'Sign out'), findsOneWidget);
     });
@@ -742,7 +742,7 @@ void main() {
       await _enrol(tester);
 
       expect(find.text('ON'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Continue to Nivora'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Continue to Apnivaas'), findsNothing);
       expect(find.text('Required'), findsNothing);
       expect(_backChevron(), findsOneWidget);
     });

@@ -251,16 +251,18 @@ class _RoleShellState extends ConsumerState<RoleShell> {
   /// it has to show the NIVORA."
   ///
   /// He is right, and the reason is that a masthead is not a logo slot. Every screen in this
-  /// app already belongs to Nivora; what the top of the screen can usefully tell a warden at
-  /// 8am is that the app knows which warden. The brand goes underneath, quieter, where it reads
-  /// as a signature on the greeting rather than as a banner over it.
+  /// app already belongs to Apnivaas (Nivora until 1.2.0); what the top of the screen can
+  /// usefully tell a warden at 8am is that the app knows which warden. The brand goes
+  /// underneath, quieter, where it reads as a signature on the greeting rather than as a banner
+  /// over it.
   ///
   /// ── AND IT IS TYPE, NOT THE DRAWN PATH ────────────────────────────────────────────────
   ///
   /// [NivoraWordmark] traces an outline, which is what the old splash animated. Asked for
   /// "simply elegant typographic which represents our logo / brand", so this is the display
-  /// face with the mark's own tracking — the same lockup the new splash resolves into, so
-  /// opening the app and using it show one wordmark rather than two that nearly match.
+  /// face writing the name the way the logo writes it — "Apnivaas", title case — so the launch
+  /// animation and the masthead show one name rather than two that nearly match. See
+  /// [NivoraTypeMark] for why its tracking is no longer the old capitals' 4.0.
   Widget _header(ThemeData t, NivoraSession? session) {
     if (widget.role == UserRole.student) return _residentHeader(t, session);
 
@@ -282,7 +284,7 @@ class _RoleShellState extends ConsumerState<RoleShell> {
             // generous. The disc grew from 32 on 2026-09-12; see AvatarSize.header.
             padding: const EdgeInsets.all(Space.xs),
             child: AccountAvatar(
-              name: name.isEmpty ? 'Nivora' : name,
+              name: name.isEmpty ? 'Apnivaas' : name,
               size: AvatarSize.header,
             ),
           ),

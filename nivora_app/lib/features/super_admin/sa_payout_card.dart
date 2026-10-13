@@ -90,7 +90,7 @@ class SaPayoutCard extends ConsumerWidget {
   String _detail(SaPayout p) {
     final owner = ownerName ?? 'this owner';
     if (p.directValid) {
-      return 'The Razorpay account NIVORA is configured with belongs to $owner, so rent lands '
+      return 'The Razorpay account Apnivaas is configured with belongs to $owner, so rent lands '
           'with them without being transferred.';
     }
     if (p.accountId != null) {
@@ -180,7 +180,7 @@ class _PayoutDialogState extends ConsumerState<_PayoutDialog> {
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Directly, with no transfer'),
                     subtitle: Text(
-                      'Only when the Razorpay account NIVORA is configured with belongs to '
+                      'Only when the Razorpay account Apnivaas is configured with belongs to '
                       '$owner. Their rent is already landing in it.',
                       style: t.textTheme.bodySmall,
                     ),

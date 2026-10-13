@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Building2, ChevronsUpDown, Loader2, LogOut, Menu, ShieldCheck, X } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
+import { LEGAL } from "@/lib/legal-config";
 import { ROLE_LABEL, type UserRole } from "@/lib/roles";
 import { NAV, isActive } from "./nav-config";
 import { NotificationBell } from "@/components/shared/notification-bell";
@@ -68,7 +69,9 @@ export function DesktopShell({
   const pathname = usePathname();
   const [drawer, setDrawer] = React.useState(false);
   const items = NAV[user.role];
-  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
+  // The product name from the legal config, not an environment variable: the same constant the
+  // page titles and the published legal pages print (see app/layout.tsx for why).
+  const appName = LEGAL.productName;
 
   React.useEffect(() => setDrawer(false), [pathname]);
 

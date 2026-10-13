@@ -76,9 +76,12 @@ class PushService {
   /// android/app/google-services.json, which includes CI and anybody who cloned this repo.
   bool _firebaseReady = false;
 
+  // The channel's NAME is what Settings -> Notifications shows; the ID ([nivoraChannelId]) must
+  // never change, or every user's notification settings would reset to a new, second channel.
+  // Android updates the visible name the next time the channel is created with the same id.
   static const _channel = AndroidNotificationChannel(
     nivoraChannelId,
-    'Nivora',
+    'Apnivaas',
     description: 'Rent reminders, notices, payments and tasks.',
     importance: Importance.high,
   );
@@ -158,9 +161,13 @@ class PushService {
     await _local.initialize(
       // NAMED `settings:` — it is positional in v19 and earlier, and this project is on v22.
       settings: const InitializationSettings(
-        // The launcher icon. A missing icon here is a notification that does not appear at all
-        // on some Android skins.
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        // THE STATUS-BAR SILHOUETTE, not the launcher icon. Android draws a notification's small
+        // icon as pure white through its alpha, so the full-colour launcher icon came out as a
+        // solid white blob. ic_stat_apnivaas is the A-house as that silhouette (res/drawable-*),
+        // and AndroidManifest.xml points FCM's background notifications at the same one. A
+        // missing icon here is a notification that does not appear at all on some Android skins,
+        // which is why the resource is generated, not hand-made: scripts/gen-icons.mjs.
+        android: AndroidInitializationSettings('@drawable/ic_stat_apnivaas'),
         iOS: DarwinInitializationSettings(),
       ),
       onDidReceiveNotificationResponse: _onTapped,
@@ -223,7 +230,7 @@ class PushService {
         notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
             nivoraChannelId,
-            'Nivora',
+            'Apnivaas',
             channelDescription: 'Rent reminders, notices, payments and tasks.',
             importance: Importance.high,
             priority: Priority.high,

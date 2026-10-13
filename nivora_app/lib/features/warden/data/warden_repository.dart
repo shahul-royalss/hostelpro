@@ -244,7 +244,8 @@ final class WardenRepository extends Repository implements StudentRegistrations 
 
     if (error is FunctionsFetchException || error.status == 0) {
       return OfflineFailure(
-        'Cannot reach Nivora. The resident was NOT registered — check your connection and try again.',
+        'Cannot reach Apnivaas. The resident was NOT registered — check your connection and '
+        'try again.',
         technical: error.toString(),
       );
     }
@@ -304,7 +305,7 @@ final class WardenRepository extends Repository implements StudentRegistrations 
       // id and says what has to be done about it, which is more useful than anything this file
       // could invent — so it is passed through verbatim.
       _ => ServerFailure(
-          message ?? 'Nivora could not finish registering that resident. Check the roster '
+          message ?? 'Apnivaas could not finish registering that resident. Check the roster '
               'before trying again.',
           technical: error.toString(),
         ),

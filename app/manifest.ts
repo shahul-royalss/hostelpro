@@ -1,8 +1,20 @@
 import type { MetadataRoute } from "next";
+import { LEGAL } from "@/lib/legal-config";
 
-/** PWA manifest — Warden & Student apps are installable (CLAUDE_2.md §2). */
+/**
+ * PWA manifest — Warden & Student apps are installable (CLAUDE_2.md §2).
+ *
+ * `name` and `short_name` are the product name from lib/legal-config.ts, the same constant the
+ * page titles (app/layout.tsx) and the legal pages read. It is deliberately not
+ * NEXT_PUBLIC_APP_NAME any more: that variable was set in Vercel, inlined at build time, and is
+ * how the live manifest kept saying the old name whatever the code's fallback said. "Apnivaas"
+ * is eight letters, short enough for a home-screen label, so the two fields are the same.
+ *
+ * The colours are the existing app ground, unchanged by the rename: only the name, the logo and
+ * the icons changed.
+ */
 export default function manifest(): MetadataRoute.Manifest {
-  const name = process.env.NEXT_PUBLIC_APP_NAME ?? "NIVORA";
+  const name = LEGAL.productName;
   return {
     name,
     short_name: name,

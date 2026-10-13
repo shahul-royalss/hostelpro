@@ -77,10 +77,24 @@ async function loadHostel(hostelId: string): Promise<HostelContext | null> {
   };
 }
 
-/** Throws the same two messages the web app's assertWritable() throws. */
+/**
+ * Throws the same two messages the web app's assertWritable() (lib/permissions.ts) throws.
+ *
+ * The words are a contract as well as copy. The Flutter repositories decide "billing problem,
+ * the owner's to fix" versus "not allowed" by looking inside them — staff_repository.dart,
+ * warden_repository.dart, checkout_repository.dart and complaint_photos.dart test for
+ * 'suspended', 'subscription', 'read-only' and 'expired' — so those words stay exactly where
+ * they are, in old builds' eyes as much as new ones'.
+ *
+ * No product name, though: since the 1.2.0 rename (Nivora -> Apnivaas) builds carrying both
+ * names call these functions, and both print this sentence as it is. See requireSession() in
+ * caller.ts. That is the one place the two copies differ on purpose: the website's says
+ * "Contact Apnivaas support." because there is only ever one version of the website, and it is
+ * the renamed one.
+ */
 export function assertWritable(hostel: HostelContext): void {
   if (hostel.writable) return;
-  if (hostel.status === "suspended") throw new HttpError(403, "This hostel is suspended. Contact NIVORA support.");
+  if (hostel.status === "suspended") throw new HttpError(403, "This hostel is suspended. Contact support.");
   throw new HttpError(403, "Subscription expired — the hostel is read-only until it is renewed.");
 }
 

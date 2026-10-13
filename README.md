@@ -93,7 +93,6 @@ cp .env.example .env.local
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Settings → API → Project API keys → `anon` `public` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Settings → API → Project API keys → `service_role` (**server-only**; used for creating accounts, regenerating passwords, private uploads and seeding — never expose to the browser) |
 | `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` / `SUPER_ADMIN_NAME` | Your platform login; the seed creates it |
-| `NEXT_PUBLIC_APP_NAME` | `NIVORA` |
 | `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` locally; your Vercel URL in production |
 
 ### 3. Install, seed, run
@@ -204,7 +203,8 @@ RLS client → `ok()` / `fail(errorMessage(e))` → `revalidatePath()`. Client-s
 
 Environment variables are configured in Vercel for Production + Preview:
 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
-`NEXT_PUBLIC_APP_NAME`, `TRUSTED_PROXY_HOPS=1`.
+`TRUSTED_PROXY_HOPS=1`. (The product name is not a setting: it is `LEGAL.productName` in
+`lib/legal-config.ts`, so changing it is a code change with a legal-version bump.)
 
 Redeploy after changes:
 
@@ -226,7 +226,7 @@ node scripts/_qa-rls-attack.mjs
 1. Push the repo and import it in Vercel (framework preset: Next.js; build `next build`).
 2. Project → Settings → Environment Variables: add every key from `.env.example`
    (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
-   `SUPER_ADMIN_*`, `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_APP_URL=https://<your-domain>`).
+   `SUPER_ADMIN_*`, `NEXT_PUBLIC_APP_URL=https://<your-domain>`).
    The service-role key is used only in server code (`lib/supabase/admin.ts`) — keep it out
    of `NEXT_PUBLIC_*`.
 3. Supabase → Auth → URL Configuration: set Site URL to the Vercel domain (cookies are

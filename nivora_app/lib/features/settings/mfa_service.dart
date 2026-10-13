@@ -219,7 +219,7 @@ class SupabaseMfaService implements MfaService {
       if (totp == null) {
         // A non-TOTP factor came back for a TOTP request. There is nothing to show, and
         // guessing would mean drawing an empty QR next to an empty key.
-        throw const MfaFailure('Nivora could not start the setup. Try again in a moment.');
+        throw const MfaFailure('Apnivaas could not start the setup. Try again in a moment.');
       }
 
       // NOTHING HERE IS LOGGED. `debugPrint` is stripped in release, but a secret in a debug log
@@ -277,7 +277,7 @@ MfaFailure _failure(Object e, {required _Step during}) {
 
   if (e is TimeoutException) {
     return const MfaFailure(
-      'The Nivora server did not answer. Check your connection and try again.',
+      'The Apnivaas server did not answer. Check your connection and try again.',
     );
   }
 
@@ -323,7 +323,7 @@ MfaFailure _failure(Object e, {required _Step during}) {
     }
     if (m.contains('aal2') || m.contains('assurance')) {
       return const MfaFailure(
-        'Nivora needs a fresh code before it can change this. Enter the current one.',
+        'Apnivaas needs a fresh code before it can change this. Enter the current one.',
       );
     }
     if (m.contains('not found') || status == '404') {
@@ -333,17 +333,17 @@ MfaFailure _failure(Object e, {required _Step during}) {
       );
     }
     if (m.contains('network') || m.contains('failed host lookup')) {
-      return const MfaFailure('Cannot reach Nivora. Check your connection and try again.');
+      return const MfaFailure('Cannot reach Apnivaas. Check your connection and try again.');
     }
     if (const {'502', '503', '504', '522'}.contains(status)) {
       return const MfaFailure(
-        'The Nivora server is not responding right now. Please try again in a few minutes.',
+        'The Apnivaas server is not responding right now. Please try again in a few minutes.',
       );
     }
     // Whoever is debugging needs the real one; the user gets a sentence. Codes and secrets never
     // travel in an AuthException message, so this cannot leak one.
     debugPrint('mfa $during failed: ${e.runtimeType} status=$status ${e.message}');
-    return const MfaFailure('Nivora could not complete that. Please try again.');
+    return const MfaFailure('Apnivaas could not complete that. Please try again.');
   }
 
   debugPrint('mfa $during failed (transport): ${e.runtimeType} $e');
@@ -351,10 +351,10 @@ MfaFailure _failure(Object e, {required _Step during}) {
   if (m.contains('failed host lookup') ||
       m.contains('no address associated') ||
       m.contains('network is unreachable')) {
-    return const MfaFailure('Cannot reach Nivora. Check your connection and try again.');
+    return const MfaFailure('Cannot reach Apnivaas. Check your connection and try again.');
   }
   return const MfaFailure(
-    'The Nivora server is not responding right now. Please try again in a few minutes.',
+    'The Apnivaas server is not responding right now. Please try again in a few minutes.',
   );
 }
 

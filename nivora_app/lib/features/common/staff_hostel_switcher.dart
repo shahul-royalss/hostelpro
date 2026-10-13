@@ -70,7 +70,7 @@ Future<String?> switchStaffHostel(ProviderContainer container, String hostelId) 
     // person signs in again, and saying "tap it again" would send them round in a circle.
     if (failure is SessionExpiredFailure || failure is SignedOutFailure) throw failure;
     throw ServerFailure(
-      'Your PG was changed, but Nivora could not reload it. Check your connection and tap the '
+      'Your PG was changed, but Apnivaas could not reload it. Check your connection and tap the '
       'PG again.',
       technical: 'staff_switch_hostel succeeded; the session re-read after it failed: $error',
     );

@@ -1,9 +1,13 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/auth/auth_controller.dart';
@@ -30,10 +34,37 @@ import '../../core/config/env.dart';
 // and demand a proof from residents whose login is <digits>@student.hostelpro.local, which no
 // mail server accepts.
 //
-// So: the account CAN sign in, a persistent banner asks for the proof, and the proof gates the
-// one action where an unproved address turns into credentials in a stranger's inbox — CREATING
-// ANOTHER ACCOUNT. The server is where that gate lives (requireVerifiedEmail in
-// supabase/functions/_shared/verification.ts). Nothing in this file is a security boundary.
+// So: the account CAN sign in, and the proof gates the one action where an unproved address
+// turns into credentials in a stranger's inbox — CREATING ANOTHER ACCOUNT. The server is where
+// that gate lives (requireVerifiedEmail in supabase/functions/_shared/verification.ts, at five
+// call sites). Nothing in this file is a security boundary.
+//
+// ── 1.2.0: STAFF ARE HELD ON THE VERIFY SCREEN; RESIDENTS GET THE BANNER ─────────────────
+//
+// Until 1.2.0 a persistent banner was the whole of the app's ask, plus a verify screen pushed
+// once at the end of a forced password change — and that push was thrown away by anything that
+// rebuilt the screen stack, so staff accounts reached their dashboards unverified. The product
+// owner's decision for 1.2.0: owners, managers, wardens and super admins whose address can
+// receive mail are HELD on /verify-email by the router until the proof lands (see
+// NivoraSession.mustVerifyEmail and resolveRedirect), existing accounts included, at their next
+// sign-in. Residents are not held — verifying changes nothing on the server for them — and keep
+// the banner. Signing in still works for everyone, which is what keeps "Confirm email" ON from
+// turning this into a lockout: the gate is a screen the person can complete from where they
+// stand, with Sign out always available.
+//
+// ── 1.2.0: A GATE THAT MOUNTS ON EVERY LAUNCH MUST NOT MAIL ON EVERY LAUNCH ──────────────
+//
+// The verify screen used to send a link the moment it opened, which was right when it was only
+// ever opened by a tap on "Verify now". As the router's gate it mounts on every cold start and
+// every sign-in of an unverified staff account, and each send KILLS the previous link ("only
+// the newest one works") and spends mail quota. The worst case is the one that matters: the
+// person taps the link, the app cold-starts from it, the gate mounts and mails a fresh link
+// while the proof is still being read — and the link in their hand is now dead.
+//
+// So the screen now (1) asks the server first, quietly, whether the proof already exists, and
+// (2) sends automatically only if no link went to this address from this phone in the last
+// [autoSendWindow] — remembered by [VerificationSendLog], a small file next to the onboarding
+// marker. "Send it again" is still there, behind the server's own 60 s limit.
 //
 // ── 2026-09-01: A LINK, NOT A CODE ───────────────────────────────────────────────────────
 //
@@ -69,7 +100,7 @@ import '../../core/config/env.dart';
 // and the anon key is printed inside the APK. Anyone who wanted to make this project send mail
 // could always call it directly. The Edge Function constrained THIS APP, not an attacker.
 //
-// ── 2026-09-01: THE LINK OPENS NIVORA, AND THE SIGN-IN IS THE PROOF ──────────────────────
+// ── 2026-09-01: THE LINK OPENS APNIVAAS, AND THE SIGN-IN IS THE PROOF ────────────────────
 //
 // The owner asked for exactly this: "it has to ask to login through that link, once they login
 // through that link they have to verify". The previous build sent people to a web page instead,
@@ -83,7 +114,8 @@ import '../../core/config/env.dart';
 //
 //   1. GoTrue has already matched the single-use token at /auth/v1/verify — this is where the
 //      proof is minted, before any redirect happens;
-//   2. Android hands com.nivorasr.app://verify-email?code=… to Nivora;
+//   2. Android hands com.nivorasr.app://verify-email?code=… to Apnivaas (the scheme is an
+//      identifier and keeps its 2026-09-14 spelling);
 //   3. supabase_flutter's deep-link observer recognises the `code` parameter, calls
 //      getSessionFromUrl -> exchangeCodeForSession, and a session exists;
 //   4. that emits AuthChangeEvent.signedIn with a NEW access token, which AuthController's
@@ -226,7 +258,7 @@ class SupabaseEmailVerificationService implements EmailVerificationService {
   static const _networkTimeout = Duration(seconds: 15);
 
   /// GoTrue's SMTP_MAX_FREQUENCY default. Used only when GoTrue has not told us a number.
-  static const _defaultCooldown = Duration(seconds: 60);
+  static const _defaultCooldown = kVerificationResendInterval;
 
   // ── SEND ──────────────────────────────────────────────────────────────────────────────
 
@@ -258,7 +290,7 @@ class SupabaseEmailVerificationService implements EmailVerificationService {
     //   https://definitely-not-allowed.example.org/x       -> https://hostelpro-three.vercel.app
     //
     // So until someone pastes the deep link into Supabase → Authentication → URL Configuration →
-    // Redirect URLs, the link lands on the web app's home page instead of opening Nivora. That
+    // Redirect URLs, the link lands on the web app's home page instead of opening Apnivaas. That
     // costs the sign-in-by-link, NOT the verification: GoTrue matched the token at
     // /auth/v1/verify BEFORE redirecting anywhere, and public.email_link_proof() reads that back
     // from GoTrue's own tables. "I have opened the link" still finishes the job, which is why
@@ -287,7 +319,7 @@ class SupabaseEmailVerificationService implements EmailVerificationService {
       throw _sendFailureFrom(e);
     } on TimeoutException {
       throw const VerificationFailure(
-        'Nivora could not reach the mail service. Check your connection and try again.',
+        'Apnivaas could not reach the mail service. Check your connection and try again.',
       );
     } catch (e) {
       debugPrint('signInWithOtp failed (transport): ${e.runtimeType} $e');
@@ -322,7 +354,7 @@ class SupabaseEmailVerificationService implements EmailVerificationService {
       throw _statusFailureFrom(e);
     } on TimeoutException {
       throw const VerificationFailure(
-        'The Nivora server did not answer. Your link still works — open it and come back.',
+        'The Apnivaas server did not answer. Your link still works — open it and come back.',
       );
     } catch (e) {
       debugPrint('email-verification failed (transport): ${e.runtimeType} $e');
@@ -336,9 +368,9 @@ String _transportMessage(Object e) {
   if (m.contains('failed host lookup') ||
       m.contains('no address associated') ||
       m.contains('network is unreachable')) {
-    return 'Cannot reach Nivora. Check your connection and try again.';
+    return 'Cannot reach Apnivaas. Check your connection and try again.';
   }
-  return 'The Nivora server is not responding right now. Please try again in a few minutes.';
+  return 'The Apnivaas server is not responding right now. Please try again in a few minutes.';
 }
 
 /// GoTrue's refusal, turned into one sentence.
@@ -355,7 +387,7 @@ VerificationFailure _sendFailureFrom(AuthException e) {
   if (code.contains('captcha') || m.contains('captcha')) {
     debugPrint('verification link BLOCKED BY CAPTCHA: $raw');
     return const VerificationFailure(
-      'Nivora cannot send verification links yet: CAPTCHA protection is switched on for this '
+      'Apnivaas cannot send verification links yet: CAPTCHA protection is switched on for this '
       'project and it refuses the link-sending endpoint. Ask your administrator to turn it off '
       'in Supabase → Authentication → Attack Protection.',
       operatorFault: true,
@@ -371,7 +403,7 @@ VerificationFailure _sendFailureFrom(AuthException e) {
   if (m.contains('redirect') && (m.contains('not allowed') || m.contains('invalid'))) {
     debugPrint('verification link REFUSED over redirect_to: $raw');
     return VerificationFailure(
-      'Nivora cannot send verification links yet: the address the link comes back to is not on '
+      'Apnivaas cannot send verification links yet: the address the link comes back to is not on '
       'this project\'s allow-list. ${Env.emailRedirectSetupHint}',
       operatorFault: true,
     );
@@ -396,7 +428,7 @@ VerificationFailure _sendFailureFrom(AuthException e) {
   if (code == 'otp_disabled' || m.contains('signups not allowed') || m.contains('user not found')) {
     debugPrint('verification link: no auth user for the profile address: $raw');
     return const VerificationFailure(
-      'Nivora could not find a mailbox for this account. The address on your profile does not '
+      'Apnivaas could not find a mailbox for this account. The address on your profile does not '
       'match the one you sign in with — ask your administrator to correct it.',
     );
   }
@@ -404,7 +436,7 @@ VerificationFailure _sendFailureFrom(AuthException e) {
   if (m.contains('error sending') || m.contains('smtp') || m.contains('mail')) {
     debugPrint('SMTP refused the verification email: $raw');
     return const VerificationFailure(
-      'Nivora could not send the email just now. If this keeps happening, the project has no '
+      'Apnivaas could not send the email just now. If this keeps happening, the project has no '
       'working mail sender configured — ask your administrator to check Supabase → '
       'Authentication → Emails.',
       operatorFault: true,
@@ -413,7 +445,7 @@ VerificationFailure _sendFailureFrom(AuthException e) {
 
   debugPrint('verification link send failed: $raw');
   return const VerificationFailure(
-    'Nivora could not send the link. Please try again in a few minutes.',
+    'Apnivaas could not send the link. Please try again in a few minutes.',
   );
 }
 
@@ -435,7 +467,7 @@ VerificationFailure _statusFailureFrom(FunctionException e) {
 
   if (e is FunctionsFetchException || e.status == 0) {
     return const VerificationFailure(
-      'Cannot reach Nivora. Check your connection and try again.',
+      'Cannot reach Apnivaas. Check your connection and try again.',
     );
   }
 
@@ -454,7 +486,7 @@ VerificationFailure _statusFailureFrom(FunctionException e) {
         operatorFault: true,
       ),
     _ => VerificationFailure(
-        message ?? 'Nivora could not check your address just now. Please try again.',
+        message ?? 'Apnivaas could not check your address just now. Please try again.',
       ),
   };
 }
@@ -475,7 +507,7 @@ final emailVerificationServiceProvider = Provider<EmailVerificationService>(
 
 /// THE RE-CHECK THE WHOLE LINK FLOW TURNS ON.
 ///
-/// The user leaves Nivora to open a link in a browser or a mail app. Nothing tells the app when
+/// The user leaves Apnivaas to open a link in a browser or a mail app. Nothing tells the app when
 /// they are done, and there is nothing to poll for cheaply — the proof is written by the server
 /// the first time it is asked. So the app asks when it comes back to the foreground, which is
 /// exactly the moment the answer is most likely to have changed. Both the banner and the
@@ -502,7 +534,7 @@ class EmailVerificationRecheck {
 
   /// THE ONE CHECK THAT IS NOT TRIGGERED BY A RESUME, AND THE CASE IT EXISTS FOR.
   ///
-  /// Tapping the link on the phone can COLD-START Nivora: Android launches the app with the
+  /// Tapping the link on the phone can COLD-START Apnivaas: Android launches the app with the
   /// VIEW intent, so there is no background-to-foreground transition and
   /// `didChangeAppLifecycleState` never fires. The banner would then sit on a freshly launched
   /// home screen asking for a proof the user gave thirty seconds ago — the exact dead end this
@@ -548,4 +580,139 @@ class EmailVerificationRecheck {
 
 final emailVerificationRecheckProvider = Provider<EmailVerificationRecheck>(
   EmailVerificationRecheck.new,
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+// WHEN THIS PHONE LAST ASKED FOR A LINK
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+
+/// How long after a link was sent that OPENING the verify screen will not send another by
+/// itself.
+///
+/// Ten minutes because it is comfortably longer than mail takes to arrive and far shorter than
+/// a link lives. Inside it, the newest link is almost certainly still sitting in the inbox, and
+/// an automatic send would only kill it ("only the newest link works") and spend the project's
+/// hourly mail allowance. Outside it, a person reopening the app after a break is more likely
+/// to have lost the mail than to be about to open it, and a fresh link is the helpful default.
+///
+/// It governs only the AUTOMATIC send. "Send it again" is a person's explicit choice and is
+/// limited by the server's own 60 s rule ([kVerificationResendInterval]), never by this.
+const autoSendWindow = Duration(minutes: 10);
+
+/// The server's minimum gap between two verification mails to one account — GoTrue's
+/// SMTP_MAX_FREQUENCY default — mirrored so "Send it again" comes back when the server would
+/// start saying yes. GoTrue's own number, when a refusal carries one, still wins.
+const kVerificationResendInterval = Duration(seconds: 60);
+
+/// Remembers, per address, when THIS PHONE last asked for a verification link.
+///
+/// ── WHY THE SCREEN NEEDS A MEMORY AT ALL ─────────────────────────────────────────────────
+///
+/// Since 1.2.0 the verify screen is the router's gate for unverified staff, so it mounts on
+/// every cold start and every sign-in until the proof lands. A screen that mailed on every
+/// mount would kill the link in the person's inbox each time they reopened the app — worst of
+/// all in the one flow that matters, where tapping the link cold-starts the app, the gate mounts
+/// while the proof is still being read, and a fresh mail makes the link in their hand worthless.
+///
+/// ── WHAT IT IS NOT ───────────────────────────────────────────────────────────────────────
+///
+/// Not a rate limit: the server enforces those, and a client-side record is a courtesy that a
+/// reinstall erases. Not shared between devices: a link sent from the laptop is not known here,
+/// which costs at most one extra mail. And never the clipboard or the mail itself — the app
+/// reads nothing it did not write.
+abstract class VerificationSendLog {
+  /// When a link to [address] was last sent from this phone, or null if not within
+  /// [autoSendWindow] or not known. Never throws.
+  Future<DateTime?> lastSent(String address);
+
+  /// Note that a link to [address] was sent at [at]. Never throws.
+  Future<void> record(String address, DateTime at);
+}
+
+/// The one this app ships: a small JSON file in the application support directory, next to the
+/// onboarding marker, for the reason OnboardingGate gives — `path_provider` is already a direct
+/// dependency, and `shared_preferences` is only present transitively through supabase_flutter.
+///
+/// It holds an address and a time for at most [autoSendWindow]: every write drops the entries
+/// older than that, so the file never accumulates a history of addresses — at most the one or
+/// two this phone has asked about in the last ten minutes.
+///
+/// TOTAL in both directions, like OnboardingGate. An unreadable file reads as "nothing sent",
+/// which costs one extra mail inside the server's limits; an unwritable one is skipped. Neither
+/// may stand between somebody and the verification screen.
+class FileVerificationSendLog implements VerificationSendLog {
+  const FileVerificationSendLog();
+
+  static Future<File> _file() async {
+    final dir = await getApplicationSupportDirectory();
+    return File(p.join(dir.path, 'verification_link_sent.json'));
+  }
+
+  static String _key(String address) => address.trim().toLowerCase();
+
+  static Map<String, DateTime> _read(File f) {
+    if (!f.existsSync()) return <String, DateTime>{};
+    final decoded = jsonDecode(f.readAsStringSync());
+    final out = <String, DateTime>{};
+    if (decoded is Map) {
+      decoded.forEach((k, v) {
+        final at = v is String ? DateTime.tryParse(v) : null;
+        if (k is String && at != null) out[k] = at;
+      });
+    }
+    return out;
+  }
+
+  @override
+  Future<DateTime?> lastSent(String address) async {
+    try {
+      return _read(await _file())[_key(address)];
+    } catch (e) {
+      debugPrint('verification send log unreadable: ${e.runtimeType} $e');
+      return null;
+    }
+  }
+
+  @override
+  Future<void> record(String address, DateTime at) async {
+    try {
+      final f = await _file();
+      Map<String, DateTime> entries;
+      try {
+        entries = _read(f);
+      } catch (_) {
+        // A corrupt file is replaced, not trusted.
+        entries = <String, DateTime>{};
+      }
+      entries
+        ..removeWhere((_, t) => at.difference(t) >= autoSendWindow || t.isAfter(at))
+        ..[_key(address)] = at;
+      f.parent.createSync(recursive: true);
+      f.writeAsStringSync(
+        jsonEncode({
+          for (final e in entries.entries) e.key: e.value.toUtc().toIso8601String(),
+        }),
+        flush: true,
+      );
+    } catch (e) {
+      debugPrint('verification send log not written: ${e.runtimeType} $e');
+    }
+  }
+}
+
+/// Whether a link sent at [last] is recent enough that opening the screen should NOT send
+/// another, as of [now].
+///
+/// A [last] in the FUTURE — the phone's clock was moved back since — counts as not recent: a
+/// record the clock cannot place must never suppress a send indefinitely.
+bool sentRecently(DateTime? last, DateTime now) {
+  if (last == null) return false;
+  final age = now.difference(last);
+  return !age.isNegative && age < autoSendWindow;
+}
+
+/// The log the verify screen reads. A provider so a widget test can install an in-memory one
+/// and never touch a disk.
+final verificationSendLogProvider = Provider<VerificationSendLog>(
+  (ref) => const FileVerificationSendLog(),
 );

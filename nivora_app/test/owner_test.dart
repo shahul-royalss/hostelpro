@@ -259,7 +259,7 @@ void main() {
       )!;
       expect(notice.title, 'Subscription ends in 12 days');
       expect(notice.severe, isFalse);
-      expect(notice.detail, contains('Nivora'));
+      expect(notice.detail, contains('Apnivaas'));
     });
 
     test('a negative days_left is read as days ago, exactly as the RPC means it', () {
