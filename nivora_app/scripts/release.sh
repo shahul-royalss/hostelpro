@@ -60,13 +60,16 @@ say "Preparing a build tree outside OneDrive"
 # since 2026-09-06 — so the gate passed by reading a file nobody maintained, and the web
 # version could have been bumped without the app while this build still went green.
 STAGE="${NIVORA_WORK_DIR:-/c/nivora-work}"
-WORK="$STAGE/app"
+# The app is staged as nivora_app/, exactly as it sits in the repository, so the relative paths
+# its tests read (../lib/legal-config.ts, ../app/legal/) mean the same thing here as in the repo.
+# It was staged as app/ until 1.2.0, which made ../app/legal resolve INSIDE the Flutter copy.
+WORK="$STAGE/nivora_app"
 if [[ "$APP_DIR" == *OneDrive* ]]; then
   printf '  repo is inside OneDrive — building in %s\n' "$WORK"
   # Derived directories are deliberately not copied: they are what OneDrive was fighting over,
   # and they regenerate. Done with tar rather than rsync, which Git Bash does not ship.
   rm -rf "$STAGE"
-  mkdir -p "$WORK" "$STAGE/lib"
+  mkdir -p "$WORK" "$STAGE/lib" "$STAGE/app"
   ( cd "$APP_DIR" && tar -cf - \
       --exclude='./build' --exclude='./.dart_tool' --exclude='./.gradle' \
       --exclude='./android/.gradle' --exclude='./ios/Pods' \
@@ -76,6 +79,10 @@ if [[ "$APP_DIR" == *OneDrive* ]]; then
   # The sibling the version gate reads. Copied fresh each run so it cannot go stale.
   cp "$APP_DIR/../lib/legal-config.ts" "$STAGE/lib/legal-config.ts" \
     || die "could not stage lib/legal-config.ts — the legal version gate needs it"
+  # The published legal pages, which legal_consent_test.dart reads to check they take the
+  # product and operator names from lib/legal-config.ts rather than from a hosting setting.
+  cp -r "$APP_DIR/../app/legal" "$STAGE/app/legal" \
+    || die "could not stage app/legal (the legal-text gate needs it)"
   cd "$WORK"
 else
   printf '  repo is outside OneDrive — building in place\n'
