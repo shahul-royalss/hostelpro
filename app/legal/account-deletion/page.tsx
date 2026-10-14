@@ -138,8 +138,7 @@ export default async function AccountDeletionPage() {
         <Section id="app" title="1. The app this applies to">
           <ul>
             <li>
-              <strong>App:</strong> {APP_NAME} — hostel and PG management software. It was called
-              Nivora before version 1.2.0; the app, the package and your account are the same.
+              <strong>App:</strong> {APP_NAME} — hostel and PG management software.
             </li>
             <li>
               {/* The developer name on the Play listing. Play asks that a deletion page name the

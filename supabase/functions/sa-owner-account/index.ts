@@ -126,7 +126,7 @@ async function loadTarget(hostelId: string): Promise<Target> {
     .eq("id", hostelId)
     .maybeSingle();
   if (hostelError) {
-    console.error("[nivora] hostel lookup failed:", hostelError.message);
+    console.error("[apnivaas] hostel lookup failed:", hostelError.message);
     throw new HttpError(500, "Could not load that hostel. Please try again.");
   }
   const hostel = hostelRow as { id: string; name: string; owner_user_id: string | null } | null;
@@ -139,7 +139,7 @@ async function loadTarget(hostelId: string): Promise<Target> {
     .eq("id", hostel.owner_user_id)
     .maybeSingle();
   if (profileError) {
-    console.error("[nivora] owner profile lookup failed:", profileError.message);
+    console.error("[apnivaas] owner profile lookup failed:", profileError.message);
     throw new HttpError(500, "Could not load that owner. Please try again.");
   }
   const profile = profileRow as
@@ -157,7 +157,7 @@ async function loadTarget(hostelId: string): Promise<Target> {
 
   const { data: authData, error: authError } = await admin.auth.admin.getUserById(profile.id);
   if (authError || !authData?.user?.email) {
-    console.error("[nivora] owner auth lookup failed:", authError?.message ?? "no email on the account");
+    console.error("[apnivaas] owner auth lookup failed:", authError?.message ?? "no email on the account");
     throw new HttpError(500, "Could not read that owner's login. Please try again.");
   }
 
@@ -184,12 +184,12 @@ async function revokeSessions(userId: string): Promise<number | null> {
   try {
     const { data, error } = await serviceClient().rpc("svc_revoke_user_sessions", { p_user_id: userId });
     if (error) {
-      console.error("[nivora] session revocation failed (non-fatal):", error.message);
+      console.error("[apnivaas] session revocation failed (non-fatal):", error.message);
       return null;
     }
     return typeof data === "number" ? data : null;
   } catch (e) {
-    console.error("[nivora] session revocation failed:", errText(e));
+    console.error("[apnivaas] session revocation failed:", errText(e));
     return null;
   }
 }
@@ -202,12 +202,12 @@ async function clearPendingTokens(userId: string): Promise<boolean | null> {
   try {
     const { data, error } = await serviceClient().rpc("svc_clear_owner_login_tokens", { p_user_id: userId });
     if (error) {
-      console.error("[nivora] pending token clear failed:", error.message);
+      console.error("[apnivaas] pending token clear failed:", error.message);
       return null;
     }
     return data === true;
   } catch (e) {
-    console.error("[nivora] pending token clear failed:", errText(e));
+    console.error("[apnivaas] pending token clear failed:", errText(e));
     return null;
   }
 }
@@ -257,7 +257,7 @@ async function resetPassword(caller: Caller, target: Target): Promise<Response> 
     app_metadata: { ...target.appMetadata, must_change_password: true },
   });
   if (authError) {
-    console.error("[nivora] owner password reset failed:", authError.message);
+    console.error("[apnivaas] owner password reset failed:", authError.message);
     throw new HttpError(400, "Could not reset that password. Please try again.");
   }
 
@@ -310,7 +310,7 @@ async function setEmail(caller: Caller, target: Target, email: string): Promise<
     .neq("id", target.userId)
     .limit(1);
   if (clashError) {
-    console.error("[nivora] email clash check failed:", clashError.message);
+    console.error("[apnivaas] email clash check failed:", clashError.message);
     throw new HttpError(500, "Could not check that email address. Please try again.");
   }
   if (clash?.length) throw emailFieldError(409, EMAIL_TAKEN);

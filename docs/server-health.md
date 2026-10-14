@@ -1,4 +1,4 @@
-# Server health — NIVORA
+# Server health — Apnivaas
 
 Whether the Supabase backend is actually unhealthy, how to tell, and which symptoms are the
 **client** wearing a server costume.
@@ -82,7 +82,7 @@ For **4 hours 17 minutes**, every password sign-in from every client failed:
 The Edge Function said so in plain language, 28 times, and the line was in the logs the whole time:
 
 ```
-[nivora] GoTrue refused the password grant for CAPTCHA — sign-in is down for every client.
+[apnivaas] GoTrue refused the password grant for CAPTCHA — sign-in is down for every client.
 ```
 
 **What happened.** CAPTCHA protection is an owner-facing toggle at **Authentication → Settings →
@@ -158,7 +158,7 @@ precisely the two fields a router guard reads to decide whether to redirect. The
 **redirect/refetch loop**: fetch profile → gate says "must change password" → navigate → the
 destination refetches the profile → repeat, with no backoff and no de-duplication.
 
-**Not fixed here.** `nivora_app/lib/**` is owned by other agents; this document does not touch it.
+**Not fixed here.** `apnivaas_app/lib/**` is owned by other agents; this document does not touch it.
 Handing it over: the fix is on the client, in whatever guard reads `must_change_password` /
 `email_verified_at`. It needs (a) a single in-flight profile request rather than one per rebuild,
 (b) a cached result, and (c) a redirect that cannot re-enter itself. Server-side rate limiting is
@@ -375,7 +375,7 @@ this investigation** and none of them is fixed by spending money today.
 - **No uptime SLA.** Shared infrastructure. The ~40-second GoTrue restart at 09:16 (§6.2) is
   normal and will happen again, unannounced, at some point during a demo.
 - **Auto-pause after 7 days idle.** A paused project must be restored from the dashboard before it
-  answers anything. Relevant if NIVORA sits unused between review cycles — the first request after
+  answers anything. Relevant if Apnivaas sits unused between review cycles — the first request after
   a pause fails, and it looks exactly like an outage.
 - **24 hours of log retention.** Confirmed against Supabase's retention table: Free gets "Last 24
   hours"; 7 / 14 / 28 days are Pro and above. **This is the real constraint.** Any incident not
@@ -395,7 +395,7 @@ anything described in §3 or §4.
 ## 9. Open items
 
 - **Client profile-fetch loop (§4)** — the one thing here that is actually broken and still
-  broken. Owned by whoever owns `nivora_app/lib/**`. Until it is fixed, the app will keep
+  broken. Owned by whoever owns `apnivaas_app/lib/**`. Until it is fixed, the app will keep
   generating its own 5xx and keep reporting them as a server outage.
 - **CAPTCHA (§3)** — leave off. Revisit only together with a client that can produce a token.
 - **Leaked-password protection is disabled** — advisor `auth_leaked_password_protection`. A

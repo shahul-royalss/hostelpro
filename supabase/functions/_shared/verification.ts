@@ -39,7 +39,7 @@
  *
  * This file used to SEND the proof as well as check it: signInWithOtp() here, verifyOtp() here,
  * a durable per-user send counter here. That put an Edge Function in the sending path —
- * app -> this function -> GoTrue -> mail — and the owner's failure screenshot ("The Nivora
+ * app -> this function -> GoTrue -> mail — and the owner's failure screenshot ("The Apnivaas
  * server did not answer") was the phone's 15s deadline expiring on exactly that hop, while this
  * free-tier NANO instance had PostgREST and Auth flipping to Unhealthy at ~72% RAM.
  *
@@ -59,7 +59,7 @@
  * ═══ 2026-09-01: THE LINK NOW OPENS THE APP, AND THIS FILE DID NOT HAVE TO CHANGE ═══
  *
  * The redirect became a custom scheme (com.nivorasr.app://verify-email) so that the link opens
- * Nivora and signs the person in, which is what the owner asked for. Nothing here moved, and
+ * Apnivaas and signs the person in, which is what the owner asked for. Nothing here moved, and
  * that is worth saying rather than assuming: both arms of email_link_proof() are written by
  * GoTrue's /auth/v1/verify handler BEFORE the 303, and the redirect target does not participate
  * in either. A deep link adds a later code exchange on top; it takes nothing away. Verified
@@ -114,11 +114,12 @@ export function isReachableAddress(email: string | null | undefined): boolean {
  *
  * ── 2026-10-12: IT CHANGED AGAIN, FOR THE SAME REASON ──
  *
- * It said "Open Nivora, tap the banner at the top of your home screen ... Come back to Nivora".
+ * It told the reader to open the app by its old name, tap the banner at the top of the home
+ * screen, and come back to it.
  * Both halves stopped being true for some of the people who read it:
  *
- *   · the app was renamed Apnivaas in 1.2.0, but 1.0.0 and 1.1.0 stay installed and are still
- *     called Nivora — one server, two names, and the sentence reaches both;
+ *   · the app was renamed Apnivaas in 1.2.0, but 1.0.0 and 1.1.0 stay installed under the old
+ *     name — one server, two names, and the sentence reaches both;
  *   · 1.2.0 holds an unverified owner, manager, warden or super admin at a blocking verification
  *     screen, so they never see a home screen, let alone a banner on it. The old builds still
  *     have the banner and nothing else.
@@ -183,7 +184,7 @@ export async function confirmEmailFromLink(caller: Caller): Promise<ConfirmResul
 
   const { data, error } = await db.rpc("email_link_proof", { p_user: caller.id });
   if (error) {
-    console.error("[nivora] email_link_proof failed: " + error.message);
+    console.error("[apnivaas] email_link_proof failed: " + error.message);
     return { verified: false, verifiedAt: null };
   }
   const provenAt = typeof data === "string" && data.length > 0 ? data : null;
@@ -202,7 +203,7 @@ export async function confirmEmailFromLink(caller: Caller): Promise<ConfirmResul
     .eq("email", email);
 
   if (writeError) {
-    console.error("[nivora] link was opened but the proof could not be recorded: " + writeError.message);
+    console.error("[apnivaas] link was opened but the proof could not be recorded: " + writeError.message);
     return { verified: false, verifiedAt: null };
   }
 

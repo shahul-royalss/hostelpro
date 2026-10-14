@@ -20,7 +20,7 @@ export const LEGAL = {
    * The entity that operates the product and is the party to the Terms — the developer name on
    * the Google Play listing. NEVER the product name: Play's User Data policy wants the privacy
    * policy to name the entity on the listing, and the DPDP Act wants a Data Fiduciary to
-   * identify itself. Until 2026-10-12 this said "NIVORA", which was neither.
+   * identify itself. Until 2026-10-12 this held the product's old name, which was neither.
    *
    * Printed as the operator on the privacy policy, as the party bound by the terms, and in the
    * copyright line of every legal page. Changing it changes both documents' wording, so it is a
@@ -31,13 +31,13 @@ export const LEGAL = {
 
   /**
    * The product's name as users see it, title case exactly as in the logo: "Apnivaas" — never
-   * "APNIVAAS" or "ApniVaas". It was "Nivora" until version 2026-10-12.
+   * "APNIVAAS" or "ApniVaas".
    *
    * The legal pages read THIS, not NEXT_PUBLIC_APP_NAME. An environment variable is set in a
    * hosting dashboard and fixed at build time, so reading it let a Vercel setting rewrite every
    * published legal page without a commit and without a version bump — text that people are
    * recorded as having agreed to must only ever change in git, together with LEGAL_VERSION.
-   * Mirrored as `kLegalProductName` in nivora_app/lib/features/legal/legal_documents.dart.
+   * Mirrored as `kLegalProductName` in apnivaas_app/lib/features/legal/legal_documents.dart.
    */
   productName: "Apnivaas",
 
@@ -80,7 +80,7 @@ export const LEGAL = {
  * ═══ THIS STRING LIVES IN THREE PLACES AND THEY MUST MOVE TOGETHER ═══
  *
  *   1. here                                                  — the published web pages
- *   2. nivora_app/lib/features/legal/legal_documents.dart     — `kLegalVersion`, what the
+ *   2. apnivaas_app/lib/features/legal/legal_documents.dart     — `kLegalVersion`, what the
  *      Android app shows and what it records an acceptance against
  *   3. `public.legal_versions.version`                        — a migration; an acceptance may
  *      only name a version that exists there
@@ -90,7 +90,7 @@ export const LEGAL = {
  * has accepted. Leaving this behind means people are quietly moved onto text they never saw,
  * which is the one failure mode a consent record exists to make impossible.
  *
- * (1) and (2) are cross-checked by nivora_app/test/legal_consent_test.dart, so they cannot
+ * (1) and (2) are cross-checked by apnivaas_app/test/legal_consent_test.dart, so they cannot
  * drift silently. (3) is a deployment order, not a check: the migration publishing a version
  * row must land BEFORE an app build carrying that string, because `accept_legal_terms()`
  * refuses a version it has never heard of and at the gate the only thing a user may do is
@@ -99,7 +99,7 @@ export const LEGAL = {
  * IT MUST STAY A PLAIN YYYY-MM-DD DATE. app/legal/layout.tsx formatDate() parses it for the
  * "Last updated" line, and a suffix such as "2026-10-12b" renders there as "Invalid Date".
  *
- * 2026-10-12: the product was renamed Nivora → Apnivaas and ShaReshi Tech is named as the
+ * 2026-10-12: the product took its current name, Apnivaas, and ShaReshi Tech is named as the
  * operator. The row is db/migrations/2026-10-12-legal-version-apnivaas.sql, and it must be on
  * the live database BEFORE the website is pushed or any app build carrying this string reaches
  * anybody — see docs/play-console-submission.md, Step 5, for the whole order.
@@ -110,15 +110,14 @@ export const LEGAL_VERSION = "2026-10-12";
  * Android application id, so the deletion page can name the app Play users installed.
  *
  * THIS IS THE FLUTTER APP, which is the artifact that goes to Play Console: the AAB built by
- * nivora_app/scripts/release.sh from nivora_app/android/app/build.gradle.kts, where
+ * apnivaas_app/scripts/release.sh from apnivaas_app/android/app/build.gradle.kts, where
  * `applicationId = "com.nivorasr.app"`.
  *
- * Two other ids exist in this repository and NEITHER belongs here. `app.nivora.twa` is the
- * Trusted Web Activity — the browser wrapper that public/.well-known/assetlinks.json still
- * vouches for — and the product deliberately moved off it to a native client. `app.hostelpro.twa`
- * is that wrapper's retired predecessor, and it was hardcoded into the deletion page until now,
- * which meant the data-deletion URL a Play reviewer opens named an app that is not the one under
- * review. Import this constant; do not re-declare it next to the text that prints it.
+ * The earlier browser-wrapper builds had other ids, and NEITHER belongs here: the product moved
+ * off the wrapper to a native client, and the wrapper project was removed from this repository
+ * on 2026-10-14. The older of those ids was once hardcoded into the deletion page, which meant
+ * the data-deletion URL a Play reviewer opens named an app that is not the one under review.
+ * Import this constant; do not re-declare it next to the text that prints it.
  */
 export const ANDROID_PACKAGE = "com.nivorasr.app";
 

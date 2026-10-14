@@ -32,7 +32,7 @@ export async function audit(action: string, actor: Caller, opts: AuditOptions = 
       p_actor_role: actor.role,
     });
   } catch (e) {
-    console.error("[nivora] audit write failed:", e instanceof Error ? e.message : String(e));
+    console.error("[apnivaas] audit write failed:", e instanceof Error ? e.message : String(e));
   }
 }
 
@@ -69,7 +69,7 @@ export async function auditSystem(
       p_actor_role: null,
     });
   } catch (e) {
-    console.error("[nivora] audit write failed:", e instanceof Error ? e.message : String(e));
+    console.error("[apnivaas] audit write failed:", e instanceof Error ? e.message : String(e));
   }
 }
 

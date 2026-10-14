@@ -212,7 +212,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const { data: bed } = await asCaller.from("beds").select("room_id").eq("id", input.bedId).maybeSingle();
       roomId = (bed as { room_id: string } | null)?.room_id ?? null;
     } catch (e) {
-      console.error("[nivora] room lookup after registration failed (non-fatal):", e instanceof Error ? e.message : String(e));
+      console.error("[apnivaas] room lookup after registration failed (non-fatal):", e instanceof Error ? e.message : String(e));
     }
 
     // audit() swallows its own failures by design — the trail must never break the operation.

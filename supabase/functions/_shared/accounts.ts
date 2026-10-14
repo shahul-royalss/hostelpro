@@ -46,13 +46,13 @@ export async function deleteAuthUser(userId: string): Promise<RollbackResult> {
   try {
     const { error } = await serviceClient().auth.admin.deleteUser(userId);
     if (error) {
-      console.error("[nivora] ROLLBACK FAILED for auth user " + userId + ": " + error.message);
+      console.error("[apnivaas] ROLLBACK FAILED for auth user " + userId + ": " + error.message);
       return { deleted: false, detail: error.message };
     }
     return { deleted: true, detail: null };
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
-    console.error("[nivora] ROLLBACK FAILED for auth user " + userId + ": " + detail);
+    console.error("[apnivaas] ROLLBACK FAILED for auth user " + userId + ": " + detail);
     return { deleted: false, detail };
   }
 }
@@ -122,7 +122,7 @@ async function createAuthUser(args: CreateAuthUserArgs): Promise<{ userId: strin
     if (/already been registered|already registered/i.test(message) || error?.status === 422) {
       throw new HttpError(409, args.duplicateMessage ?? "An account with this email already exists.");
     }
-    console.error("[nivora] createUser failed:", message);
+    console.error("[apnivaas] createUser failed:", message);
     throw new HttpError(400, "Could not create the account.");
   }
   return { userId: data.user.id, password };
@@ -272,6 +272,6 @@ export async function syncHostelMetadata(userId: string, hostelId: string): Prom
     const meta = (data?.user?.app_metadata ?? {}) as Record<string, unknown>;
     await serviceClient().auth.admin.updateUserById(userId, { app_metadata: { ...meta, hostel_id: hostelId } });
   } catch (e) {
-    console.error("[nivora] app_metadata hostel sync failed (non-fatal):", e instanceof Error ? e.message : String(e));
+    console.error("[apnivaas] app_metadata hostel sync failed (non-fatal):", e instanceof Error ? e.message : String(e));
   }
 }

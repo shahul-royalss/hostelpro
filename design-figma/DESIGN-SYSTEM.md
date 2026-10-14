@@ -1,4 +1,4 @@
-# NIVORA — the design system, extracted from the owner's Figma
+# Apnivaas — the design system, extracted from the owner's Figma
 
 Source: Figma file `8qkhZArLAz9KVOIiWF8ZTG` ("Untitled"), 19 `screen-*` frames, read 2026-08-30.
 Values below are copied from `get_design_context` output on `4:947` (screen-student-dashboard) —
@@ -17,11 +17,11 @@ warm cream text, gold accent. It reads as designed rather than defaulted.
 
 ## Two things in the file that are NOT the design
 
-1. `screen-admin-dashboard` (`4:1369`) is LIGHT — white ground, dark text. Every other Nivora
+1. `screen-admin-dashboard` (`4:1369`) is LIGHT — white ground, dark text. Every other Apnivaas
    screen is dark. Treated as a stale exploration; the admin dashboard is built dark like the rest.
 2. The file also contains generic UI-kit frames — `Social feed`, `Ecommerce`, `Booking`,
-   `Checkout`, `Chat`, `Dashboard`, `Activities` (node ids `2:*`). Not Nivora. Ignore them.
-   The Nivora screens are the `4:*` range, all named `screen-…`.
+   `Checkout`, `Chat`, `Dashboard`, `Activities` (node ids `2:*`). Not Apnivaas. Ignore them.
+   The Apnivaas screens are the `4:*` range, all named `screen-…`.
 
 ## Colour
 
@@ -51,7 +51,7 @@ tonal, recognisable. The Figma palette above is untouched — every hex is still
 `test/theme_contrast_test.dart` — and the brand's one loud object is still the cream button.
 What was added is the OTHER job colour does in a well-made product: not "what state is this
 in" but "what kind of thing is this". Gmail is red, Calendar is blue, Keep is yellow, and none
-of those means error, info or warning. In NIVORA the saffron icon at the head of a row means
+of those means error, info or warning. In Apnivaas the saffron icon at the head of a row means
 "this is the menu", on every screen, always.
 
 | Domain | Canonical | Dark ink | Light ink | Covers |
@@ -85,7 +85,7 @@ opens a row or a section — the most recognisable piece of a Google app), `Doma
 neutral control with the glyph and label in the destination's colour), `DomainCard`, and
 `avatarToneFor(name)` — a stable colour per person from a hash of their name, the way Google
 Contacts does it, so a list of strangers becomes a list of people you can tell apart.
-`NivoraDomain` in `tokens.dart` is the enum and carries the rule in its doc comment.
+`ApnivaasDomain` in `tokens.dart` is the enum and carries the rule in its doc comment.
 
 ### Where it landed, and the two things review changed
 

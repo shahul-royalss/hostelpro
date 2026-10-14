@@ -9,7 +9,7 @@
  *
  * It used to have three actions: `send` mailed a 6-digit code, `check` verified it, `status`
  * reported. `send` and `check` are gone as of 2026-09-01, and the reason is the failure the
- * owner photographed: "The Nivora server did not answer".
+ * owner photographed: "The Apnivaas server did not answer".
  *
  * That sentence is the phone's 15s deadline expiring on THIS function. The sending path was
  * app -> here -> GoTrue -> mail, and this instance is a free-tier NANO that flips PostgREST and
@@ -94,7 +94,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         // silent 400. Those two moved to GoTrue; there is nothing here to route them to.
         //
         // No product name in it: it is read inside whatever build is calling, and since the
-        // 1.2.0 rename those are called Nivora or Apnivaas depending on the version. "Update the
+        // 1.2.0 rename they carry the old name or Apnivaas depending on the version. "Update the
         // app" is true for every one of them that could ever get here.
         return fail(
           "Unknown action. Email addresses are now verified with a link — update the app.",

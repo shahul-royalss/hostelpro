@@ -43,7 +43,7 @@ export const changePasswordSchema = z
      * PASSWORD_MIN_LENGTH stays at 8 although GoTrue would take 6: being STRICTER than the
      * server tells nobody a lie, and 8 is the number every screen in this product already says.
      * Mirrored rule-for-rule by _Rule in
-     * nivora_app/lib/features/auth/change_password_screen.dart.
+     * apnivaas_app/lib/features/auth/change_password_screen.dart.
      */
     password: z
       .string()

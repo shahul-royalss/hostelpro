@@ -1,8 +1,8 @@
-# Security sign-off — NIVORA mobile release (nivora_app)
+# Security sign-off — Apnivaas mobile release (apnivaas_app)
 
 **Date:** 2026-09-04 (round 2). The 2026-08-29 pass is kept below from §2 onward; this header
 and §1 supersede it.
-**Scope:** the Flutter mobile app (`nivora_app/`), all ten deployed Supabase Edge Functions, the
+**Scope:** the Flutter mobile app (`apnivaas_app/`), all ten deployed Supabase Edge Functions, the
 database on project `nimxvgzscbanhtvgnjll`, and the staged artifacts in `dist/`, at commit
 `af71ea6` on `main`.
 **Method:** automated scanner run, manual source review, **and the live system this time** —
@@ -45,7 +45,7 @@ live RLS attack suites. This document does not restate or re-verify those result
   findings against it.
 - `npm run security:all`: exit 0, including 53 webhook-signature cases.
 - Artifacts: both APKs verify (v2; `minSdk 24`, so the absent v1 JAR signature is correct rather
-  than missing), package `app.nivora.mobile` (the applicationId at `af71ea6`), versionCode 1 on both APKs and on the bundle, four
+  than missing), package `app.apnivaas.mobile` (the applicationId at `af71ea6`), versionCode 1 on both APKs and on the bundle, four
   arm64 native libraries all aligned ≥ 16 KB, and no secrets in either APK or in any of the
   AAB's three ABIs. *(Those were the 2026-09-04 artifacts, under the package the app had then. The
   upload now on Play is package `com.nivorasr.app`, versionCode 6, release name `1.0.0 (6)`, for a
@@ -100,28 +100,28 @@ the open item above.
 === 2  SECRETS ===
 
   x BLOCKER  Hardcoded password assignment in a tracked file
-      nivora_app/test/owner_staff_test.dart:572  password: 'Tx7-quiet-lamp',
+      apnivaas_app/test/owner_staff_test.dart:572  password: 'Tx7-quiet-lamp',
 
   x BLOCKER  Hardcoded password assignment in a tracked file
-      nivora_app/test/owner_staff_test.dart:689  password: 'Tx7-quiet-lamp',
+      apnivaas_app/test/owner_staff_test.dart:689  password: 'Tx7-quiet-lamp',
 
   x BLOCKER  Hardcoded password assignment in a tracked file
-      nivora_app/test/owner_staff_test.dart:773  password: 'Tx7-quiet-lamp',
+      apnivaas_app/test/owner_staff_test.dart:773  password: 'Tx7-quiet-lamp',
 
   x BLOCKER  Hardcoded password assignment in a tracked file
-      nivora_app/test/warden_register_student_test.dart:459  password: 'Sage-7413-Kite',
+      apnivaas_app/test/warden_register_student_test.dart:459  password: 'Sage-7413-Kite',
 
   x BLOCKER  Hardcoded password assignment in a tracked file
-      nivora_app/test/warden_register_student_test.dart:631  password: 'Sage-7413-Kite',
+      apnivaas_app/test/warden_register_student_test.dart:631  password: 'Sage-7413-Kite',
 
   x BLOCKER  value of RAZORPAY_KEY_ID (.env) is committed in a tracked file
       docs/razorpay-in-app.md:128
 
   x BLOCKER  value of RAZORPAY_KEY_ID (.env) is committed in a tracked file
-      nivora_app/test/payment_test.dart:35
+      apnivaas_app/test/payment_test.dart:35
 
   x BLOCKER  value of RAZORPAY_KEY_ID (.env) is committed in a tracked file
-      nivora_app/test/receipt_test.dart:44
+      apnivaas_app/test/receipt_test.dart:44
   . .env files are not tracked
 
   x BLOCKER  Hardcoded password assignment in git history
@@ -154,21 +154,21 @@ the open item above.
 The 10 blockers are dispositioned in §3. The scanner was **not** modified to make this pass
 green; it still exits 1, and will until the fixture strings are allowlisted or renamed (§3.1).
 
-### 2.2 Client-side sweep of `nivora_app/`
+### 2.2 Client-side sweep of `apnivaas_app/`
 
 - **No Razorpay key SECRET anywhere.** `git grep` for `RAZORPAY_KEY_SECRET=<value>` patterns
   over tracked files: no hits. Full-history search (`git log -p --all -S "RAZORPAY_KEY_SECRET="`
   filtered to real-looking values): no hits. The only `rzp_…` string in the repo is the
-  **key id** `rzp_test_TTZjgz6pssJVJs` (see §3.2). `nivora_app/scripts/release.sh:403` itself
+  **key id** `rzp_test_TTZjgz6pssJVJs` (see §3.2). `apnivaas_app/scripts/release.sh:403` itself
   greps `lib/` for `RAZORPAY_KEY_SECRET` and aborts the build if found (the line was `:186` on
   2026-08-29).
-- **Every `eyJ…` literal decoded — none is service_role.** A repo-wide sweep of `nivora_app/`
+- **Every `eyJ…` literal decoded — none is service_role.** A repo-wide sweep of `apnivaas_app/`
   (all text files, excluding `build/`, `.dart_tool/`, `.git/`) finds JWT-shaped literals in
-  exactly one file: `nivora_app/lib/core/config/env.dart:29` (`:24` on 2026-08-29). Its payload base64-decodes to:
+  exactly one file: `apnivaas_app/lib/core/config/env.dart:29` (`:24` on 2026-08-29). Its payload base64-decodes to:
   `{"iss":"supabase","ref":"nimxvgzscbanhtvgnjll","role":"anon","iat":1785574366,"exp":2101150366}`
   — **`role":"anon"`**, the publishable anon key, safe in a client by design (RLS is the
   boundary). No other JWT literal exists in the app source.
-- **No WebView, no url_launcher in app code.** Neither appears in `nivora_app/pubspec.yaml` as a
+- **No WebView, no url_launcher in app code.** Neither appears in `apnivaas_app/pubspec.yaml` as a
   direct dependency and neither is imported anywhere in `lib/` (the only grep hits are comments
   asserting their absence, e.g. `lib/core/version/update_banner.dart:36` and
   `lib/features/payments/receipt_export.dart:11-12`). This used to cite
@@ -178,14 +178,14 @@ green; it still exits 1, and will until the fixture strings are allowlisted or r
   `url_launcher` **is present transitively** in `pubspec.lock` (pulled in by a plugin's
   dependency tree, not by app code); the plugin is compiled in but nothing calls it. Recorded as
   an open Low item (§3.3).
-- **No secrets in `android/` gradle files.** Tracked files under `nivora_app/android/` include
+- **No secrets in `android/` gradle files.** Tracked files under `apnivaas_app/android/` include
   no keystore and no `key.properties` (`git ls-files` shows only `gradle.properties` — JVM args
   and two Flutter template flags — and the gradle wrapper). `android/app/build.gradle.kts:44-55`
-  (`:31-33` on 2026-08-29) reads signing material from `NIVORA_KEYSTORE_*`/`NIVORA_KEY_*` environment variables or
+  (`:31-33` on 2026-08-29) reads signing material from `APNIVAAS_KEYSTORE_*`/`APNIVAAS_KEY_*` environment variables or
   `~/.hostelpro-keys/keystore.properties`, both outside the repo.
 - **No secret in `--dart-define` scripts.** The only build script is
-  `nivora_app/scripts/release.sh`; it contains no key/secret values (and enforces the
-  no-secret-in-lib rule itself, see above). `nivora_app/MIGRATION.md:127` (`:118` on 2026-08-29) shows
+  `apnivaas_app/scripts/release.sh`; it contains no key/secret values (and enforces the
+  no-secret-in-lib rule itself, see above). `apnivaas_app/MIGRATION.md:127` (`:118` on 2026-08-29) shows
   `--dart-define` usage with placeholder `...` values only.
 
 ### 2.3 Server-side spot-check (source review — READ only, nothing deployed)
@@ -250,12 +250,12 @@ server-side per-creation and never stored in plaintext.
 ### 3.2 `RAZORPAY_KEY_ID` committed (4 blockers: 3 tracked-file + 1 history) — **Low**
 
 `rzp_test_TTZjgz6pssJVJs` appears in `docs/razorpay-in-app.md:128`,
-`nivora_app/test/payment_test.dart:35`, `nivora_app/test/receipt_test.dart:44`, and git history.
+`apnivaas_app/test/payment_test.dart:35`, `apnivaas_app/test/receipt_test.dart:44`, and git history.
 Two facts bound the risk: (a) a Razorpay **key id** is the publishable merchant identifier —
 it is handed to every client that opens Checkout, by design. It is no longer compiled into the app:
 `razorpay-order` returns it with each order (`supabase/functions/razorpay-order/index.ts:318`), and
-the app reads it (`nivora_app/lib/data/models/checkout.dart:79`) and passes it to Checkout
-(`nivora_app/lib/features/payments/pay_rent.dart:169`); (b) this one is **test mode** (`rzp_test_`), which can move
+the app reads it (`apnivaas_app/lib/data/models/checkout.dart:79`) and passes it to Checkout
+(`apnivaas_app/lib/features/payments/pay_rent.dart:169`); (b) this one is **test mode** (`rzp_test_`), which can move
 no real money. The corresponding **key secret** — the credential that actually matters — was
 verified absent from all tracked files and from full git history (§2.2).
 
@@ -281,8 +281,8 @@ An independent verifier was pointed at this sign-off with instructions to falsif
 corrections it produced are applied above; recorded here so the document's own history is
 honest:
 
-- The signing fallback path was misnamed `~/.nivora-keys/`; the gradle file actually reads
-  `~/.hostelpro-keys/keystore.properties` (nivora_app/android/app/build.gradle.kts:45; `:22` when
+- The signing fallback path was misnamed `~/.apnivaas-keys/`; the gradle file actually reads
+  `~/.hostelpro-keys/keystore.properties` (apnivaas_app/android/app/build.gradle.kts:45; `:22` when
   this erratum was written). The
   load-bearing claim — no keystore or key.properties tracked in the repo — was verified true.
 - A scanner output quoted in §6 was produced one commit earlier than the HEAD it was attributed
@@ -359,7 +359,7 @@ ACTIVE on 2026-09-13 (§5 item 1).
 5. **Play-side device checks** (the APKs Play actually delivers from a store build) were not
    exercised; the no-secrets claims are about source and tracked files, backed by `release.sh`'s
    own build-time grep. Digital Asset Links is not among these checks: `com.nivorasr.app` declares
-   no `autoVerify` link (`nivora_app/android/app/src/main/AndroidManifest.xml`).
+   no `autoVerify` link (`apnivaas_app/android/app/src/main/AndroidManifest.xml`).
 
 A sign-off that overclaims is worse than none. §1's verdict is exactly as strong as §2's
 evidence and no stronger; the §5 items belong to their owners before this release is real.
@@ -369,7 +369,7 @@ evidence and no stronger; the §5 items belong to their owners before this relea
 ## 6. Re-verification — second independent pass, same day
 
 *2026-08-29, at HEAD `8586e39` (the commit that added §3.4 and the scanner refinement), with
-the tab-warmup work in flight as uncommitted changes under `nivora_app/lib/` and new
+the tab-warmup work in flight as uncommitted changes under `apnivaas_app/lib/` and new
 `*_warmup_test.dart` suites.* Every load-bearing claim above was re-checked from scratch, not
 trusted:
 
@@ -385,7 +385,7 @@ trusted:
   string-matching scanner red forever; that is the concrete demonstration that §3.4's
   refinement (allowlist the two fixture strings, exempt the key-id shape) was the correct fix
   rather than a whitewash.
-- **JWT sweep re-done:** one JWT-shaped literal in all of `nivora_app/` (excluding
+- **JWT sweep re-done:** one JWT-shaped literal in all of `apnivaas_app/` (excluding
   `build/`, `.dart_tool/`) — `lib/core/config/env.dart:24` (`:29` as of 2026-09-13, same payload);
   payload re-decoded today:
   `{"iss":"supabase","ref":"nimxvgzscbanhtvgnjll","role":"anon",...}` — anon, as §2.2 states.

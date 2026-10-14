@@ -9,8 +9,8 @@ Every answer here was read out of the source, not assumed. The files that decide
 `db/migrations/2026-09-12-notifications-and-rent-due.sql`, `lib/storage.ts`,
 `lib/actions/payments.ts`, `lib/razorpay.ts`, `app/api/webhooks/razorpay/route.ts`,
 `components/payments/`, `supabase/functions/push-send/index.ts`,
-`nivora_app/lib/core/notify/push_service.dart`, `package.json`, and for the Android payment path
-`nivora_app/lib/features/payments/pay_rent.dart`, `nivora_app/android/app/src/main/AndroidManifest.xml`,
+`apnivaas_app/lib/core/notify/push_service.dart`, `package.json`, and for the Android payment path
+`apnivaas_app/lib/features/payments/pay_rent.dart`, `apnivaas_app/android/app/src/main/AndroidManifest.xml`,
 `supabase/functions/razorpay-order/index.ts`, `supabase/functions/_shared/razorpay.ts` and
 `public.rz_open_intent`.
 
@@ -45,7 +45,7 @@ anything a user types or uploads is collected. There is no on-device-only data t
 **excludes transfers to a service provider** processing on your behalf, on your instructions.
 Supabase, Vercel, **Razorpay and Google** are service providers — Google because Firebase Cloud
 Messaging receives the device token and the notification text in order to deliver a notification
-NIVORA asked it to deliver. The answer to "Is this data shared?" is **No** on every row — see §4
+Apnivaas asked it to deliver. The answer to "Is this data shared?" is **No** on every row — see §4
 for the Razorpay reasoning, which is the one a reviewer may probe, and §3.5 for Google's.
 
 **"Processed ephemerally"** = held in memory for the request and never written down. **Nothing here
@@ -77,7 +77,7 @@ to be run on it.
 browser: `lib/razorpay.ts` opens with `import "server-only"`, which makes importing it from a client
 component a build error. **The Android app is different.** It depends on `razorpay_flutter`, which
 bundles Razorpay's native Checkout SDK (`com.razorpay`, pinned to `checkout:1.6.41` in
-`nivora_app/android/build.gradle.kts`) and runs it in the app's own process. It is still not an
+`apnivaas_app/android/build.gradle.kts`) and runs it in the app's own process. It is still not an
 analytics or ad SDK, but it does collect data in Play's sense, and four rows below declare it:
 **User payment info** and **Installed apps** (both changed to Yes for it), **App interactions** (App
 functionality added for it) and **Device or other IDs** (already Yes; its evidence names the SDK's
@@ -95,14 +95,14 @@ telemetry).
 | Personal info › Political or religious beliefs | No | — | — | — | — | No such column exists |
 | Personal info › Sexual orientation | No | — | — | — | — | No such column exists |
 | **Financial info › Purchase history** | **Yes** | No | No | **Required** | App functionality, **Fraud prevention, security and compliance** | `fee_payments` (`amount_due`, `amount_paid`, `status`, `paid_on`, `mode`, `notes`), `students.monthly_fee`, and **all of `public.payment_intents` and `public.payment_refunds`** — see §3.1. Fraud prevention is a genuine second purpose here: `razorpay_payment_id` is stored under a unique index precisely so the same payment can never credit twice, and `razorpay_refund_id` under another so the same refund can never reverse the ledger twice |
-| **Financial info › User payment info** | **Yes** | No | No | Optional | App functionality, **Fraud prevention, security and compliance** | **Tick it — this used to say "Do not tick", and that was wrong for Android.** The Razorpay Checkout SDK, opened in-process by `nivora_app/lib/features/payments/pay_rent.dart`, handles the card number, expiry, CVV or UPI ID the resident types and transmits it to Razorpay. Still no payment instrument reaches NIVORA's servers or database. Optional because rent can always be paid to the warden in cash. See §3.2 — the single most consequential answer on the form |
+| **Financial info › User payment info** | **Yes** | No | No | Optional | App functionality, **Fraud prevention, security and compliance** | **Tick it — this used to say "Do not tick", and that was wrong for Android.** The Razorpay Checkout SDK, opened in-process by `apnivaas_app/lib/features/payments/pay_rent.dart`, handles the card number, expiry, CVV or UPI ID the resident types and transmits it to Razorpay. Still no payment instrument reaches Apnivaas's servers or database. Optional because rent can always be paid to the warden in cash. See §3.2 — the single most consequential answer on the form |
 | Financial info › Credit score | No | — | — | — | — | No such column exists |
 | Financial info › Other financial info | No | — | — | — | — | Play defines this as salary, debts and similar. An outstanding rent balance is a transaction record and is disclosed under Purchase history |
-| **Photos and videos › Photos** | **Yes** | No | No | Optional | App functionality | `students.photo_url`, `students.id_proof_url` — in the Android app a warden adds a new resident's photo and ID proof at registration, from the camera or the photo picker (`nivora_app/lib/features/warden/actions/register_student_sheet.dart:116-117`, `:324-339`). `fee_payments`/`expenses` receipts. `complaints.photo_url` is not written by the Android app: the resident app has no complaint photo field (`nivora_app/lib/features/student/raise_complaint_sheet.dart:28-30`). Buckets `student-docs`, `complaint-photos`, `receipts` — all **private** |
+| **Photos and videos › Photos** | **Yes** | No | No | Optional | App functionality | `students.photo_url`, `students.id_proof_url` — in the Android app a warden adds a new resident's photo and ID proof at registration, from the camera or the photo picker (`apnivaas_app/lib/features/warden/actions/register_student_sheet.dart:116-117`, `:324-339`). `fee_payments`/`expenses` receipts. `complaints.photo_url` is not written by the Android app: the resident app has no complaint photo field (`apnivaas_app/lib/features/student/raise_complaint_sheet.dart:28-30`). Buckets `student-docs`, `complaint-photos`, `receipts` — all **private** |
 | Photos and videos › Videos | No | — | — | — | — | `lib/storage.ts` `ALLOWED` permits only `image/jpeg`, `image/png`, `image/webp`, `application/pdf`. No video type is accepted |
 | **Files and docs** | **Yes** | No | No | Optional | App functionality | Same buckets: `application/pdf` is accepted for `student-docs` and `receipts`, so an ID proof or a receipt uploaded as a PDF is a document, not a photo. See §6 |
 | **App activity › App interactions** | **Yes** | No | No | **Required** | **App functionality**, Fraud prevention, security and compliance | App functionality added 2026-09-13: while a payment is open, the in-process Razorpay SDK reports its own checkout-session events to Razorpay in order to run the payment — §3.4. The existing security purpose rests on `audit_log` (`action`, `target_type`, `target_id`, `actor_user_id`, `at`), `security_alerts`. Now includes ten payment events — `payment.order.created`, `payment.captured`, `payment.credited`, `payment.failed`, `payment.webhook.rejected`, `payment.reconcile.required`, and the four refund events `payment.refund.pending`, `payment.refund.processed`, `payment.refund.failed`, `payment.refund.reversed` (`lib/audit.ts`) |
-| **App activity › Other user-generated content** | **Yes** | No | No | Optional | App functionality | `complaints.title`/`description`/`resolution_note`, `complaint_events.note`, `leaves.decision_note` (a warden's approve or reject note, written from the Android warden app — `nivora_app/lib/features/warden/data/warden_repository.dart:484-491`), `announcements.body`, `tasks.description`, `fee_payments.notes`, `expenses.note`, `visitors.relation`. `leaves.reason` is not typed in the Android app, which has no resident leave feature; its only `leaves` access is the warden's list and decision (`warden_repository.dart:452-499`) |
+| **App activity › Other user-generated content** | **Yes** | No | No | Optional | App functionality | `complaints.title`/`description`/`resolution_note`, `complaint_events.note`, `leaves.decision_note` (a warden's approve or reject note, written from the Android warden app — `apnivaas_app/lib/features/warden/data/warden_repository.dart:484-491`), `announcements.body`, `tasks.description`, `fee_payments.notes`, `expenses.note`, `visitors.relation`. `leaves.reason` is not typed in the Android app, which has no resident leave feature; its only `leaves` access is the warden's list and decision (`warden_repository.dart:452-499`) |
 | App activity › In-app search history | No | — | — | — | — | Not recorded |
 | **App activity › Installed apps** | **Yes** | No | No | Optional | App functionality | **Changed from No on 2026-09-13.** The old reason — no `QUERY_ALL_PACKAGES` — was true but incomplete: `AndroidManifest.xml` declares a `<queries>` intent for the `upi:` scheme, and the Razorpay SDK resolves it to find which UPI apps (GPay, PhonePe, Paytm and so on) are installed, so it can offer them in the sheet. Visibility is limited to apps that handle `upi:`. Optional because it only happens when a resident opens a payment — §3.4 |
 | **Device or other IDs** | **Yes** | No | No | **Required** | App functionality; fraud prevention, security and compliance | `audit_log.ip`, `audit_log.user_agent`, `security_alerts.ip`, plus Vercel access logs. **`public.push_devices.token` — the FCM registration token — since 2026-09-12; §3.5.** Razorpay Checkout additionally runs its own device and session telemetry during a payment — inside its iframe on the web, and inside the app's own process on Android — §3.4 |
@@ -110,7 +110,7 @@ telemetry).
 | Messages (email / SMS / in-app) | **No** | — | — | — | — | Work-item text, declared under Other user-generated content. Reasoning in the submission pack §2.6 |
 | Health and fitness | **No** | — | — | — | — | No health feature and no health column. Reasoning in the submission pack §2.7 |
 | **App info and performance › Crash logs** | **No** | — | — | — | — | No crash reporter of any kind. Android Vitals is collected by Google Play itself, not by the developer, and does not need declaring |
-| App info and performance › Diagnostics | No | — | — | — | — | No telemetry SDK of NIVORA's. Razorpay's own checkout-session telemetry during a payment is declared under Device or other IDs and App interactions — §3.4 |
+| App info and performance › Diagnostics | No | — | — | — | — | No telemetry SDK of Apnivaas's. Razorpay's own checkout-session telemetry during a payment is declared under Device or other IDs and App interactions — §3.4 |
 | Audio files | No | — | — | — | — | No audio MIME type accepted |
 | Calendar | No | — | — | — | — | No calendar access |
 | Contacts | No | — | — | — | — | No `READ_CONTACTS`; guardian and visitor phone numbers are typed in by staff, not read from the device address book |
@@ -121,11 +121,11 @@ telemetry).
 ## 3. Payments — the section to get exactly right
 
 The app now takes money. That bears on nine rows above and none of the others. Five because of what
-NIVORA itself sends and stores: **Name**, **Email address** and **Phone number** (Checkout prefill,
+Apnivaas itself sends and stores: **Name**, **Email address** and **Phone number** (Checkout prefill,
 §3.3), **User IDs** (`razorpay_order_id`, `razorpay_payment_id`) and **Purchase history** (§3.1).
 Four because of what Razorpay's Android SDK does inside the app (§3.2, §3.4): **User payment info**
 and **Installed apps** (changed to Yes), **App interactions** (App functionality added; its ten
-payment audit events are NIVORA's own) and **Device or other IDs** (the SDK's telemetry, under an
+payment audit events are Apnivaas's own) and **Device or other IDs** (the SDK's telemetry, under an
 answer that was already Yes). Being imprecise here in **either** direction is what causes a strike.
 
 ### 3.1 What `public.payment_intents` and `public.payment_refunds` actually store
@@ -218,14 +218,14 @@ is **Purchase history**, exactly as `payment_intents` is.
 Play's **User payment info** means information about a user's financial accounts — card numbers,
 bank account numbers, payment credentials. Two platforms, two different facts:
 
-**On the web, NIVORA's code never touches it.** The card and UPI fields belong to **Razorpay's
+**On the web, Apnivaas's code never touches it.** The card and UPI fields belong to **Razorpay's
 document, not ours**. Checkout renders its form in an iframe on `checkout.razorpay.com`;
 `lib/security-headers.ts` grants `frame-src` for exactly that reason, and its comment states the
 point plainly — keeping PCI scope off this application only works if the card fields are Razorpay's.
 Our origin never sees a keystroke of it. The Data safety form describes the Android app, so this
 fact alone does not decide the answer; it is recorded because the privacy policy covers both.
 
-**On Android, the checkout runs inside the app.** `nivora_app/lib/features/payments/pay_rent.dart`
+**On Android, the checkout runs inside the app.** `apnivaas_app/lib/features/payments/pay_rent.dart`
 creates a `Razorpay()` instance from `razorpay_flutter` and calls `razorpay.open(...)`. That opens
 Razorpay's **native Android Checkout SDK** in the app's own process, not a web page in a frame. (The
 versionCode 4 AAB carries it: its dex holds 318 `Lcom/razorpay/` type references, and its manifest
@@ -237,12 +237,12 @@ has no access to" argument does not survive: the SDK is code the app ships.
 
 What stays true, and is worth saying to a reviewer in the same breath:
 
-- **NIVORA's own code still never reads it.** The success callback's payload is discarded unread
+- **Apnivaas's own code still never reads it.** The success callback's payload is discarded unread
   (`razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, (_) => ...)`), and the resident's balance is only
   ever reported from the server's ledger.
-- **It never reaches NIVORA's servers or database.** §3.1 lists every column of both financial
+- **It never reaches Apnivaas's servers or database.** §3.1 lists every column of both financial
   tables; none can hold an instrument, and the webhook parses none.
-- **Its only recipient is Razorpay**, processing the payment NIVORA asked it to take — a service
+- **Its only recipient is Razorpay**, processing the payment Apnivaas asked it to take — a service
   provider (§4). So **Shared is No**.
 
 How to fill the row:
@@ -251,16 +251,16 @@ How to fill the row:
 |---|---|---|
 | Collected | **Yes** | The in-process SDK transmits the details the resident types |
 | Shared | **No** | Razorpay is a service provider — §4 |
-| Processed ephemerally | **No** | NIVORA cannot vouch for how Razorpay retains it, and Razorpay keeps its own transaction record under its own regulatory duty (§7.1). Do not claim ephemeral on a third party's behalf |
+| Processed ephemerally | **No** | Apnivaas cannot vouch for how Razorpay retains it, and Razorpay keeps its own transaction record under its own regulatory duty (§7.1). Do not claim ephemeral on a third party's behalf |
 | Required or optional | **Optional** | Paying online is a choice; rent can always be paid at the desk in cash, and a hostel not set up for online payment (§4.1) never opens the SDK at all |
 | Purposes | **App functionality**; **Fraud prevention, security and compliance** | The details exist to take the payment; Razorpay's own checks on them are fraud prevention and regulatory compliance |
 
 **Keep Purchase history ticked as well.** User payment info covers the instrument the SDK handles
-during the payment; Purchase history covers the record of the transaction that NIVORA stores in
+during the payment; Purchase history covers the record of the transaction that Apnivaas stores in
 `fee_payments`, `payment_intents` and `payment_refunds`. They are different data and both are true.
 
 **What would change the evidence behind this answer** (the answer itself stays Yes): the day
-NIVORA's own servers receive an instrument — a card, UPI or bank field rendered by our own form, or a
+Apnivaas's own servers receive an instrument — a card, UPI or bank field rendered by our own form, or a
 saved-card, token, mandate or auto-debit flow. Then the database would hold it and retention, PCI
 scope and the privacy policy would all have to move. None of that exists today. There is no
 `customer`, `token`, `subscription` or `mandate` call anywhere; the only Razorpay API calls in the
@@ -268,7 +268,7 @@ codebase create orders — `razorpayClient().orders.create(...)` in `lib/actions
 web, and the `POST https://api.razorpay.com/v1/orders` in `supabase/functions/_shared/razorpay.ts`
 that the Android app reaches through `supabase/functions/razorpay-order/index.ts`.
 
-### 3.3 What NIVORA does send to Razorpay
+### 3.3 What Apnivaas does send to Razorpay
 
 Answer this honestly if asked, because it is more than nothing:
 
@@ -278,7 +278,7 @@ Answer this honestly if asked, because it is more than nothing:
 | `transfers: [{ account, amount, currency, on_hold: false }]` — **Route hostels only** | `createOrder()` in `supabase/functions/_shared/razorpay.ts` (the Android order path; the web's `orders.create()` never sends `transfers`) | The hostel's linked-account id and the whole rent. Omitted entirely for a DIRECT hostel, and no hostel is on Route today. Because the web never sends it, a Route hostel paying on the web would settle to the wrong account — a latent defect, not fixed, §4.1 |
 | `receipt: rent_<YYYY-MM>_<first 8 chars of student uuid>_<base36 timestamp>` | `lib/actions/payments.ts:133` (web); `supabase/functions/razorpay-order/index.ts:287` (Android) | Deliberately no PII — a truncated UUID is a lookup key for us and meaningless to anyone else |
 | `notes: { purpose: "hostel_rent", period }` on the web; `notes: { purpose: "hostel_rent", period, channel: "mobile" }` on Android | `lib/actions/payments.ts:137` (web); `supabase/functions/razorpay-order/index.ts:290` (Android) | For a human reading the Razorpay dashboard. Nothing on the settlement path ever reads it back |
-| `name` (the hostel's name), `description` (`"<Month YYYY> rent"` on the web, `"Rent · <period>"` on Android) | Checkout options in `components/payments/pay-rent-sheet.tsx` (web) and `razorpay.open()` in `nivora_app/lib/features/payments/pay_rent.dart` (Android) | Branding on the checkout |
+| `name` (the hostel's name), `description` (`"<Month YYYY> rent"` on the web, `"Rent · <period>"` on Android) | Checkout options in `components/payments/pay-rent-sheet.tsx` (web) and `razorpay.open()` in `apnivaas_app/lib/features/payments/pay_rent.dart` (Android) | Branding on the checkout |
 | `prefill: { name, email, contact }` | same, from `RentOrder.prefill` (web) and `CheckoutOrder.prefillName` / `prefillEmail` / `prefillContact` (Android) | **The student's own `full_name`, `email` and `phone`**, so they do not have to retype them |
 
 So Razorpay receives the payer's name, email and phone. That is a transfer **to a service
@@ -298,7 +298,7 @@ on the platform.
   The loader Checkout draws in *our* page cannot reach them.
 - **Inside its own iframe our CSP does not apply** — a cross-origin frame carries its own policy.
   Razorpay's telemetry from within its modal is Razorpay's, serving the payment's own fraud and
-  operational purposes. **NIVORA receives none of it.**
+  operational purposes. **Apnivaas receives none of it.**
 
 The web Razorpay CSP grants are also **scoped to `/student`** (`needsRazorpay()` in
 `lib/security-headers.ts` returns true only for `/student` and below). No other web page — including
@@ -307,7 +307,7 @@ every screen that renders resident PII — can load Checkout at all.
 **On Android, neither bound exists.** There is no iframe and no CSP: the native Checkout SDK runs
 in the app's own process, with the app's network access, from the moment `razorpay.open()` is
 called until the sheet closes. Which hosts the native SDK (`com.razorpay:checkout:1.6.41`,
-`nivora_app/android/build.gradle.kts:18`) reports to is not recorded anywhere in this repository;
+`apnivaas_app/android/build.gradle.kts:18`) reports to is not recorded anywhere in this repository;
 the lumberjack hosts named above come from the web CSP and are not verified for Android. Previous
 versions of this section reasoned only from the web and
 concluded that no new row was needed. For the Android app that is wrong, because whatever the SDK
@@ -319,27 +319,27 @@ transmits is collected by the app (§1). Three things follow while a payment is 
 2. **Checkout interactions.** The SDK reports what happens in its sheet to Razorpay as part of
    running the payment. That is declared under **App activity › App interactions**, with **App
    functionality** added as a purpose alongside the existing Fraud prevention one.
-3. **Which UPI apps are installed.** `nivora_app/android/app/src/main/AndroidManifest.xml` declares
+3. **Which UPI apps are installed.** `apnivaas_app/android/app/src/main/AndroidManifest.xml` declares
    a `<queries>` block for `android.intent.action.VIEW` on the `upi:` scheme. Its comment gives the
    reason: from API 30 an app sees only the packages it declares, and Razorpay's checkout builds its
    "Pay using GPay / PhonePe / Paytm" list by resolving exactly that intent. The SDK therefore
    detects installed UPI apps in order to offer them. That is **App activity › Installed apps:
-   collected, not shared, optional, App functionality**. NIVORA cannot inspect what the SDK sends
-   about that list, and Play's rule turns on what the SDK transmits, not on what NIVORA receives, so
+   collected, not shared, optional, App functionality**. Apnivaas cannot inspect what the SDK sends
+   about that list, and Play's rule turns on what the SDK transmits, not on what Apnivaas receives, so
    it is declared rather than asserted away. Visibility is limited to apps that handle `upi:` — the
    app does not request `QUERY_ALL_PACKAGES`.
 
-On both platforms, **NIVORA receives none of it** — no telemetry, no interaction events and no app
-list reach NIVORA's servers. Razorpay is the only recipient, acting as a service provider (§4), so
-none of these rows is Shared. **Do not add Analytics as a purpose** — NIVORA performs no analytics
+On both platforms, **Apnivaas receives none of it** — no telemetry, no interaction events and no app
+list reach Apnivaas's servers. Razorpay is the only recipient, acting as a service provider (§4), so
+none of these rows is Shared. **Do not add Analytics as a purpose** — Apnivaas performs no analytics
 and receives no analytics data, and Razorpay's processing serves the payment, not a product of
-NIVORA's.
+Apnivaas's.
 
 ---
 
 ### 3.5 Notifications — the FCM registration token
 
-Nivora sends push notifications: rent is due, the owner posted a notice, a payment arrived, a task
+Apnivaas sends push notifications: rent is due, the owner posted a notice, a payment arrived, a task
 was assigned. That needs two things Play asks about.
 
 **The token is a device identifier, and it is declared.** Firebase Cloud Messaging issues each
@@ -363,14 +363,14 @@ row in §2 now carries App functionality alongside the security purpose.
 A phone that has not checked in for 90 days is pruned by `app.send_rent_reminders()`.
 
 **POST_NOTIFICATIONS is a runtime permission, not a data type.** Play's Data safety form has no box
-for it. The manifest declares it (`nivora_app/android/app/src/main/AndroidManifest.xml:50`), and the
+for it. The manifest declares it (`apnivaas_app/android/app/src/main/AndroidManifest.xml:50`), and the
 ask is the system dialog itself: there is no in-app rationale screen before it
 (`AndroidManifest.xml:25-26`; `Permission.notification.request()` in `_askPermission`,
-`nivora_app/lib/core/notify/push_service.dart:183-193`). The dialog appears only once the signed-in
+`apnivaas_app/lib/core/notify/push_service.dart:183-193`). The dialog appears only once the signed-in
 person has agreed to the Terms of Use and Privacy Policy at the consent gate, not at sign-in. Push
 starts from `initState` for someone who agreed on an earlier launch and from `_accept` for someone
-agreeing now (`nivora_app/lib/features/legal/consent_gate.dart:93-95`, `:150-166`), and
-`nivora_app/lib/main.dart:227-236` only stops it on sign-out. A refusal does not stop registration:
+agreeing now (`apnivaas_app/lib/features/legal/consent_gate.dart:93-95`, `:150-166`), and
+`apnivaas_app/lib/main.dart:227-236` only stops it on sign-out. A refusal does not stop registration:
 `start()` registers the token straight after asking (`push_service.dart:116-118`, `:180-182`), so the
 token declaration above applies whatever the person answers. Delivery to a real phone has not yet
 been proven; the declaration does not depend on it, because the token is registered and stored
@@ -381,7 +381,7 @@ whether or not a notification ever arrives. The permission is not tied to any of
 manifest removes `com.google.android.gms.permission.AD_ID` explicitly with `tools:node="remove"`,
 so a future dependency cannot merge one in silently, and the Advertising ID declaration in Console
 is therefore **No**. Verify that on the BUILT artifact rather than on the source, with
-`nivora_app/scripts/verify-adid.sh`. A missing AD_ID line proves nothing unless the same read also
+`apnivaas_app/scripts/verify-adid.sh`. A missing AD_ID line proves nothing unless the same read also
 finds a permission that is certainly there, so the script refuses to report clean unless it also
 sees `android.permission.INTERNET` (`verify-adid.sh:27-29`, `:74-87`); its earlier version passed on
 APK manifests it could not read (`verify-adid.sh:18-25`). On 2026-09-13 it reported all three
@@ -397,16 +397,16 @@ the wrong one and you have either misled users or invited a question you cannot 
 sufficient on its own:
 
 1. **What we send, we send on our instruction.** Razorpay processes the amount, the order and the
-   payer's prefill details in order to collect a payment *NIVORA asked it to collect*, against an
-   order *NIVORA created*, and reports the result back. That is processing on the developer's
+   payer's prefill details in order to collect a payment *Apnivaas asked it to collect*, against an
+   order *Apnivaas created*, and reports the result back. That is processing on the developer's
    behalf, on the developer's instructions — Play's own definition of a service provider. A payment
    processor is the textbook case; GDPR and CCPA reach the same conclusion about a merchant's PSP.
-2. **What NIVORA's own code never touches, NIVORA does not pass on.** On the web the card number and
+2. **What Apnivaas's own code never touches, Apnivaas does not pass on.** On the web the card number and
    the UPI ID are typed into Razorpay's own document. On Android they are typed into Razorpay's
    native SDK, which runs inside the app's process — so the app does collect them (§3.2) — but the
-   SDK sends them to Razorpay and nowhere else, NIVORA's Dart code discards the success payload
-   unread, and nothing reaches NIVORA's servers or database. There is no second recipient for the
-   data to be "shared" with. *(This ground previously said the details "never enter NIVORA's
+   SDK sends them to Razorpay and nowhere else, Apnivaas's Dart code discards the success payload
+   unread, and nothing reaches Apnivaas's servers or database. There is no second recipient for the
+   data to be "shared" with. *(This ground previously said the details "never enter Apnivaas's
    process". That was true of the web and false of Android, and was corrected on 2026-09-13.)*
 
 **The counter-argument, stated so nobody is ambushed by it:** Razorpay is a regulated entity with
@@ -426,7 +426,7 @@ transfers are disclosed in the policy, not in the Shared column. So:
 
 ### 4.1 Whose account the rent settles into — as it actually is on 2026-09-13
 
-**Rent settles into the hostel owner's own Razorpay account, and NIVORA never holds it — on the one
+**Rent settles into the hostel owner's own Razorpay account, and Apnivaas never holds it — on the one
 path in use today.** The Android order path allows two ways to get there and refuses everything
 else. The web order path does not choose between them at all. Today that moves no money wrongly but
 can leave an unpaid live Razorpay order behind, and it would misroute rent the day a hostel gets a
@@ -485,7 +485,7 @@ that hostel's web rent into someone else's merchant account.
   take an online payment at all**. On Android the Edge Function refuses the order with HTTP 409 —
   "Online payment is not set up for this hostel yet. Please pay your warden directly." — before any
   Razorpay order is created, and the checkout sheet never opens, because `payRent()` asks for the
-  order before it opens the sheet (`nivora_app/lib/features/payments/pay_rent.dart:92-104`). Their
+  order before it opens the sheet (`apnivaas_app/lib/features/payments/pay_rent.dart:92-104`). Their
   residents pay at the desk, and a Play reviewer who taps Pay in the demo PG sees that message and
   never reaches Razorpay.
 
@@ -510,17 +510,17 @@ so a hostel that changes hands stops taking online payment until it is re-approv
 
 What follows from all of this, enforced rather than intended:
 
-- **NIVORA takes no commission.** On DIRECT the whole payment settles to the owner's merchant
-  account; on ROUTE the transfer is the full sum. NIVORA's own revenue is a subscription the owner
+- **Apnivaas takes no commission.** On DIRECT the whole payment settles to the owner's merchant
+  account; on ROUTE the transfer is the full sum. Apnivaas's own revenue is a subscription the owner
   pays, recorded separately and never through this gateway.
-- **NIVORA holds no balance.** There is no NIVORA-owned merchant account on the payment path, no
+- **Apnivaas holds no balance.** There is no Apnivaas-owned merchant account on the payment path, no
   `on_hold` transfer and no wallet. Razorpay settles on its normal cycle.
 - **A hostel with neither path cannot take an online payment.** `rz_open_intent` refuses the intent
   on both platforms, and on Android the Edge Function also refuses the order before it exists — the
   same failure guarded from both sides, because rent landing somewhere it cannot lawfully be released
   from is unrecoverable. On the web only the database refuses, after a Razorpay order exists (above).
 
-**So the Payment Aggregator question does not arise.** NIVORA is software: it creates an order for
+**So the Payment Aggregator question does not arise.** Apnivaas is software: it creates an order for
 what a resident owes, and Razorpay, an RBI-licensed aggregator, settles it to the owner's own
 account. This is why the Financial features answer in §5 is "none".
 
@@ -556,15 +556,15 @@ Hostel rent is as real-world as the category gets:
 - It is **consumed off-device**. Nothing in the app is unlocked, upgraded or enabled by paying —
   verified: no code path gates a feature on `payment_intents.status` or `credited_at`. The only
   thing a successful payment changes is a row in `fee_payments`, which is a ledger entry.
-- **The money is the hostel's, not NIVORA's.** The app is collecting what the resident already owes
+- **The money is the hostel's, not Apnivaas's.** The app is collecting what the resident already owes
   their landlord under a tenancy that exists outside the app.
 
-**The contrast, and state it plainly if asked:** an owner paying NIVORA a platform subscription
+**The contrast, and state it plainly if asked:** an owner paying Apnivaas a platform subscription
 *would* be a digital service consumed in the app, and on Android that is Google Play Billing
 territory. `docs/payments.md` puts that flow explicitly out of scope — *"Owners paying their
 platform subscription is a separate flow and is not built here"* — and `public.subscriptions` is a
-record the NIVORA administrator maintains, with no in-app purchase path. **Keep it that way, or
-bring in Play Billing when it changes.** An in-app "renew your NIVORA subscription" button that
+record the Apnivaas administrator maintains, with no in-app purchase path. **Keep it that way, or
+bring in Play Billing when it changes.** An in-app "renew your Apnivaas subscription" button that
 charged through Razorpay would be a Payments-policy violation on the day it shipped.
 
 Consequences for the declarations — all unchanged from before payments existed, but now for
@@ -573,7 +573,7 @@ articulable reasons rather than by default:
 | Console question | Answer | Reason |
 |---|---|---|
 | **In-app purchases** | **No** | The label reflects Google Play Billing products. There is no Play Billing library in the bundle and no Play product to sell. Rent is an external real-world payment, which that badge does not describe |
-| **Financial features** | **"My app doesn't provide any financial features."** | The list covers financial *products and services* — lending, banking or e-money, insurance, investments, crypto, debt management, money management or planning, tax. Accepting payment for the hostel's own service is none of them, exactly as an e-commerce app taking card payments is none of them. As §4.1 records from the database on 2026-09-13: exactly one hostel, Kushi Hostels, takes online rent, on the DIRECT path, into the merchant account the operator confirmed is KYC'd to Kushi Hostels' owner; no hostel has a Route linked account; every other hostel cannot take online payment at all. NIVORA takes no commission, holds no balance, issues no credit and moves no money between people. **Revisit if any of that changes** — a DIRECT approval for a hostel whose owner is not the KYC'd holder of that merchant account, a commission or hold on rent, any NIVORA-owned account on the payment path, or a Route linked account for any hostel while the web order path still omits `transfers` (§4.1) |
+| **Financial features** | **"My app doesn't provide any financial features."** | The list covers financial *products and services* — lending, banking or e-money, insurance, investments, crypto, debt management, money management or planning, tax. Accepting payment for the hostel's own service is none of them, exactly as an e-commerce app taking card payments is none of them. As §4.1 records from the database on 2026-09-13: exactly one hostel, Kushi Hostels, takes online rent, on the DIRECT path, into the merchant account the operator confirmed is KYC'd to Kushi Hostels' owner; no hostel has a Route linked account; every other hostel cannot take online payment at all. Apnivaas takes no commission, holds no balance, issues no credit and moves no money between people. **Revisit if any of that changes** — a DIRECT approval for a hostel whose owner is not the KYC'd holder of that merchant account, a commission or hold on rent, any Apnivaas-owned account on the payment path, or a Route linked account for any hostel while the web order path still omits `transfers` (§4.1) |
 | **Content rating › "Can users purchase digital goods?"** | **No** | Rent is a real-world service, not a digital good. If the questionnaire separately asks about real-world purchases, answer **that** one Yes — it is trivially verifiable by opening the fee card |
 
 ---
@@ -581,7 +581,7 @@ articulable reasons rather than by default:
 ## 6. Government ID — no box exists, declare it anyway
 
 **Play's Data safety form has no "Government ID" data type.** That is a gap in the form, not
-permission to stay quiet, and NIVORA holds exactly this: `students.id_proof_type` plus a scan at
+permission to stay quiet, and Apnivaas holds exactly this: `students.id_proof_type` plus a scan at
 `students.id_proof_url` in the private `student-docs` bucket.
 [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §4.4 calls it "the highest-value
 data in the system".
@@ -603,7 +603,7 @@ Then say it in plain words in the privacy policy: *this app stores identity docu
 | Question | Answer | Evidence |
 |---|---|---|
 | Is all user data encrypted in transit? | **Yes** | TLS to Vercel and to Supabase throughout; HSTS and a nonce-based CSP in `middleware.ts`; the manifest sets no `usesCleartextTraffic`. The payment path adds no exception — on the web Checkout loads over HTTPS from `checkout.razorpay.com`, on Android the Razorpay SDK runs inside the app under that same manifest, and the webhook is HTTPS-only |
-| Do you provide a way for users to request that their data be deleted? | **Yes** | `/legal/account-deletion` is live (HTTP 200 signed out, verified), backed by the erasure runbook in [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §6.3. Inside the app, **Delete my account and data** files a deletion request: residents open it from the Profile tab (`nivora_app/lib/features/student/profile_screen.dart:160`), staff by tapping their picture at the top left (`nivora_app/lib/features/shell/staff_profile_sheet.dart:139`), and a second request inside 30 days returns the first instead of filing another (`nivora_app/lib/features/legal/account_deletion.dart:34-37`). See §7.1 for what deletion does to payment records |
+| Do you provide a way for users to request that their data be deleted? | **Yes** | `/legal/account-deletion` is live (HTTP 200 signed out, verified), backed by the erasure runbook in [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §6.3. Inside the app, **Delete my account and data** files a deletion request: residents open it from the Profile tab (`apnivaas_app/lib/features/student/profile_screen.dart:160`), staff by tapping their picture at the top left (`apnivaas_app/lib/features/shell/staff_profile_sheet.dart:139`), and a second request inside 30 days returns the first instead of filing another (`apnivaas_app/lib/features/legal/account_deletion.dart:34-37`). See §7.1 for what deletion does to payment records |
 | Has your app been independently reviewed against a global security standard? | **No** | `SECURITY.md` is a thorough internal review. It is not a third-party audit, and claiming otherwise in Console is a misrepresentation |
 | Committed to follow the Play Families Policy? | **No** | Not a children's app — submission pack §4 |
 
@@ -631,7 +631,7 @@ identifies a person.
 
 **For how long.** The same period as the rest of the fee ledger: **kept indefinitely**, as the
 published policy and [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §5.2 say. The
-hostel's statutory accounting duty is why the ledger is kept, and NIVORA does not shorten it.
+hostel's statutory accounting duty is why the ledger is kept, and Apnivaas does not shorten it.
 Do not invent a shorter one for `payment_intents` or `payment_refunds` — the intent is part of the
 same financial record as the `fee_payments` row it credited, and the refund is part of the same
 record as the intent it reverses. Splitting them would leave a credit with no evidence behind it,
@@ -641,8 +641,8 @@ or a reversal with nothing on the ledger to show what it undid.
 that never went anywhere to `expired` after a day (`docs/payments.md` §7). It **marks**; it does not
 delete. An expired row is still a retained record on the schedule above.
 
-**What NIVORA cannot reach, and must say so.** Razorpay keeps its own record of the transaction
-under its own regulatory retention duty. An erasure request to NIVORA cannot delete it. This is the
+**What Apnivaas cannot reach, and must say so.** Razorpay keeps its own record of the transaction
+under its own regulatory retention duty. An erasure request to Apnivaas cannot delete it. This is the
 same honest boundary as backups in
 [`data-retention-and-privacy.md`](./data-retention-and-privacy.md) §6.5, and it belongs on the
 deletion page next to them.
@@ -669,21 +669,21 @@ live pages immediately before submitting. That is the complete list of blocking 
 | 2 | `/legal/privacy` does not claim payments are offline-only | **PASSING** — §3 now reads *"This is still true now that rent can be paid inside the app"*, and says the card and UPI fields are typed into Razorpay's own checkout |
 | 3 | `/legal/account-deletion` names the payment record among what is retained, and Razorpay among what cannot be reached | **PASSING** — the retention table carries *"Fee and payment records"* as kept indefinitely (since 2026-09-13; it said 8 years before, which contradicted the privacy policy), and that page's own "What deletion cannot reach" section names Razorpay's own record of the transaction |
 | 4 | `/legal/terms` reflects that rent can now be collected in-app | **PASSING** — the payments section is now **§6, "Subscription and payments"**, and states that the payment is taken by Razorpay in Razorpay's own checkout. Note the renumbering: it was §9 |
-| 5 | `/legal/privacy` discloses the **FCM device token** and names **Google** as the notification sub-processor | **PASSING** — the data inventory carries a "Notification device" row, §3 explains the token and the ten-permission list, and the Google row in the sub-processor table covers *"your device's registration token, plus the title and body of each notification"*. One timing phrase is out of date, though it is not a Data safety answer. The inventory row says the token is *"written when you sign in on a device"* (live, `app/legal/privacy/page.tsx:215`). The in-app copy says *"When you sign in on a phone"* (`nivora_app/lib/features/legal/legal_documents.dart:221`). Push actually starts only after agreement at the consent gate (§3.5). See the note under this table |
-| 6 | `/legal/privacy` (and the in-app copy in `nivora_app/lib/features/legal/legal_documents.dart`) says that on Android **the Razorpay checkout runs inside the app**, **handles the card or UPI details the resident types** while a payment is open, and **checks which UPI apps are installed** so it can offer them — while NIVORA still never receives those details. This is what the §2 **User payment info** and **Installed apps** rows declare. The live sentence that the details "never reach NIVORA at all" (on deploy it becomes "go to Razorpay, never to NIVORA") stays true of NIVORA's servers, but it must sit next to the in-app handling, or it reads as a denial of what the form declares | **PASSING — both halves.** Legal version **2026-09-13** in `public.legal_versions` records this change for both documents. *Web half:* `app/legal/privacy/page.tsx:251-253` and `:442` carry it, and it has been live since commit `4fd41ef` was deployed on 2026-09-13; a signed-out GET found "which on Android runs inside the app" and "On Android its checkout runs inside the app". *In-app half:* `nivora_app/lib/features/legal/legal_documents.dart:257-260` and `:386-394` carry it, and the versionCode 4 `libapp.so` was checked on 2026-09-13 to contain "runs inside this app" and "which UPI apps are installed". The versionCode 6 `libapp.so` has not had that check yet, so run it on the uploaded artifact. Older builds do not contain the text, so the build uploaded with this form must be versionCode 6 |
+| 5 | `/legal/privacy` discloses the **FCM device token** and names **Google** as the notification sub-processor | **PASSING** — the data inventory carries a "Notification device" row, §3 explains the token and the ten-permission list, and the Google row in the sub-processor table covers *"your device's registration token, plus the title and body of each notification"*. One timing phrase is out of date, though it is not a Data safety answer. The inventory row says the token is *"written when you sign in on a device"* (live, `app/legal/privacy/page.tsx:215`). The in-app copy says *"When you sign in on a phone"* (`apnivaas_app/lib/features/legal/legal_documents.dart:221`). Push actually starts only after agreement at the consent gate (§3.5). See the note under this table |
+| 6 | `/legal/privacy` (and the in-app copy in `apnivaas_app/lib/features/legal/legal_documents.dart`) says that on Android **the Razorpay checkout runs inside the app**, **handles the card or UPI details the resident types** while a payment is open, and **checks which UPI apps are installed** so it can offer them — while Apnivaas still never receives those details. This is what the §2 **User payment info** and **Installed apps** rows declare. The live sentence that the details "never reach Apnivaas at all" (on deploy it becomes "go to Razorpay, never to Apnivaas") stays true of Apnivaas's servers, but it must sit next to the in-app handling, or it reads as a denial of what the form declares | **PASSING — both halves.** Legal version **2026-09-13** in `public.legal_versions` records this change for both documents. *Web half:* `app/legal/privacy/page.tsx:251-253` and `:442` carry it, and it has been live since commit `4fd41ef` was deployed on 2026-09-13; a signed-out GET found "which on Android runs inside the app" and "On Android its checkout runs inside the app". *In-app half:* `apnivaas_app/lib/features/legal/legal_documents.dart:257-260` and `:386-394` carry it, and the versionCode 4 `libapp.so` was checked on 2026-09-13 to contain "runs inside this app" and "which UPI apps are installed". The versionCode 6 `libapp.so` has not had that check yet, so run it on the uploaded artifact. Older builds do not contain the text, so the build uploaded with this form must be versionCode 6 |
 
 The three pages behind those rows are **outside this document's scope** and belong to whoever owns
 `app/legal/`. They agree with every answer on this form. Two sentences in the
 privacy policy are still out of date against the Android app. Neither changes a Data safety answer,
 and both are for that owner to correct:
 
-- **When the token is registered.** `app/legal/privacy/page.tsx:215` (live) and `nivora_app/lib/features/legal/legal_documents.dart:221` tie registration to
+- **When the token is registered.** `app/legal/privacy/page.tsx:215` (live) and `apnivaas_app/lib/features/legal/legal_documents.dart:221` tie registration to
   signing in. In fact push starts only once the person has agreed at the consent gate
-  (`nivora_app/lib/features/legal/consent_gate.dart:93-95`, `:166`; §3.5).
+  (`apnivaas_app/lib/features/legal/consent_gate.dart:93-95`, `:166`; §3.5).
 - **What the camera is for.** `app/legal/privacy/page.tsx:262-263` (live) says the Android camera photographs *"an identity document, a receipt or a
   complaint"*. In the Android app residents cannot attach a photo to a complaint, and the camera is
   declared for a warden registering a resident
-  (`nivora_app/android/app/src/main/AndroidManifest.xml:30-32`). The in-app copy already lists an
+  (`apnivaas_app/android/app/src/main/AndroidManifest.xml:30-32`). The in-app copy already lists an
   identity document, a resident or a receipt (`legal_documents.dart:263-264`).
 
 Re-check all three pages the next time either side changes, because Google fetches the
@@ -707,7 +707,7 @@ one batch of 13 changes alongside the 1.0.0 (6) upload. The order below stands a
 next submission, and step 7 is still ahead of the production release.
 
 1. **Data collection and security** — confirm the app collects data; answer the four §7 questions.
-2. **Data types** — work down §2 row by row. Slow down on the five rows NIVORA's own payment code
+2. **Data types** — work down §2 row by row. Slow down on the five rows Apnivaas's own payment code
    bears on: **Name**, **Phone number** and **Email address** (all now also reach Razorpay as
    prefill), **Personal info › User IDs** (Razorpay's order and payment ids), and **Financial info ›
    Purchase history** (now includes `payment_intents` and

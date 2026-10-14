@@ -130,7 +130,7 @@ export async function uploadPrivateFile(opts: {
     cacheControl: "0",
   });
   if (error) {
-    console.error("[nivora] storage upload failed:", error.message);
+    console.error("[apnivaas] storage upload failed:", error.message);
     throw new HttpError(500, "Upload failed. Please try again.");
   }
   return path;
@@ -189,12 +189,12 @@ export async function signedObjectUrl(
       .from(bucket)
       .createSignedUrl(path, expiresIn, isDocument ? { download: true } : {});
     if (error) {
-      console.error("[nivora] signing failed:", error.message);
+      console.error("[apnivaas] signing failed:", error.message);
       return null;
     }
     return data?.signedUrl ?? null;
   } catch (e) {
-    console.error("[nivora] signing threw:", e instanceof Error ? e.message : String(e));
+    console.error("[apnivaas] signing threw:", e instanceof Error ? e.message : String(e));
     return null;
   }
 }
@@ -207,7 +207,7 @@ export async function removeObjects(bucket: string, paths: (string | null | unde
     await serviceClient().storage.from(bucket).remove(keep);
   } catch (e) {
     // Never mask the original failure with a cleanup failure.
-    console.error("[nivora] storage cleanup failed:", e instanceof Error ? e.message : String(e));
+    console.error("[apnivaas] storage cleanup failed:", e instanceof Error ? e.message : String(e));
   }
 }
 

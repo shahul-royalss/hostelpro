@@ -20,7 +20,7 @@ import apnivaasLockup from "@/public/brand/apnivaas-lockup.png";
  *
  * The lockup already contains the mark AND the word "Apnivaas", so it replaces all three things
  * that used to sit here: a generic building icon standing in for a logo, the product name in
- * small caps, and a handwritten NIVORA traced from a font. Repeating the name as text under a
+ * small caps, and a handwritten wordmark traced from a font. Repeating the name as text under a
  * picture of the name would only make a screen reader say it twice; the picture's alt text is
  * the one announcement.
  */

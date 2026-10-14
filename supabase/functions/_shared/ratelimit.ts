@@ -125,7 +125,7 @@ export async function consumeRateLimit(
     // caller a refusal with "wait 0 seconds".
     return Math.max(1, Number(row.retry_after_seconds) || limit.windowSeconds);
   } catch (e) {
-    console.error("[nivora] rate limiter unavailable:", e instanceof Error ? e.message : String(e));
+    console.error("[apnivaas] rate limiter unavailable:", e instanceof Error ? e.message : String(e));
     throw new HttpError(
       503,
       opts.unavailableMessage ?? "This is temporarily unavailable. Please try again in a minute.",

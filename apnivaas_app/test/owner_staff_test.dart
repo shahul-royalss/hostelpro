@@ -1,0 +1,1260 @@
+// Tests for the owner's staff screen — the flow that creates a manager or warden login from
+// inside the app.
+//
+// WHAT THESE ARE FOR. Three things here are worth more than the usual widget coverage:
+//
+//  1. THE REQUEST SHAPE. `StaffDraft.toJson()` is a contract with a Deno process in another
+//     repository directory. A renamed key does not fail to compile — it fails at 9pm with
+//     "Please check the highlighted fields" and no highlighted field. The map is asserted
+//     literally, against supabase/functions/owner-create-staff/index.ts parseBody().
+//
+//  2. HARD RULE §4.3. "One active manager and one active warden per hostel" is refused in three
+//     places that do not agree on a status code, so the client recognises it by its words. If
+//     that match breaks, the owner is told "Something went wrong. Please try again." about a
+//     rule the product is working exactly as designed.
+//
+//  3. THE SHOW-ONCE DIALOG. The password it holds exists nowhere else — not in a table, not in
+//     a log, not in the audit row. Every obstacle in the way of dismissing it is load-bearing,
+//     so each one is tested: the barrier, the back gesture, and the confirmation checkbox.
+//
+//  4. ONE PERSON, SEVERAL PGs. A warden or manager can hold access to more than one of the
+//     owner's PGs. The add form sends `hostelIds` only when two or more are ticked and the old
+//     single-PG body otherwise (the live Android build sends that body, and the function must
+//     keep treating it exactly as before). PG access never lets the last PG be unticked. A
+//     member who holds several PGs shows where they are working and what else they hold.
+//
+// No network: the writes go through `ownerStaffWritesProvider`, which exists as an interface
+// for exactly this reason, and every read is an overridden provider.
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/core/theme/theme.dart';
+import 'package:mobile/data/models/models.dart';
+import 'package:mobile/features/owner/owner_providers.dart';
+import 'package:mobile/features/owner/staff/add_staff_sheet.dart';
+import 'package:mobile/features/owner/staff/owner_staff_screen.dart';
+import 'package:mobile/features/owner/staff/staff_access_sheet.dart';
+import 'package:mobile/features/owner/staff/staff_credentials_dialog.dart';
+import 'package:mobile/features/owner/staff/staff_models.dart';
+import 'package:mobile/features/owner/staff/staff_providers.dart';
+import 'package:mobile/features/owner/staff/staff_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+const _hostelId = '3f1c9e2a-0000-4000-8000-00000000abcd';
+const _lakeviewId = '3f1c9e2a-0000-4000-8000-00000000beef';
+const _hilltopId = '3f1c9e2a-0000-4000-8000-00000000cafe';
+
+final _sunrise = Hostel(
+  id: _hostelId,
+  name: 'Sunrise Residency',
+  ownerUserId: 'owner-1',
+  totalFloors: 3,
+  totalRooms: 12,
+  bedsPerRoomDefault: 3,
+  status: HostelStatus.active,
+  createdAt: DateTime.utc(2026, 3, 1),
+  updatedAt: DateTime.utc(2026, 3, 1),
+);
+
+Hostel _pg(String id, String name) => Hostel(
+      id: id,
+      name: name,
+      ownerUserId: 'owner-1',
+      totalFloors: 2,
+      totalRooms: 8,
+      bedsPerRoomDefault: 2,
+      status: HostelStatus.active,
+      createdAt: DateTime.utc(2026, 3, 1),
+      updatedAt: DateTime.utc(2026, 3, 1),
+    );
+
+/// An owner with three PGs, in the name order `hostelsOwnedBy` asks the server for.
+final _threePgs = [
+  _pg(_hilltopId, 'Hilltop House'),
+  _pg(_lakeviewId, 'Lakeview PG'),
+  _sunrise,
+];
+
+StaffMember _member({
+  String id = 'u-1',
+  StaffRole role = StaffRole.manager,
+  String name = 'Ravi Kulkarni',
+  StaffStatus status = StaffStatus.active,
+  String? email = 'ravi@example.com',
+  String? phone = '9876543210',
+  String? activeHostelId = _hostelId,
+  String? activeHostelName = 'Sunrise Residency',
+  List<String> hostelIds = const [_hostelId],
+}) {
+  return StaffMember(
+    id: id,
+    role: role,
+    fullName: name,
+    status: status,
+    createdAt: DateTime.utc(2026, 5, 12),
+    email: email,
+    phone: phone,
+    activeHostelId: activeHostelId,
+    activeHostelName: activeHostelName,
+    hostelIds: hostelIds,
+  );
+}
+
+/// Stands in for the three writes. Records what it was asked to do, answers what the test set.
+class _FakeWrites implements OwnerStaffWrites {
+  _FakeWrites({this.outcome, this.throws, this.grants});
+
+  StaffCreateOutcome? outcome;
+  Object? throws;
+
+  /// What PG access answers. Null means "every PG sent, the first one active".
+  List<StaffHostelGrant>? grants;
+
+  int createCalls = 0;
+  String? lastHostelId;
+  StaffDraft? lastDraft;
+
+  int statusCalls = 0;
+  String? lastStatusUserId;
+  StaffStatus? lastStatus;
+
+  int accessCalls = 0;
+  String? lastAccessUserId;
+  List<String>? lastAccessHostelIds;
+
+  @override
+  Future<StaffCreateOutcome> createStaff({
+    required String hostelId,
+    required StaffDraft draft,
+  }) async {
+    createCalls++;
+    lastHostelId = hostelId;
+    lastDraft = draft;
+    if (throws != null) throw throws!;
+    return outcome!;
+  }
+
+  @override
+  Future<void> setStaffStatus({
+    required String userId,
+    required StaffStatus status,
+  }) async {
+    statusCalls++;
+    lastStatusUserId = userId;
+    lastStatus = status;
+    if (throws != null) throw throws!;
+  }
+
+  @override
+  Future<List<StaffHostelGrant>> setStaffHostels({
+    required String userId,
+    required List<String> hostelIds,
+  }) async {
+    accessCalls++;
+    lastAccessUserId = userId;
+    lastAccessHostelIds = hostelIds;
+    if (throws != null) throw throws!;
+    return grants ??
+        [
+          for (var i = 0; i < hostelIds.length; i++)
+            StaffHostelGrant(hostelId: hostelIds[i], isActive: i == 0),
+        ];
+  }
+}
+
+/// Typed as List<Object> and cast at the call site because Riverpod 3 does not export
+/// `Override` from its public barrel, so the real element type cannot be named here.
+List<Object> _overrides({
+  List<StaffMember> staff = const [],
+  Object? staffError,
+  OwnerStaffWrites? writes,
+  String? hostelId = _hostelId,
+  List<Hostel>? owned,
+}) {
+  return [
+    activeHostelIdProvider.overrideWithValue(hostelId),
+    myHostelsProvider.overrideWith((ref) => owned ?? [_sunrise]),
+    if (staffError != null)
+      ownerStaffProvider.overrideWith(
+        (ref, id) => Future<List<StaffMember>>.error(staffError),
+      )
+    else
+      ownerStaffProvider.overrideWith((ref, id) => staff),
+    if (writes != null) ownerStaffWritesProvider.overrideWithValue(writes),
+  ];
+}
+
+/// Not pumpAndSettle: the loading skeletons animate forever, so settling would hang.
+Future<void> _tick(WidgetTester tester, {int frames = 12}) async {
+  for (var i = 0; i < frames; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
+Future<void> _pump(WidgetTester tester, List<Object> overrides) async {
+  // Tall enough that both role cards and the sheet fit without scrolling — this is about
+  // reaching buttons in a test, not about a real device.
+  tester.view.physicalSize = const Size(1200, 3000);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: overrides.cast(),
+      child: MaterialApp(
+        theme: ApnivaasTheme.light(),
+        debugShowCheckedModeBanner: false,
+        home: const OwnerStaffScreen(),
+      ),
+    ),
+  );
+  await _tick(tester);
+}
+
+/// Opens the add sheet for one role and fills in a valid person.
+Future<void> _fillValidForm(WidgetTester tester) async {
+  await tester.enterText(find.widgetWithText(TextField, 'Full name'), '  Priya Nair ');
+  await tester.enterText(find.widgetWithText(TextField, 'Email'), 'Priya@Example.COM');
+  await tester.enterText(find.widgetWithText(TextField, 'Phone (optional)'), '98765 43210');
+  await tester.pump();
+}
+
+void main() {
+  // ───────────────────────────────────────────────────────────────────────────
+  // THE REQUEST SHAPE — the contract with owner-create-staff/index.ts
+  // ───────────────────────────────────────────────────────────────────────────
+  group('StaffDraft.toJson', () {
+    test('sends exactly the keys parseBody() reads, and nothing else', () {
+      const draft = StaffDraft(
+        role: StaffRole.warden,
+        fullName: '  Priya Nair  ',
+        email: '  Priya@Example.COM ',
+        phone: ' +91 98765 43210 ',
+      );
+
+      expect(draft.toJson(_hostelId), {
+        'role': 'warden',
+        'fullName': 'Priya Nair',
+        'email': 'priya@example.com',
+        'phone': '+91 98765 43210',
+        'hostelId': _hostelId,
+      });
+    });
+
+    test('omits phone entirely when it is blank, because it is optional', () {
+      const draft = StaffDraft(
+        role: StaffRole.manager,
+        fullName: 'Ravi',
+        email: 'r@example.com',
+        phone: '   ',
+      );
+      final body = draft.toJson(_hostelId);
+
+      // v.optionalPhone() treats a missing key and an empty string the same, but sending the
+      // key with whitespace in it would be a value the loose phone regex rejects.
+      expect(body.containsKey('phone'), isFalse);
+      expect(body.keys.toSet(), {'role', 'fullName', 'email', 'hostelId'});
+    });
+
+    test('the role goes over the wire as the Postgres label, never the Dart name', () {
+      expect(const StaffDraft(role: StaffRole.manager).toJson(_hostelId)['role'], 'manager');
+      expect(const StaffDraft(role: StaffRole.warden).toJson(_hostelId)['role'], 'warden');
+    });
+
+    test('the hostel is always named, so a multi-PG owner cannot create against the wrong one',
+        () {
+      // The function would otherwise fall back to caller.hostelId, which for an owner holding
+      // several PGs is whichever they were first attached to — not the one on screen.
+      expect(const StaffDraft().toJson(_hostelId)['hostelId'], _hostelId);
+    });
+
+    test('two or more PGs travel as hostelIds, the starting one first and named in hostelId too',
+        () {
+      // hostelId rides along, equal to the first, so a function deployed before hostelIds
+      // (which ignores keys it does not know) still creates the account in the PG the owner
+      // picked rather than falling back to the owner's own users.hostel_id.
+      const draft = StaffDraft(
+        role: StaffRole.warden,
+        fullName: 'Priya Nair',
+        email: 'priya@example.com',
+        hostelIds: [_lakeviewId, _hostelId, _lakeviewId],
+      );
+      expect(draft.toJson(_hostelId), {
+        'role': 'warden',
+        'fullName': 'Priya Nair',
+        'email': 'priya@example.com',
+        'hostelId': _lakeviewId,
+        'hostelIds': [_lakeviewId, _hostelId],
+      });
+    });
+
+    test('ONE chosen PG is the old single-PG body exactly, with no hostelIds key at all', () {
+      // The live Android build sends this shape, and the function treats a body without
+      // hostelIds as "exactly as today". One ticked PG must not change a byte of it.
+      const draft = StaffDraft(
+        role: StaffRole.manager,
+        fullName: 'Ravi',
+        email: 'r@example.com',
+        hostelIds: [_lakeviewId],
+      );
+      final body = draft.toJson(_hostelId);
+      expect(body.containsKey('hostelIds'), isFalse);
+      expect(body['hostelId'], _lakeviewId);
+      expect(body.keys.toSet(), {'role', 'fullName', 'email', 'hostelId'});
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // THE ROW: public.owner_hostel_staff
+  // ───────────────────────────────────────────────────────────────────────────
+  group('StaffMember.fromJson', () {
+    Map<String, dynamic> row({Object? hostelIds = const [_hostelId, _lakeviewId]}) => {
+          'user_id': 'u-1',
+          'full_name': 'Ravi Kulkarni',
+          'email': 'ravi@example.com',
+          'phone': null,
+          'role': 'warden',
+          'status': 'active',
+          'created_at': '2026-05-12T09:00:00+00:00',
+          'must_change_password': false,
+          'active_hostel_id': _lakeviewId,
+          'active_hostel_name': 'Lakeview PG',
+          'hostel_ids': hostelIds,
+        };
+
+    test('reads the RPC columns, user_id as the id and the access list as ids', () {
+      final m = StaffMember.fromJson(row());
+      expect(m.id, 'u-1');
+      expect(m.role, StaffRole.warden);
+      expect(m.activeHostelId, _lakeviewId);
+      expect(m.activeHostelName, 'Lakeview PG');
+      expect(m.hostelIds, [_hostelId, _lakeviewId]);
+      expect(m.hasSeveralPgs, isTrue);
+    });
+
+    test('a null access list is none, but a missing column still names itself', () {
+      expect(StaffMember.fromJson(row(hostelIds: null)).hostelIds, isEmpty);
+      final missing = row()..remove('hostel_ids');
+      expect(() => StaffMember.fromJson(missing), throwsA(isA<RowShapeError>()));
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // VALIDATION — the same rejections _shared/validate.ts would produce
+  // ───────────────────────────────────────────────────────────────────────────
+  group('validateStaffDraft', () {
+    test('accepts a complete person', () {
+      expect(
+        validateStaffDraft(const StaffDraft(
+          fullName: 'Priya Nair',
+          email: 'priya@example.com',
+          phone: '9876543210',
+        )),
+        isEmpty,
+      );
+    });
+
+    test('accepts a person with no phone at all — the column is nullable', () {
+      expect(
+        validateStaffDraft(
+            const StaffDraft(fullName: 'Priya Nair', email: 'priya@example.com')),
+        isEmpty,
+      );
+    });
+
+    test('rejects a name under two characters, in the function\'s own words', () {
+      final errors = validateStaffDraft(
+          const StaffDraft(fullName: 'P', email: 'priya@example.com'));
+      expect(errors['fullName'], 'Enter the full name.');
+    });
+
+    test('rejects a name over the 80-character column budget', () {
+      final errors = validateStaffDraft(
+        StaffDraft(fullName: 'P' * 81, email: 'priya@example.com'),
+      );
+      expect(errors['fullName'], 'Keep this under 80 characters.');
+    });
+
+    test('rejects an address without an @ or a dot', () {
+      for (final bad in ['priya', 'priya@example', 'priya example.com', '']) {
+        final errors = validateStaffDraft(StaffDraft(fullName: 'Priya Nair', email: bad));
+        expect(errors['email'], 'Enter a valid email address', reason: bad);
+      }
+    });
+
+    test('rejects a phone the loose server regex would also reject', () {
+      // Letters are out; so is anything under 8 or over 16 characters.
+      for (final bad in ['98765abcd', '12345', '1' * 17]) {
+        final errors = validateStaffDraft(
+          StaffDraft(fullName: 'Priya Nair', email: 'p@example.com', phone: bad),
+        );
+        expect(errors['phone'], 'Enter a valid phone number.', reason: bad);
+      }
+    });
+
+    test('accepts the punctuation people actually type into a phone box', () {
+      for (final good in ['+91 98765 43210', '(022) 555-0100', '9876543210']) {
+        final errors = validateStaffDraft(
+          StaffDraft(fullName: 'Priya Nair', email: 'p@example.com', phone: good),
+        );
+        expect(errors, isEmpty, reason: good);
+      }
+    });
+
+    test('reports every bad field at once, not one per round trip', () {
+      final errors = validateStaffDraft(const StaffDraft(fullName: '', email: 'nope'));
+      expect(errors.keys.toSet(), {'fullName', 'email'});
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // TRANSLATING THE FUNCTION'S REFUSALS
+  // ───────────────────────────────────────────────────────────────────────────
+  group('staffRejectionFrom', () {
+    test('a validator 400 becomes one message per field', () {
+      final rejection = staffRejectionFrom(const FunctionException(
+        status: 400,
+        details: {
+          'error': 'Enter the full name.',
+          'fieldErrors': {
+            'fullName': ['Enter the full name.'],
+            'email': ['Enter a valid email address'],
+          },
+        },
+      ));
+
+      expect(rejection, isNotNull);
+      expect(rejection!.fieldErrors['fullName'], 'Enter the full name.');
+      expect(rejection.fieldErrors['email'], 'Enter a valid email address');
+      expect(rejection.roleLimitReached, isFalse);
+    });
+
+    test('§4.3 is recognised from the pre-check, which arrives as a 409', () {
+      final rejection = staffRejectionFrom(const FunctionException(
+        status: 409,
+        details: {
+          'error': 'This hostel already has an active manager. '
+              'Deactivate the current manager first.',
+        },
+      ));
+
+      expect(rejection!.roleLimitReached, isTrue);
+      expect(rejection.fieldErrors, isEmpty, reason: 'nothing the owner can retype fixes it');
+    });
+
+    test('§4.3 is recognised from the trigger too, which arrives as a 400 after rollback', () {
+      // rollbackAwareError() hard-codes 400 once the half-created auth user has been removed,
+      // so the status alone cannot tell this from a validation failure.
+      final rejection = staffRejectionFrom(const FunctionException(
+        status: 400,
+        details: {
+          'error': 'This hostel already has an active warden. '
+              'Deactivate the current warden first.',
+        },
+      ));
+
+      expect(rejection!.roleLimitReached, isTrue);
+    });
+
+    test('a duplicate email lands under the email box', () {
+      final rejection = staffRejectionFrom(const FunctionException(
+        status: 409,
+        details: {'error': 'An account with this email already exists.'},
+      ));
+
+      expect(rejection!.fieldErrors['email'], 'An account with this email already exists.');
+      expect(rejection.roleLimitReached, isFalse);
+    });
+
+    test('a 500 is not a rejection — it is not something a field edit fixes', () {
+      expect(
+        staffRejectionFrom(const FunctionException(
+          status: 500,
+          details: {'error': 'Something went wrong. Please try again.'},
+        )),
+        isNull,
+      );
+    });
+  });
+
+  group('staffFailureFrom', () {
+    test('no response at all is offline, and offline is retryable', () {
+      final failure = staffFailureFrom(const FunctionsFetchException(details: 'SocketException'));
+      expect(failure, isA<OfflineFailure>());
+      expect(failure.isRetryable, isTrue);
+    });
+
+    test('a lapsed subscription is a billing problem, not a permissions one', () {
+      final failure = staffFailureFrom(const FunctionException(
+        status: 403,
+        details: {'error': 'Subscription expired — the hostel is read-only until it is renewed.'},
+      ));
+      expect(failure, isA<ReadOnlyFailure>());
+    });
+
+    test('a suspended hostel is read-only too', () {
+      expect(
+        staffFailureFrom(const FunctionException(
+          status: 403,
+          details: {'error': 'This hostel is suspended. Contact Apnivaas support.'},
+        )),
+        isA<ReadOnlyFailure>(),
+      );
+    });
+
+    test('any other 403 is "not yours", and offers no retry', () {
+      final failure = staffFailureFrom(const FunctionException(
+        status: 403,
+        details: {'error': 'Hostel not found.'},
+      ));
+      expect(failure, isA<AccessDeniedFailure>());
+      expect(failure.isRetryable, isFalse);
+    });
+
+    test('401 ends the session rather than blaming the form', () {
+      expect(
+        staffFailureFrom(const FunctionException(status: 401, details: {'error': 'expired'})),
+        isA<SignedOutFailure>(),
+      );
+    });
+
+    test('the rate limiter, open or fail-closed, both say wait', () {
+      expect(staffFailureFrom(const FunctionException(status: 429)), isA<ServerFailure>());
+      expect(staffFailureFrom(const FunctionException(status: 503)), isA<ServerFailure>());
+    });
+
+    test('a failed rollback keeps the function\'s own message, orphan id and all', () {
+      const report = 'Could not create the account. The half-created login could NOT be removed '
+          'automatically — delete auth user 1234 in the Supabase dashboard before retrying.';
+      final failure = staffFailureFrom(
+        const FunctionException(status: 500, details: {'error': report}),
+      );
+      expect(failure.message, report);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // THE LIST
+  // ───────────────────────────────────────────────────────────────────────────
+  group('the staff list', () {
+    testWidgets('shows both posts, and who holds them', (tester) async {
+      await _pump(
+        tester,
+        _overrides(staff: [
+          _member(name: 'Ravi Kulkarni', role: StaffRole.manager),
+          _member(
+            id: 'u-2',
+            name: 'Priya Nair',
+            role: StaffRole.warden,
+            email: 'priya@example.com',
+          ),
+        ]),
+      );
+
+      expect(find.text('MANAGER'), findsOneWidget);
+      expect(find.text('WARDEN'), findsOneWidget);
+      expect(find.text('Ravi Kulkarni'), findsOneWidget);
+      expect(find.text('Priya Nair'), findsOneWidget);
+      // The login id is on screen — it is what the owner has to read out to them.
+      expect(find.text('ravi@example.com'), findsOneWidget);
+    });
+
+    testWidgets('an empty PG says which posts are unfilled rather than showing nothing',
+        (tester) async {
+      await _pump(tester, _overrides(staff: const []));
+
+      expect(find.text('No manager yet'), findsOneWidget);
+      expect(find.text('No warden yet'), findsOneWidget);
+      expect(find.text('Add manager'), findsOneWidget);
+      expect(find.text('Add warden'), findsOneWidget);
+    });
+
+    testWidgets('one manager does NOT fill the post — the limit is five', (tester) async {
+      // THE RULE CHANGED ON 2026-09-12 and this is the test that would have caught a client
+      // still drawing the old one. Until then a single holder disabled Add; a PG with two
+      // shifts, or an owner running a second building, needs more than one of each.
+      await _pump(
+        tester,
+        _overrides(staff: [_member(name: 'Ravi Kulkarni', role: StaffRole.manager)]),
+      );
+
+      final addManager = tester.widget<FilledButton>(
+        find.ancestor(of: find.text('Add manager'), matching: find.byType(FilledButton)),
+      );
+      expect(addManager.onPressed, isNotNull, reason: 'four places are still free');
+      expect(find.text('1 of 5'), findsOneWidget);
+      expect(find.text('You can add 4 more.'), findsOneWidget);
+    });
+
+    testWidgets('§4.3 — Add is disabled once five hold the post, and says why', (tester) async {
+      await _pump(
+        tester,
+        _overrides(staff: [
+          for (var i = 1; i <= 5; i++)
+            _member(id: 'm-$i', name: 'Manager $i', role: StaffRole.manager),
+        ]),
+      );
+
+      final addManager = tester.widget<FilledButton>(
+        find.ancestor(of: find.text('Add manager'), matching: find.byType(FilledButton)),
+      );
+      final addWarden = tester.widget<FilledButton>(
+        find.ancestor(of: find.text('Add warden'), matching: find.byType(FilledButton)),
+      );
+
+      expect(addManager.onPressed, isNull, reason: 'the manager post is full');
+      expect(addWarden.onPressed, isNotNull, reason: 'no warden has been added at all');
+      expect(find.text('5 of 5'), findsOneWidget);
+      expect(find.text('5 is the limit. Deactivate one to free a place.'), findsOneWidget);
+    });
+
+    testWidgets('an inactive holder can be reactivated, and does not count against the five',
+        (tester) async {
+      await _pump(
+        tester,
+        _overrides(staff: [
+          _member(name: 'Ravi Kulkarni', status: StaffStatus.inactive),
+        ]),
+      );
+
+      expect(find.text('Reactivate'), findsOneWidget);
+      expect(find.text('Deactivate'), findsNothing);
+      // BOTH posts read 0 of 5, and that is the assertion: the manager card because its one
+      // holder is inactive, the warden card because nobody has ever held it. An inactive
+      // account fails every RLS policy in the schema — app.user_role() does not resolve for
+      // one — so it is not a manager in any sense that counts.
+      expect(find.text('0 of 5'), findsNWidgets(2));
+      final addManager = tester.widget<FilledButton>(
+        find.ancestor(of: find.text('Add manager'), matching: find.byType(FilledButton)),
+      );
+      expect(addManager.onPressed, isNotNull);
+    });
+
+    testWidgets('a full post cannot be reactivated INTO — the button is dark, not missing',
+        (tester) async {
+      // Five active plus one who left. Reactivating the sixth would put six people in a post
+      // the database allows five in, so the refusal has to be visible before the tap; hiding
+      // the button instead would read as "that person's record is gone".
+      await _pump(
+        tester,
+        _overrides(staff: [
+          for (var i = 1; i <= 5; i++)
+            _member(id: 'm-$i', name: 'Manager $i', role: StaffRole.manager),
+          _member(id: 'm-old', name: 'Former Manager', status: StaffStatus.inactive),
+        ]),
+      );
+
+      final reactivate = tester.widget<OutlinedButton>(
+        find.ancestor(of: find.text('Reactivate'), matching: find.byType(OutlinedButton)),
+      );
+      expect(reactivate.onPressed, isNull);
+      expect(find.text('Former Manager'), findsOneWidget);
+    });
+
+    testWidgets('a failed load says so instead of showing two empty posts', (tester) async {
+      // Zero staff and a broken connection are different facts. Reporting the second as the
+      // first is how an owner concludes their warden's account vanished.
+      await _pump(
+        tester,
+        _overrides(staffError: const OfflineFailure('offline')),
+      );
+
+      expect(find.text('No connection'), findsOneWidget);
+      expect(find.text('No manager yet'), findsNothing);
+    });
+
+    testWidgets('deactivating asks first, then sends the status the button promised',
+        (tester) async {
+      final writes = _FakeWrites();
+      await _pump(
+        tester,
+        _overrides(
+          staff: [_member(id: 'u-7', name: 'Ravi Kulkarni')],
+          writes: writes,
+        ),
+      );
+
+      await tester.tap(find.text('Deactivate'));
+      await tester.pumpAndSettle();
+      expect(find.text('Deactivate Ravi Kulkarni?'), findsOneWidget);
+      expect(writes.statusCalls, 0, reason: 'nothing happens until it is confirmed');
+
+      // Cancel really cancels.
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(writes.statusCalls, 0);
+
+      await tester.tap(find.text('Deactivate'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Deactivate'));
+      await _tick(tester);
+
+      expect(writes.statusCalls, 1);
+      expect(writes.lastStatusUserId, 'u-7');
+      expect(writes.lastStatus, StaffStatus.inactive);
+    });
+
+    testWidgets('a refused deactivation is reported, not silently swallowed', (tester) async {
+      final writes = _FakeWrites(
+        throws: const AccessDeniedFailure('That account is not yours to change.'),
+      );
+      await _pump(
+        tester,
+        _overrides(staff: [_member(name: 'Ravi Kulkarni')], writes: writes),
+      );
+
+      await tester.tap(find.text('Deactivate'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Deactivate'));
+      await _tick(tester);
+
+      expect(find.text('That account is not yours to change.'), findsOneWidget);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // THE ADD FORM
+  // ───────────────────────────────────────────────────────────────────────────
+  group('the add-staff sheet', () {
+    testWidgets('a blank form never reaches the network', (tester) async {
+      final writes = _FakeWrites();
+      await _pump(tester, _overrides(writes: writes));
+
+      await tester.tap(find.text('Add manager'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Create manager account'));
+      await _tick(tester);
+
+      // Every create is rate-limited and every one that gets through mints a credential, so a
+      // form the server would certainly refuse must not cost an attempt.
+      expect(writes.createCalls, 0);
+      expect(find.text('Enter the full name.'), findsOneWidget);
+      expect(find.text('Enter a valid email address'), findsOneWidget);
+    });
+
+    testWidgets('a valid form sends the body index.ts parses', (tester) async {
+      final writes = _FakeWrites(
+        outcome: const StaffCreated(IssuedStaffCredentials(
+          userId: 'u-9',
+          name: 'Priya Nair',
+          roleLabel: 'Warden',
+          loginId: 'priya@example.com',
+          password: 'Tx7-quiet-lamp',
+        )),
+      );
+      await _pump(tester, _overrides(writes: writes));
+
+      await tester.tap(find.text('Add warden'));
+      await tester.pumpAndSettle();
+      await _fillValidForm(tester);
+      await tester.tap(find.text('Create warden account'));
+      await _tick(tester);
+
+      expect(writes.createCalls, 1);
+      expect(writes.lastHostelId, _hostelId);
+      expect(writes.lastDraft!.toJson(_hostelId), {
+        'role': 'warden',
+        'fullName': 'Priya Nair',
+        'email': 'priya@example.com',
+        'phone': '98765 43210',
+        'hostelId': _hostelId,
+      });
+    });
+
+    testWidgets('§4.3 is shown as a next step, not as a database error', (tester) async {
+      final writes = _FakeWrites(
+        outcome: const StaffRejected(
+          'This hostel already has an active warden. Deactivate the current warden first.',
+          roleLimitReached: true,
+        ),
+      );
+      await _pump(tester, _overrides(writes: writes));
+
+      await tester.tap(find.text('Add warden'));
+      await tester.pumpAndSettle();
+      await _fillValidForm(tester);
+      await tester.tap(find.text('Create warden account'));
+      await _tick(tester);
+
+      expect(
+        find.text('This hostel already has an active warden. '
+            'Deactivate the current warden first.'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('deactivate someone in that post'),
+        findsOneWidget,
+        reason: 'the rule is only useful with the way out of it attached',
+      );
+      // The sheet stays open — nothing was created, and the typing is still worth something.
+      expect(find.text('ADD STAFF'), findsOneWidget);
+    });
+
+    testWidgets('a duplicate email is put under the email box', (tester) async {
+      final writes = _FakeWrites(
+        outcome: const StaffRejected(
+          'An account with this email already exists.',
+          fieldErrors: {'email': 'An account with this email already exists.'},
+        ),
+      );
+      await _pump(tester, _overrides(writes: writes));
+
+      await tester.tap(find.text('Add manager'));
+      await tester.pumpAndSettle();
+      await _fillValidForm(tester);
+      await tester.tap(find.text('Create manager account'));
+      await _tick(tester);
+
+      final field = tester.widget<TextField>(find.widgetWithText(TextField, 'Email'));
+      expect(field.decoration!.errorText, 'An account with this email already exists.');
+    });
+
+    testWidgets('being offline is a connection card, not a field message', (tester) async {
+      final writes = _FakeWrites(
+        throws: const OfflineFailure('Cannot reach Apnivaas. Check your connection and try again.'),
+      );
+      await _pump(tester, _overrides(writes: writes));
+
+      await tester.tap(find.text('Add manager'));
+      await tester.pumpAndSettle();
+      await _fillValidForm(tester);
+      await tester.tap(find.text('Create manager account'));
+      await _tick(tester);
+
+      expect(find.text('No connection'), findsOneWidget);
+      expect(writes.createCalls, 1);
+    });
+
+    testWidgets('a full post is drawn as full in the role picker', (tester) async {
+      await _pump(
+        tester,
+        _overrides(
+          staff: [
+            for (var i = 1; i <= 5; i++)
+              _member(id: 'm-$i', name: 'Manager $i', role: StaffRole.manager),
+          ],
+          writes: _FakeWrites(),
+        ),
+      );
+
+      await tester.tap(find.text('Add warden'));
+      await tester.pumpAndSettle();
+
+      // The picker is two [StaffRoleCard]s rather than a SegmentedButton — the design draws
+      // each role as a card with its own description, so both descriptions are readable while
+      // the choice is being made. Same behaviour under test: the post that already holds five
+      // active people cannot be chosen, and the one with room is what the sheet opened on.
+      StaffRoleCard card(StaffRole role) => tester.widget<StaffRoleCard>(
+            find.byWidgetPredicate((w) => w is StaffRoleCard && w.role == role),
+          );
+
+      expect(card(StaffRole.manager).enabled, isFalse);
+      expect(card(StaffRole.manager).full, isTrue);
+      expect(card(StaffRole.warden).enabled, isTrue);
+      expect(card(StaffRole.warden).selected, isTrue);
+      expect(card(StaffRole.manager).selected, isFalse);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // ONE PERSON, SEVERAL PGs
+  // ───────────────────────────────────────────────────────────────────────────
+  group('several PGs', () {
+    StaffMember multi({StaffStatus status = StaffStatus.active}) => _member(
+          id: 'u-multi',
+          name: 'Anil Warden',
+          role: StaffRole.warden,
+          status: status,
+          activeHostelId: _lakeviewId,
+          activeHostelName: 'Lakeview PG',
+          hostelIds: const [_hostelId, _lakeviewId, _hilltopId],
+        );
+
+    testWidgets('a member who holds several PGs is listed here, with where they work now',
+        (tester) async {
+      // Working in Lakeview right now, and still on Sunrise's list: users.hostel_id points at
+      // Lakeview, which is exactly the member a `users where hostel_id = Sunrise` read dropped.
+      await _pump(tester, _overrides(staff: [multi()], owned: _threePgs));
+
+      expect(find.text('Anil Warden'), findsOneWidget);
+      expect(find.text('WORKING IN NOW'), findsOneWidget);
+      expect(find.text('Lakeview PG'), findsOneWidget);
+      expect(find.text('OTHER PGS'), findsOneWidget);
+      expect(find.text('Sunrise Residency, Hilltop House'), findsOneWidget);
+      // Counted against Sunrise's five: access is what the limit counts, not where they are.
+      expect(find.text('1 of 5'), findsOneWidget);
+    });
+
+    testWidgets('a deactivated member is not said to be working anywhere', (tester) async {
+      // Their users.hostel_id still names Lakeview, which is where a reactivation lands them,
+      // but "working in now" would be false of somebody who cannot sign in.
+      await _pump(
+        tester,
+        _overrides(staff: [multi(status: StaffStatus.inactive)], owned: _threePgs),
+      );
+
+      expect(find.text('WORKING IN NOW'), findsNothing);
+      expect(find.text('LAST WORKED IN'), findsOneWidget);
+      expect(find.text('Lakeview PG'), findsOneWidget);
+    });
+
+    testWidgets('a single-PG member keeps today\'s card, with no PG lines on it', (tester) async {
+      await _pump(tester, _overrides(staff: [_member()], owned: _threePgs));
+
+      expect(find.text('WORKING IN NOW'), findsNothing);
+      expect(find.text('OTHER PGS'), findsNothing);
+      expect(find.text('PG access'), findsOneWidget, reason: 'the owner has three PGs');
+    });
+
+    testWidgets('PG access is not offered to an owner with one PG', (tester) async {
+      await _pump(tester, _overrides(staff: [_member()]));
+      expect(find.text('PG access'), findsNothing);
+    });
+
+    testWidgets('deactivating a multi-PG member says they lose every PG, not just this one',
+        (tester) async {
+      final writes = _FakeWrites();
+      await _pump(tester, _overrides(staff: [multi()], owned: _threePgs, writes: writes));
+
+      await tester.tap(find.text('Deactivate'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('loses access to all 3 of your PGs'), findsOneWidget);
+      expect(find.textContaining('use PG access instead'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Deactivate'));
+      await _tick(tester);
+      // Account-wide, and no PG in the call: the status is the account's.
+      expect(writes.statusCalls, 1);
+      expect(writes.lastStatusUserId, 'u-multi');
+      expect(writes.lastStatus, StaffStatus.inactive);
+    });
+
+    testWidgets('add-staff with two PGs ticked sends hostelIds, the PG on screen first',
+        (tester) async {
+      final writes = _FakeWrites(
+        outcome: const StaffCreated(IssuedStaffCredentials(
+          userId: 'u-9',
+          name: 'Priya Nair',
+          roleLabel: 'Warden',
+          loginId: 'priya@example.com',
+          password: 'Tx7-quiet-lamp',
+          hostelIds: [_hostelId, _lakeviewId],
+        )),
+      );
+      await _pump(tester, _overrides(writes: writes, owned: _threePgs));
+
+      await tester.tap(find.text('Add warden'));
+      await tester.pumpAndSettle();
+      // The fixed ASSIGNED PROPERTY fact became a choice, with this PG already ticked.
+      expect(find.text('ASSIGNED PROPERTY'), findsNothing);
+      expect(find.text('ASSIGNED PGS'), findsOneWidget);
+      CheckboxListTile box(String name) => tester.widget<CheckboxListTile>(
+            find.widgetWithText(CheckboxListTile, name),
+          );
+      expect(box('Sunrise Residency').value, isTrue);
+      expect(box('Lakeview PG').value, isFalse);
+
+      await tester.tap(find.widgetWithText(CheckboxListTile, 'Lakeview PG'));
+      await tester.pump();
+      await _fillValidForm(tester);
+      await tester.tap(find.text('Create warden account'));
+      await _tick(tester);
+
+      expect(writes.createCalls, 1);
+      expect(writes.lastDraft!.toJson(_hostelId), {
+        'role': 'warden',
+        'fullName': 'Priya Nair',
+        'email': 'priya@example.com',
+        'phone': '98765 43210',
+        'hostelId': _hostelId,
+        'hostelIds': [_hostelId, _lakeviewId],
+      });
+      // The dialog names both PGs the function granted.
+      expect(find.text('Sunrise Residency, Lakeview PG'), findsOneWidget);
+    });
+
+    testWidgets('add-staff with only this PG ticked sends the old single-PG body',
+        (tester) async {
+      final writes = _FakeWrites(
+        outcome: const StaffCreated(IssuedStaffCredentials(
+          userId: 'u-9',
+          name: 'Priya Nair',
+          roleLabel: 'Warden',
+          loginId: 'priya@example.com',
+          password: 'Tx7-quiet-lamp',
+        )),
+      );
+      await _pump(tester, _overrides(writes: writes, owned: _threePgs));
+
+      await tester.tap(find.text('Add warden'));
+      await tester.pumpAndSettle();
+      await _fillValidForm(tester);
+      await tester.tap(find.text('Create warden account'));
+      await _tick(tester);
+
+      expect(writes.lastDraft!.toJson(_hostelId), {
+        'role': 'warden',
+        'fullName': 'Priya Nair',
+        'email': 'priya@example.com',
+        'phone': '98765 43210',
+        'hostelId': _hostelId,
+      });
+    });
+
+    testWidgets('the add form will not let the last PG be unticked', (tester) async {
+      await _pump(tester, _overrides(writes: _FakeWrites(), owned: _threePgs));
+
+      await tester.tap(find.text('Add manager'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(CheckboxListTile, 'Sunrise Residency'));
+      await tester.pump();
+
+      final box = tester.widget<CheckboxListTile>(
+        find.widgetWithText(CheckboxListTile, 'Sunrise Residency'),
+      );
+      expect(box.value, isTrue);
+      expect(find.text('Keep at least one PG.'), findsOneWidget);
+    });
+
+    testWidgets('a single-PG owner keeps the ASSIGNED PROPERTY fact, not a picker',
+        (tester) async {
+      await _pump(tester, _overrides(writes: _FakeWrites()));
+
+      await tester.tap(find.text('Add manager'));
+      await tester.pumpAndSettle();
+      expect(find.text('ASSIGNED PROPERTY'), findsOneWidget);
+      expect(find.byType(CheckboxListTile), findsNothing);
+    });
+
+    testWidgets('PG access keeps at least one PG, and saves exactly what is ticked',
+        (tester) async {
+      final writes = _FakeWrites();
+      final member = _member(
+        id: 'u-5',
+        name: 'Ravi Kulkarni',
+        hostelIds: const [_hostelId, _lakeviewId],
+      );
+      await _pump(tester, _overrides(staff: [member], owned: _threePgs, writes: writes));
+
+      await tester.tap(find.text('PG access'));
+      await tester.pumpAndSettle();
+      expect(find.text('PG ACCESS'), findsOneWidget);
+
+      FilledButton save() => tester.widget<FilledButton>(
+            find.ancestor(of: find.text('Save PG access'), matching: find.byType(FilledButton)),
+          );
+      CheckboxListTile box(String name) => tester.widget<CheckboxListTile>(
+            find.descendant(
+              of: find.byType(StaffAccessSheet),
+              matching: find.widgetWithText(CheckboxListTile, name),
+            ),
+          );
+      Finder tile(String name) => find.descendant(
+            of: find.byType(StaffAccessSheet),
+            matching: find.widgetWithText(CheckboxListTile, name),
+          );
+
+      expect(save().onPressed, isNull, reason: 'nothing has changed yet');
+
+      // Untick Lakeview: one left, and it is the PG they are working in.
+      await tester.tap(tile('Lakeview PG'));
+      await tester.pump();
+      expect(box('Lakeview PG').value, isFalse);
+
+      // The last one will not go.
+      await tester.tap(tile('Sunrise Residency'));
+      await tester.pump();
+      expect(box('Sunrise Residency').value, isTrue);
+      expect(find.textContaining('Keep at least one PG.'), findsOneWidget);
+      expect(save().onPressed, isNotNull);
+
+      await tester.tap(find.text('Save PG access'));
+      await _tick(tester);
+
+      expect(writes.accessCalls, 1);
+      expect(writes.lastAccessUserId, 'u-5');
+      expect(writes.lastAccessHostelIds, [_hostelId]);
+      expect(find.text('PG access saved'), findsOneWidget);
+    });
+
+    testWidgets('PG access says where they land when their current PG is taken away',
+        (tester) async {
+      final writes = _FakeWrites(grants: const [
+        StaffHostelGrant(hostelId: _hilltopId, isActive: true),
+        StaffHostelGrant(hostelId: _hostelId, isActive: false),
+      ]);
+      await _pump(tester, _overrides(staff: [multi()], owned: _threePgs, writes: writes));
+
+      await tester.tap(find.text('PG access'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+        of: find.byType(StaffAccessSheet),
+        matching: find.widgetWithText(CheckboxListTile, 'Lakeview PG'),
+      ));
+      await tester.pump();
+      // Hilltop House is first by name among what is left, which is what the RPC picks.
+      expect(
+        find.text('They are working in Lakeview PG now. Saving moves them to Hilltop House.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Save PG access'));
+      await _tick(tester);
+      expect(writes.lastAccessHostelIds, [_hilltopId, _hostelId]);
+      expect(
+        find.text('PG access saved. Anil Warden is now working in Hilltop House.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a refused PG access change keeps the sheet open and says why', (tester) async {
+      final writes = _FakeWrites(
+        throws: const InvalidInputFailure(
+            'This PG already has 5 active wardens. Remove one from it first.'),
+      );
+      await _pump(
+        tester,
+        _overrides(
+          staff: [_member(role: StaffRole.warden)],
+          owned: _threePgs,
+          writes: writes,
+        ),
+      );
+
+      await tester.tap(find.text('PG access'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+        of: find.byType(StaffAccessSheet),
+        matching: find.widgetWithText(CheckboxListTile, 'Hilltop House'),
+      ));
+      await tester.pump();
+      await tester.tap(find.text('Save PG access'));
+      await _tick(tester);
+
+      expect(
+        find.text('This PG already has 5 active wardens. Remove one from it first.'),
+        findsOneWidget,
+      );
+      expect(find.text('PG ACCESS'), findsOneWidget);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // THE SHOW-ONCE DIALOG
+  // ───────────────────────────────────────────────────────────────────────────
+  group('the credentials dialog', () {
+    const creds = IssuedStaffCredentials(
+      userId: 'u-9',
+      name: 'Priya Nair',
+      roleLabel: 'Warden',
+      loginId: 'priya@example.com',
+      password: 'Tx7-quiet-lamp',
+    );
+
+    Future<void> show(WidgetTester tester) async {
+      await tester.pumpWidget(MaterialApp(
+        theme: ApnivaasTheme.light(),
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () => StaffCredentialsDialog.show(
+                  context,
+                  credentials: creds,
+                  hostelName: 'Sunrise Residency',
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('shows the login and the password, and names the PG', (tester) async {
+      await show(tester);
+
+      expect(find.text('Warden account created'), findsOneWidget);
+      expect(find.text('Sunrise Residency'), findsOneWidget);
+      expect(find.text('priya@example.com'), findsOneWidget);
+      expect(find.text('Tx7-quiet-lamp'), findsOneWidget);
+      expect(find.textContaining('shown once and is stored nowhere'), findsOneWidget);
+    });
+
+    testWidgets('Done is dead until the owner says they have saved it', (tester) async {
+      await show(tester);
+
+      FilledButton done() => tester.widget<FilledButton>(
+            find.ancestor(of: find.text('Done'), matching: find.byType(FilledButton)),
+          );
+
+      expect(done().onPressed, isNull);
+
+      await tester.tap(find.text('I have saved these credentials'));
+      await tester.pumpAndSettle();
+      expect(done().onPressed, isNotNull);
+
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tx7-quiet-lamp'), findsNothing);
+    });
+
+    testWidgets('a tap outside cannot take the password away', (tester) async {
+      await show(tester);
+
+      await tester.tapAt(const Offset(4, 4));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tx7-quiet-lamp'), findsOneWidget);
+    });
+
+    testWidgets('neither can the back gesture', (tester) async {
+      await show(tester);
+
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator).first);
+      await navigator.maybePop();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tx7-quiet-lamp'), findsOneWidget);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // CREATE → DIALOG → CLOSE, END TO END
+  // ───────────────────────────────────────────────────────────────────────────
+  testWidgets('a successful create hands over the password before the sheet closes',
+      (tester) async {
+    final writes = _FakeWrites(
+      outcome: const StaffCreated(IssuedStaffCredentials(
+        userId: 'u-9',
+        name: 'Priya Nair',
+        roleLabel: 'Warden',
+        loginId: 'priya@example.com',
+        password: 'Tx7-quiet-lamp',
+      )),
+    );
+    await _pump(tester, _overrides(writes: writes));
+
+    await tester.tap(find.text('Add warden'));
+    await tester.pumpAndSettle();
+    await _fillValidForm(tester);
+    await tester.tap(find.text('Create warden account'));
+    await _tick(tester);
+
+    // The dialog is up and the sheet is still behind it — the password has crossed no route
+    // boundary on its way to the screen.
+    expect(find.text('Tx7-quiet-lamp'), findsOneWidget);
+    expect(find.text('ADD STAFF'), findsOneWidget);
+
+    await tester.tap(find.text('I have saved these credentials'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tx7-quiet-lamp'), findsNothing);
+    expect(find.text('ADD STAFF'), findsNothing, reason: 'the sheet closes on its own after');
+  });
+}

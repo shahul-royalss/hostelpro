@@ -1,5 +1,5 @@
 /**
- * NIVORA — demo seed (CLAUDE_2.md §8.1 + §13)
+ * Apnivaas — demo seed (CLAUDE_2.md §8.1 + §13)
  *
  *   npm run db:seed                 → super admin + full demo data (two hostels)
  *   npm run db:seed:admin           → super admin only  (= tsx db/seed.ts --admin-only)
@@ -733,7 +733,7 @@ function printCredentials(hostels: { name: string; id: string; state: string }[]
 /* ─────────────────────────── main ─────────────────────────── */
 
 async function main() {
-  console.log(`NIVORA seed → ${SUPABASE_URL}${ADMIN_ONLY ? "  [--admin-only]" : ""}${FORCE ? "  [--force]" : ""}`);
+  console.log(`Apnivaas seed → ${SUPABASE_URL}${ADMIN_ONLY ? "  [--admin-only]" : ""}${FORCE ? "  [--force]" : ""}`);
 
   if (FORCE) await wipeDemoData();
 

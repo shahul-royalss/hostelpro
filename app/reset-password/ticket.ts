@@ -51,7 +51,7 @@ const TICKET_TTL_SECONDS = 15 * 60;
 function ticketKey(): Buffer {
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!secret) throw new Error("password-reset ticket: SUPABASE_SERVICE_ROLE_KEY is not set");
-  return createHmac("sha256", secret).update("nivora/password-reset-ticket/v1").digest();
+  return createHmac("sha256", secret).update("apnivaas/password-reset-ticket/v1").digest();
 }
 
 function sign(payload: string): string {

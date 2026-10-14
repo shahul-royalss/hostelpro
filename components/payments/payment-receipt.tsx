@@ -28,7 +28,7 @@ import { cn, formatDate, formatINR, formatPeriodMonth } from "@/lib/utils";
  * BOTH FIGURES, NEVER THEIR DIFFERENCE. `amountRupees` and `refundedRupees` are
  * each printed verbatim and neither is adjusted by the other. The net is not a
  * column anywhere in this schema, so this component does not state one — the same
- * rule the Flutter receipt follows (nivora_app/lib/features/payments/receipt.dart).
+ * rule the Flutter receipt follows (apnivaas_app/lib/features/payments/receipt.dart).
  *
  * The props are optional and the current callers in pay-rent-sheet.tsx pass
  * nothing: that sheet shows a receipt for a payment made seconds ago, which cannot

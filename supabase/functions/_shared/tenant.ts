@@ -52,7 +52,7 @@ async function loadHostel(hostelId: string): Promise<HostelContext | null> {
     .eq("id", hostelId)
     .maybeSingle();
   if (error) {
-    console.error("[nivora] hostel lookup failed:", error.message);
+    console.error("[apnivaas] hostel lookup failed:", error.message);
     throw new HttpError(500, "Could not load the hostel. Please try again.");
   }
   if (!hostel) return null;
@@ -86,7 +86,7 @@ async function loadHostel(hostelId: string): Promise<HostelContext | null> {
  * 'suspended', 'subscription', 'read-only' and 'expired' — so those words stay exactly where
  * they are, in old builds' eyes as much as new ones'.
  *
- * No product name, though: since the 1.2.0 rename (Nivora -> Apnivaas) builds carrying both
+ * No product name, though: since the 1.2.0 rename, builds carrying both
  * names call these functions, and both print this sentence as it is. See requireSession() in
  * caller.ts. That is the one place the two copies differ on purpose: the website's says
  * "Contact Apnivaas support." because there is only ever one version of the website, and it is
@@ -164,7 +164,7 @@ export async function requireOwnedHostels(
     .in("id", wanted)
     .eq("owner_user_id", caller.id);
   if (error) {
-    console.error("[nivora] ownership check failed:", error.message);
+    console.error("[apnivaas] ownership check failed:", error.message);
     throw new HttpError(500, "Could not verify the hostel. Please try again.");
   }
   const owned = new Map(((data ?? []) as OwnedHostel[]).map((h) => [h.id.toLowerCase(), h]));
@@ -227,7 +227,7 @@ async function requireStaffAccess(userId: string, hostelId: string): Promise<voi
     .eq("hostel_id", hostelId)
     .maybeSingle();
   if (error) {
-    console.error("[nivora] staff access check failed:", error.message);
+    console.error("[apnivaas] staff access check failed:", error.message);
     throw new HttpError(500, "Could not verify the hostel. Please try again.");
   }
   if (!data) throw new HttpError(403, "You no longer have access to this PG.");

@@ -1,0 +1,219 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      REQUIRED IN main, not just debug/profile. Flutter's template adds INTERNET only to the
+      debug and profile manifests, so a RELEASE build ships with no network permission at all:
+      Supabase.initialize() throws and the process dies before the first frame. The app appears
+      to "not open". Every screen in Apnivaas needs the network, so it belongs here.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lets the app tell "you are offline" apart from "the server is down". -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- ── WHAT IS ASKED FOR AT RUNTIME, AND WHAT IS DELIBERATELY NOT ──────────────────────
+
+         POST_NOTIFICATIONS is a runtime permission from Android 13 (API 33). Without it the app
+         can hold a valid FCM token, the server can send a perfectly good message, and NOTHING
+         APPEARS — silently. Rent reminders, a notice from the owner and "payment received" all
+         arrive through it.
+
+         WHEN IT IS ASKED FOR: once the signed-in person has agreed to the Terms of Use and
+         Privacy Policy at the consent gate — not on first launch, and not merely at sign-in. The
+         token is registered against a USER, and registering it is processing the Privacy Policy
+         describes, so nothing starts before that agreement (lib/features/legal/consent_gate.dart,
+         initState). There is no in-app rationale screen ahead of the system dialog — the dialog
+         is the ask — and a refusal is not treated as an error: the token is registered anyway,
+         so turning notifications on later in Settings works immediately. See
+         lib/core/notify/push_service.dart.
+
+         CAMERA is declared because a warden photographs a new resident and their ID proof at
+         registration (register_student_sheet.dart); residents cannot attach a photo to a
+         complaint in this app. It is the only runtime permission besides POST_NOTIFICATIONS, and
+         DECLARING IT IS WHAT MAKES IT MANDATORY: ACTION_IMAGE_CAPTURE throws SecurityException
+         for an app that
+         declares CAMERA without holding it, so data/capture.dart asks first. The uses-feature
+         line keeps the app installable on a device with no camera — a declared permission
+         otherwise implies required hardware and quietly filters the store listing.
+
+         NOT DECLARED, each absence deliberate:
+           READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE — the gallery goes through Android's photo
+             picker, which returns one chosen image and needs no permission at all. Asking for the
+             media library would trigger Play's Photo and Video Permissions declaration for a
+             capability this app does not use.
+           READ_CONTACTS — nothing in Apnivaas reads a contact. A guardian's phone is typed into a
+             form by the warden.
+           AD_ID — no advertising, no analytics SDK, no ad id. Removed EXPLICITLY rather than
+             merely left out: a dependency's manifest can merge it in, and its presence would
+             contradict the Data safety declaration. tools:node="remove" makes that a fact about
+             the merged manifest instead of a hope. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- NFC STAYS OPTIONAL WHATEVER A LIBRARY SAYS. NFC comes from Razorpay (standard-core asks for
+         the NFC permission for tap-to-pay cards) and is optional today only because Razorpay's own
+         manifest says required="false". If a Razorpay release ever flipped that to true, Google Play
+         would silently stop offering Apnivaas to every phone without NFC, which is many budget
+         phones in India, with no build error to warn anyone. tools:replace makes this line win
+         the manifest merge. Apnivaas itself never uses NFC. -->
+    <uses-feature
+        android:name="android.hardware.nfc"
+        android:required="false"
+        tools:replace="android:required" />
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
+    <!-- ── THE SESSION MUST NOT LEAVE THE PHONE ────────────────────────────────────────────
+         Android Auto Backup is ON BY DEFAULT. With it on,
+         /data/data/com.nivorasr.app/shared_prefs/FlutterSharedPreferences.xml is uploaded to
+         the user's Google Drive and restored by Android 12+ device-to-device transfer — and
+         that file holds the persisted GoTrue session, including a long-lived refresh token for
+         an account that moves other people's rent.
+
+         A warden who hands on a phone, or restores onto a second handset, would carry a live
+         session with them. It is also an off-device transfer of account data that
+         docs/data-safety.md does not declare, in a document whose own §1 defines "collected"
+         as "transmitted off the user's device".
+
+         Nothing is lost by refusing it. This client keeps no local state worth restoring; every
+         screen is server-backed and the cost of a fresh install is signing in once.
+
+         BOTH attributes are needed and they are not duplicates: allowBackup governs cloud
+         backup on every version, dataExtractionRules governs cloud backup AND D2D transfer on
+         Android 12+ (targetSdk here is 36), and a device transfer is not a "backup". -->
+    <application
+        android:label="@string/app_name"
+        android:name="${applicationName}"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <!-- Specifies an Android theme to apply to this Activity as soon as
+                 the Android process has started. This theme is visible to the user
+                 while the Flutter UI initializes. After that, this theme continues
+                 to determine the Window background behind the Flutter UI. -->
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+            <!--
+              FLUTTER'S OWN DEEP-LINK ROUTING IS OFF, as ios/Runner/Info.plist already has it.
+
+              With it on (the engine's default), the email link below, tapped while the app is
+              running, was handed to go_router as a navigation to '/' (the link has an empty path).
+              That replaced the whole screen stack - including the blocking "verify your email"
+              screen - and the redirect then sent the person home unverified. The link does not need
+              Flutter's router at all: supabase_flutter receives the code through app_links either way
+              and signs the person in, and the router's verification rule does the rest.
+              Notification taps never navigate (lib/core/notify/push_service.dart), so nothing else
+              relied on it.
+            -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="false" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!--
+              THE EMAIL CONFIRMATION LINK COMES BACK HERE.
+
+              GoTrue matches the one-time token at /auth/v1/verify and then 302s to whatever
+              `redirect_to` the app asked for. That destination is this filter, so the link
+              opens Apnivaas rather than a web page: supabase_flutter's deep-link observer sees
+              the `?code=` on the incoming Uri, exchanges it for a session using the PKCE code
+              verifier it stored when it asked for the mail, and the person is SIGNED IN BY THE
+              LINK. That sign-in is the proof the owner asked for.
+
+              A browser can never complete that exchange - it does not hold the verifier - which
+              is why the previous landing-page design could only ever show a page and hope.
+
+              A CUSTOM SCHEME, AND NOT http/https, DELIBERATELY.
+              An <data android:scheme="https"> filter would offer this app as a handler for
+              ordinary web links and, without a verified Digital Asset Link, Android would show
+              a disambiguation sheet on somebody else's URLs. `com.nivorasr.app` is this app's
+              own applicationId used as a scheme (see android/app/build.gradle.kts), which is
+              the reverse-DNS form Android and RFC 3986 both allow and which nothing else on the
+              device can claim. The scheme AND the host are both pinned, so the ONLY Uri this
+              filter accepts is com.nivorasr.app://verify-email[?...]. No http, no https, no
+              bare scheme wildcard.
+
+              MUST BE MIRRORED IN THE SUPABASE DASHBOARD or no link ever arrives here: paste
+
+                  com.nivorasr.app://verify-email
+
+              into Authentication -> URL Configuration -> Redirect URLs. Measured against this
+              project on 2026-09-01: GoTrue does not refuse an unlisted redirect, it SILENTLY
+              substitutes the Site URL, so a missing entry looks like a working link that opens
+              the wrong thing. docs/email-verification.md has the whole procedure.
+
+              The activity is launchMode="singleTop", so a link tapped while Apnivaas is already
+              running is delivered to the existing instance via onNewIntent rather than starting
+              a second copy of the app.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="com.nivorasr.app" android:host="verify-email"/>
+            </intent-filter>
+        </activity>
+        <!--
+          THE STATUS-BAR ICON AND ACCENT for notifications FCM shows by itself (app in the
+          background). Android draws a notification's small icon as a pure white silhouette, so the
+          full-colour launcher icon came out as a solid white blob; ic_stat_apnivaas is the A-house
+          as that silhouette. lib/core/notify/push_service.dart uses the same icon for notifications
+          the app shows itself.
+        -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_apnivaas" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
+        <!-- Don't delete the meta-data below.
+             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+    <!-- Required to query activities that can process text, see:
+         https://developer.android.com/training/package-visibility and
+         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+
+         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+
+        <!--
+          UPI APPS MUST BE VISIBLE OR THEY DO NOT EXIST.
+
+          From Android 11 (API 30) — and this app targets 36 — package visibility is filtered by
+          default: an app cannot see what else is installed unless it declares what it is looking
+          for here. Razorpay's checkout builds its "Pay using GPay / PhonePe / Paytm" list by
+          resolving this exact intent, so WITHOUT this block that list resolves empty and the
+          sheet silently drops UPI intent altogether.
+
+          That is the single most-used way to pay rent in India, and the failure is invisible: no
+          crash, no error, no log — just a checkout that quietly offers cards and netbanking to a
+          resident who has never owned a card. It also cannot be caught on an older test device,
+          because the filtering only applies at API 30+.
+        -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="upi"/>
+        </intent>
+    </queries>
+</manifest>

@@ -478,7 +478,7 @@ $$;
 -- ── EMAIL VERIFICATION ───────────────────────────────────────────────────────
 -- Who is required to prove their address is decided by the ADDRESS, not by the role.
 -- Mirrors isStudentLoginEmail() in supabase/functions/_shared/validate.ts and
--- studentLoginDomain in nivora_app/lib/core/auth/auth_controller.dart: a resident registered
+-- studentLoginDomain in apnivaas_app/lib/core/auth/auth_controller.dart: a resident registered
 -- without an email signs in as <digits>@student.hostelpro.local, a namespace no mail server
 -- accepts, so demanding a proof of it would be a permanent lockout rather than a policy.
 create or replace function app.email_is_reachable(p_email text) returns boolean
@@ -1420,8 +1420,8 @@ end $$;
 -- SUPER ADMIN HOSTEL CONTROLS — suspend / reactivate, cancel the plan, rename.
 -- Each refuses everyone but the Super Admin with 42501 (coalesced: a NULL must not fail open),
 -- audits, and notifies the owner. Full reasoning: db/migrations/2026-09-16-sa-hostel-controls.sql.
--- The notification bodies name no product: builds called Nivora (1.0.0, 1.1.0) and Apnivaas
--- (1.2.0 on) read the same rows. See db/migrations/2026-10-12-brand-free-server-messages.sql.
+-- The notification bodies name no product: builds under the old name (1.0.0, 1.1.0) and
+-- Apnivaas (1.2.0 on) read the same rows. See db/migrations/2026-10-12-brand-free-server-messages.sql.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Suspension is about the account, not the plan; lifting it returns the hostel read-only if the

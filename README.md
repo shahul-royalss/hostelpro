@@ -1,4 +1,4 @@
-# NIVORA — PG / Hostel Management SaaS
+# Apnivaas — PG / Hostel Management SaaS
 
 Multi-tenant SaaS for running PG hostels. The platform operator (Super Admin) sells
 subscriptions and creates hostel owners; each owner runs one hostel per subscription

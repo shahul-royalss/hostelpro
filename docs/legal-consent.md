@@ -23,7 +23,7 @@ policy URL.** It is a field in Play Console (Store listing → Privacy policy), 
 **while signed out**, and a listing submitted without it — or with one that contradicts the Data
 safety form — is rejected.
 
-NIVORA is squarely inside that rule. It handles, for people who never chose to install it:
+Apnivaas is squarely inside that rule. It handles, for people who never chose to install it:
 
 - names, phone numbers and email addresses
 - permanent addresses and guardian contact details
@@ -57,8 +57,8 @@ Four public pages under `app/legal/`, all statically readable with no session:
 | Account deletion | `app/legal/account-deletion/page.tsx` |
 
 The **same two documents are also bundled into the Android app** as structured data in
-`nivora_app/lib/features/legal/legal_documents.dart`, rendered by
-`nivora_app/lib/features/legal/legal_screen.dart`.
+`apnivaas_app/lib/features/legal/legal_documents.dart`, rendered by
+`apnivaas_app/lib/features/legal/legal_screen.dart`.
 
 **Why bundled rather than fetched.** The gate has to show a person what they are agreeing to before
 they have agreed to anything; making that a network fetch means the one screen nobody may skip is
@@ -92,7 +92,7 @@ carries the platform's normal request context under its own retention rule.
 
 ### 2.3 The gate
 
-`nivora_app/lib/features/legal/consent_gate.dart`, wired in `nivora_app/lib/core/router/router.dart`
+`apnivaas_app/lib/features/legal/consent_gate.dart`, wired in `apnivaas_app/lib/core/router/router.dart`
 by wrapping every role home in the route table:
 
 ```dart
@@ -122,7 +122,7 @@ is no state in which somebody is half-agreed. It lives in three places and they 
 | # | Where | Symbol |
 |---|---|---|
 | 1 | `lib/legal-config.ts` | `LEGAL_VERSION` — the published web pages |
-| 2 | `nivora_app/lib/features/legal/legal_documents.dart` | `kLegalVersion` — what the app shows and records against |
+| 2 | `apnivaas_app/lib/features/legal/legal_documents.dart` | `kLegalVersion` — what the app shows and records against |
 | 3 | `public.legal_versions.version` | a migration — what an acceptance may name |
 
 **Change the wording of either document → bump all three → every user is asked again**, because the
@@ -130,7 +130,7 @@ gate compares the version it ships against the versions that user has accepted. 
 acceptance is stored per version rather than as a boolean: a `has_accepted` flag would silently move
 existing users onto a policy they never saw.
 
-(1) and (2) are cross-checked by `nivora_app/test/legal_consent_test.dart`, which reads
+(1) and (2) are cross-checked by `apnivaas_app/test/legal_consent_test.dart`, which reads
 `lib/legal-config.ts` off disk, so they cannot drift silently.
 
 ### 3.1 Deployment order is not optional
@@ -145,7 +145,7 @@ in Dart can check this; it is a release step.
 ## 4. What the gate does, state by state
 
 LOADING, EMPTY, FAILED and REFUSED are four distinct states everywhere in this app
-(`nivora_app/lib/data/models/failure.dart`). The gate is the one screen every user meets, so
+(`apnivaas_app/lib/data/models/failure.dart`). The gate is the one screen every user meets, so
 collapsing two of them here would be the rule broken in the most visible place there is.
 
 | State | What is drawn |
@@ -194,7 +194,7 @@ reach** — "More" and "Profile" exist for two roles between them.
 
 Everything below is a real-world fact about the business that cannot be derived from the codebase.
 All of them live in **`lib/legal-config.ts`** and are mirrored in
-**`nivora_app/lib/features/legal/legal_documents.dart`** — change both.
+**`apnivaas_app/lib/features/legal/legal_documents.dart`** — change both.
 
 These were set by an earlier pass and have **not been verified by this one.** They are not
 placeholders in the `.invalid` sense any more — `isConfigured` reports true and the "not ready to
@@ -209,7 +209,7 @@ contact, and neither is better served by publishing an individual's home address
 
 | Value | Currently | What must be confirmed |
 |---|---|---|
-| `operatorName` | `NIVORA` | **This is a product name, not a legal entity.** DPDP requires a Data Fiduciary to identify itself. If a company or proprietorship is registered, use its registered name; if the operator is an individual, use their name |
+| `operatorName` | `Apnivaas` | **This is a product name, not a legal entity.** DPDP requires a Data Fiduciary to identify itself. If a company or proprietorship is registered, use its registered name; if the operator is an individual, use their name |
 | `grievanceEmail` / `legalEmail` | `support@nivora.dhrishtaerf.org` | **Send a test message and confirm somebody receives it.** A privacy policy's contact address is where erasure requests arrive; one that bounces is worse than none, because the request is lost silently |
 | `postalAddress` | `Chittoor, Andhra Pradesh, India` | **Deliberately a locality, not a doorstep** (changed 2026-09-04). The published pages are read by anyone on the open web, and the monitored mailbox above is the channel that actually answers a request. If counsel says a fuller address is required, use a business or registered-office address — not a home one |
 | `grievanceOfficer` | `The Grievance Officer` | **Deliberately a role, not a person** (changed 2026-09-04). DPDP requires the grievance officer's *contact*, and a role title plus a monitored role mailbox gives one that does not go stale the day somebody else takes the job. Confirm that whoever holds the role answers within 30 days |
@@ -299,5 +299,5 @@ bare `user_id = auth.uid()`, matching `notifications_select`.
 
 ```bash
 # the app side
-cd nivora_app && flutter analyze && flutter test
+cd apnivaas_app && flutter analyze && flutter test
 ```

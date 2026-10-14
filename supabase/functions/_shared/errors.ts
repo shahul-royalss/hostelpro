@@ -34,7 +34,7 @@ export function dbError(err: PostgrestLikeError | null | undefined, fallback = "
     // Dropped from the live database by db/migrations/2026-09-12-five-staff-per-role.sql, but NOT
     // yet dead: db/schema.sql still creates this index, so a database built from the baseline
     // without replaying the migrations still raises it. The apps still recognise this sentence
-    // too (nivora_app staff_repository.dart, _roleTaken). Remove it when the baseline stops
+    // too (apnivaas_app staff_repository.dart, _roleTaken). Remove it when the baseline stops
     // creating the index.
     if (/users_one_active_staff_per_hostel/.test(msg)) return new HttpError(409, "This hostel already has an active manager or warden in that role. Deactivate the current one first.");
     if (/students_one_active_per_bed|beds_student_key/.test(msg)) return new HttpError(409, "That bed is already occupied. Choose a free bed.");
@@ -51,6 +51,6 @@ export function dbError(err: PostgrestLikeError | null | undefined, fallback = "
   if (code === "PGRST116") return new HttpError(404, "Not found.");
 
   // Anything else: log the raw error where only we can see it, tell the caller nothing.
-  console.error("[nivora] db error:", JSON.stringify({ code, message: msg }).slice(0, 500));
+  console.error("[apnivaas] db error:", JSON.stringify({ code, message: msg }).slice(0, 500));
   return new HttpError(statusFor(code), fallback);
 }

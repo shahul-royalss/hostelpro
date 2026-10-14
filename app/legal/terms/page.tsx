@@ -5,7 +5,7 @@ import { Callout, DataTable, DocBody, DocHeader, Section, TableOfContents } from
 
 /* ────────────────────────────────────────────────────────────────────────────
  * The operator's real-world facts live in lib/legal-config.ts and are mirrored
- * in nivora_app/lib/features/legal/legal_documents.dart — change both, in the
+ * in apnivaas_app/lib/features/legal/legal_documents.dart — change both, in the
  * same commit. While any value there is still an unresolvable `.invalid`
  * placeholder this page renders a visible notice at the top, which disappears
  * on its own once real values are set.
@@ -46,7 +46,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * EIGHT SECTIONS, and they are the same eight the Android app shows — see
- * nivora_app/lib/features/legal/legal_documents.dart, which carries this text so the consent
+ * apnivaas_app/lib/features/legal/legal_documents.dart, which carries this text so the consent
  * gate can draw it without a network call. An earlier version of this page ran to eighteen
  * sections; the cut was made by merging and by deleting repetition, never by softening a claim.
  */

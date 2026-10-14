@@ -1,5 +1,5 @@
 /**
- * HTTP envelope shared by every NIVORA Edge Function.
+ * HTTP envelope shared by every Apnivaas Edge Function.
  *
  * The response shape is deliberately identical to the web app's `ActionResult<T>`
  * (lib/types.ts) so a Dart client and a React client read the same JSON:
@@ -111,6 +111,6 @@ export function toResponse(err: unknown): Response {
   if (err instanceof HttpError) {
     return fail(err.message, err.status, { fieldErrors: err.fieldErrors, extra: err.extra, headers: err.headers });
   }
-  console.error("[nivora] unhandled:", err instanceof Error ? `${err.name}: ${err.message}` : String(err).slice(0, 500));
+  console.error("[apnivaas] unhandled:", err instanceof Error ? `${err.name}: ${err.message}` : String(err).slice(0, 500));
   return fail("Something went wrong. Please try again.", 500);
 }

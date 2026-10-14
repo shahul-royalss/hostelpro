@@ -49,7 +49,7 @@ notification rows are still written and still visible in the app's own list.
 1. **Create the Firebase project** — <https://console.firebase.google.com> → Add project. Any name;
    Google Analytics is not needed and adds an advertising id, which this app declares it does not use.
 2. **Add an Android app** with package name **`com.nivorasr.app`** exactly — check it letter by
-   letter. That is the build's `applicationId` (`nivora_app/android/app/build.gradle.kts:109`), and
+   letter. That is the build's `applicationId` (`apnivaas_app/android/app/build.gradle.kts:109`), and
    it is already registered in `nivorapg`, so on this project the step is done. A
    `google-services.json` with no client for that package fails the build ("No matching client
    found"). Editing the package name inside the file is not a fix: the app id beside it belongs to
@@ -57,11 +57,11 @@ notification rows are still written and still visible in the app's own list.
 
    ```bash
    npx -y firebase-tools@latest apps:list ANDROID --project nivorapg   # note the App ID of com.nivorasr.app
-   npx -y firebase-tools@latest apps:sdkconfig ANDROID <APP_ID> --project nivorapg -o nivora_app/android/app/google-services.json
+   npx -y firebase-tools@latest apps:sdkconfig ANDROID <APP_ID> --project nivorapg -o apnivaas_app/android/app/google-services.json
    ```
 
    On a fresh Firebase project, register the app first:
-   `npx -y firebase-tools@latest apps:create ANDROID "Nivora Android" --package-name com.nivorasr.app --project <project>`.
+   `npx -y firebase-tools@latest apps:create ANDROID "Apnivaas Android" --package-name com.nivorasr.app --project <project>`.
 
    *Until 2026-09-13 this step named `com.srnivora.app`, the package of a Play listing that was
    abandoned before any release, and warned against `com.nivorasr.app`. That is reversed:
@@ -71,7 +71,7 @@ notification rows are still written and still visible in the app's own list.
    The file lists every Android app in the project, so the leftover registration appearing in it
    is expected and harmless: today's file has clients for both packages, and the Google Services
    plugin picks the one matching the build's applicationId. It is not a secret (it ships inside the
-   APK), but it IS gitignored here (`nivora_app/.gitignore:53`), because it belongs to whoever owns
+   APK), but it IS gitignored here (`apnivaas_app/.gitignore:53`), because it belongs to whoever owns
    the Play listing.
 3. **Generate a service-account key** — Project settings → Service accounts → *Generate new private
    key*. This one IS a secret: it can send a notification to every device in the project.
@@ -466,8 +466,8 @@ read `auth.mfa_amr_claims` and why that table can never gain a row for a PKCE li
    an hour and is not for production; a real SMTP provider belongs in
    Authentication → Emails → SMTP Settings before this ships to a hostel.
 4. **Authentication → URL Configuration → Redirect URLs must contain `com.nivorasr.app://verify-email`.**
-   The app asks for that string (`nivora_app/lib/core/config/env.dart:40`, `:100-103`), a custom
-   scheme whose intent filter opens Nivora (`nivora_app/android/app/src/main/AndroidManifest.xml:142`),
+   The app asks for that string (`apnivaas_app/lib/core/config/env.dart:40`, `:100-103`), a custom
+   scheme whose intent filter opens Apnivaas (`apnivaas_app/android/app/src/main/AndroidManifest.xml:142`),
    so that the link signs the person in and that sign-in *is* the proof. Until 2026-09-13 the app
    asked for `com.srnivora.app://verify-email`; that entry, if present, can be removed.
    GoTrue accepts
@@ -530,7 +530,7 @@ refuse to register that address again. Retrying then fails with "already exists"
 nobody can see.
 
 **What to do:** Dashboard → **Authentication → Users**, search the id from `orphanedAuthUserId`,
-delete that user, then retry the operation. A `[nivora] ROLLBACK FAILED for auth user <id>` line is
+delete that user, then retry the operation. A `[apnivaas] ROLLBACK FAILED for auth user <id>` line is
 in the function logs too.
 
 ---

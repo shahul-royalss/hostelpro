@@ -54,6 +54,6 @@
     "supabase/functions",
 
     // The Flutter client. Has no TypeScript the web build reads, and carries a 1.1 GB tool cache.
-    "nivora_app"
+    "apnivaas_app"
   ]
 }

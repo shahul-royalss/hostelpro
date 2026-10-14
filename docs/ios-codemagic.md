@@ -38,12 +38,12 @@ that should own the app. It is a yearly fee. Enrolment can take a day or two to 
 [appstoreconnect.apple.com](https://appstoreconnect.apple.com) → Apps → **+** → New App.
 
 - **Platform:** iOS
-- **Name:** Nivora
+- **Name:** Apnivaas
 - **Bundle ID:** `com.nivorasr.app`. If it is not in the list, register it first at
   developer.apple.com → Certificates, Identifiers & Profiles → Identifiers → **+** → App IDs,
   explicit, exactly `com.nivorasr.app`. It must match `PRODUCT_BUNDLE_IDENTIFIER` in
-  `nivora_app/ios/Runner.xcodeproj/project.pbxproj` and the Android `applicationId`.
-- **SKU:** anything unique to you, for example `nivora-ios`.
+  `apnivaas_app/ios/Runner.xcodeproj/project.pbxproj` and the Android `applicationId`.
+- **SKU:** anything unique to you, for example `apnivaas-ios`.
 
 Afterwards, App Information shows the app's numeric **Apple ID**. Keep it for step 5.
 
@@ -66,7 +66,7 @@ else: not into this repository, not into chat, not into a screenshot.
    `shahul-royalss/hostelpro`, and add that repository as an app.
 2. Team settings → Integrations → **Developer Portal** → Connect. Enter the Issuer ID, the Key ID,
    and upload the `.p8`.
-3. Name the key exactly **`Nivora App Store Connect`**. `codemagic.yaml` refers to it by that name,
+3. Name the key exactly **`Apnivaas App Store Connect`**. `codemagic.yaml` refers to it by that name,
    character for character, and a build fails at the signing step if the two differ.
 
 Codemagic creates the distribution certificate and the provisioning profile itself, through that
@@ -217,7 +217,7 @@ On the iPhone, in **Safari** (Chrome on iPhone cannot do this):
 
 1. Open `https://hostelpro-three.vercel.app` and sign in.
 2. Tap **Share**, then **Add to Home Screen**, then **Add**.
-3. A NIVORA icon appears on the Home Screen. It opens full screen, without Safari's address bar.
+3. An Apnivaas icon appears on the Home Screen. It opens full screen, without Safari's address bar.
 
 Free for any number of people, with no expiry and no device IDs. A change reaches everyone the
 moment the website is deployed, and nobody installs an update.
@@ -306,7 +306,7 @@ existed. Every change has a comment at the site saying why it is there.
 | Failure it prevents | Fix | Where |
 |---|---|---|
 | **The app is killed** when a resident saves a receipt | `NSPhotoLibraryAddUsageDescription` | `ios/Runner/Info.plist` |
-| Flutter's logo on the home screen, and an App Review rejection | The 15 placeholder icons replaced by the Nivora master, `public/brand/logo-square-1024.png` (1024×1024, RGB, no alpha) | `ios/Runner/Assets.xcassets/AppIcon.appiconset/` |
+| Flutter's logo on the home screen, and an App Review rejection | The 15 placeholder icons replaced by the Apnivaas master, `public/brand/logo-square-1024.png` (1024×1024, RGB, no alpha) | `ios/Runner/Assets.xcassets/AppIcon.appiconset/` |
 | Every TestFlight build held at "Missing Compliance" until answered by hand | `ITSAppUsesNonExemptEncryption` = false | `Info.plist` |
 | No UPI app tiles (GPay, PhonePe, Paytm) in checkout | `LSApplicationQueriesSchemes`, Razorpay's own list of 23 | `Info.plist` |
 | The verification link landing on "That page has moved" | `FlutterDeepLinkingEnabled` = false | `Info.plist` |
@@ -469,13 +469,13 @@ None of this is needed for TestFlight. All of it is needed before submitting to 
 
 Everything above was concluded from source. These confirm it on a device.
 
-1. The home-screen icon is the Nivora mark, and a cold start shows no white flash.
+1. The home-screen icon is the Apnivaas mark, and a cold start shows no white flash.
 2. As a warden, register a resident and tap **Take photo**. The camera permission dialog must
    appear. If it does not, `PERMISSION_CAMERA` did not resolve; check the build log. Tap
-   **Don't Allow** once: the message must name Settings, Apps, Nivora, Camera.
+   **Don't Allow** once: the message must name Settings, Apps, Apnivaas, Camera.
 3. As a resident, open a receipt, **Share**, **Save Image**. A Photos permission prompt appears
    and the app stays open.
 4. On a hostel with Razorpay linked, tap **Pay**: installed UPI apps appear as tiles.
-5. Tap an email verification link in Mail. Nivora opens, and it does not show "That page has
+5. Tap an email verification link in Mail. Apnivaas opens, and it does not show "That page has
    moved".
 6. On an iPad, share a receipt: the share sheet opens as a popover.

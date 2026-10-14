@@ -13,12 +13,12 @@
 #   2. An app record in App Store Connect with bundle ID com.nivorasr.app.
 #   3. An App Store Connect API key (role: App Manager), added in Codemagic under
 #      Team settings -> Integrations -> Developer Portal, and named EXACTLY
-#      "Nivora App Store Connect". The name below must match it character for character.
+#      "Apnivaas App Store Connect". The name below must match it character for character.
 #   4. This repository added as an app in Codemagic.
 # docs/ios-codemagic.md walks through each one.
 #
 # NO SECRETS BELONG HERE. The Supabase URL and anon key are compiled into the app as defaults in
-# nivora_app/lib/core/config/env.dart, exactly as in the Android build, and the anon key is a
+# apnivaas_app/lib/core/config/env.dart, exactly as in the Android build, and the anon key is a
 # client key gated by RLS. Razorpay's publishable key comes from the server per order. Signing
 # material is fetched at build time through the integration and never touches the repository.
 
@@ -26,12 +26,12 @@ workflows:
   ios-testflight:
     name: iOS to TestFlight
     # The Flutter app is a subdirectory; the website occupies the repository root.
-    working_directory: nivora_app
+    working_directory: apnivaas_app
     instance_type: mac_mini_m2
     max_build_duration: 60
 
     integrations:
-      app_store_connect: Nivora App Store Connect
+      app_store_connect: Apnivaas App Store Connect
 
     environment:
       # Pinned to the version that builds the Android release (.flutter-plugins-dependencies records
@@ -152,12 +152,12 @@ workflows:
   # onto a phone.
   ios-adhoc:
     name: iOS ad hoc .ipa (share the file)
-    working_directory: nivora_app
+    working_directory: apnivaas_app
     instance_type: mac_mini_m2
     max_build_duration: 60
 
     integrations:
-      app_store_connect: Nivora App Store Connect
+      app_store_connect: Apnivaas App Store Connect
 
     environment:
       flutter: 3.47.1
@@ -187,7 +187,7 @@ workflows:
   # which has neither limit.
   ios-unsigned:
     name: iOS unsigned .ipa (sideload, no Apple account)
-    working_directory: nivora_app
+    working_directory: apnivaas_app
     instance_type: mac_mini_m2
     max_build_duration: 60
 
@@ -218,7 +218,7 @@ workflows:
           mkdir -p build/ios/unsigned/Payload
           cp -R build/ios/iphoneos/Runner.app build/ios/unsigned/Payload/
           VERSION=$(grep '^version:' pubspec.yaml | cut -d' ' -f2 | cut -d+ -f1)
-          ( cd build/ios/unsigned && zip -qry "Nivora-$VERSION-$BUILD_NUMBER-unsigned.ipa" Payload )
+          ( cd build/ios/unsigned && zip -qry "Apnivaas-$VERSION-$BUILD_NUMBER-unsigned.ipa" Payload )
           ls -l build/ios/unsigned/*.ipa
 
     artifacts:

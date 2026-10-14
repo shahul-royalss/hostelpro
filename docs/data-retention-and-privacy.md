@@ -1,4 +1,4 @@
-# Data retention and privacy — NIVORA
+# Data retention and privacy — Apnivaas
 
 What personal data this application holds, on what basis, for how long, how a person gets a copy or
 gets it erased, and who else touches it.
@@ -42,15 +42,15 @@ deliberately does not touch, and what a person still has to do by hand around it
 
 | Data set | Data Fiduciary | Data Processor | Data Principal |
 |---|---|---|---|
-| Resident (student) data, complaints, leaves, visitors, fee records | **The hostel / PG operator** — they decide to collect it and why | **NIVORA** | The resident (and the guardian and visitor, for their own contact details) |
-| Owner and platform-staff accounts | **NIVORA** | Supabase / Vercel | The owner, manager, warden |
-| `audit_log`, security telemetry | **NIVORA** — collected for NIVORA's own security purpose | Supabase / Vercel | Whoever the row is about |
+| Resident (student) data, complaints, leaves, visitors, fee records | **The hostel / PG operator** — they decide to collect it and why | **Apnivaas** | The resident (and the guardian and visitor, for their own contact details) |
+| Owner and platform-staff accounts | **Apnivaas** | Supabase / Vercel | The owner, manager, warden |
+| `audit_log`, security telemetry | **Apnivaas** — collected for Apnivaas's own security purpose | Supabase / Vercel | Whoever the row is about |
 
 **What follows from this split, and it is not cosmetic:**
 
 1. The **consent notice, the lawful basis and the response to a resident's request are the hostel
-   operator's obligations**, not NIVORA's. NIVORA's job is to make them possible.
-2. NIVORA must have a **written contract** with each tenant covering processing (DPDP requires a
+   operator's obligations**, not Apnivaas's. Apnivaas's job is to make them possible.
+2. Apnivaas must have a **written contract** with each tenant covering processing (DPDP requires a
    valid contract for a Fiduciary to engage a Processor). It should state: processing only on the
    Fiduciary's instructions; the breach-notification duty to notify the tenant immediately
    ([`incident-response.md`](./incident-response.md) §6.1); the sub-processors in §7; and what happens
@@ -75,7 +75,7 @@ at children.
 
 That has two consequences, and they should be a conscious choice rather than an accident:
 
-- The **positive**: NIVORA does no tracking, no behavioural profiling, no advertising and no
+- The **positive**: Apnivaas does no tracking, no behavioural profiling, no advertising and no
   analytics of any kind (§7), so the §9 *prohibitions* are satisfied by construction and by the
   absence of an age field, not merely by policy.
 - The **gap**: the §9 *consent* duty cannot be discharged through the product, because the product
@@ -108,7 +108,7 @@ Sensitivity: **H** = identity-theft or safety risk if exposed; **M** = privacy o
 | `complaints` | `student_id`, `title`, `description` (free text, may name other residents or staff), `photo_url`, `resolution_note`, `updated_by` | Resident + whoever is named | M | 2 months after it is raised, resolved or not |
 | `complaint_events` | `actor_user_id`, `note`, status timeline | Resident + staff | M | With the complaint |
 | `leaves` | `student_id`, dates, `reason` (free text — may reveal health or family circumstances), `decided_by`, `decision_note` | Resident | **H** — free-text reasons routinely contain sensitive context | With the resident record |
-| `visitors` | `visitor_name`, `visitor_phone`, `relation`, `check_in_at`/`check_out_at`, `student_id`, `logged_by` | **The visitor** — a third party with no account, no notice and no relationship with NIVORA — and, by inference, the resident's social contacts | **H** | With the resident record (§5) |
+| `visitors` | `visitor_name`, `visitor_phone`, `relation`, `check_in_at`/`check_out_at`, `student_id`, `logged_by` | **The visitor** — a third party with no account, no notice and no relationship with Apnivaas — and, by inference, the resident's social contacts | **H** | With the resident record (§5) |
 | `beds` | `student_id` — occupancy, i.e. where a named person sleeps | Resident | M | With the student |
 | `announcements` | `author_user_id`, `title`, `body` (free text, may name people) | Staff + anyone named | L | 2 months |
 | `tasks` | `assigned_to`, `created_by`, `title`, `description` | Staff | L | Life of the tenant |
@@ -183,10 +183,10 @@ is:
   without advice.
 - **Staff and owners:** employment / commercial relationship, again with notice.
 - **Visitors:** the weakest link in the whole inventory. A visitor's name and phone are recorded by a
-  warden; the visitor gets no notice and has no relationship with NIVORA. **The tenant must display
+  warden; the visitor gets no notice and has no relationship with Apnivaas. **The tenant must display
   a visible notice at the visitor log point** saying what is recorded, why, and for how long. Add this
   to the onboarding checklist.
-- **`audit_log`:** NIVORA's own security purpose. It is retained for the shortest period that
+- **`audit_log`:** Apnivaas's own security purpose. It is retained for the shortest period that
   supports investigation and legal duty, and identifying columns age out first
   ([`logging-and-monitoring.md`](./logging-and-monitoring.md) §4).
 
@@ -252,7 +252,7 @@ is why it lives in the `storage-erasure` Edge Function
 (`supabase/functions/storage-erasure/index.ts`) rather than in the database: a permanently readable
 service-role key sitting where any `security definer` function can reach it would be a worse privacy
 problem than the one it solves. **Nothing in this repository schedules that function.**
-[`razorpay-money-path.md`](./razorpay-money-path.md) records a `nivora-drain-storage-erasures` job on
+[`razorpay-money-path.md`](./razorpay-money-path.md) records an `apnivaas-drain-storage-erasures` job on
 the live `cron.job` table, which is not the same thing as a job in version control. Confirm it is
 running, and watch the queue-depth number: a count that climbs every night means erasures are half
 done — the records gone and the ID scans still in the bucket.
@@ -271,7 +271,7 @@ rather than delete.
 ## 6. Data-subject requests and erasure
 
 DPDP gives a Data Principal rights to information about processing, correction and completion, and
-erasure. Requests come to the **hostel operator** (the Fiduciary); NIVORA executes them.
+erasure. Requests come to the **hostel operator** (the Fiduciary); Apnivaas executes them.
 
 Log every request in an ops record with: who asked, how identity was verified, what was done, when.
 Acknowledge within **72 hours** and complete within **30 days** as an operating standard, and confirm
@@ -330,7 +330,7 @@ guards fire, and it is audited. A direct `update` leaves no trail and bypasses
 > `public.wd_request_student_erasure(uuid)` and `public.wd_cancel_student_erasure(uuid)` are
 > `security definer`, gated on `app.has_role_in(hostel, 'warden', 'owner')`, and granted to
 > `authenticated` (`db/schema.sql`); `WardenRepository.requestErasure` and `.cancelErasure`
-> (`nivora_app/lib/features/warden/data/warden_repository.dart`) call them. In the ordinary case
+> (`apnivaas_app/lib/features/warden/data/warden_repository.dart`) call them. In the ordinary case
 > nobody has to remember: `public.wd_vacate_student()` raises the request in the same statement as
 > the check-out, so checking a resident out schedules their erasure.
 >
@@ -445,7 +445,7 @@ Then check the free-text fields for names the structured columns do not cover: `
 `complaints.description` and `resolution_note`, `leaves.reason`, `expenses.note`. **Free text is where
 anonymisation quietly fails.**
 
-### 6.5 What NIVORA cannot do
+### 6.5 What Apnivaas cannot do
 
 - **Delete from backups.** Backups are point-in-time snapshots and are not selectively editable. The
   honest position, which should be in the tenant notice: erased data disappears from backups when

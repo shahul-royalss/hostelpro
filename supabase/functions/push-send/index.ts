@@ -72,7 +72,7 @@ function serviceAccount(): ServiceAccount | null {
     if (!parsed.client_email || !parsed.private_key || !parsed.project_id) return null;
     return parsed;
   } catch {
-    console.error("[nivora] FCM_SERVICE_ACCOUNT is set but is not valid JSON");
+    console.error("[apnivaas] FCM_SERVICE_ACCOUNT is set but is not valid JSON");
     return null;
   }
 }
@@ -195,7 +195,7 @@ async function sendOne(
   if (res.ok) return { token, ok: true, dead: false };
   const text = await res.text().catch(() => "");
   const dead = tokenIsDead(res.status, text);
-  if (!dead) console.error("[nivora] FCM " + res.status + ": " + text.slice(0, 300));
+  if (!dead) console.error("[apnivaas] FCM " + res.status + ": " + text.slice(0, 300));
   return { token, ok: false, dead };
 }
 
@@ -284,7 +284,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     return json({ ok: true, claimed: rows.length, sent, pruned: dead.length });
   } catch (e) {
-    console.error("[nivora] push-send:", e instanceof Error ? e.message : String(e));
+    console.error("[apnivaas] push-send:", e instanceof Error ? e.message : String(e));
     // 200, deliberately. The caller is a database trigger that cannot act on a failure, and a
     // non-2xx only fills net._http_response with noise.
     return json({ ok: false, error: "push failed" });

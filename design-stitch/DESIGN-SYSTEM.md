@@ -1,6 +1,6 @@
-# NIVORA UI/UX — the design system, extracted from the real Stitch project
+# Apnivaas UI/UX — the design system, extracted from the real Stitch project
 
-Source: Stitch project `2206751849911882558` ("NIVORA UI/UX"), 24 screens, fetched 2026-08-30.
+Source: Stitch project `2206751849911882558` ("Apnivaas UI/UX"), 24 screens, fetched 2026-08-30.
 Ground truth is `owner-dashboard.html`'s `tailwind.config` block — every value below is copied
 from it verbatim, not inferred from a screenshot.
 
@@ -104,6 +104,6 @@ may be used sparingly for the hero figure.
 ## What the screenshots are and are not
 
 All 24 PNGs are layout references. **Every name, figure and date in them is invented** — "Rahul
-Sharma", "Nivora Heights PG", "₹8,500", "150 beds", "5th Oct 2024". None of it may reach a real
+Sharma", "Apnivaas Heights PG", "₹8,500", "150 beds", "5th Oct 2024". None of it may reach a real
 screen. Every value the app displays comes from a provider reading the real database. If a
 mockup shows a widget whose data does not exist in the schema, skip the widget and say so.

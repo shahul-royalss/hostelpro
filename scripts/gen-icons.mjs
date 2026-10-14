@@ -24,7 +24,7 @@
  * channel distance from #FEFCF9 goes from 12 to 55 (the tile itself drifts by up to 9 between
  * its top and its bottom, which is why the floor is 12), and each partly covered edge pixel has
  * the tile colour taken back OUT of it, so the mark keeps no pale fringe on a dark or beige
- * ground. The result is committed as two transparent masters under nivora_app/assets/brand/:
+ * ground. The result is committed as two transparent masters under apnivaas_app/assets/brand/:
  *
  *   apnivaas_mark.png    the A-house alone, 2048px wide, trimmed to its ink
  *   apnivaas_lockup.png  the mark above the wordmark, exactly as the artwork sets them, 2048 wide
@@ -39,17 +39,17 @@
  *
  * ── WHERE THE OUTPUT GOES ────────────────────────────────────────────────────────────────────
  *
- *   nivora_app/android/app/src/main/res   launcher, round, adaptive foreground + monochrome,
+ *   apnivaas_app/android/app/src/main/res   launcher, round, adaptive foreground + monochrome,
  *                                         and the status-bar notification icon
- *   nivora_app/ios/.../AppIcon.appiconset the single 1024 universal icon (Xcode derives the rest)
+ *   apnivaas_app/ios/.../AppIcon.appiconset the single 1024 universal icon (Xcode derives the rest)
  *   public/icons + app/favicon.ico        the website's PWA icons and favicon
- *   public/brand                          the store masters scripts/store-assets.mjs reads, and
- *                                         the lockup the website's sign-in card shows
+ *   public/brand                          the square store masters, and the lockup the
+ *                                         website's sign-in card shows
  *
- * This used to write its launcher icons into the ROOT android/ folder — the retired Trusted Web
- * Activity wrapper (app.nivora.twa) — and the Flutter and iOS copies were then copied across by
- * hand, which is exactly how an app ends up shipping a new name with the old icon. It writes the
- * app the Play listing actually serves now, and nothing into the retired wrapper.
+ * This used to write its launcher icons into a separate web-wrapper project (removed on
+ * 2026-10-14), and the Flutter and iOS copies were then copied across by hand, which is exactly
+ * how an app ends up shipping a new name with the old icon. It writes the app the Play listing
+ * actually serves.
  *
  * ── SAFE ZONES ARE MEASURED, NOT GUESSED ─────────────────────────────────────────────────────
  *
@@ -80,7 +80,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const SRC_ART = path.join(REPO_ROOT, "Apnivaas_8K_UHD.png");
 const SRC_VIDEO = path.join(REPO_ROOT, "Logo animation.mp4");
 
-const APP = path.join(REPO_ROOT, "nivora_app");
+const APP = path.join(REPO_ROOT, "apnivaas_app");
 const APP_BRAND = path.join(APP, "assets", "brand");
 const MARK_MASTER = path.join(APP_BRAND, "apnivaas_mark.png");
 const LOCKUP_MASTER = path.join(APP_BRAND, "apnivaas_lockup.png");
@@ -728,7 +728,7 @@ async function makeIcons() {
   const lockupWebMeta = await sharp(lockupWeb).metadata();
   add(emit(path.join(BRAND_DIR, "apnivaas-lockup.png"), lockupWeb), { w: 1024, h: lockupWebMeta.height, alpha: true });
 
-  // Square, opaque masters for scripts/store-assets.mjs: the caption badge and the Play icon.
+  // Square, opaque masters: the caption badge and the Play icon.
   // 66% wide keeps the mark inside the rounded square Play and the stores crop to.
   add(emit(path.join(BRAND_DIR, "logo-square-1024.png"), await compose(markPng, { size: 1024, frac: 0.66, shape: "square", opaque: true, truecolor: true })), { w: 1024, h: 1024, alpha: false, channels: 3 });
   add(emit(path.join(BRAND_DIR, "play-icon-512.png"), await compose(markPng, { size: 512, frac: 0.66, shape: "square", opaque: true, truecolor: true })), { w: 512, h: 512, alpha: false, channels: 3 });

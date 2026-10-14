@@ -562,8 +562,8 @@
   APP CHROME — safe areas, the tab bar, tap targets, momentum scrolling.
 
   Additive only: nothing above this line is redefined. It exists because the
-  Android build is a TWA (app.nivora.twa) that runs fullscreen against the same
-  deployment, with `viewportFit: "cover"` already set in app/layout.tsx. That
+  site runs fullscreen when it is installed as a web app, with
+  `viewportFit: "cover"` already set in app/layout.tsx. That
   flag is what makes the window extend *under* the status bar and the gesture
   pill — Chrome then hands the page those distances in env(safe-area-inset-*),
   and if nothing consumes them the top bar sits under the clock and the tab bar

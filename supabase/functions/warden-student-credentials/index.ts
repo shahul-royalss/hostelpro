@@ -123,7 +123,7 @@ async function loadTarget(studentId: string, hostel: HostelContext): Promise<Tar
     .eq("hostel_id", hostel.id)
     .maybeSingle();
   if (error) {
-    console.error("[nivora] student lookup failed:", error.message);
+    console.error("[apnivaas] student lookup failed:", error.message);
     throw new HttpError(500, "Could not load that resident. Please try again.");
   }
   const row = data as
@@ -146,7 +146,7 @@ async function loadTarget(studentId: string, hostel: HostelContext): Promise<Tar
     .eq("id", row.user_id)
     .maybeSingle();
   if (profileError) {
-    console.error("[nivora] profile lookup failed:", profileError.message);
+    console.error("[apnivaas] profile lookup failed:", profileError.message);
     throw new HttpError(500, "Could not load that resident. Please try again.");
   }
   const user = profile as { role: string; hostel_id: string | null; deleted_at: string | null } | null;
@@ -154,7 +154,7 @@ async function loadTarget(studentId: string, hostel: HostelContext): Promise<Tar
 
   const { data: authData, error: authError } = await admin.auth.admin.getUserById(row.user_id);
   if (authError || !authData?.user?.email) {
-    console.error("[nivora] auth lookup failed:", authError?.message ?? "no email on the account");
+    console.error("[apnivaas] auth lookup failed:", authError?.message ?? "no email on the account");
     throw new HttpError(500, "Could not read that resident's login. Please try again.");
   }
 
@@ -203,7 +203,7 @@ async function resetPassword(caller: Caller, hostel: HostelContext, target: Targ
     app_metadata: { ...meta, must_change_password: true },
   });
   if (authError) {
-    console.error("[nivora] password reset failed:", authError.message);
+    console.error("[apnivaas] password reset failed:", authError.message);
     // The flag is now true and the password did not change. The resident will be asked to set a
     // new password on their next sign-in with their EXISTING one, which is harmless and honest.
     throw new HttpError(400, "Could not reset that password. Please try again.");
@@ -236,7 +236,7 @@ async function resetPassword(caller: Caller, hostel: HostelContext, target: Targ
     if (error) throw error;
     sessionsEnded = typeof data === "number" ? data : null;
   } catch (e) {
-    console.error("[nivora] session revocation failed (non-fatal):", e instanceof Error ? e.message : String(e));
+    console.error("[apnivaas] session revocation failed (non-fatal):", e instanceof Error ? e.message : String(e));
   }
 
   await audit("warden.student.password_reset", caller, {

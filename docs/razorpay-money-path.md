@@ -25,7 +25,7 @@ a property it does not have and does not need.
 End-to-end encryption means a message is readable only by the two endpoints and not by the server
 in the middle — what WhatsApp does. A rent payment is the opposite shape: the server *must* read
 the amount, because the server is the thing that decides the amount. There is no version of this
-where NIVORA holds a payment it cannot read.
+where Apnivaas holds a payment it cannot read.
 
 Four real things protect this money. They are worth knowing by name, because they are what to
 check when something looks wrong:
@@ -35,11 +35,11 @@ Razorpay back to the webhook — is HTTPS. Nobody on the café wi-fi, the ISP, o
 can read or alter any of it. This is the part people mean when they say "encrypted", and it is
 already true everywhere, with no work outstanding.
 
-**2. Card details never touch NIVORA. This is the real reason the design is safe.** When the
+**2. Card details never touch Apnivaas. This is the real reason the design is safe.** When the
 resident types a card number, they are typing it into an iframe served by `checkout.razorpay.com`
 — Razorpay's own document, on Razorpay's own origin. The browser's same-origin policy means our
 JavaScript cannot read those fields, not by choice but by construction. The same is true of UPI
-PINs and net-banking passwords. NIVORA never sees a card number, never stores one, never logs one,
+PINs and net-banking passwords. Apnivaas never sees a card number, never stores one, never logs one,
 and therefore cannot leak one. The database has no column for it. This is worth saying plainly to
 anyone who asks whether the app is safe with their card: **the app never has your card.**
 
@@ -366,7 +366,7 @@ No, on every check.
   `no .env value appears in tracked files (6 secrets compared)`,
   `no credentials in git history (2,15,434 diff lines scanned)`, and
   `RESULT: 0 blocker(s), 0 warning(s)`.
-- **The APK.** `nivora_app/lib/core/config/env.dart` holds only the Supabase URL and anon key, and
+- **The APK.** `apnivaas_app/lib/core/config/env.dart` holds only the Supabase URL and anon key, and
   says so in a comment: the Razorpay key secret, the webhook secret and the service-role key are
   named as things that must never be there. There is no Razorpay key of any kind in the Flutter
   app — the key id was removed with the in-app checkout.
@@ -419,7 +419,7 @@ only trace is a `payment.reconcile.required` audit row.
 
 **Today this cannot happen**, and that is the only reason it is not High: nothing runs
 `rz_expire_stale_intents()`. The live `cron.job` table holds three jobs — `hostelpro-retention`,
-`hostelpro-keepwarm`, `nivora-drain-storage-erasures` — and none of them call it, nor does
+`hostelpro-keepwarm`, `apnivaas-drain-storage-erasures` — and none of them call it, nor does
 `app.apply_retention()`.
 
 It becomes real the moment anyone follows the runbook. `payments.md` §7 "Housekeeping" says to run

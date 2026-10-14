@@ -26,7 +26,7 @@
  *
  * ═══ WHAT IT ACTUALLY CLOSES, AND WHAT IT DOES NOT ═══
  *
- * CLOSED: the app's own path. Every sign-in and every code check the NIVORA app performs now
+ * CLOSED: the app's own path. Every sign-in and every code check the Apnivaas app performs now
  * spends a durable Postgres counter first and lands in the audit trail either way.
  *
  * NOT CLOSED BY THIS FILE: /auth/v1/token is still a public endpoint, and the anon key that
@@ -132,7 +132,7 @@ async function revoke(accessToken: string): Promise<void> {
     await gotrue("logout?scope=global", { body: {}, bearer: accessToken });
   } catch (e) {
     console.error(
-      "[nivora] could not revoke a session we declined to return:",
+      "[apnivaas] could not revoke a session we declined to return:",
       e instanceof Error ? e.message : String(e),
     );
   }
@@ -259,7 +259,7 @@ async function signIn(req: Request, body: Record<string, unknown>): Promise<Resp
     // failing exactly that way; if it is ever switched back on, this line keeps the message
     // honest instead of blaming the user.
     if (/captcha/i.test(errorCode) || /captcha/i.test(description)) {
-      console.error("[nivora] GoTrue refused the password grant for CAPTCHA — sign-in is down for every client.");
+      console.error("[apnivaas] GoTrue refused the password grant for CAPTCHA — sign-in is down for every client.");
       throw unavailable(SIGNIN_UNAVAILABLE);
     }
 
@@ -275,7 +275,7 @@ async function signIn(req: Request, body: Record<string, unknown>): Promise<Resp
     }
 
     if (call.status >= 500) {
-      console.error(`[nivora] GoTrue ${call.status} on password grant: ${description.slice(0, 200)}`);
+      console.error(`[apnivaas] GoTrue ${call.status} on password grant: ${description.slice(0, 200)}`);
       throw unavailable(SIGNIN_UNAVAILABLE);
     }
 
@@ -303,7 +303,7 @@ async function signIn(req: Request, body: Record<string, unknown>): Promise<Resp
     .maybeSingle();
 
   if (error) {
-    console.error("[nivora] profile lookup failed after a valid password:", error.message);
+    console.error("[apnivaas] profile lookup failed after a valid password:", error.message);
     await revoke(session.access_token);
     throw unavailable(SIGNIN_UNAVAILABLE);
   }

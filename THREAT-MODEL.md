@@ -1,4 +1,4 @@
-# THREAT-MODEL.md — NIVORA
+# THREAT-MODEL.md — Apnivaas
 
 GOD-MODE checklist **§1**. This is the inventory the rest of the security work is measured
 against: if an asset, boundary or entry point is not listed here, it was not tested.
@@ -10,8 +10,9 @@ Companion documents: [`SECURITY.md`](./SECURITY.md) (findings + sign-off),
 
 ## 1. System shape
 
-Single Next.js 15 application (Vercel) + Supabase (Postgres, Auth, Storage), wrapped for Android
-as a Trusted Web Activity (`app.nivora.twa`) that loads the same deployment. **No** background
+Single Next.js 15 application (Vercel) + Supabase (Postgres, Auth, Storage). The Android client
+is the native Flutter app (`apnivaas_app/`, package `com.nivorasr.app`) on the same Supabase
+project; the old web wrapper was removed on 2026-10-14. **No** background
 workers/queues, **no** AI/LLM integration, **no** second backend.
 
 Since 24 Aug 2026 there IS a payment provider and there IS a webhook, and both widen this model:

@@ -8,16 +8,19 @@ Play counts the characters *inside* the tags, not the tags themselves.
 
 ## v1.2.0 (versionCode 8) — the Apnivaas name, the email gate and the one-time Terms screen
 
-`nivora_app/pubspec.yaml:19` says `version: 1.2.0+8`. **Not built yet.** Fill in the table from the
-`nivora_app/scripts/release.sh` run, as for 1.1.0 below. The files keep the `NIVORA-` prefix: that is
-a file name on the build machine, not the product name (`release.sh:424-427`), and nobody outside
-that machine sees it.
+`apnivaas_app/pubspec.yaml:19` says `version: 1.2.0+8`. Built on 2026-10-14 by
+`apnivaas_app/scripts/release.sh` from the renamed tree (analyzer clean, 1,493 tests passed, signed
+with the upload key, label `Apnivaas`, versionCode 8 on every artifact, no secrets in any ABI):
 
 | File | Bytes | SHA-256 |
 |---|---|---|
-| `dist/NIVORA-1.2.0.aab` (upload this) | *after the build* | *after the build* |
-| `dist/NIVORA-1.2.0.apk` (arm64, to install) | *after the build* | *after the build* |
-| `dist/NIVORA-1.2.0-universal.apk` (any CPU) | *after the build* | *after the build* |
+| `dist/APNIVAAS-1.2.0.aab` (upload this) | 66,774,114 | `4037186cf49bf429f3fafa1f86509386b3396943f4f9b1c6723d9610bc021386` |
+| `dist/APNIVAAS-1.2.0.apk` (arm64, to install) | 25,635,512 | `933958518e727bbaec08650ba7975c7877d71a7778d2ed47fb89ec50048c5567` |
+| `dist/APNIVAAS-1.2.0-universal.apk` (any CPU) | 69,292,270 | `b834c1ccaf66e9deb6f5a652d280265094b42196359a7b281910d245097aaf7b` |
+
+An earlier build of the same version, made before the folders and files were renamed, is kept as
+`dist/APNIVAAS-1.2.0-first-build.aab` (SHA-256 `16801967…42433`). The two behave the same; if that
+one is already on Play, versionCode 8 is used and this one is not uploaded.
 
 What a user meets in this build:
 
@@ -41,7 +44,7 @@ off the screen. The whole order is
 
 ```
 <en-US>
-Nivora is now Apnivaas: new name, new icon, same account and records.
+New name and icon: Apnivaas. Your account and records stay the same.
 
 • Owners: every PG in one place, staff logins, rent, expense charts and tasks.
 • Wardens: rooms, beds, residents, fees at the desk, complaints and leave.
@@ -52,25 +55,25 @@ New: staff in several PGs tap Switch PG. Owners and staff confirm their email on
 </en-US>
 ```
 
-**488 characters** inside the tags, **495** if every line break becomes CRLF on paste, against Play's
-500 (counted in Python on 2026-10-13). That leaves 5 to spare, so recount after any edit. It still
+**487 characters** inside the tags, **494** if every line break becomes CRLF on paste, against Play's
+500 (counted in Python on 2026-10-14). That leaves 6 to spare, so recount after any edit. It still
 describes the whole app, for the reason 1.1.0's block did: unless 1.1.0 (7) reached production
-first, this is the first release production users see. The first line uses the old name on purpose,
-because testers know the app as Nivora. If 1.1.0 (7) did reach production first, Switch PG is old
+first, this is the first release production users see. The first line tells testers the name and
+icon are new without naming the old one. If 1.1.0 (7) did reach production first, Switch PG is old
 news there and its sentence can go.
 
 ---
 
 ## v1.1.0 (versionCode 7) — staff across several PGs, and the first production release
 
-`nivora_app/pubspec.yaml:19` says `version: 1.1.0+7`. Built on 2026-09-30 by
-`nivora_app/scripts/release.sh` (analyzer clean, 1,458 tests passed) and checked independently:
+`apnivaas_app/pubspec.yaml:19` says `version: 1.1.0+7`. Built on 2026-09-30 by
+`apnivaas_app/scripts/release.sh` (analyzer clean, 1,458 tests passed) and checked independently:
 
 | File | Bytes | SHA-256 |
 |---|---|---|
-| `dist/NIVORA-1.1.0.aab` (upload this) | 66,416,290 | `2daac0451fb2ca3123fe097162e0565d6bd2aeded0a2d9166734f0957f7e16c2` |
-| `dist/NIVORA-1.1.0.apk` (arm64, to install) | 25,290,785 | `7c373e9e9d44ec68f5fd3f6ab7ac69a97500729f0801ae46e3fa06984102cc48` |
-| `dist/NIVORA-1.1.0-universal.apk` (any CPU) | 68,849,239 | `d0967f8c89f1e160ebfc8507007eba30de95e1b69c5df5fe0012f4b3e4dc441c` |
+| `dist/APNIVAAS-1.1.0.aab` (upload this) | 66,416,290 | `2daac0451fb2ca3123fe097162e0565d6bd2aeded0a2d9166734f0957f7e16c2` |
+| `dist/APNIVAAS-1.1.0.apk` (arm64, to install) | 25,290,785 | `7c373e9e9d44ec68f5fd3f6ab7ac69a97500729f0801ae46e3fa06984102cc48` |
+| `dist/APNIVAAS-1.1.0-universal.apk` (any CPU) | 68,849,239 | `d0967f8c89f1e160ebfc8507007eba30de95e1b69c5df5fe0012f4b3e4dc441c` |
 
 Package `com.nivorasr.app`, versionCode 7, versionName 1.1.0, targetSdk 36, the same 10 permissions
 as versionCode 6, no AD_ID, every arm64 and x86_64 library 16 KB aligned, signed with the upload key
@@ -87,7 +90,7 @@ same day; see [play-console-submission.md, Step 4](play-console-submission.md#st
 
 ```
 <en-US>
-Nivora runs a PG or hostel end to end.
+Apnivaas runs a PG or hostel end to end.
 
 • Owners: every property in one place, staff logins for one PG or several, rent and payment history, expense charts, and tasks for your manager.
 • Wardens: rooms and beds, resident registration, fees at the desk, complaints and leave.
@@ -98,8 +101,8 @@ New: staff who work in several PGs tap Switch PG to move between them.
 </en-US>
 ```
 
-**491 characters** inside the tags, **498** if every line break becomes CRLF on paste, against Play's
-500 (counted in Python on 2026-09-30). That is close, so recount after any edit. It keeps the full
+**493 characters** inside the tags, **500** if every line break becomes CRLF on paste, against Play's
+500 (recounted in Python on 2026-10-14, after the name change). That is exactly the limit, so recount after any edit. It keeps the full
 description of the app because this is the release production users will see first: nobody in
 production ever had versionCode 6, so a "what changed" list alone would describe nothing to them. The
 owners line lost "(5 managers and 5 wardens each)" and "monthly" to make room for the new line.
@@ -108,8 +111,8 @@ owners line lost "(5 managers and 5 wardens each)" and "monthly" to make room fo
 
 ## v1.0.0 (versionCode 6) — first release
 
-`nivora_app/pubspec.yaml:19` says `version: 1.0.0+6`. The bundle that went up is
-`dist/NIVORA-1.0.0.aab`, built from it on 2026-09-16, 66,433,003 bytes, SHA-256 `d1283f6b173eecf37d6ebbbb2d026e414d8e60b0dc7480a5505583075a888541`. Check the
+`apnivaas_app/pubspec.yaml:19` says `version: 1.0.0+6`. The bundle that went up is
+`dist/APNIVAAS-1.0.0.aab`, built from it on 2026-09-16, 66,433,003 bytes, SHA-256 `d1283f6b173eecf37d6ebbbb2d026e414d8e60b0dc7480a5505583075a888541`. Check the
 hash before any upload; the steps are in [play-console-submission.md](play-console-submission.md).
 That bundle is already up: the closed testing release `1.0.0 (6)` passed review and is published to
 the closed track. Production is still Inactive.
@@ -130,7 +133,7 @@ must be 7 or higher.
 
 ```
 <en-US>
-Nivora runs a PG or hostel end to end.
+Apnivaas runs a PG or hostel end to end.
 
 • Owners: every property in one place, staff logins (5 managers and 5 wardens each), rent and payment history, monthly expense charts, and tasks for your manager.
 • Wardens: rooms and beds, resident registration, fees at the desk, complaints and leave.
@@ -139,7 +142,7 @@ Nivora runs a PG or hostel end to end.
 </en-US>
 ```
 
-**437 characters** inside the tags, against Play's limit of 500 (counted in Python on 2026-09-14).
+**439 characters** inside the tags, against Play's limit of 500 (recounted in Python on 2026-10-14).
 The text is unchanged from the versionCode 4 draft; nothing in it names the package.
 
 Two lines changed from the previous version of this block, and a reader who remembers it should
@@ -166,7 +169,7 @@ python3 -c "import re,sys;print([len(m) for m in re.findall(r'<en-US>\n(.*?)\n</
 
 ```
 <en-US>
-The first release of Nivora — PG and hostel management for owners, wardens, managers and residents. Rooms and beds, resident records, rent and receipts with UPI payment, expenses with month-by-month charts, mess menu, complaints, leave, notices and tasks.
+The first release of Apnivaas — PG and hostel management for owners, wardens, managers and residents. Rooms and beds, resident records, rent and receipts with UPI payment, expenses with month-by-month charts, mess menu, complaints, leave, notices and tasks.
 </en-US>
 ```
 

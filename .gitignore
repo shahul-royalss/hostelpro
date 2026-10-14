@@ -43,13 +43,6 @@ next-env.d.ts
 .vercel
 .env*
 
-# android (TWA wrapper) build output
-/android/.gradle/
-/android/build/
-/android/app/build/
-/android/local.properties
-/android/captures/
-
 # Android signing material - the release keystore and its passwords must never
 # be committed. Losing it is unrecoverable, leaking it lets anyone ship an
 # update signed as HostelPro. It lives in ~/.hostelpro-keys/ (docs/play-store.md).
@@ -65,7 +58,7 @@ sbom.json
 # `actions/checkout` fail with "No url found for submodule path" on every CI run
 skills/mvanhorn/
 
-# Release artifacts (AAB/APK) — binaries, rebuilt from android/ on demand
+# Release artifacts (AAB/APK) — binaries, rebuilt by apnivaas_app/scripts/release.sh
 /dist/
 
 # Owner-supplied prototype kept as reference for components/payments/receipt-printer.tsx.

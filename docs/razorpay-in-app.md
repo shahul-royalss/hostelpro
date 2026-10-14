@@ -26,12 +26,12 @@ Companion documents, not duplicates of this one:
 | `supabase/functions/razorpay-order/index.ts` | Supabase Edge (Deno) | `RAZORPAY_KEY_SECRET`. **No service-role key.** |
 | `supabase/functions/razorpay-webhook/index.ts` | Supabase Edge (Deno) | `RAZORPAY_WEBHOOK_SECRET` + the service-role key |
 | `supabase/functions/_shared/razorpay.ts` | Supabase Edge (Deno) | Key handling, HMAC verification, the Orders API call |
-| `nivora_app/lib/data/models/checkout.dart` | Phone | `CheckoutOrder`, `CheckoutOutcome` — no secret of any kind |
-| `nivora_app/lib/data/repositories/checkout_repository.dart` | Phone | The Edge Function call, and the refusal-to-sentence mapping |
-| `nivora_app/lib/features/payments/pay_rent.dart` | Phone | The native checkout wrapper and the **ledger wait** that confirms it |
-| `nivora_app/lib/features/student/rent_payment_controller.dart` | Phone | The eight-state payment machine |
-| `nivora_app/lib/features/student/pay_rent_sheet.dart` | Phone | What the resident actually sees |
-| `nivora_app/test/payment_test.dart` | CI | 18 tests — no network, no device, no Razorpay account |
+| `apnivaas_app/lib/data/models/checkout.dart` | Phone | `CheckoutOrder`, `CheckoutOutcome` — no secret of any kind |
+| `apnivaas_app/lib/data/repositories/checkout_repository.dart` | Phone | The Edge Function call, and the refusal-to-sentence mapping |
+| `apnivaas_app/lib/features/payments/pay_rent.dart` | Phone | The native checkout wrapper and the **ledger wait** that confirms it |
+| `apnivaas_app/lib/features/student/rent_payment_controller.dart` | Phone | The eight-state payment machine |
+| `apnivaas_app/lib/features/student/pay_rent_sheet.dart` | Phone | What the resident actually sees |
+| `apnivaas_app/test/payment_test.dart` | CI | 18 tests — no network, no device, no Razorpay account |
 
 Nothing new was added to the database. `payment_intents`, `rz_open_intent`, `rz_record_capture`,
 `rz_credit_fee` and `rz_mark_failed` already existed for the web path and are reused unchanged —
@@ -110,7 +110,7 @@ Three values. Only one of them may ever reach a phone.
 | Name | Secret? | Where it lives | Where it must never be |
 | --- | --- | --- | --- |
 | `RAZORPAY_KEY_ID` | no — publishable | Supabase function secret; returned to the app per-order | (safe anywhere) |
-| `RAZORPAY_KEY_SECRET` | **yes** | Supabase function secret **only** | any file under `nivora_app/`, any `--dart-define`, any APK |
+| `RAZORPAY_KEY_SECRET` | **yes** | Supabase function secret **only** | any file under `apnivaas_app/`, any `--dart-define`, any APK |
 | `RAZORPAY_WEBHOOK_SECRET` | **yes** | Supabase function secret **only** | same |
 
 `RAZORPAY_KEY_SECRET` for this project is in `.env.local` at the repo root, under that name. Read it
@@ -268,7 +268,7 @@ token>`, and **no body**. `supabase_flutter`'s functions client attaches the tok
 The key id comes back **from the server**, per order, rather than being compiled into the app. That
 is deliberate: it is read from the same environment as the secret that signed the order, so a test
 order can never be opened with a live key or the reverse. (`Env.razorpayKeyId` exists in
-`nivora_app/lib/core/config/env.dart` as a build-time hook and is **not used** by this path.)
+`apnivaas_app/lib/core/config/env.dart` as a build-time hook and is **not used** by this path.)
 
 ### Order reuse
 
@@ -374,7 +374,7 @@ subcommand, so the dashboard is the way.
 | Every delivery 401s, `bad_signature` in `audit_log` | Dashboard secret ≠ `RAZORPAY_WEBHOOK_SECRET`, or the API key secret was pasted into the dashboard | Re-set both to the same freshly chosen string |
 | Every delivery 503 | `RAZORPAY_WEBHOOK_SECRET` not set | `npx supabase secrets set ...`; no redeploy needed |
 | Pay button says "not set up yet" | `RAZORPAY_KEY_ID` or `RAZORPAY_KEY_SECRET` not set | §3 |
-| Sheet opens then dies on a **release** build only | R8 stripped Razorpay's reflective classes | Already handled — `nivora_app/android/app/proguard-rules.pro` keeps `com.razorpay.**`. If you edit that file, do not remove that block. |
+| Sheet opens then dies on a **release** build only | R8 stripped Razorpay's reflective classes | Already handled — `apnivaas_app/android/app/proguard-rules.pro` keeps `com.razorpay.**`. If you edit that file, do not remove that block. |
 | App always ends at "we stopped waiting" | The webhook is not reaching the server at all | Steps 4–5 above, then the dashboard's own webhook delivery log |
 | `captured` rows with `credited_at` null | `rz_credit_fee` was refused — usually an expired subscription (§4.4) | `docs/payments.md` §7. Renew, then re-deliver the event from the Razorpay dashboard; it re-enters as `duplicate` and the credit is retried |
 
@@ -399,7 +399,7 @@ Stated plainly so nobody assumes otherwise:
 - **Nothing is deployed.** Every command above is written down and none of it has been run against
   the live project. The functions exist as source only.
 - **No live payment has been made end to end.** The state machine is verified by 18 tests in
-  `nivora_app/test/payment_test.dart` using a fake repository and a fake checkout — no network, no
+  `apnivaas_app/test/payment_test.dart` using a fake repository and a fake checkout — no network, no
   device, no Razorpay account. The `razorpay_flutter` plugin's own behaviour on a real handset (the
   native sheet, and the resync-after-activity-death path) is **unverified** and needs a device.
 - **The Deno functions have not been type-checked.** `deno check` was not run — there is no Deno

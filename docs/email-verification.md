@@ -1,4 +1,4 @@
-# Email verification — the link opens Nivora, and that sign-in is the proof
+# Email verification — the link opens Apnivaas, and that sign-in is the proof
 
 **Status:** rebuilt 2026-09-01 to the flow the owner asked for, verbatim:
 
@@ -6,7 +6,7 @@
 > login through that link they have to verify"
 
 **Updated 2026-09-13:** the link now returns on `com.nivorasr.app://verify-email`, because the
-app's package is now `com.nivorasr.app` (`nivora_app/android/app/build.gradle.kts:109`). Until
+app's package is now `com.nivorasr.app` (`apnivaas_app/android/app/build.gradle.kts:109`). Until
 then it was `com.srnivora.app`, the package of a Play listing that was abandoned before any
 release. Measurements dated 2026-09-01 below were taken with the old string and say so. §10 covers
 the temporary Demo PG exemption added the same day.
@@ -63,7 +63,7 @@ unpushed.
 and it changes nothing about the proof. Three of the four live accounts have a real recorded
 click and a stamped `email_verified_at` today (§6), earned through exactly that broken landing
 page. The failure was **cosmetic in the browser and fatal in the head**: the user believed
-nothing had happened and never came back to Nivora to let it re-check.
+nothing had happened and never came back to Apnivaas to let it re-check.
 
 Deploying the page removed the scary screen. It did not give the owner what they asked for, and it
 could never have, for the reason in §2.
@@ -72,7 +72,7 @@ could never have, for the reason in §2.
 
 ## 2. Why the link now opens the app, and why a web page could never have done this
 
-The app pins `AuthFlowType.pkce` (`nivora_app/lib/main.dart`). Under PKCE, `/auth/v1/verify`
+The app pins `AuthFlowType.pkce` (`apnivaas_app/lib/main.dart`). Under PKCE, `/auth/v1/verify`
 does not hand out a session — it stamps an auth code onto the flow state and redirects with
 `?code=`. That code can only be exchanged for a session by whoever holds the **code verifier**,
 and the verifier for a link *this app* asked for is in *this app's* keystore.
@@ -81,16 +81,16 @@ and the verifier for a link *this app* asked for is in *this app's* keystore.
 happen elsewhere and printed a sentence about it. It is structurally incapable of logging the
 person in, which is the thing the owner asked for.
 
-So the redirect is a **custom scheme that opens Nivora**:
+So the redirect is a **custom scheme that opens Apnivaas**:
 
 | Piece | Where | Value |
 |---|---|---|
-| Redirect the app requests | `nivora_app/lib/core/config/env.dart:100-103` → `Env.emailConfirmRedirectUrl` | `com.nivorasr.app://verify-email` |
-| Intent filter that catches it | `nivora_app/android/app/src/main/AndroidManifest.xml:142` | `<data android:scheme="com.nivorasr.app" android:host="verify-email"/>` |
+| Redirect the app requests | `apnivaas_app/lib/core/config/env.dart:100-103` → `Env.emailConfirmRedirectUrl` | `com.nivorasr.app://verify-email` |
+| Intent filter that catches it | `apnivaas_app/android/app/src/main/AndroidManifest.xml:142` | `<data android:scheme="com.nivorasr.app" android:host="verify-email"/>` |
 | Dashboard allow-list entry | Supabase → Authentication → URL Configuration | the same string (§0) |
 
 All three must be the same string. The first two are asserted against each other by
-`nivora_app/test/email_verification_test.dart:846-872` (its eighth group), which reads the manifest and compares it to
+`apnivaas_app/test/email_verification_test.dart:846-872` (its eighth group), which reads the manifest and compares it to
 the Dart constant, because those two files cannot see one another and drift between them is
 silent. The third is a dashboard field no test can reach — which is why §0 exists and why the
 app itself names it on screen (§4.4).
@@ -100,7 +100,7 @@ What happens on the phone, in order:
 1. GoTrue matches the emailed token at `/auth/v1/verify` and stamps
    `auth.flow_state.auth_code_issued_at`. **The proof is minted here**, before any redirect.
 2. GoTrue 303s to `com.nivorasr.app://verify-email?code=…`.
-3. Android hands that Uri to Nivora — to the copy already running, because `MainActivity` is
+3. Android hands that Uri to Apnivaas — to the copy already running, because `MainActivity` is
    `launchMode="singleTop"`, or by cold-starting it.
 4. `supabase_flutter`'s deep-link observer sees the `code` parameter, calls
    `getSessionFromUrl` → `exchangeCodeForSession`, and **the person is signed in by the link**.
@@ -109,11 +109,11 @@ What happens on the phone, in order:
 
 ### Why a custom scheme and not an `https://` App Link
 
-An `https` intent filter would offer Nivora as a handler for ordinary web URLs. Without a
+An `https` intent filter would offer Apnivaas as a handler for ordinary web URLs. Without a
 verified Digital Asset Link, Android shows a disambiguation sheet on somebody else's links — and
 on Android 12+ an `autoVerify` filter that fails verification is **never offered to the app at
-all**. `public/.well-known/assetlinks.json` currently delegates `hostelpro-three.vercel.app` to
-`app.nivora.twa`, the old web wrapper, not to `com.nivorasr.app`; adding the Flutter app needs
+all**. `public/.well-known/assetlinks.json` has been an empty list since the old web wrapper was
+removed on 2026-10-14, so it vouches for no app; adding the Flutter app (`com.nivorasr.app`) needs
 the Play App Signing SHA-256. That fingerprint exists now: Google generated it on 2026-09-19 when
 the `com.nivorasr.app` app was created in Play Console, and it is recorded in
 `docs/play-technical-compliance.md` §4, which is where to read it from rather than here. What is
@@ -121,7 +121,7 @@ still missing is the hosted file. Until `assetlinks.json` names `com.nivorasr.ap
 fingerprint and is deployed, verification fails, so an App Link would still ship as a filter that
 never fires.
 
-`com.nivorasr.app` is this app's own `applicationId` (`nivora_app/android/app/build.gradle.kts:109`)
+`com.nivorasr.app` is this app's own `applicationId` (`apnivaas_app/android/app/build.gradle.kts:109`)
 used as a scheme — the reverse-DNS form RFC 3986 allows, which nothing else on the device can
 claim. **Scheme and host are both pinned**, so the only Uri the filter accepts is
 `com.nivorasr.app://verify-email[?…]`. It captures no
@@ -169,7 +169,7 @@ Two facts follow, and both matter:
    it is on the allow-list or shares a hostname with the Site URL. A custom scheme shares a
    hostname with nothing, so it needs the entry. The entry that matters now is
    `com.nivorasr.app://verify-email` (§0), new as of 2026-09-13. Until it is added, the link keeps
-   landing on the web root instead of opening Nivora.
+   landing on the web root instead of opening Apnivaas.
 
 **GoTrue never says no out loud.** It does not refuse an unlisted redirect — it *silently
 substitutes the Site URL*. There is no error for the app to catch, no log line, and no way for
@@ -180,7 +180,7 @@ earned on-screen note rather than an automatic check.
 
 - **Magic Link email template must contain `{{ .ConfirmationURL }}`**
   (Authentication → Emails → Magic Link). That is Supabase's stock template, so an untouched
-  project is correct. It is listed because Nivora's *previous* flow was a 6-digit code and asked
+  project is correct. It is listed because Apnivaas's *previous* flow was a 6-digit code and asked
   for `{{ .Token }}` here; a template still edited that way sends mail with nothing to click.
 - **CAPTCHA must be OFF** (Authentication → Attack Protection). The app sends no CAPTCHA token
   and CAPTCHA refuses `/auth/v1/otp` outright. Verified off. If it is ever switched on, the app
@@ -198,26 +198,26 @@ earned on-screen note rather than an automatic check.
 The deep link is the good path. It is not the only path, and the design does not depend on it.
 
 **The proof does not live in the app.** It is minted by GoTrue at step 1 of §2 — before the
-redirect, before Android, before Nivora is involved — and is read back afterwards by
+redirect, before Android, before Apnivaas is involved — and is read back afterwards by
 `public.email_link_proof()`. Everything below therefore costs a **tap**, never the verification.
 
-### 4.1 The link is opened on a laptop, or on a phone without Nivora installed
+### 4.1 The link is opened on a laptop, or on a phone without Apnivaas installed
 
 The browser cannot open a custom scheme, so it does nothing visible or shows "no app can open
-this link". **The address is still verified.** The person comes back to Nivora — on any device,
+this link". **The address is still verified.** The person comes back to Apnivaas — on any device,
 at any time — and either:
 
 - returns to the foreground, and the resume re-check clears the banner on its own; or
 - taps **Verify now → I have opened the link**, which asks the server directly.
 
 Both are live on every state of the screen. The screen says so, in as many words: "Opened on a
-laptop or another device it lands on a web page instead: come back to Nivora and tap the button
+laptop or another device it lands on a web page instead: come back to Apnivaas and tap the button
 below, which finishes it just as well."
 
 ### 4.2 The allow-list entry in §0 is never added
 
 GoTrue substitutes the Site URL, so the link lands on `https://hostelpro-three.vercel.app`, which
-returns 200. The user sees the Nivora web home page instead of the app. Identical to §4.1 from
+returns 200. The user sees the Apnivaas web home page instead of the app. Identical to §4.1 from
 there: the proof exists, the button finishes it. This was the situation measured on 2026-09-01,
 it stays the situation until the `com.nivorasr.app` entry is added, and it is how the three
 verified accounts in §6 got verified.
@@ -366,8 +366,8 @@ the landing page looks.
 ## 8. Checking it worked
 
 From the app: home-screen banner → **Verify now**. A link is sent automatically. Open it on the
-phone; if §0 has been done, **Nivora opens and you are signed in** and the banner is gone. If it
-has not, the browser shows the Nivora home page — come back to Nivora and tap **I have opened the
+phone; if §0 has been done, **Apnivaas opens and you are signed in** and the banner is gone. If it
+has not, the browser shows the Apnivaas home page — come back to Apnivaas and tap **I have opened the
 link**.
 
 From the SQL editor:
@@ -413,7 +413,7 @@ click to the next `status` call, which is seconds — but it is why two independ
   registers was read back from the parse tree: one `MainActivity`, `exported=true`,
   `launchMode=singleTop`, and a VIEW/DEFAULT/BROWSABLE filter whose only `<data>` was then
   `scheme=com.srnivora.app host=verify-email`. Since 2026-09-13 that element reads
-  `scheme=com.nivorasr.app` (`nivora_app/android/app/src/main/AndroidManifest.xml:142`). The
+  `scheme=com.nivorasr.app` (`apnivaas_app/android/app/src/main/AndroidManifest.xml:142`). The
   rename was read from the file, not re-parsed.
 - **`supabase_flutter`'s behaviour was read, not run.** Version 2.17.2:
   `detectSessionInUri` defaults to `true`; the default callback predicate returns true for any
@@ -446,8 +446,8 @@ them can ever open a link. `demo.manager@nivora.app`, which the operator creates
 owner's staff screen and which now exists and is active, would otherwise:
 
 - after its first password change, land on the verify screen pushed with `blocking: true`
-  (`nivora_app/lib/features/auth/change_password_screen.dart:191`), which cannot be dismissed
-  (`canPop: !widget.blocking`, `nivora_app/lib/features/auth/verify_email_screen.dart:364`); and
+  (`apnivaas_app/lib/features/auth/change_password_screen.dart:191`), which cannot be dismissed
+  (`canPop: !widget.blocking`, `apnivaas_app/lib/features/auth/verify_email_screen.dart:364`); and
 - be refused by `requireVerifiedEmail()` (`supabase/functions/_shared/verification.ts:108`) if it
   ever creates an account. The callers are `sa-create-owner/index.ts:146`,
   `owner-create-staff/index.ts:97`, `warden-register-student/index.ts:120` and

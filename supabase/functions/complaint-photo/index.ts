@@ -159,7 +159,7 @@ async function handleSign(req: Request, body: Record<string, unknown>): Promise<
     .eq("id", complaintId)
     .maybeSingle();
   if (error) {
-    console.error("[nivora] complaint lookup failed:", error.message);
+    console.error("[apnivaas] complaint lookup failed:", error.message);
     throw new HttpError(500, "Could not load that complaint. Please try again.");
   }
   const row = data as { id: string; hostel_id: string; photo_url: string | null } | null;
@@ -209,7 +209,7 @@ async function handleDiscard(req: Request, body: Record<string, unknown>): Promi
     .select("id", { count: "exact", head: true })
     .eq("photo_url", path);
   if (error) {
-    console.error("[nivora] orphan check failed:", error.message);
+    console.error("[apnivaas] orphan check failed:", error.message);
     throw new HttpError(500, "Could not check that photo. Please try again.");
   }
   if ((count ?? 0) > 0) throw new HttpError(409, "That photo belongs to a complaint and cannot be removed.");

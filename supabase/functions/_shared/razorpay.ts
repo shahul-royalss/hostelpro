@@ -1,5 +1,5 @@
 /**
- * Razorpay wiring for NIVORA's Edge Functions.
+ * Razorpay wiring for Apnivaas's Edge Functions.
  *
  * WHY THIS EXISTS SEPARATELY FROM lib/razorpay.ts. That file is the Next.js server's copy and
  * imports `server-only`, `node:crypto` and the `razorpay` npm SDK — none of which belong in a
@@ -221,7 +221,7 @@ export async function createOrder(input: CreateOrderInput): Promise<{ id: string
         notes: input.notes,
         // ── ROUTE: THE MONEY GOES TO THE PG OWNER, NOT TO US ────────────────────────────────
         //
-        // The whole amount, to the hostel's linked account. NIVORA takes nothing out of rent —
+        // The whole amount, to the hostel's linked account. Apnivaas takes nothing out of rent —
         // it is paid by the owner as a subscription, recorded separately and never through this
         // gateway — so there is no commission to hold back and the transfer is the full sum.
         //

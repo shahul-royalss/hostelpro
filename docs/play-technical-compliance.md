@@ -1,13 +1,13 @@
 # Play technical compliance — independent verification of the release artifact
 
-**Artifact:** `dist/NIVORA-1.0.0.apk`, `dist/NIVORA-1.0.0-universal.apk` and `dist/NIVORA-1.0.0.aab`
+**Artifact:** `dist/APNIVAAS-1.0.0.apk`, `dist/APNIVAAS-1.0.0-universal.apk` and `dist/APNIVAAS-1.0.0.aab`
 **Package:** `com.nivorasr.app` · versionCode 6 · versionName 1.0.0 · release name `1.0.0 (6)` · compileSdk 37 · targetSdk 36
 **The upload:** versionCode 6, AAB SHA-256 `d1283f6b173eecf37d6ebbbb2d026e414d8e60b0dc7480a5505583075a888541`, 66,433,003 bytes, built 2026-09-16.
 **Superseded:** versionCode 5, AAB SHA-256 `ec552f06eb45d1f52daeeffdb2f69cfaa087bfab70c34a4f3acee90d491f186f`, 66,228,186 bytes, built by `scripts/release.sh` at 15:47 IST on 2026-09-14. It was built but never uploaded; versionCode 6 replaced it two days later.
 **Until 2026-09-13 this document described the `com.srnivora.app` listing.** That Play Console app
 is abandoned and nothing was ever released from it; its verified build was versionCode 4, AAB
-SHA-256 `a85e26c1…a975ba`. Nivora now goes up as a new Play Console app, `com.nivorasr.app`
-(`nivora_app/android/app/build.gradle.kts:60`, `:109`), as versionCode 6 (`nivora_app/pubspec.yaml:19`
+SHA-256 `a85e26c1…a975ba`. Apnivaas now goes up as a new Play Console app, `com.nivorasr.app`
+(`apnivaas_app/android/app/build.gradle.kts:60`, `:109`), as versionCode 6 (`apnivaas_app/pubspec.yaml:19`
 is `1.0.0+6`). An applicationId is permanent once a bundle is uploaded to that app.
 **Verified:** 4 September 2026 against the versionCode 1 artifacts (then compiled against SDK 36);
 permissions verified again on 12 September 2026 against the rebuilt versionCode 1 artifact, compiled
@@ -33,7 +33,7 @@ versionCode 5 build, and has to be re-run on versionCode 6 before it can be clai
 manifests. Nothing was taken on trust from the build guide.
 
 > **This document replaced a version that described a completely different app.** The earlier
-> revision verified the Trusted Web Activity build — package `app.nivora.twa`, 937 KB, one
+> revision verified the Trusted Web Activity build (since removed) — 937 KB, one
 > permission, zero native libraries. That artifact no longer exists: the product is a native
 > Flutter client. A stale compliance document is worse than none, because it is consulted at
 > exactly the moment when being wrong is most expensive. Everything below was re-measured.
@@ -49,7 +49,7 @@ manifests. Nothing was taken on trust from the build guide.
 | 3 | Signing key strength | **PASS** — RSA 2048, `CN=HostelPro, O=HostelPro, C=IN` (the §4 `apksigner` block is the versionCode 1 output; the versionCode 4 bundle's certificate digest, read on 2026-09-13, is the same key; the versionCode 5 bundle's digest, read on 2026-09-14, is the same key, which remains the upload key for the new `com.nivorasr.app` app) |
 | 4 | Signature schemes | **PASS** — AAB is JAR-signed (`keytool -printcert -jarfile` reads the upload certificate out of the versionCode 5 bundle), which is what Play requires; APK is v2, and the signature gate in `release.sh` passed on both versionCode 5 APKs |
 | 5 | **16 KB page-size compatibility** (required for apps targeting API 35+; from 1 Feb 2027 an update without it cannot be released) | **PASS on `com.nivorasr.app` versionCode 5** — 12 native libraries, the same four in each of `arm64-v8a`, `armeabi-v7a` and `x86_64`, every 64-bit library's `PT_LOAD` segments aligned ≥ 16 KB, measured on the versionCode 5 bundle (versionCode 4 gave the same values); see §3 |
-| 6 | ABI coverage | **PASS** — the AAB carries `arm64-v8a`, `armeabi-v7a` and `x86_64`, and Play splits it per device. The APK handed round directly is arm64-only by design; `NIVORA-<v>-universal.apk` is the one that installs anywhere |
+| 6 | ABI coverage | **PASS** — the AAB carries `arm64-v8a`, `armeabi-v7a` and `x86_64`, and Play splits it per device. The APK handed round directly is arm64-only by design; `APNIVAAS-<v>-universal.apk` is the one that installs anywhere |
 | 7 | Artifact size | **PASS** — measured 2026-09-20 on the versionCode 6 artifacts in `dist/`, built 2026-09-16: arm64 APK 25,372,605 bytes, universal APK 68,799,987 bytes, AAB 66,433,003 bytes, all far under the 200 MB base limit. Size is the only row re-measured on versionCode 6. The versionCode 5 artifacts, never uploaded, measured arm64 APK 25,306,793 bytes, universal APK 68,586,719 bytes, AAB 66,228,186 bytes. The `com.srnivora.app` versionCode 4 artifacts measured arm64 APK 25.3 MB (25,306,793 bytes), universal APK 68.6 MB (68,586,719), AAB 66.2 MB (66,228,048). What a phone downloads from Play is the per-device split of the AAB, not the whole bundle |
 | 8 | Typeface available offline | **PASS** — Inter bundled; the app does not fetch fonts at runtime |
 | 9 | No secrets in the shipped bundle | **PASS** — see §5 |
@@ -64,7 +64,7 @@ rebuild. The remaining blockers are operational, not built into the binary, and 
 ## 1. Target and compile SDK
 
 ```
-$ aapt2 dump badging dist/NIVORA-1.0.0.apk | grep -E "package:|targetSdkVersion"
+$ aapt2 dump badging dist/APNIVAAS-1.0.0.apk | grep -E "package:|targetSdkVersion"
 package: name='com.nivorasr.app' versionCode='5' versionName='1.0.0'
          platformBuildVersionName='17' platformBuildVersionCode='37'
          compileSdkVersion='37' compileSdkVersionCodename='17'
@@ -86,11 +86,11 @@ Google requires API 36 for new submissions from 31 August 2026. This targets 36 
 deadline is not a future migration.
 
 `minSdk` and `targetSdk` are inherited from `flutter.minSdkVersion` / `flutter.targetSdkVersion`
-(`nivora_app/android/app/build.gradle.kts:112-113`) rather than pinned. That is deliberate — Flutter raises
+(`apnivaas_app/android/app/build.gradle.kts:112-113`) rather than pinned. That is deliberate — Flutter raises
 them in step with its own support window — but it does mean **a Flutter SDK upgrade can change
 the target level without anyone editing this project**. Re-check this table after any upgrade.
 
-`compileSdk` is the exception. It is pinned to 37 at `nivora_app/android/app/build.gradle.kts:75`,
+`compileSdk` is the exception. It is pinned to 37 at `apnivaas_app/android/app/build.gradle.kts:75`,
 one above `flutter.compileSdkVersion`, because `permission_handler_android` refuses to compile
 against anything lower. Compiling against 37 is not targeting 37: Play measures `targetSdk`, which
 stays at Flutter's 36. The pin comes out once Flutter's own value reaches 37.
@@ -99,7 +99,7 @@ stays at Flutter's 36. The pin comes out once Flutter's own value reaches 37.
 
 ## 2. Permissions
 
-Verified against `dist/NIVORA-1.0.0.apk` **as built on 2026-09-12** (package `com.srnivora.app`,
+Verified against `dist/APNIVAAS-1.0.0.apk` **as built on 2026-09-12** (package `com.srnivora.app`,
 versionCode 1, targetSdk 36, compileSdk 37), dumped again on 2026-09-13 from both versionCode 3 APKs
 and from the versionCode 4 universal APK, and **dumped once more on 2026-09-14 from the
 `com.nivorasr.app` versionCode 5 arm64 APK**, which is the block below. All of them list the same ten
@@ -109,7 +109,7 @@ build-tools 37.0.0 actually prints. An earlier revision showed a simplified one-
 instead:
 
 ```
-$ aapt2 dump permissions dist/NIVORA-1.0.0.apk
+$ aapt2 dump permissions dist/APNIVAAS-1.0.0.apk
 package: com.nivorasr.app
 uses-permission: name='android.permission.INTERNET'
 uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
@@ -126,12 +126,12 @@ uses-permission: name='android.permission.READ_BASIC_PHONE_STATE'
 
 The `permission:` line is the app *defining* its own receiver permission; the `uses-permission:`
 line after it is the app using it. Ten permissions used. **Only four are declared by this project**
-(`nivora_app/android/app/src/main/AndroidManifest.xml:10`, `:12`, `:50`, `:51`); **the rest arrive
+(`apnivaas_app/android/app/src/main/AndroidManifest.xml:10`, `:12`, `:50`, `:51`); **the rest arrive
 through the manifest merger from dependencies**, and three of our four are declared by dependencies
 as well.
 
 The Origin column is read from the manifest-merger report of the `com.nivorasr.app` versionCode 5 build
-(`/c/nivora-work/app/build/app/outputs/logs/manifest-merger-release-report.txt`, written 15:42 IST on
+(`/c/apnivaas-work/app/build/app/outputs/logs/manifest-merger-release-report.txt`, written 15:42 IST on
 2026-09-14; the versionCode 4 report of 2026-09-13 listed the same sources for every entry). For each entry it lists every source the merger `ADDED` or `MERGED`. "Ours" is the
 `ADDED` line from our own manifest; the libraries after it declare the same permission. An earlier
 pass rebuilt this column from the dependencies' own manifests because that build's report had already
@@ -158,13 +158,13 @@ transport libraries.
   picker, which returns one chosen image and needs no permission at all. Asking for the media
   library would trigger Play's Photo and Video Permissions declaration for a capability this app
   does not use
-- no `READ_CONTACTS` — nothing in Nivora reads a contact
+- no `READ_CONTACTS` — nothing in Apnivaas reads a contact
 - no `com.google.android.gms.permission.AD_ID` — there is no advertising ID to declare, and since
   2026-09-12 it is removed EXPLICITLY (`tools:node="remove"`) rather than merely left out, because
   a dependency's manifest can merge one in and its presence would contradict the Data safety form
 - no `READ_PHONE_STATE` (the full-scope one)
 - no `QUERY_ALL_PACKAGES`. Razorpay's UPI-app detection works through the manifest's `<queries>`
-  block for the `upi` scheme instead (`nivora_app/android/app/src/main/AndroidManifest.xml:156` and
+  block for the `upi` scheme instead (`apnivaas_app/android/app/src/main/AndroidManifest.xml:156` and
   `:178`). That detection is why Data safety answers Installed apps = Yes (`docs/data-safety.md` §3.4)
 
 ### How this table was checked, and how to check it again
@@ -176,10 +176,10 @@ versionCode 4 files on 2026-09-13, and on the `com.nivorasr.app` versionCode 5 f
 with the same result each time:
 
 ```bash
-cd nivora_app && bash scripts/verify-adid.sh
-#   clean: NIVORA-1.0.0-universal.apk (manifest readable: INTERNET found, AD_ID not found)
-#   clean: NIVORA-1.0.0.apk (manifest readable: INTERNET found, AD_ID not found)
-#   clean: NIVORA-1.0.0.aab (manifest readable: INTERNET found, AD_ID not found)
+cd apnivaas_app && bash scripts/verify-adid.sh
+#   clean: APNIVAAS-1.0.0-universal.apk (manifest readable: INTERNET found, AD_ID not found)
+#   clean: APNIVAAS-1.0.0.apk (manifest readable: INTERNET found, AD_ID not found)
+#   clean: APNIVAAS-1.0.0.aab (manifest readable: INTERNET found, AD_ID not found)
 ```
 
 **The "clean" this section used to show proved nothing for the two APKs.** Until 2026-09-13 the
@@ -195,16 +195,16 @@ it), but the script's old output was not the evidence for that.
 To re-attribute any entry after a dependency changes, read the merge-blame report of the build in
 question. It names the exact AAR and line that contributed each permission, which is how `NFC` and
 `READ_BASIC_PHONE_STATE` were first pinned on Razorpay. The report is not in the repository tree.
-When the repo is inside OneDrive, `scripts/release.sh` builds in `$NIVORA_WORK_DIR`, default
-`/c/nivora-work`, and deletes that tree at the start of every run
-(`nivora_app/scripts/release.sh:62-68`). So the report only ever describes the last build, and has
+When the repo is inside OneDrive, `scripts/release.sh` builds in `$APNIVAAS_WORK_DIR`, default
+`/c/apnivaas-work`, and deletes that tree at the start of every run
+(`apnivaas_app/scripts/release.sh:62-68`). So the report only ever describes the last build, and has
 to be read before the next one starts. The origins in the table above were read from the
 versionCode 5 report on 2026-09-14, before any further build, and from the versionCode 4 report the day
 before, with the same result:
 
 ```bash
 grep -A2 "permission.NFC" \
-  /c/nivora-work/app/build/app/intermediates/manifest_merge_blame_file/release/processReleaseMainManifest/manifest-merger-blame-release-report.txt
+  /c/apnivaas-work/app/build/app/intermediates/manifest_merge_blame_file/release/processReleaseMainManifest/manifest-merger-blame-release-report.txt
 ```
 
 **A permission dump is only ever true of one artifact.** An earlier version of this section was
@@ -228,12 +228,12 @@ native code at all.** That is no longer true — a Flutter app ships the engine,
 to be met rather than sidestepped.
 
 Measured on 2026-09-14 by parsing, with Python, the ELF program headers of every library in all
-three ABIs of `dist/NIVORA-1.0.0.aab` and taking the smallest `p_align` across each library's
+three ABIs of `dist/APNIVAAS-1.0.0.aab` and taking the smallest `p_align` across each library's
 `PT_LOAD` segments. **These are the `com.nivorasr.app` versionCode 5 bundle's figures**, measured after
 the 15:47 build. versionCodes 3 and 4 gave identical values, but each `libapp.so` is a different file,
 so no figure was carried over; each bundle was measured. **The versionCode 6 bundle has not been
 measured**, and by that same rule its figures cannot be carried over from this table;
-`dist/NIVORA-1.0.0.aab` now holds versionCode 6, so re-run the parse against it. The guide's threshold is `2**14` (16384, `0x4000`); a `LOAD`
+`dist/APNIVAAS-1.0.0.aab` now holds versionCode 6, so re-run the parse against it. The guide's threshold is `2**14` (16384, `0x4000`); a `LOAD`
 segment at `2**13` or lower fails:
 
 | Library | min LOAD alignment | |
@@ -269,7 +269,7 @@ build reports it.
 ## 4. Signing
 
 ```
-$ apksigner verify --print-certs --verbose dist/NIVORA-1.0.0.apk
+$ apksigner verify --print-certs --verbose dist/APNIVAAS-1.0.0.apk
 Verified using v2 scheme (APK Signature Scheme v2): true
 Number of signers: 1
 V2 Signer: certificate DN: CN=HostelPro, O=HostelPro, C=IN
@@ -280,7 +280,7 @@ V2 Signer: certificate SHA-256 digest:
 ```
 
 That block was printed for the versionCode 1 APK. For the `com.nivorasr.app` versionCode 5 bundle, on
-2026-09-14, `keytool -printcert -jarfile dist/NIVORA-1.0.0.aab` printed the certificate SHA-256
+2026-09-14, `keytool -printcert -jarfile dist/APNIVAAS-1.0.0.aab` printed the certificate SHA-256
 `24:23:97:46:89:5A:54:63:86:F1:87:4B:1D:B5:F5:31:3D:02:DA:99:DB:E4:72:F5:45:19:23:58:1F:FB:64:65`,
 the same key as the digest above (the `com.srnivora.app` versionCode 4 bundle printed the same on
 2026-09-13), and the signature gate in `scripts/release.sh` passed on both versionCode 5 APKs. The
@@ -320,7 +320,7 @@ An APK is a zip archive anyone can download and unpack, so this is not a theoret
 
 Verified on the staged artifact:
 
-- the Razorpay **key secret** appears nowhere under `nivora_app/`
+- the Razorpay **key secret** appears nowhere under `apnivaas_app/`
 - every JWT literal in the client decodes to `"role":"anon"` — the anon key is public by design
   and grants nothing without RLS; there is **no** `service_role` key
 - the service-role key and the Razorpay secret live only as Supabase Edge Function secrets, set
@@ -366,7 +366,7 @@ a native client and does not depend on it. It is required again only if App Link
 added later.
 
 **Note on the email-confirmation redirect (not a blocker):** the confirmation link now returns on
-`com.nivorasr.app://verify-email` (`nivora_app/lib/core/config/env.dart:40`, `:44`). Add exactly that
+`com.nivorasr.app://verify-email` (`apnivaas_app/lib/core/config/env.dart:40`, `:44`). Add exactly that
 string under Supabase → Authentication → URL Configuration → Redirect URLs; the old
 `com.srnivora.app://verify-email` entry can be removed. GoTrue silently substitutes the Site URL for
 an unlisted redirect, and the verification still completes (`env.dart:80-95`), so the only symptom is
@@ -382,7 +382,7 @@ wrong.** Seven dependencies already declare `INTERNET`, among them `com.razorpay
 `com.razorpay:core` and the `firebase_messaging` plugin (§2). So the release build always had network. (An earlier
 revision said `INTERNET` had come from the Firebase packages "until those were removed". Firebase was
 not removed: `firebase_core` and `firebase_messaging` are dependencies at
-`nivora_app/pubspec.yaml:85-86`, and the `WAKE_LOCK` and `com.google.android.c2dm.permission.RECEIVE`
+`apnivaas_app/pubspec.yaml:85-86`, and the `WAKE_LOCK` and `com.google.android.c2dm.permission.RECEIVE`
 rows in §2 come from it.)
 The real cause was a routing bug that held the app on its splash screen forever — see the commit
 "Fix the real reason the app would not open".

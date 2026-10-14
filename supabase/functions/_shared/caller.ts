@@ -79,7 +79,7 @@ function bearerToken(req: Request): string {
   // (auth.getUser() would also refuse both — this makes the refusal deliberate and loggable.)
   if (token === keyOrNull(anonKey)) throw new HttpError(401, "You are signed out. Please sign in again.");
   if (token === keyOrNull(serviceRoleKey)) {
-    console.error("[nivora] refused: service-role key presented as a user session");
+    console.error("[apnivaas] refused: service-role key presented as a user session");
     throw new HttpError(401, "You are signed out. Please sign in again.");
   }
   return token;
@@ -203,16 +203,15 @@ export async function requireSession(req: Request): Promise<{ caller: Caller; mu
     .eq("id", authUser.id)
     .maybeSingle();
   if (error) {
-    console.error("[nivora] profile lookup failed:", error.message);
+    console.error("[apnivaas] profile lookup failed:", error.message);
     throw new HttpError(500, "Could not verify your account. Please try again.");
   }
   const profile = data as ProfileRow | null;
   // No product name in this sentence, or in any other a person can read from these functions.
-  // The app was renamed (Nivora -> Apnivaas, 1.2.0), and every build ever installed shares this
-  // one backend: a phone still on 1.0.0 or 1.1.0 is called Nivora on its home screen, a phone on
-  // 1.2.0 is called Apnivaas, and both print this text verbatim. Naming either is wrong on the
-  // other. "Support" is the address in the app's own legal and help screens, whichever name
-  // those carry.
+  // The app was renamed in 1.2.0, and every build ever installed shares this one backend: a
+  // phone still on 1.0.0 or 1.1.0 shows the old name on its home screen, a phone on 1.2.0 shows
+  // Apnivaas, and both print this text verbatim. Naming either is wrong on the other. "Support"
+  // is the address in the app's own legal and help screens, whichever name those carry.
   if (!profile) throw new HttpError(403, "Your account is not set up. Contact support.");
   if (profile.status !== "active" || profile.deleted_at) throw new HttpError(403, "Your account is inactive.");
 
@@ -276,7 +275,7 @@ export async function requireCaller(req: Request, ...roles: UserRole[]): Promise
  * platform's administrators out of their own platform, and enrolling a factor needs a working
  * session, so there would have been no way back in. A privileged account with NO factor is
  * therefore let through and told to enrol; the Flutter client routes it to the enrolment screen
- * (nivora_app/lib/core/auth/auth_controller.dart, mfaGate()).
+ * (apnivaas_app/lib/core/auth/auth_controller.dart, mfaGate()).
  *
  * That third arm is a real hole and is audited every time it is used, so "how much longer is
  * this open, and for whom" is a query against public.audit_log rather than a guess. It closes
@@ -303,7 +302,7 @@ async function requireAssurance(caller: Caller): Promise<void> {
     // cannot determine is whether they own a factor at all. Refusing a privileged write on an
     // unanswerable question is safe here in a way it would not be on the client: enrolment runs
     // against GoTrue directly and does not pass through these functions, so nobody is stranded.
-    console.error("[nivora] factor lookup failed:", e instanceof Error ? e.message : String(e));
+    console.error("[apnivaas] factor lookup failed:", e instanceof Error ? e.message : String(e));
     // Brand-free for the reason at requireSession(): old and new builds both print it.
     throw new HttpError(403, "Could not confirm your two-factor status. Please sign in again.");
   }

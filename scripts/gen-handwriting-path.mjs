@@ -132,7 +132,7 @@ function toArrayBuffer(buf) {
  * Lay a string out one glyph at a time.
  *
  * font.getPath(string) is the obvious call and it is the one that was here first, but on this
- * font it emits literal "NaN" into the path data — 11 of them in "Welcome", none in "NIVORA".
+ * font it emits literal "NaN" into the path data — 11 of them in "Welcome", none in the old wordmark.
  * It is not the outlines and it is not kerning: every glyph renders cleanly on its own AND at
  * its accumulated x position, every advanceWidth is finite, and the NaN count is identical with
  * kerning on and off. The fault is inside opentype.js's own string-layout pass for this variable
@@ -182,7 +182,7 @@ function layout(font, text, x, y) {
     // Render at the ORIGIN and translate the commands ourselves.
     //
     // glyph.getPath(penX, ...) is the natural call, and it is what produced 11-13 literal
-    // "NaN" coordinates in "Welcome" while leaving "NIVORA" untouched. It is not the outlines
+    // "NaN" coordinates in "Welcome" while leaving the old wordmark untouched. It is not the outlines
     // (every glyph is clean alone), not kerning (identical with it off, and every pair value is
     // finite) and not the position (m is clean at 197.7 when asked directly). It only appears
     // through opentype.js's own positioning pass on this variable font, which is a family it

@@ -77,7 +77,7 @@ function requireServiceRole(req: Request): void {
     }
   }
   if (role !== "service_role") {
-    console.error("[nivora] storage-erasure: caller role was", JSON.stringify(role));
+    console.error("[apnivaas] storage-erasure: caller role was", JSON.stringify(role));
     throw new HttpError(403, "This endpoint is for the platform itself.");
   }
 }

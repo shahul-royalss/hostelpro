@@ -1,12 +1,12 @@
-# Play Console — releasing Apnivaas (formerly Nivora) as a new app
+# Play Console — releasing Apnivaas as a new app
 
 Everything Console will ask for on the new app, in the order to do it, plus the two things outside
 Play that this release depends on.
 
-**App name:** Apnivaas from 1.2.0; it was Nivora until then · **Package:** `com.nivorasr.app`, which
-never changes · **On the closed track:** `1.0.0 (6)` · **Next uploads:** `dist/NIVORA-1.1.0.aab`,
+**App name:** Apnivaas · **Package:** `com.nivorasr.app`, which
+never changes · **On the closed track:** `1.0.0 (6)` · **Next uploads:** `dist/APNIVAAS-1.1.0.aab`,
 versionCode 7, release name `1.1.0 (7)` ([Step 4](#step-4--versioncode-7-and-production)), then
-`dist/NIVORA-1.2.0.aab`, versionCode 8, release name `1.2.0 (8)`
+`dist/APNIVAAS-1.2.0.aab`, versionCode 8, release name `1.2.0 (8)`
 ([Step 5](#step-5--versioncode-8-the-apnivaas-release)). Step 5 says when 7 can be skipped.
 
 > **The rename (2026-10-12).** The product is now called **Apnivaas**, and the developer shown on
@@ -33,9 +33,9 @@ versionCode 7, release name `1.1.0 (7)` ([Step 4](#step-4--versioncode-7-and-pro
 > instructions because the next release repeats them, and each one says whether it is finished.
 
 The package is set in code: `namespace` and `applicationId` are `com.nivorasr.app`
-(`nivora_app/android/app/build.gradle.kts:60` and `:109`), `MainActivity` lives in
-`nivora_app/android/app/src/main/kotlin/com/nivorasr/app/`, and the upload is `version: 1.0.0+6`
-(`nivora_app/pubspec.yaml:19`).
+(`apnivaas_app/android/app/build.gradle.kts:60` and `:109`), `MainActivity` lives in
+`apnivaas_app/android/app/src/main/kotlin/com/nivorasr/app/`, and the upload is `version: 1.0.0+6`
+(`apnivaas_app/pubspec.yaml:19`).
 
 ---
 
@@ -46,8 +46,8 @@ again.
 
 Play Console → **Home → Create app**.
 
-- **App name:** `Apnivaas`. The app was created as `Nivora` on 2026-09-19, and Step 5 renames it on
-  the store listing. **Default language:** English (United States), the one language the release
+- **App name:** `Apnivaas`. The app was created on 2026-09-19 under its earlier name, and Step 5
+  sets `Apnivaas` on the store listing. **Default language:** English (United States), the one language the release
   notes declare ([play-release-notes.md](play-release-notes.md)).
 - Answer the remaining questions and accept the declarations yourself.
 
@@ -90,7 +90,7 @@ production, is the one that is left.
 2. Keep **Play App Signing** with a key Google generates. It creates a new app signing key for this
    app. The upload key is the same one as before: the certificate SHA-256 that starts `24:23:97` and
    ends `FB:64:65`, recorded in [play-technical-compliance.md](play-technical-compliance.md) §4.
-3. Upload `dist/NIVORA-1.0.0.aab`: versionCode 6, 66,433,003 bytes, SHA-256
+3. Upload `dist/APNIVAAS-1.0.0.aab`: versionCode 6, 66,433,003 bytes, SHA-256
    `d1283f6b173eecf37d6ebbbb2d026e414d8e60b0dc7480a5505583075a888541`, built on 2026-09-16. Check it first (see
    [Verifying the artifact](#verifying-the-artifact-before-you-upload-it)). Wait for it to finish
    processing.
@@ -106,7 +106,7 @@ once Console has parsed the upload, not when the upload bar fills.
 
 ## Step 4 — versionCode 7 and production
 
-`dist/NIVORA-1.1.0.aab`, versionCode 7, release name `1.1.0 (7)`, built 2026-09-30. Sizes, hashes
+`dist/APNIVAAS-1.1.0.aab`, versionCode 7, release name `1.1.0 (7)`, built 2026-09-30. Sizes, hashes
 and the release notes are in [play-release-notes.md](play-release-notes.md). It adds staff access
 to several PGs, with a Switch PG control for wardens and managers.
 
@@ -144,7 +144,7 @@ rule counts testers who stay opted in; publishing a newer release to the same tr
 it, and it gives the testers a few days on the multi-PG screens before production.
 
 1. **Test and release → Testing → Closed testing** → the existing track → **Create new release**.
-2. Upload `dist/NIVORA-1.1.0.aab` and wait until it has finished processing. Check the SHA-256
+2. Upload `dist/APNIVAAS-1.1.0.aab` and wait until it has finished processing. Check the SHA-256
    first ([Verifying the artifact](#verifying-the-artifact-before-you-upload-it)).
 3. Release name `1.1.0 (7)`, release notes from [play-release-notes.md](play-release-notes.md).
 4. **Next → Save → Publishing overview → Send changes for review.**
@@ -178,7 +178,7 @@ Keep the demo accounts themselves: every future update is reviewed by signing in
 
 ## Step 5 — versionCode 8, the Apnivaas release
 
-`dist/NIVORA-1.2.0.aab`, versionCode 8 (`version: 1.2.0+8`), release name `1.2.0 (8)`. The release
+`dist/APNIVAAS-1.2.0.aab`, versionCode 8 (`version: 1.2.0+8`), release name `1.2.0 (8)`. The release
 notes are in [play-release-notes.md](play-release-notes.md), and so are the sizes and hashes once it
 is built. It renames the product to Apnivaas and replaces the icons. It adds a launch animation on a
 fresh start, and makes email confirmation a gate for owners, managers, wardens and super admins. The
@@ -229,7 +229,7 @@ leave it alone and put 8 on top. Once 8 is up, 7 has no further use.
    Demo PG trigger (Step 4 E) re-stamps them if their address is ever changed, so keep it until
    1.2.0 has passed review.
 3. Supabase Dashboard → **Authentication → Emails**: the confirmation and password-reset templates,
-   and the SMTP sender name, are not in this repository. Wherever they say Nivora, change them to
+   and the SMTP sender name, are not in this repository. Wherever they say Apnivaas, change them to
    Apnivaas when you push the website (C).
 
 **B. The backend, in this order.**
@@ -239,7 +239,7 @@ leave it alone and put 8 on top. Once 8 is up, 7 has no further use.
    before this.**
 2. Apply `db/migrations/2026-10-12-brand-free-server-messages.sql`, after running its `.test.sql`
    as that file says; its `.down.sql` puts the previous text back. It rewords server messages so
-   they name no app, which reads correctly in Nivora and Apnivaas builds alike, so it is not ordered
+   they name no app, which reads correctly in old and new builds alike, so it is not ordered
    against C to F.
 3. **The owner redeploys the changed Edge Functions** from their own terminal. The permission
    system refuses production deploys from Claude (Step 4 A3). That is every function whose code
@@ -271,7 +271,7 @@ leave it alone and put 8 on top. Once 8 is up, 7 has no further use.
 **D. Build 1.2.0.** It may be built at any time, but it must not be installed on any phone, yours
 included, before B1.
 
-1. `nivora_app/scripts/release.sh`. It refuses a launcher label that is not `Apnivaas` and an
+1. `apnivaas_app/scripts/release.sh`. It refuses a launcher label that is not `Apnivaas` and an
    upload key that is not `CN=HostelPro`.
 2. Fill in the sizes and hashes in [play-release-notes.md](play-release-notes.md), and check the
    artifact as in [Verifying the artifact](#verifying-the-artifact-before-you-upload-it). The
@@ -284,7 +284,7 @@ included, before B1.
 
 **E. The store listing (after B1 and C).** Turn on **Publishing overview → Managed publishing**
 first. Without it, each change goes live the moment it is approved, so the listing would say
-Apnivaas while every installed phone still says Nivora. With it, the listing and the build go live
+Apnivaas while every installed phone still shows the old name. With it, the listing and the build go live
 together when you press Publish.
 
 1. **Main store listing.** App name `Apnivaas` (30 characters at most; no ALL CAPS, emoji, "best"
@@ -294,11 +294,11 @@ together when you press Publish.
 2. **Graphics.** App icon `public/store/icon-512.png` (512×512, 32-bit, fully opaque, square
    corners; Play applies its own mask). Feature graphic `public/store/feature-graphic-1024x500.png`
    (24-bit, no alpha). Re-render the 4 phone and 4 tablet screenshots after the in-app rename
-   (`nivora_app/test/_storeshot.dart` writes them to `dist/store-listing/`); the old owner shot
-   shows "NIVORA" in its header.
+   (`apnivaas_app/test/_storeshot.dart` writes them to `dist/store-listing/`); the old owner shot
+   shows "Apnivaas" in its header.
 3. **App content → App access.** Replace the "Any other information" text of all four sets with the
    blocks [below](#app-access--what-to-enter-in-console). Only their first word changed (Apnivaas
-   for Nivora). The usernames and the order of screens they describe are the same.
+   for Apnivaas). The usernames and the order of screens they describe are the same.
 4. **Contact details.** The email stays `support@nivora.dhrishtaerf.org`. If an Apnivaas-named
    address is wanted, add it as an alias of the same mailbox and receive a test message before
    switching it here and in `lib/legal-config.ts`; a switch there is a wording change and a legal
@@ -310,7 +310,7 @@ together when you press Publish.
 **F. Release (after B1, C and E).**
 
 1. **Closed testing** → the existing track → **Create new release** → upload
-   `dist/NIVORA-1.2.0.aab` → release name `1.2.0 (8)`, notes from
+   `dist/APNIVAAS-1.2.0.aab` → release name `1.2.0 (8)`, notes from
    [play-release-notes.md](play-release-notes.md) → **Next → Save → Send changes for review**. With
    Managed publishing on, press **Publish** once the release and the listing are both approved.
 2. **Production**, once production access is granted, exactly as Step 4 D with versionCode 8. Use a
@@ -321,7 +321,7 @@ together when you press Publish.
 **G. After 1.2.0 is live on Play.**
 
 1. Point the in-app update banner at it. Older builds read this row and offer the update in their
-   own wording ("Nivora 1.2.0 is available"), which is fine:
+   own wording, under the old name, which is fine:
 
    ```sql
    update public.app_releases
@@ -366,7 +366,7 @@ Analytics is deliberately not installed.
 explicitly:
 
 ```bash
-cd nivora_app && bash scripts/verify-adid.sh
+cd apnivaas_app && bash scripts/verify-adid.sh
 ```
 
 If that ever prints a line, the declaration in Console is wrong and must change with it.
@@ -388,7 +388,7 @@ Play Console → the new app → **Test and release → Testing → Closed testi
 
 1. Select the email list you already created — email lists belong to the developer account and can
    be ticked on any track — or **Create email list** → name it `Apnivaas testers`.
-   The list on this account was created as `Nivora testers`. Testers never see a list's name, so
+   The list on this account was created as `Apnivaas testers`. Testers never see a list's name, so
    it can stay.
 2. Add `codewithshahul@gmail.com` — the account that owns this Play Console. It is allowed to be
    its own tester, and it should be the first one. This is a personal account, so add at least 11
@@ -450,8 +450,7 @@ an unstated length limit.
 
 The four sets below went in on 2026-09-19. They stay here as the text to paste again on the next
 release, and because a changed password or a changed account means editing them first. For 1.2.0
-each block starts "Apnivaas is invitation-only" instead of "Nivora is invitation-only", and nothing
-else in them changed. Paste all four again in [Step 5](#step-5--versioncode-8-the-apnivaas-release) E3.
+each block starts "Apnivaas is invitation-only", and nothing else in them changed. Paste all four again in [Step 5](#step-5--versioncode-8-the-apnivaas-release) E3.
 
 **Before submitting, sign in to each account yourself** on a phone, with the exact password you will
 type into Console. That is standing procedure for every submission, not a one-off. All four accounts
@@ -540,7 +539,7 @@ it if it is ever lost or deactivated. They need the owner's authenticator, becau
 get past two-step verification to reach the staff screen:
 
 1. Sign in as `demo.owner@nivora.app`. On the owner's More screen, tap **Staff accounts**
-   (`nivora_app/lib/features/owner/more/owner_more_screen.dart:71`), then **Add manager**.
+   (`apnivaas_app/lib/features/owner/more/owner_more_screen.dart:71`), then **Add manager**.
 2. Check that the sheet shows **Demo PG (Play review)** — the demo owner's only property, which the
    sheet displays rather than asks for — and the Manager role. Type any full name and the email
    `demo.manager@nivora.app` exactly, then tap **Create manager account**. The app calls
@@ -549,16 +548,16 @@ get past two-step verification to reach the staff screen:
    credentials**, and tap **Done**.
 4. Sign out, then sign in as `demo.manager@nivora.app` with the temporary password. From 1.2.0 the
    Terms and Privacy screen comes first. After it, the app makes you set a new password
-   (`resolveRedirect` in `nivora_app/lib/core/router/router.dart`). Choose the one you will type into
+   (`resolveRedirect` in `apnivaas_app/lib/core/router/router.dart`). Choose the one you will type into
    Console.
 
 **The demo staff logins are exempt from email verification, because of the Demo PG trigger
 above.** From 1.2.0, verification is a gate. The app holds every owner, manager, warden or super
 admin whose address can receive mail and whose `email_verified_at` is empty on a verify-email screen
 that cannot be dismissed. It does this at every sign-in and every cold start, not only after the
-first password change as in 1.0.0 and 1.1.0 (`NivoraSession.mustVerifyEmail` in
-`nivora_app/lib/core/auth/session.dart`, applied by `resolveRedirect` in
-`nivora_app/lib/core/router/router.dart`). Nobody reads mail sent to `nivora.app`. The trigger
+first password change as in 1.0.0 and 1.1.0 (`ApnivaasSession.mustVerifyEmail` in
+`apnivaas_app/lib/core/auth/session.dart`, applied by `resolveRedirect` in
+`apnivaas_app/lib/core/router/router.dart`). Nobody reads mail sent to `nivora.app`. The trigger
 stamps that column when `owner-create-staff` inserts the manager's row, and the owner and warden
 rows were stamped already, so the screen never opens for any of the three. For the same reason,
 `requireVerifiedEmail()` (`supabase/functions/_shared/verification.ts`) will not refuse these
@@ -636,8 +635,8 @@ must never be given the owner account.
 ### 1. The Supabase redirect URL (do this before anyone verifies an email)
 
 The confirmation link's custom scheme is the applicationId (`Env.emailLinkScheme`,
-`nivora_app/lib/core/config/env.dart:40`, matched by the manifest filter at
-`nivora_app/android/app/src/main/AndroidManifest.xml:142`), so it changed with the package. The
+`apnivaas_app/lib/core/config/env.dart:40`, matched by the manifest filter at
+`apnivaas_app/android/app/src/main/AndroidManifest.xml:142`), so it changed with the package. The
 link now returns on:
 
 ```
@@ -662,15 +661,15 @@ apps:
 
 | Firebase Android app | Status |
 |---|---|
-| `com.nivorasr.app` | **The app.** It matches `applicationId` (`nivora_app/android/app/build.gradle.kts:109`). Keep it; do not delete it |
+| `com.nivorasr.app` | **The app.** It matches `applicationId` (`apnivaas_app/android/app/build.gradle.kts:109`). Keep it; do not delete it |
 | `com.srnivora.app` | Left over from the abandoned listing. Nothing uses it, and it may be deleted later |
 
 Until 2026-09-13 this section called the `com.nivorasr.app` registration a typo never to be used.
 That is reversed: it is now the app.
 
-`nivora_app/android/app/google-services.json` sits on the build machine and is gitignored
-(`nivora_app/.gitignore:53`). It has a client for each of the two packages, and the Google Services
-plugin (applied at `nivora_app/android/app/build.gradle.kts:25-26` when that file exists) picks the
+`apnivaas_app/android/app/google-services.json` sits on the build machine and is gitignored
+(`apnivaas_app/.gitignore:53`). It has a client for each of the two packages, and the Google Services
+plugin (applied at `apnivaas_app/android/app/build.gradle.kts:25-26` when that file exists) picks the
 one matching `applicationId`, so the file needs no edit. The `FCM_SERVICE_ACCOUNT` secret in Supabase
 is project-level and needs no change either: a `push-send` probe on 2026-09-13 answered
 `claimed: 0`, not `not_configured`. Details are in
@@ -686,24 +685,24 @@ the build from the testing track, tap **Agree and continue**, allow notification
 ## Verifying the artifact before you upload it
 
 **Do not run `scripts/release.sh` for this.** It rebuilds, and it overwrites
-`dist/NIVORA-1.0.0.aab` with a new, unmeasured file that still says versionCode 6. Check the files
-that are already there. `nivora_app/scripts/release.sh:420-422` stages all three from one run:
+`dist/APNIVAAS-1.0.0.aab` with a new, unmeasured file that still says versionCode 6. Check the files
+that are already there. `apnivaas_app/scripts/release.sh:420-422` stages all three from one run:
 
 | File | What it is | Bytes |
 |---|---|---|
-| `dist/NIVORA-1.0.0.aab` | The upload | 66,433,003 |
-| `dist/NIVORA-1.0.0.apk` | arm64 APK, the one to hand round | 25,372,605 |
-| `dist/NIVORA-1.0.0-universal.apk` | Universal APK, any CPU | 68,799,987 |
+| `dist/APNIVAAS-1.0.0.aab` | The upload | 66,433,003 |
+| `dist/APNIVAAS-1.0.0.apk` | arm64 APK, the one to hand round | 25,372,605 |
+| `dist/APNIVAAS-1.0.0-universal.apk` | Universal APK, any CPU | 68,799,987 |
 
 They were built on 2026-09-16.
 
 ```bash
-sha256sum dist/NIVORA-1.0.0.aab
+sha256sum dist/APNIVAAS-1.0.0.aab
 # must print d1283f6b173eecf37d6ebbbb2d026e414d8e60b0dc7480a5505583075a888541
 BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
-"$BT/aapt2.exe" dump badging dist/NIVORA-1.0.0.apk | head -1
+"$BT/aapt2.exe" dump badging dist/APNIVAAS-1.0.0.apk | head -1
 # must start: package: name='com.nivorasr.app' versionCode='6' versionName='1.0.0'
-cd nivora_app && bash scripts/verify-adid.sh
+cd apnivaas_app && bash scripts/verify-adid.sh
 ```
 
 The package line matters more than usual. The first bundle uploaded to a new app fixes its package
@@ -721,9 +720,9 @@ run them again on this bundle rather than reading those tables as if they descri
 hash means `dist/` was rebuilt, and every one of those checks has to be run again before upload.
 
 When a rebuild *is* wanted — any code change, which also means raising the `+N` in
-`nivora_app/pubspec.yaml` — `scripts/release.sh` refuses to stage anything that fails its own gates:
-the upload key (`CN=HostelPro`, not a debug fallback), the launcher label (`Apnivaas` from 1.2.0,
-`Nivora` before that — it once shipped as "mobile", the Flutter project name), `libflutter.so` in
+`apnivaas_app/pubspec.yaml` — `scripts/release.sh` refuses to stage anything that fails its own gates:
+the upload key (`CN=HostelPro`, not a debug fallback), the launcher label (`Apnivaas`; it once shipped
+as "mobile", the Flutter project name), `libflutter.so` in
 every ABI directory, a versionCode
 matching `pubspec.yaml`, and no service-role key or Razorpay secret anywhere in the bundle, in
 either of the two encodings a Dart snapshot uses. It does not check the package name.

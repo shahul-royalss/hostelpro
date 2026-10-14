@@ -48,7 +48,7 @@ delete their own row:
 | Public web URL | `https://hostelpro-three.vercel.app/legal/account-deletion` | `app/legal/account-deletion/page.tsx` |
 | Server action | `requestAccountDeletion()` / `getMyDeletionRequest()` | `lib/actions/account.ts` |
 | App RPCs | `request_account_deletion()` / `my_account_deletion_request()` | `db/migrations/2026-09-13-account-deletion-request-rpc.sql` |
-| App screen | "Delete my account and data" — resident Profile tab; staff profile sheet | `nivora_app/lib/features/legal/account_deletion.dart` |
+| App screen | "Delete my account and data" — resident Profile tab; staff profile sheet | `apnivaas_app/lib/features/legal/account_deletion.dart` |
 
 The public page sits inside the shared legal shell (`app/legal/layout.tsx`) alongside the Privacy
 Policy and Terms, and uses that shell's `DocHeader` / `Section` / `DataTable` / `Callout`
