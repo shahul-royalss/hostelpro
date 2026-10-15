@@ -229,8 +229,8 @@ leave it alone and put 8 on top. Once 8 is up, 7 has no further use.
    Demo PG trigger (Step 4 E) re-stamps them if their address is ever changed, so keep it until
    1.2.0 has passed review.
 3. Supabase Dashboard → **Authentication → Emails**: the confirmation and password-reset templates,
-   and the SMTP sender name, are not in this repository. Wherever they say Apnivaas, change them to
-   Apnivaas when you push the website (C).
+   and the SMTP sender name, are not in this repository. Wherever they still use the old name, change
+   it to Apnivaas when you push the website (C).
 
 **B. The backend, in this order.**
 
@@ -295,10 +295,10 @@ together when you press Publish.
    corners; Play applies its own mask). Feature graphic `public/store/feature-graphic-1024x500.png`
    (24-bit, no alpha). Re-render the 4 phone and 4 tablet screenshots after the in-app rename
    (`apnivaas_app/test/_storeshot.dart` writes them to `dist/store-listing/`); the old owner shot
-   shows "Apnivaas" in its header.
+   showed the old name in its header.
 3. **App content → App access.** Replace the "Any other information" text of all four sets with the
-   blocks [below](#app-access--what-to-enter-in-console). Only their first word changed (Apnivaas
-   for Apnivaas). The usernames and the order of screens they describe are the same.
+   blocks [below](#app-access--what-to-enter-in-console). Only their first word changed (the
+   product's new name). The usernames and the order of screens they describe are the same.
 4. **Contact details.** The email stays `support@nivora.dhrishtaerf.org`. If an Apnivaas-named
    address is wanted, add it as an alias of the same mailbox and receive a test message before
    switching it here and in `lib/legal-config.ts`; a switch there is a wording change and a legal
