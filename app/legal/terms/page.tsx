@@ -148,7 +148,9 @@ export default function TermsOfUsePage() {
             There is <strong>no public sign-up</strong>. The platform administrator creates the
             Owner account for a hostel, the Owner creates Manager and Warden accounts, and a Warden
             registers residents — who sign in with the phone number the hostel registered. Every
-            account comes with a temporary password that must be changed at first sign-in.
+            account comes with a temporary password that must be changed at first sign-in. Owners
+            and residents whose login is a Google account&rsquo;s address may also sign in with
+            Continue with Google.
           </p>
           <p>
             An account belongs to the hostel&rsquo;s workspace rather than to you personally, and is
@@ -157,8 +159,9 @@ export default function TermsOfUsePage() {
           </p>
           <ul>
             <li>
-              Keep your password to yourself. Anything done with your account is treated as done by
-              you, because that is how the security log records it.
+              Keep your password to yourself, and keep the Google account you sign in with secure if
+              you use one. Anything done with your account is treated as done by you, because that is
+              how the security log records it.
             </li>
             <li>
               Turn on two-factor authentication where it is offered. Where it is required for your

@@ -50,11 +50,14 @@ library;
 ///
 /// 2026-10-12 gave the product its current name, Apnivaas, and named ShaReshi Tech as the
 /// operator.
-/// Nothing else in either document changed.
-const kLegalVersion = '2026-10-12';
+///
+/// 2026-10-17 added "Continue with Google": who may use it, what Google shares, and Google's
+/// third job as a recipient. Row: db/migrations/2026-10-17-legal-version-google.sql, which must
+/// be live before any build carrying this string reaches anybody.
+const kLegalVersion = '2026-10-17';
 
 /// Human-readable form of [kLegalVersion], for the "last updated" line.
-const kLegalVersionLabel = '12 October 2026';
+const kLegalVersionLabel = '17 October 2026';
 
 const kTermsUrl = 'https://hostelpro-three.vercel.app/legal/terms';
 const kPrivacyUrl = 'https://hostelpro-three.vercel.app/legal/privacy';
@@ -200,6 +203,12 @@ const kPrivacyPolicy = LegalDocument(
           'never seen by $kLegalProductName, by your hostel or by us.',
         ),
         Para(
+          'Owners and residents whose login is an email address that is also a Google account '
+          'may sign in with Continue with Google instead of their password. Managers, wardens '
+          'and platform administrators cannot: the database refuses it, and they sign in only '
+          'with the login they were given.',
+        ),
+        Para(
           'That is why this policy matters more than it would for an app you chose to install: '
           'most of what is here was typed in by hostel staff, from documents you handed them at '
           'the desk.',
@@ -213,6 +222,13 @@ const kPrivacyPolicy = LegalDocument(
           (
             term: 'Who you are',
             detail: 'Full name, phone number, email address if you have one, and your role.',
+          ),
+          (
+            term: 'Google sign-in',
+            detail: 'Only if you use Continue with Google: your Google account ID, and the name, '
+                'email address and profile photo link Google shares when you sign in. They are '
+                'kept by the sign-in service with your login and used only to sign you in. '
+                'Nothing is posted to your Google account and nothing else is read from it.',
           ),
           (
             term: 'Resident details',
@@ -425,10 +441,12 @@ const kPrivacyPolicy = LegalDocument(
           ),
           (
             term: 'Google',
-            detail: 'Two jobs. It delivers the few account emails — a confirmation link, a '
+            detail: 'Three jobs. It delivers the few account emails — a confirmation link, a '
                 'password reset — and sees your email address and the message. Through Firebase '
                 'Cloud Messaging it also delivers push notifications to your phone, and receives '
-                'the phone\'s registration token and each notification\'s title and body.',
+                'the phone\'s registration token and each notification\'s title and body. And if '
+                'you choose Continue with Google, it confirms who you are when you sign in, so it '
+                'learns that you signed in to this app.',
           ),
         ]),
         Para(
@@ -646,13 +664,15 @@ const kTermsOfUse = LegalDocument(
       blocks: [
         Para(
           'There is no self sign-up. Your account was created for you and comes with a '
-          'temporary password you must change when you first sign in. An account belongs to the '
-          'hostel\'s workspace rather than to you personally, and is deactivated when you check '
-          'out or when your employment ends.',
+          'temporary password you must change when you first sign in. Owners and residents '
+          'whose login is a Google account\'s address may also sign in with Continue with '
+          'Google. An account belongs to the hostel\'s workspace rather than to you personally, '
+          'and is deactivated when you check out or when your employment ends.',
         ),
         Bullets([
-          'Keep your password to yourself. Anything done with your account is treated as done '
-              'by you, because that is how the security log records it.',
+          'Keep your password to yourself, and keep the Google account you sign in with secure '
+              'if you use one. Anything done with your account is treated as done by you, '
+              'because that is how the security log records it.',
           'Turn on two-factor authentication where it is offered. Where it is required for your '
               'role you will be asked to set it up before you can continue.',
           'Tell your hostel immediately if you think someone else has your password.',

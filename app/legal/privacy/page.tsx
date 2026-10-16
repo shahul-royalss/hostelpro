@@ -170,6 +170,12 @@ export default function PrivacyPolicyPage() {
               <strong>Every account must set a new password at first sign-in.</strong> Passwords are
               hashed by the authentication service; the application itself never sees or stores one.
             </li>
+            <li>
+              <strong>Owners and residents may use Continue with Google</strong> instead of their
+              password, if their login is an email address that is also a Google account. Managers,
+              Wardens and platform administrators cannot: the database refuses it, and they sign in
+              only with the login they were given.
+            </li>
             <li>A resident&rsquo;s account is deactivated when they check out of the hostel.</li>
           </ul>
         </Section>
@@ -197,6 +203,11 @@ export default function PrivacyPolicyPage() {
                 "Sign-in credentials",
                 "Password hash, two-factor (TOTP) enrolment, sign-in timestamps — held by the authentication service, never by the application",
                 "Every person with a login",
+              ],
+              [
+                "Google sign-in",
+                "Only if you use Continue with Google: your Google account ID, and the name, email address and profile photo link Google shares when you sign in — kept by the authentication service with your login and used only to sign you in. Nothing is posted to your Google account and nothing else is read from it",
+                "Owners and residents who choose it",
               ],
               [
                 "Fee records",
@@ -446,8 +457,8 @@ export default function PrivacyPolicyPage() {
               ],
               [
                 "Google",
-                "Two separate jobs: delivering the account emails — a confirmation link, a password reset — and, through Firebase Cloud Messaging, delivering push notifications to the Android app",
-                "For email: your address and the contents of those messages; no marketing email is ever sent. For notifications: your device's registration token, plus the title and body of each notification — which name the hostel and the amount or subject, and so should be read as visible to Google and on your lock screen",
+                "Three separate jobs: delivering the account emails — a confirmation link, a password reset — and, through Firebase Cloud Messaging, delivering push notifications to the Android app; and, if you choose Continue with Google, confirming who you are when you sign in",
+                "For email: your address and the contents of those messages; no marketing email is ever sent. For notifications: your device's registration token, plus the title and body of each notification — which name the hostel and the amount or subject, and so should be read as visible to Google and on your lock screen. For sign-in: the fact that you signed in to this app",
               ],
             ]}
           />

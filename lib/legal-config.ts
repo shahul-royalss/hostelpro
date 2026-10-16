@@ -103,8 +103,11 @@ export const LEGAL = {
  * operator. The row is db/migrations/2026-10-12-legal-version-apnivaas.sql, and it must be on
  * the live database BEFORE the website is pushed or any app build carrying this string reaches
  * anybody — see docs/play-console-submission.md, Step 5, for the whole order.
+ *
+ * 2026-10-17: "Continue with Google" — who may use it, what Google shares, and Google's third job
+ * as a recipient. Row: db/migrations/2026-10-17-legal-version-google.sql, same order as above.
  */
-export const LEGAL_VERSION = "2026-10-12";
+export const LEGAL_VERSION = "2026-10-17";
 
 /**
  * Android application id, so the deletion page can name the app Play users installed.

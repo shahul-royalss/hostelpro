@@ -85,11 +85,11 @@ telemetry).
 
 | Play data type | Collected | Shared | Ephemeral | Required / optional | Purpose | Where it lives in the code |
 |---|---|---|---|---|---|---|
-| **Personal info › Name** | **Yes** | No | No | **Required** | App functionality, Account management | `students.full_name` (NOT NULL), `users.full_name` (NOT NULL), `students.guardian_name`, `visitors.visitor_name` (NOT NULL). Also sent to Razorpay as Checkout `prefill.name` — §3.3 |
-| **Personal info › Email address** | **Yes** | No | No | Optional | App functionality, Account management | `users.email`, `students.email` (both nullable). Staff sign in by email; **students sign in by phone**, mapped to a synthetic email in Supabase Auth. Also `prefill.email` — §3.3 |
+| **Personal info › Name** | **Yes** | No | No | **Required** | App functionality, Account management | `students.full_name` (NOT NULL), `users.full_name` (NOT NULL), `students.guardian_name`, `visitors.visitor_name` (NOT NULL). Also sent to Razorpay as Checkout `prefill.name` — §3.3. Also received from Google at Continue with Google — §3.6 |
+| **Personal info › Email address** | **Yes** | No | No | Optional | App functionality, Account management | `users.email`, `students.email` (both nullable). Staff sign in by email; **students sign in by phone**, mapped to a synthetic email in Supabase Auth. Also `prefill.email` — §3.3. Also received from Google at Continue with Google — §3.6 |
 | **Personal info › Phone number** | **Yes** | No | No | **Required** | App functionality, Account management | `students.phone` (NOT NULL — it is the student's login identifier), `students.guardian_phone`, `users.phone`, `visitors.visitor_phone`. Also `prefill.contact` — §3.3 |
 | **Personal info › Address** | **Yes** | No | No | Optional | App functionality | `students.permanent_address` (nullable), `hostels.address` |
-| **Personal info › User IDs** | **Yes** | No | No | **Required** | App functionality, Account management, Fraud prevention & security | Supabase Auth `uid`, `users.id`, `students.id`, `hostel_id`, role. Plus `payment_intents.razorpay_order_id` and `razorpay_payment_id` — Razorpay's own transaction identifiers |
+| **Personal info › User IDs** | **Yes** | No | No | **Required** | App functionality, Account management, Fraud prevention & security | Supabase Auth `uid`, `users.id`, `students.id`, `hostel_id`, role. Plus `payment_intents.razorpay_order_id` and `razorpay_payment_id` — Razorpay's own transaction identifiers. Plus the Google account ID (`auth.identities.provider_id`) for anyone who uses Continue with Google — §3.6 |
 | **Personal info › Other info** | **Yes** | No | No | Optional | App functionality | `students.id_proof_type` — the *kind* of government ID a resident holds. See §6 |
 | Personal info › Race and ethnicity | No | — | — | — | — | No such column exists |
 | Personal info › Political or religious beliefs | No | — | — | — | — | No such column exists |
@@ -387,6 +387,24 @@ sees `android.permission.INTERNET` (`verify-adid.sh:27-29`, `:74-87`); its earli
 APK manifests it could not read (`verify-adid.sh:18-25`). On 2026-09-13 it reported all three
 versionCode 4 artifacts clean, with `INTERNET` found. Run it again on any rebuild, the versionCode 6
 upload included. A result from one build does not carry over to the next.
+
+### 3.6 Google sign-in ("Continue with Google", from legal version 2026-10-17)
+
+Owners and residents whose login is a Google account's address may sign in with Google
+(`docs/google-sign-in.md`). Google then sends, and Supabase Auth keeps in `auth.identities.identity_data`:
+the Google account ID (`sub`), name, email address, whether Google verified it, and a profile photo
+**link** (a URL; the app never downloads or stores the image). Nothing is posted to the Google account
+and no other Google data is requested (scopes: openid, email, profile).
+
+- **Already declared, new source:** Personal info › Name, Email address and User IDs, all for Account
+  management. No new data type is ticked.
+- **Account creation methods** (App content → Data safety → Account creation): add **Google sign-in /
+  OAuth** next to username and password once a build with the button ships.
+- **Permissions unchanged:** google_sign_in's dependency `androidx.biometric` declares USE_BIOMETRIC and
+  USE_FINGERPRINT; both are removed in `AndroidManifest.xml` (`tools:node="remove"`), so the merged
+  manifest still has exactly the ten permissions the privacy policy lists. Checked in a release build on
+  2026-10-17.
+- **Deletion:** the identity rows go with the account (`auth.identities` cascades from `auth.users`).
 
 ## 4. Razorpay: service provider, not third party
 
