@@ -12,6 +12,7 @@ import '../../data/models/failure.dart';
 import '../boot/startup.dart';
 import 'auth_endpoint.dart';
 import '../config/env.dart';
+import 'google_id_token.dart';
 import 'session.dart';
 import 'session_standing.dart';
 
@@ -622,34 +623,7 @@ class AuthController extends AsyncNotifier<AuthPhase> {
             loginEmail: resolveLoginEmail(identifier),
             password: password,
           );
-      final AuthGranted granted;
-      switch (verdict) {
-        case AuthGranted():
-          granted = verdict;
-        case AuthThrottled(:final message):
-          return message;
-        case AuthRejected(:final message):
-          return message;
-        case AuthUnavailable(:final message):
-          return message;
-      }
-      _installingSelf = true;
-      try {
-        await _install(granted);
-        // The profile read is a SECOND network call, to PostgREST rather than to Auth, and it
-        // gets its own deadline. This step is why sign-in could previously appear to succeed and
-        // then strand the user: the password was accepted, this read hung or failed, and the
-        // PostgrestException it threw is not an AuthException, so the catch below never saw it.
-        // The button kept spinning and no message was ever shown.
-        //
-        // ONE read, not two. `_installingSelf` is what keeps the `signedIn` this install emits
-        // from starting a second, concurrent resolve of the same session — see
-        // [actionForAuthEvent], and the 825-reads-per-second it measures.
-        state = AsyncData(await _resolve().timeout(_networkTimeout));
-      } finally {
-        _installingSelf = false;
-      }
-      return null;
+      return await _accept(verdict);
     } on AuthException catch (e) {
       // The user sees a deliberately vague message; whoever is debugging needs the real one.
       // debugPrint is stripped in release, so this cannot leak to a device log in production.
@@ -669,12 +643,91 @@ class AuthController extends AsyncNotifier<AuthPhase> {
     }
   }
 
+  /// What a sign-in does with the server's verdict, whichever credential produced it.
+  ///
+  /// Returns null once the session is installed and the phase published, or the sentence to show.
+  /// Throws what [_install] and [_resolve] throw; the callers' catch blocks word those.
+  Future<String?> _accept(AuthVerdict verdict) async {
+    final AuthGranted granted;
+    switch (verdict) {
+      case AuthGranted():
+        granted = verdict;
+      case AuthThrottled(:final message):
+        return message;
+      case AuthRejected(:final message):
+        return message;
+      case AuthUnavailable(:final message):
+        return message;
+    }
+    _installingSelf = true;
+    try {
+      await _install(granted);
+      // The profile read is a SECOND network call, to PostgREST rather than to Auth, and it
+      // gets its own deadline. This step is why sign-in could previously appear to succeed and
+      // then strand the user: the password was accepted, this read hung or failed, and the
+      // PostgrestException it threw is not an AuthException, so the AuthException catch in the
+      // caller never saw it. The button kept spinning and no message was ever shown.
+      //
+      // ONE read, not two. `_installingSelf` is what keeps the `signedIn` this install emits
+      // from starting a second, concurrent resolve of the same session — see
+      // [actionForAuthEvent], and the 825-reads-per-second it measures.
+      state = AsyncData(await _resolve().timeout(_networkTimeout));
+    } finally {
+      _installingSelf = false;
+    }
+    return null;
+  }
+
+  /// "Continue with Google". Returns null on success AND when there is nothing to say — the
+  /// person closed the account sheet, or [quietly] found no returning Google user — otherwise the
+  /// sentence to show.
+  ///
+  /// [quietly] is the automatic attempt the sign-in screen makes when it opens: a returning
+  /// Google user is signed straight back in, and nobody else sees anything, not even an error.
+  ///
+  /// The token goes to mobile-auth, never to GoTrue directly — see google_id_token.dart. A
+  /// refusal makes this phone forget the Google account, so the next visit to the sign-in screen
+  /// does not quietly try the same refused account again.
+  Future<String?> signInWithGoogle({bool quietly = false}) async {
+    final google = ref.read(googleIdTokenSourceProvider);
+    if (!google.isAvailable) return quietly ? null : GoogleSignInWords.notSetUp;
+
+    final outcome = quietly ? await google.requestQuietly() : await google.request();
+    final GoogleTokenIssued token;
+    switch (outcome) {
+      case GoogleTokenIssued():
+        token = outcome;
+      case GoogleTokenCancelled():
+        return null;
+      case GoogleTokenFailed(:final message):
+        return quietly ? null : message;
+    }
+
+    // The same fresh start a password sign-in makes, for the same reason: see [signIn].
+    unawaited(_dropStaleSession());
+
+    try {
+      final verdict = await ref
+          .read(mobileAuthEndpointProvider)
+          .signInWithGoogle(idToken: token.idToken, nonce: token.rawNonce);
+      if (verdict is AuthRejected) unawaited(google.forget());
+      return await _accept(verdict);
+    } on AuthException catch (e) {
+      debugPrint('signInWithGoogle failed: ${e.runtimeType} status=${e.statusCode} '
+          'code=${e.code} ${e.message}');
+      return _authFailure(e);
+    } catch (e) {
+      debugPrint('signInWithGoogle failed (transport): ${e.runtimeType} $e');
+      return _unreachable(e);
+    }
+  }
+
   /// Clear whatever session this handset is still holding, locally and now.
   ///
-  /// Called only from [signIn]. The local half is what matters and it is synchronous; the
-  /// /logout round trip is a courtesy to the server and its failure is not the user's problem —
-  /// the token being retired is one the server has very often already forgotten, which is how
-  /// this app got into the state that needed clearing.
+  /// Called only from [signIn] and [signInWithGoogle]. The local half is what matters and it is
+  /// synchronous; the /logout round trip is a courtesy to the server and its failure is not the
+  /// user's problem — the token being retired is one the server has very often already
+  /// forgotten, which is how this app got into the state that needed clearing.
   Future<void> _dropStaleSession() async {
     if (_db.auth.currentSession == null) return;
     try {
@@ -963,6 +1016,10 @@ class AuthController extends AsyncNotifier<AuthPhase> {
   }
 
   Future<void> signOut() async {
+    // A deliberate sign-out must stay signed out: without this, the sign-in screen's quiet
+    // Google attempt would sign the same person straight back in. Unawaited — Google's own
+    // housekeeping must never hold up leaving.
+    unawaited(ref.read(googleIdTokenSourceProvider).forget());
     await _db.auth.signOut();
     state = const AsyncData(AuthSignedOut());
   }

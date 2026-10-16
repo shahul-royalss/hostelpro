@@ -61,6 +61,15 @@
         android:required="false"
         tools:replace="android:required" />
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
+    <!-- NO BIOMETRICS, WHATEVER A LIBRARY SAYS (2026-10-17). google_sign_in 7 brings in
+         androidx.credentials, which brings in androidx.biometric 1.1.0, whose manifest declares
+         USE_BIOMETRIC and USE_FINGERPRINT for Credential Manager's optional biometric prompt
+         (BiometricPromptData). Apnivaas never passes one: the Google account sheet is drawn by
+         Google Play services in its own process, with its own permissions. Left in, the two would
+         make the privacy policy's "ten permissions and no others" and "no biometrics" untrue.
+         Removed here the same way AD_ID is, so it is a fact about the merged manifest. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" tools:node="remove" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" tools:node="remove" />
     <!-- ── THE SESSION MUST NOT LEAVE THE PHONE ────────────────────────────────────────────
          Android Auto Backup is ON BY DEFAULT. With it on,
          /data/data/com.nivorasr.app/shared_prefs/FlutterSharedPreferences.xml is uploaded to

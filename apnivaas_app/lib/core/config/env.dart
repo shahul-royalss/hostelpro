@@ -113,5 +113,19 @@ abstract final class Env {
       'Supabase → Authentication → URL Configuration → Redirect URLs must contain '
       '$emailConfirmRedirectUrl (exactly, then Save). Site URL does not need to change.';
 
+  /// The Google Cloud "Web application" OAuth client ID that Google ID tokens are addressed to.
+  ///
+  /// NOT A SECRET, for the same reason the anon key is not: it is printed inside every app and web
+  /// page that offers Google sign-in, and it grants nothing by itself. Its SECRET half lives only in
+  /// the Supabase dashboard (Authentication → Sign In / Providers → Google) and never in this app.
+  ///
+  /// Empty means "Continue with Google" is not drawn at all — a build made before the client
+  /// exists must not offer a button that can only fail. Set per build with
+  ///   flutter build appbundle --dart-define=GOOGLE_WEB_CLIENT_ID=…apps.googleusercontent.com
+  /// or as this default once the client is created. The same value must also be the
+  /// GOOGLE_WEB_CLIENT_ID Edge Function secret and the dashboard's "Client IDs" field; all three
+  /// have to agree. docs/google-sign-in.md has the steps.
+  static const googleWebClientId = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
+
   static bool get isConfigured => supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 }

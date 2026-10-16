@@ -1,10 +1,14 @@
 /**
  * POST /functions/v1/mobile-auth
  *
- * The phone's sign-in and second-factor endpoint. Two actions on one function:
+ * The phone's sign-in and second-factor endpoint. Three actions on one function:
  *
  *   { "action": "signin", "identifier": "<resolved login address>", "password": "..." }
  *   { "action": "mfa",    "factorId": "<uuid>", "code": "123456" }
+ *   { "action": "google", "idToken": "<Google ID token>", "nonce": "<raw nonce>" }
+ *
+ * The third is "Continue with Google" (2026-10-17). See the GOOGLE section below; it needs the
+ * GOOGLE_WEB_CLIENT_ID secret and db/migrations/2026-10-17-google-sign-in.sql on the database.
  *
  * ═══ WHY THIS EXISTS ═══
  *
@@ -51,6 +55,7 @@
  * and it gates nothing on its own; the real gate is the limiter below. The MFA action is
  * called with the caller's own aal1 token and is verified properly by requireSession().
  */
+import { createRemoteJWKSet, errors as joseErrors, jwtVerify, type JWTPayload } from "npm:jose@5.9.6";
 import { audit, auditSystem, hashIdentifier } from "../_shared/audit.ts";
 import { clientIp, clientUserAgent, requireSession } from "../_shared/caller.ts";
 import { HttpError, ok, preflight, readJsonBody, toResponse } from "../_shared/http.ts";
@@ -430,6 +435,234 @@ async function verifyMfa(req: Request, body: Record<string, unknown>): Promise<R
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════
+// GOOGLE
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+//
+// The phone gets an ID token from Android's own Google account sheet (Credential Manager — no
+// browser) and sends it here with the raw nonce it hashed into the request. This function:
+//
+//   1. spends the IP budget, before the token is even parsed;
+//   2. verifies the token itself — Google's signature, issuer, audience (our Web client ID),
+//      expiry, email_verified, and that the token's nonce is sha256(raw nonce);
+//   3. spends the per-address budget, the SAME bucket a password sign-in for that address uses;
+//   4. looks the account up (public.login_account_for_email) and refuses — with a sentence that
+//      says what to do — no account, staff and super admin, deactivated, not set up;
+//   5. only then hands the same token to GoTrue's id_token grant, which links the Google
+//      identity to the account by address and mints the session.
+//
+// Why verify here when GoTrue verifies too: step 4 must not run on an unverified claim. Answering
+// "no account uses x@y" for a forged token would be an enumeration oracle; for a real one it is
+// telling the owner of x@y about their own address. And this project has "Allow new users to sign
+// up" ON, so a token for an unknown address must never reach GoTrue, which would create an account.
+//
+// Why the database still has its own guard: GoTrue's id_token grant and its browser redirect are
+// public, so "staff never use Google" is enforced again by the trigger in
+// db/migrations/2026-10-17-google-sign-in.sql, where the link is written. Step 4 is what gives
+// the app a sentence instead of GoTrue's "Database error".
+//
+// New people (no account yet) are refused here on purpose: self sign-up is 1.3.0 work, and it
+// will create the account through the server, never by turning public sign-up on.
+
+const GOOGLE_UNAVAILABLE =
+  "Google sign-in is temporarily unavailable. Please try again in a minute, or sign in with your password.";
+const GOOGLE_NOT_ON =
+  "Google sign-in isn't switched on yet. Sign in with your phone number or email and password.";
+const GOOGLE_FAILED = "Google sign-in didn't go through. Please try again.";
+const GOOGLE_STAFF =
+  "Staff and administrator accounts sign in with the login they were given, not with Google.";
+const GOOGLE_ISSUERS = ["https://accounts.google.com", "accounts.google.com"];
+const STAFF_ROLES = new Set(["super_admin", "manager", "warden"]);
+
+/**
+ * Google's signing keys, fetched once per warm isolate. jose refetches when a token names a key
+ * it has not seen (Google rotates them every few days). A fetch that fails is a 503, never a
+ * rejection: the token was not judged.
+ */
+const googleKeys = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"), {
+  timeoutDuration: 5_000,
+  cooldownDuration: 30_000,
+});
+
+/** The Web client ID(s) a token may be addressed to. Comma-separated, like the dashboard field. */
+function googleClientIds(): string[] {
+  return (Deno.env.get("GOOGLE_WEB_CLIENT_ID") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+interface LoginAccount {
+  user_id: string;
+  role: string | null;
+  status: string | null;
+  deleted_at: string | null;
+}
+
+async function signInWithGoogle(req: Request, body: Record<string, unknown>): Promise<Response> {
+  const ip = clientIp(req);
+  const userAgent = clientUserAgent(req);
+  const failed = (reason: string, targetId: string | null, extra: Record<string, unknown> = {}) =>
+    auditSystem("auth.login.failed", {
+      targetType: "identifier",
+      targetId,
+      ip,
+      userAgent,
+      meta: { reason, method: "google", surface: "mobile", ...extra },
+    });
+
+  const clientIds = googleClientIds();
+  if (clientIds.length === 0) throw unavailable(GOOGLE_NOT_ON);
+
+  const idToken = body["idToken"];
+  const nonce = body["nonce"];
+  if (
+    typeof idToken !== "string" || idToken.length < 20 || idToken.length > 4096 ||
+    typeof nonce !== "string" || nonce.length < 16 || nonce.length > 256
+  ) {
+    throw new HttpError(400, GOOGLE_FAILED);
+  }
+
+  // 1. The IP budget, before any work. Same key and same numbers as the password path, and the
+  //    same rule about a missing address: no shared "unknown" bucket.
+  if (ip) {
+    const ipWait = await consumeRateLimit(`login:ip:${ip}`, LIMITS.loginPerIp, {
+      unavailableMessage: GOOGLE_UNAVAILABLE,
+    });
+    if (ipWait > 0) throw tooManyAttempts(ipWait);
+  }
+
+  // 2. The token.
+  let claims: JWTPayload;
+  try {
+    ({ payload: claims } = await jwtVerify(idToken, googleKeys, {
+      issuer: GOOGLE_ISSUERS,
+      audience: clientIds,
+      algorithms: ["RS256"],
+      clockTolerance: 60,
+    }));
+  } catch (e) {
+    // A JOSE error is a verdict on the token. Anything else (a network failure fetching the
+    // keys, a timeout) means nobody judged it.
+    if (!(e instanceof joseErrors.JOSEError) || e instanceof joseErrors.JWKSTimeout) {
+      console.error("[apnivaas] could not check a Google token:", e instanceof Error ? e.message : String(e));
+      throw unavailable(GOOGLE_UNAVAILABLE);
+    }
+    await failed("bad-token", null, { code: e.code });
+    throw new HttpError(400, GOOGLE_FAILED);
+  }
+
+  const email = typeof claims["email"] === "string" ? claims["email"].trim().toLowerCase() : "";
+  const emailVerified = claims["email_verified"] === true || claims["email_verified"] === "true";
+  if (!email || !emailVerified) {
+    await failed(email ? "unverified-email" : "no-email", email ? await hashIdentifier(email) : null);
+    throw new HttpError(400, GOOGLE_FAILED);
+  }
+  if (claims["nonce"] !== await sha256Hex(nonce)) {
+    await failed("nonce", await hashIdentifier(email));
+    throw new HttpError(400, GOOGLE_FAILED);
+  }
+
+  // 3. The address's own budget — shared with password sign-ins for the same address, so
+  //    switching method does not buy a second allowance.
+  const idHash = await hashIdentifier(email);
+  const idWait = await consumeRateLimit(`login:id:${idHash}`, LIMITS.loginPerIdentifier, {
+    unavailableMessage: GOOGLE_UNAVAILABLE,
+  });
+  if (idWait > 0) {
+    if (await reportOnce(`login:${idHash}`, LIMITS.loginPerIdentifier.windowSeconds)) {
+      await auditSystem("auth.login.rate_limited", { targetType: "identifier", targetId: idHash, ip, userAgent });
+    }
+    throw tooManyAttempts(idWait);
+  }
+
+  // 4. The account. Google has proved the caller owns `email`, so every sentence below may name
+  //    what is true about it.
+  const { data: rows, error: lookupError } = await serviceClient().rpc("login_account_for_email", {
+    p_email: email,
+  });
+  if (lookupError) {
+    console.error("[apnivaas] account lookup failed for a verified Google token:", lookupError.message);
+    throw unavailable(GOOGLE_UNAVAILABLE);
+  }
+  const accounts = (Array.isArray(rows) ? rows : []) as LoginAccount[];
+
+  if (accounts.length === 0) {
+    await failed("no-account", idHash);
+    throw new HttpError(
+      403,
+      `No account uses ${email} yet. Sign in with your phone number or email and password, ` +
+        "or ask your PG to add this address to your account.",
+    );
+  }
+  if (accounts.length > 1) {
+    console.error("[apnivaas] two auth users share a login address; GoTrue would refuse to link");
+    await failed("duplicate-account", idHash);
+    throw new HttpError(403, "This address is on more than one account. Contact your administrator.");
+  }
+
+  const account = accounts[0];
+  if (!account.role) {
+    await failed("no-profile", idHash);
+    throw new HttpError(403, "Your account isn't set up yet. Contact your administrator.");
+  }
+  if (STAFF_ROLES.has(account.role)) {
+    await failed("staff-refused", idHash, { role: account.role });
+    throw new HttpError(403, GOOGLE_STAFF);
+  }
+  if (account.deleted_at || account.status !== "active") {
+    await failed("inactive", idHash);
+    throw new HttpError(403, "This account has been deactivated. Contact your hostel owner.");
+  }
+
+  // 5. GoTrue: the same token, the same raw nonce. It checks both again and links the identity.
+  const call = await gotrue("token?grant_type=id_token", {
+    body: { provider: "google", id_token: idToken, nonce },
+  });
+  const session = sessionFrom(call.body);
+  if (call.status !== 200 || !session) {
+    const errorCode = String(call.body["error_code"] ?? call.body["error"] ?? "");
+    const description = String(call.body["msg"] ?? call.body["error_description"] ?? call.body["message"] ?? "");
+    if (call.status === 429) throw tooManyAttempts(60);
+    if (/provider_disabled/i.test(errorCode) || /not enabled|disabled/i.test(description)) {
+      console.error(`[apnivaas] GoTrue has Google switched off: ${description.slice(0, 200)}`);
+      throw unavailable(GOOGLE_NOT_ON);
+    }
+    if (call.status >= 500) {
+      console.error(`[apnivaas] GoTrue ${call.status} on the Google grant: ${description.slice(0, 200)}`);
+      throw unavailable(GOOGLE_UNAVAILABLE);
+    }
+    // We accepted the token and GoTrue did not: the dashboard's Client IDs and our secret
+    // disagree, most likely. Logged for the operator; the user is told to try again.
+    console.error(`[apnivaas] GoTrue refused a Google token mobile-auth accepted: ${call.status} ${errorCode} ${description.slice(0, 200)}`);
+    await failed("gotrue-refused", idHash, { status: call.status });
+    throw new HttpError(400, GOOGLE_FAILED);
+  }
+
+  const userId = String((call.body["user"] as Record<string, unknown> | undefined)?.["id"] ?? "");
+  if (userId !== account.user_id) {
+    // Cannot happen while addresses are unique; if it ever does, nobody gets a session for an
+    // account this function did not check.
+    console.error("[apnivaas] GoTrue signed a Google token into a different account than the lookup named");
+    await revoke(session.access_token);
+    throw unavailable(GOOGLE_UNAVAILABLE);
+  }
+
+  await auditSystem("auth.login.success", {
+    targetType: "user",
+    targetId: account.user_id,
+    ip,
+    userAgent,
+    meta: { role: account.role, method: "google", surface: "mobile" },
+  });
+  return grant(session);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════
 
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return preflight();
@@ -440,6 +673,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         return await signIn(req, body);
       case "mfa":
         return await verifyMfa(req, body);
+      case "google":
+        return await signInWithGoogle(req, body);
       default:
         throw new HttpError(400, "Could not read the request.");
     }

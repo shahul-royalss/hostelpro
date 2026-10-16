@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/auth/google_id_token.dart';
 import '../../core/theme/tokens.dart';
 import '../../shared/beam_card.dart';
 import '../../shared/glass/glass.dart';
@@ -48,13 +50,50 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   // the router watches — so tapping Sign in read as "still restoring the session" and pushed
   // the user to the splash screen mid-login.
   bool _busy = false;
+  // Google has its own flag so its spinner sits on its own button: the quiet attempt below runs
+  // without anyone pressing anything, and a spinner on "Sign in" would read as "I pressed that".
+  bool _googleBusy = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    // "Automated": a returning Google user is signed straight back in. After a deliberate
+    // sign-out there is nothing to restore — AuthController.signOut makes the phone forget the
+    // Google account — so this does nothing for them, and nothing at all in a build without Google.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _google(quietly: true));
+  }
 
   @override
   void dispose() {
     _id.dispose();
     _pw.dispose();
     super.dispose();
+  }
+
+  /// "Continue with Google", or — [quietly] — the automatic attempt when the screen opens.
+  Future<void> _google({bool quietly = false}) async {
+    if (!mounted || _busy || _googleBusy) return;
+    if (!ref.read(googleIdTokenSourceProvider).isAvailable) return;
+    // Not when the router brought us here to say why (deactivated, not set up): a quiet attempt
+    // would only repeat the refusal over the top of the sentence explaining it.
+    if (quietly) {
+      final phase = ref.read(authControllerProvider).value;
+      if (phase is AuthSignedOut && phase.message != null) return;
+    }
+    if (!quietly) FocusScope.of(context).unfocus();
+    setState(() {
+      _googleBusy = true;
+      if (!quietly) _error = null;
+    });
+    final message =
+        await ref.read(authControllerProvider.notifier).signInWithGoogle(quietly: quietly);
+    // On success the router navigates away and this widget is gone.
+    if (!mounted) return;
+    setState(() {
+      _googleBusy = false;
+      if (message != null) _error = message;
+    });
   }
 
   /// Ask for an address and send a reset link to it.
@@ -192,7 +231,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final busy = _busy;
+    final busy = _busy || _googleBusy;
+    final google = ref.watch(googleIdTokenSourceProvider);
     // This attempt's own failure first: it is about what the user just typed, and it replaces
     // whatever brought them here. The arrival message is suppressed while a submission is in
     // flight so a stale reason cannot sit under a spinner.
@@ -325,7 +365,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: Space.sm),
               FilledButton(
                 onPressed: busy ? null : _submit,
-                child: busy
+                child: _busy
                     ? SizedBox(
                         width: IconSize.md,
                         height: IconSize.md,
@@ -346,6 +386,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 onPressed: busy ? null : _forgotPassword,
                 child: const Text('Forgot your password?'),
               ),
+              // Only in a build that carries a Web client ID (Env.googleWebClientId). A button
+              // that can only fail is worse than no button.
+              if (google.isAvailable) ...[
+                const SizedBox(height: Space.xs),
+                const _OrDivider(),
+                const SizedBox(height: Space.sm),
+                _GoogleButton(busy: _googleBusy, onPressed: busy ? null : _google),
+                const SizedBox(height: Space.sm),
+              ],
               // 4:86 puts a gold "Contact your hostel admin" here. It is a STATEMENT in this
               // build, not the design's link: gold means interactive everywhere else in this
               // app, and there is nothing a signed-out client could open — a user with no
@@ -356,6 +405,84 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// "or", between the password form and Google.
+class _OrDivider extends StatelessWidget {
+  const _OrDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return Row(
+      children: [
+        const Expanded(child: Divider()),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Space.sm),
+          child: Text('or', style: t.textTheme.bodySmall),
+        ),
+        const Expanded(child: Divider()),
+      ],
+    );
+  }
+}
+
+/// Google's button, to its published light-theme spec: white fill, #747775 hairline, #1F1F1F
+/// label, the four-colour "G" at 18 dp, and the words "Continue with Google". Google's branding
+/// rules say the mark and its colours are not to be restyled, so this one control does not take
+/// the app's theme colours.
+class _GoogleButton extends StatelessWidget {
+  const _GoogleButton({required this.busy, required this.onPressed});
+
+  final bool busy;
+  final VoidCallback? onPressed;
+
+  /// Google's "G", as published with its sign-in button assets.
+  static const _mark =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">'
+      '<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 '
+      '14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>'
+      '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 '
+      '5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>'
+      '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 '
+      '16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>'
+      '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 '
+      '2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>'
+      '</svg>';
+
+  static const _ink = Color(0xFF1F1F1F);
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(48),
+        backgroundColor: Colors.white,
+        foregroundColor: _ink,
+        disabledBackgroundColor: Colors.white,
+        disabledForegroundColor: _ink.withValues(alpha: 0.38),
+        side: const BorderSide(color: Color(0xFF747775)),
+        shape: const StadiumBorder(),
+        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 20 / 14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (busy)
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: _ink),
+            )
+          else
+            SvgPicture.string(_mark, width: 18, height: 18),
+          const SizedBox(width: 12),
+          const Flexible(child: Text('Continue with Google', overflow: TextOverflow.ellipsis)),
+        ],
       ),
     );
   }

@@ -46,6 +46,7 @@ const mobileAuthFunction = 'mobile-auth';
 
 const _actionSignIn = 'signin';
 const _actionMfa = 'mfa';
+const _actionGoogle = 'google';
 
 /// What the server decided. Four outcomes, because they want four different sentences.
 ///
@@ -172,9 +173,25 @@ class MobileAuthEndpoint {
         unavailable: mfaUnavailable,
       );
 
+  /// "Continue with Google": the ID token Android's account sheet produced, and the raw nonce
+  /// whose sha256 is inside it. The server verifies the token itself, refuses staff and anyone
+  /// without an account in words, and only then asks GoTrue for the session. Same four verdicts
+  /// as a password, decoded by the same code; only the fallback sentences differ, because "wrong
+  /// password" is not a thing that can be wrong here.
+  Future<AuthVerdict> signInWithGoogle({
+    required String idToken,
+    required String nonce,
+  }) =>
+      _call(
+        {'action': _actionGoogle, 'idToken': idToken, 'nonce': nonce},
+        unavailable: googleUnavailable,
+        rejected: googleRejected,
+      );
+
   Future<AuthVerdict> _call(
     Map<String, Object?> body, {
     required String unavailable,
+    String rejected = genericRejection,
   }) async {
     try {
       final response = await _invoke(mobileAuthFunction, body: body).timeout(timeout);
@@ -183,7 +200,7 @@ class MobileAuthEndpoint {
       // verdict. Saying "wrong password" here would blame the user for our own bug.
       return granted ?? AuthUnavailable(unavailable);
     } on FunctionsHttpException catch (e) {
-      return verdictFor(e.status, e.details, unavailable: unavailable);
+      return verdictFor(e.status, e.details, unavailable: unavailable, rejected: rejected);
     } on FunctionException catch (e) {
       // FunctionsFetchException (the request never left) and FunctionsRelayException (the
       // platform edge failed before our code ran). Both are "we could not ask the question".
@@ -217,6 +234,7 @@ class MobileAuthEndpoint {
     int status,
     Object? details, {
     required String unavailable,
+    String rejected = genericRejection,
   }) {
     final serverMessage = _messageFrom(details);
 
@@ -244,7 +262,7 @@ class MobileAuthEndpoint {
 
     // 400 and 403 — the function answered, and its message is already written for a person and
     // already refuses to distinguish "no such account" from "wrong password".
-    return AuthRejected(serverMessage ?? genericRejection);
+    return AuthRejected(serverMessage ?? rejected);
   }
 
   /// Pulls `error` out of the `{ ok: false, error: "..." }` envelope every Apnivaas function
@@ -286,6 +304,12 @@ class MobileAuthEndpoint {
 
   static const mfaUnavailable =
       'Verification is temporarily unavailable. Please try again in a minute.';
+
+  static const googleUnavailable =
+      'Google sign-in is temporarily unavailable. Please try again in a minute, or sign in with '
+      'your password.';
+
+  static const googleRejected = "Google sign-in didn't go through. Please try again.";
 
   static const unreachable =
       'Cannot reach Apnivaas. Check your connection and try again.';

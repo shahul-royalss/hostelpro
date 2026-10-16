@@ -94,6 +94,14 @@ dependencies:
   share_plus: ^13.3.0
   image_picker: ^1.2.3
 
+  # "Continue with Google" (2026-10-17). On Android this is Credential Manager: Google's own
+  # account sheet, drawn by the system, no browser and no web view — the rule is "nothing goes to
+  # the browser". It yields an ID token and nothing else; the token goes to the mobile-auth Edge
+  # Function, never straight to GoTrue (lib/core/auth/google_id_token.dart says why). crypto is
+  # for the nonce: Google is handed sha256(raw), the server is handed raw and checks the pair.
+  google_sign_in: ^7.2.0
+  crypto: ^3.0.6
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
