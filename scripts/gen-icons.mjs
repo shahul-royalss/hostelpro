@@ -71,24 +71,19 @@ import sharp from "sharp";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** The owner's artwork and animation. Only read by --cut and --splash respectively. */
+/** The owner's artwork. Only read by --cut (the animation is read by scripts/gen-splash.mjs). */
 const SRC_ART = path.join(REPO_ROOT, "Apnivaas_8K_UHD.png");
-const SRC_VIDEO = path.join(REPO_ROOT, "Logo animation.mp4");
 
 const APP = path.join(REPO_ROOT, "apnivaas_app");
 const APP_BRAND = path.join(APP, "assets", "brand");
 const MARK_MASTER = path.join(APP_BRAND, "apnivaas_mark.png");
 const LOCKUP_MASTER = path.join(APP_BRAND, "apnivaas_lockup.png");
-const SPLASH_ANIM = path.join(APP_BRAND, "apnivaas_splash.webp");
-const SPLASH_STILL = path.join(APP_BRAND, "apnivaas_splash_still.webp");
 
 const RES_DIR = path.join(APP, "android", "app", "src", "main", "res");
-const COLORS_XML = path.join(RES_DIR, "values", "colors.xml");
 const IOS_ICON = path.join(APP, "ios", "Runner", "Assets.xcassets", "AppIcon.appiconset", "Icon-App-1024x1024@1x.png");
 
 const ICONS_DIR = path.join(REPO_ROOT, "public", "icons");
@@ -490,177 +485,11 @@ async function cutMasters() {
 
 /* ───────────────────────── 2. the launch animation (--splash) ───────────────────────── */
 
-/**
- * THE ANIMATION THE APP PLAYS ON A COLD START. Every number here is a decision, so each one says
- * why. lib/core/boot/splash_gate.dart holds the matching constants, and
- * test/splash_asset_bytes_test.dart reads this file's RIFF chunks to keep the two in step.
- *
- * CROP (0,400)-(1080,1480). A square out of the 9:16 frame: every frame's logo content lives in
- * rows 572-1312, so this keeps all of it — and drops the watermark in the corner (863-935,
- * 1702-1776) as a side effect, since the app shows the logo, not the frame.
- *
- * 720px. Big enough for the ~300dp slot at 2.4x density; each decoded frame is 2 MB of RGBA and
- * the engine holds only the current one and the next, so this is the ceiling, not the floor.
- *
- * SOURCE FRAMES 6-100. The first quarter-second is empty ground (the native launch window
- * already showed that), and by frame 100 (4.17s) the wordmark is fully in; after it the video
- * only drifts the camera for another second, which on a launch reads as waiting.
- *
- * TWICE AS FAST, AT 30 FRAMES A SECOND, 32ms EACH. This is the one place where the obvious
- * numbers are wrong. Taking every second frame at the video's own 42ms looks like 2x in a
- * browser, but Flutter shows an animated frame only on a vsync at least `duration` after the
- * last one, so on a 60Hz phone a 42ms frame stays up for THREE vsyncs (50ms) and the whole thing
- * plays at 1.7x and runs past the gate's cap. 32ms is two vsyncs at 60Hz, three at 90 and four
- * at 120 — 33.3ms on all of them, with 1.3ms of slack for vsync jitter — so the file plays at the
- * same 30fps on every display. Covering source frames 6-100 in 60 frames is a step of 94/59
- * (1.59) source frames, i.e. 1.99x; the in-between positions are a LINEAR BLEND of the two
- * neighbouring frames rather than the nearer one, because picking alternately 1 and 2 frames
- * ahead judders visibly on the ribbon sweep and a blend reads as motion blur instead.
- *
- * THE OUTER RING IS BLENDED INTO ONE FLAT COLOUR. The video's ground is not flat (diagonal light
- * streaks, R from 224 to 242), so a square cut from it would show its edges on any flat ground.
- * Inside 80% of the half-width the frame is untouched; from there to 98% it fades to a single
- * colour — the median of that ring on the final frame — and the corners are that colour alone.
- * The app and both native launch screens then paint exactly that colour, measured off the
- * DECODED file below (lossy encoding moves a flat colour by about one level, and a one-level
- * square is visible on a phone in a dark room).
- *
- * LOOP ONCE, NO SOUND. ANIM loop count 1 = play once (Skia maps it to repetitionCount 0); WebP
- * has no audio track, which settles "silent" structurally rather than by a setting.
- */
-const SPLASH = {
-  crop: { x: 0, y: 400, size: 1080 },
-  size: 720,
-  firstSource: 6,
-  lastSource: 100,
-  frames: 60,
-  frameMs: 32,
-  quality: 74,
-  stillQuality: 82,
-  featherFrom: 0.8,
-  featherTo: 0.98,
-};
-
+/** Built by scripts/gen-splash.mjs, which keys the logo out of the video onto transparency; see
+ *  its header for every number and why. --splash only runs it before the icons. */
 async function makeSplash() {
-  if (!fs.existsSync(SRC_VIDEO)) throw new Error(`--splash needs the video at ${rel(SRC_VIDEO)}`);
-  const S = SPLASH.size;
-  const frameBytes = S * S * 3;
-  const vf = `crop=${SPLASH.crop.size}:${SPLASH.crop.size}:${SPLASH.crop.x}:${SPLASH.crop.y},` +
-    `scale=${S}:${S}:flags=lanczos+accurate_rnd+full_chroma_int`;
-  let raw;
-  try {
-    raw = execFileSync(
-      FFMPEG,
-      ["-v", "error", "-i", SRC_VIDEO, "-an", "-vf", vf, "-frames:v", String(SPLASH.lastSource + 1),
-        "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"],
-      { maxBuffer: frameBytes * (SPLASH.lastSource + 2) },
-    );
-  } catch (e) {
-    throw new Error(`ffmpeg failed (${FFMPEG}): ${e.message}. Pass --ffmpeg=<path to ffmpeg.exe>.`);
-  }
-  const count = Math.floor(raw.length / frameBytes);
-  if (count < SPLASH.lastSource + 1) throw new Error(`ffmpeg returned ${count} frames, need ${SPLASH.lastSource + 1}`);
-  const src = (i) => raw.subarray(i * frameBytes, (i + 1) * frameBytes);
-  log(`video   ${rel(SRC_VIDEO)}: ${count} frames decoded at ${S}x${S}, audio dropped`);
-
-  // The flat ground: median of the outer 24px ring of the final frame.
-  const last = src(SPLASH.lastSource);
-  const ring = [[], [], []];
-  for (let y = 0; y < S; y += 1) {
-    for (let x = 0; x < S; x += 1) {
-      if (x >= 24 && x < S - 24 && y >= 24 && y < S - 24) continue;
-      const i = (y * S + x) * 3;
-      for (let c = 0; c < 3; c += 1) ring[c].push(last[i + c]);
-    }
-  }
-  const ground = ring.map((v) => v.sort((a, b) => a - b)[v.length >> 1]);
-  log(`ground  median of the final frame's outer ring ${hex(ground)} (before encoding)`);
-
-  // Feather weights: 0 inside featherFrom of the half-width, 1 from featherTo outwards.
-  const weight = new Float32Array(S * S);
-  const c0 = (S - 1) / 2;
-  for (let y = 0; y < S; y += 1) {
-    for (let x = 0; x < S; x += 1) {
-      const r = Math.hypot(x - c0, y - c0) / (S / 2);
-      weight[y * S + x] = Math.min(1, Math.max(0, (r - SPLASH.featherFrom) / (SPLASH.featherTo - SPLASH.featherFrom)));
-    }
-  }
-  const frameAt = (pos) => {
-    const k = Math.floor(pos);
-    const f = pos - k;
-    const a = src(k);
-    const b = f > 1e-6 ? src(k + 1) : a;
-    const outBuf = Buffer.alloc(frameBytes);
-    for (let p = 0, px = 0; p < frameBytes; p += 3, px += 1) {
-      const w = weight[px];
-      for (let c = 0; c < 3; c += 1) {
-        const v = a[p + c] * (1 - f) + b[p + c] * f;
-        outBuf[p + c] = Math.round(v * (1 - w) + ground[c] * w);
-      }
-    }
-    return outBuf;
-  };
-
-  const step = (SPLASH.lastSource - SPLASH.firstSource) / (SPLASH.frames - 1);
-  const strip = Buffer.alloc(frameBytes * SPLASH.frames);
-  for (let i = 0; i < SPLASH.frames; i += 1) {
-    frameAt(SPLASH.firstSource + i * step).copy(strip, i * frameBytes);
-  }
-  const anim = await sharp(strip, { raw: { width: S, height: S * SPLASH.frames, channels: 3, pageHeight: S } })
-    .webp({
-      quality: SPLASH.quality,
-      effort: 6,
-      smartSubsample: true,
-      loop: 1,
-      delay: new Array(SPLASH.frames).fill(SPLASH.frameMs),
-    })
-    .toBuffer();
-  fs.mkdirSync(APP_BRAND, { recursive: true });
-  fs.writeFileSync(SPLASH_ANIM, anim);
-
-  const still = await sharp(frameAt(SPLASH.lastSource), { raw: { width: S, height: S, channels: 3 } })
-    .webp({ quality: SPLASH.stillQuality, effort: 6, smartSubsample: true })
-    .toBuffer();
-  fs.writeFileSync(SPLASH_STILL, still);
-
-  // What a phone will actually paint at the edges: decode both files and read their borders.
-  const borderOf = async (buf, page) => {
-    const { data, info } = await sharp(buf, { page }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-    const seen = new Map();
-    for (let y = 0; y < info.height; y += 1) {
-      for (let x = 0; x < info.width; x += 1) {
-        if (x >= 8 && x < info.width - 8 && y >= 8 && y < info.height - 8) continue;
-        const i = (y * info.width + x) * info.channels;
-        const k = hex([data[i], data[i + 1], data[i + 2]]);
-        seen.set(k, (seen.get(k) ?? 0) + 1);
-      }
-    }
-    return [...seen.entries()].sort((a, b) => b[1] - a[1]);
-  };
-  const meta = await sharp(anim, { pages: -1 }).metadata();
-  const borders = {
-    first: await borderOf(anim, 0),
-    last: await borderOf(anim, meta.pages - 1),
-    still: await borderOf(still, 0),
-  };
-  log(`splash  ${rel(SPLASH_ANIM)}: ${meta.pages} frames x ${SPLASH.frameMs}ms, loop ${meta.loop}, ${(anim.length / 1024).toFixed(0)} KB`);
-  log(`splash  ${rel(SPLASH_STILL)}: ${(still.length / 1024).toFixed(0)} KB`);
-  for (const [name, list] of Object.entries(borders)) {
-    log(`border  ${name.padEnd(5)} ${list.slice(0, 3).map(([k, n]) => `${k} x${n}`).join("  ")}${list.length > 3 ? `  (+${list.length - 3} more)` : ""}`);
-  }
-  const decoded = borders.first[0][0];
-  if (borders.last[0][0] !== decoded || borders.still[0][0] !== decoded) {
-    throw new Error("the decoded border differs between frames — the app ground cannot match all of them");
-  }
-  // The colour every native launch surface and the Flutter splash must paint. values/colors.xml
-  // is the copy the build reads; lib/features/splash/splash_screen.dart and the iOS storyboard
-  // are asserted against it by test/splash_opening_test.dart.
-  const colors = fs.readFileSync(COLORS_XML, "utf8");
-  const declared = /<color name="splash_ground">(#[0-9A-Fa-f]{6})<\/color>/.exec(colors)?.[1]?.toUpperCase();
-  log(`ground  decoded ${decoded}; values/colors.xml splash_ground ${declared ?? "(missing)"}`);
-  if (declared !== decoded) {
-    throw new Error(`values/colors.xml splash_ground is ${declared ?? "missing"}, the decoded animation border is ${decoded} — update colors.xml, splash_screen.dart and LaunchScreen.storyboard together`);
-  }
+  const { makeSplash: build } = await import("./gen-splash.mjs");
+  await build({ ffmpeg: FFMPEG, log });
 }
 
 /* ───────────────────────── 3. every icon (default) ───────────────────────── */

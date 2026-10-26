@@ -20,8 +20,8 @@ import 'package:mobile/data/providers.dart';
 import 'package:mobile/features/owner/owner_dashboard_screen.dart';
 import 'package:mobile/features/owner/owner_insights.dart';
 import 'package:mobile/features/owner/owner_providers.dart';
-import 'package:mobile/features/owner/widgets/states.dart';
 import 'package:mobile/features/shell/role_shell.dart';
+import 'package:mobile/shared/clay/clay.dart';
 
 const _period = '2026-08';
 const _hostelId = 'h-sunrise';
@@ -139,9 +139,8 @@ Future<void> _pumpDashboard(
         ownerActivityProvider.overrideWith((ref, hostelId) => activity ?? AsyncData(_activity())),
       ],
       child: MaterialApp(
-        // The app's own theme is built on google_fonts, which would try to fetch a font file
-        // over the network from inside the test binary. The layout under test does not depend
-        // on the typeface — only on the scale's slot names, which the stock theme also has.
+        // The stock theme: the layout under test does not depend on the typeface or the
+        // palette — only on the scale's slot names, which the stock theme also has.
         home: throughShell
             ? const RoleShell(role: UserRole.owner)
             : const Scaffold(body: OwnerDashboardScreen()),
@@ -152,6 +151,12 @@ Future<void> _pumpDashboard(
   // the moment one of them is on screen.
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
+}
+
+/// A frame and a beat — long enough for a sheet or a tab switch to land, without settling.
+Future<void> _beat(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 600));
 }
 
 List<ActivityItem> _activity() => [
@@ -173,61 +178,74 @@ List<ActivityItem> _activity() => [
 ];
 
 void main() {
-  testWidgets('the money cards say what came in and what has not', (tester) async {
-    await _pumpDashboard(tester);
+  testWidgets('the money tiles say what came in and what has not', (tester) async {
+    await _pumpDashboard(tester, throughShell: true);
 
     // Not asserted against a fixed greeting: "Good morning" depends on the clock the test
-    // happens to run under, and a test that fails at 5pm is worse than no test.
+    // happens to run under, and a test that fails at 5pm is worse than no test. The greeting
+    // and the PG are the forest header's, which the shell draws above Home.
     expect(find.textContaining('Ananya'), findsOneWidget);
     expect(find.text('Sunrise Residency'), findsOneWidget);
 
-    // Figma 4:437 splits what used to be one hero card across two cells of the KPI grid: what
-    // is IN on the left of the top row, what is OWED on the left of the bottom one. Both halves
-    // of the fee ledger still reach the screen — this asserts the same rpc_hostel_stats fields
-    // as before, in the two places the design now puts them.
-    expect(find.text('COLLECTED IN AUGUST'), findsOneWidget);
+    // The hero tile: what is IN, against what was billed, with the share in words as well as
+    // on the gold bar — a bar is never the only carrier of a number.
+    expect(find.text('Collected in August'), findsOneWidget);
     expect(find.text('₹50,200'), findsOneWidget);
-    expect(find.text('of ₹84,000 billed'), findsOneWidget);
-    // 50,200 of 84,000 — the meter prints its own share, in its own tone.
-    expect(find.text('60%'), findsOneWidget);
+    expect(find.text('of ₹84,000 billed · 60%'), findsOneWidget);
 
-    expect(find.text('PENDING FEES'), findsOneWidget);
+    // What is OWED, on a tile of its own.
+    expect(find.text('Pending fees'), findsOneWidget);
     expect(find.text('₹33,800'), findsOneWidget);
     expect(find.text('6 outstanding bills'), findsOneWidget);
   });
 
+  testWidgets('outstanding rent is the one gold banner, with the way to the payments',
+      (tester) async {
+    await _pumpDashboard(tester, throughShell: true);
+
+    expect(find.text('Rent still to collect'), findsOneWidget);
+    expect(find.text('₹33,800 still to collect from 6 residents.'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'See payments'));
+    await _beat(tester);
+    // The Money tab's header. The bar's own label is "Money", so this can only be the header.
+    expect(find.text('Payments'), findsOneWidget);
+  });
+
   testWidgets('a first load is a skeleton of the real layout, not a spinner', (tester) async {
-    await _pumpDashboard(tester, statsPending: true);
+    await _pumpDashboard(tester, statsPending: true, throughShell: true);
 
     // The brief's line, under test: no full-screen spinner. The page keeps its shape and fills
     // in, so nothing jumps when the numbers land.
-    expect(find.byType(Skeleton), findsWidgets);
+    expect(find.byType(SkeletonPulse), findsWidgets);
     expect(find.byType(CircularProgressIndicator), findsNothing);
-    // The greeting is not behind the query, so it is readable immediately.
+    // The greeting is not behind the query, so it is readable immediately — and so are the
+    // quick actions, which open screens that load their own data.
     expect(find.textContaining('Ananya'), findsOneWidget);
+    expect(find.text('Post a notice'), findsOneWidget);
   });
 
-  testWidgets('occupancy leads with the rate and states the count under it', (tester) async {
+  testWidgets('beds lead with the count and state the rate under it', (tester) async {
     await _pumpDashboard(tester);
 
-    // 4:437's occupancy card: the percentage IS the figure, with the ratio it came from on
-    // the line below. The meter does not repeat the percentage a second time.
-    expect(find.text('OCCUPANCY'), findsOneWidget);
-    expect(find.text('33%'), findsOneWidget);
-    expect(find.text('12 of 36 beds filled'), findsOneWidget);
+    expect(find.text('Beds filled'), findsOneWidget);
+    expect(find.text('12/36'), findsOneWidget);
+    expect(find.text('33% occupancy'), findsOneWidget);
   });
 
-  testWidgets('NEEDS YOU lists only what the KPI grid does not already carry', (tester) async {
+  testWidgets('NEEDS YOUR ATTENTION lists only what the tiles do not already carry',
+      (tester) async {
     await _pumpDashboard(tester);
 
-    // Unpaid fees and open complaints have a card each on the grid above, so repeating them
-    // as rows here would be the same fact twice, three centimetres apart.
-    expect(find.text('COMPLAINTS'), findsOneWidget);
+    // Unpaid fees and open complaints have a tile each above, so repeating them as rows here
+    // would be the same fact twice, a thumb's width apart.
+    expect(find.text('Complaints'), findsOneWidget);
     expect(find.text('3 open'), findsOneWidget);
     expect(find.text('6 residents have not paid'), findsNothing);
     expect(find.text('3 complaints still open'), findsNothing);
 
-    // What the grid has no card for still gets a row.
+    // What the tiles have no place for still gets a row, under its heading.
+    expect(find.text('Needs your attention'), findsOneWidget);
     expect(find.text('1 task not done'), findsOneWidget);
     // pending_leaves is zero for this hostel, so it is absent rather than shown as "0".
     expect(find.textContaining('leave request'), findsNothing);
@@ -250,12 +268,14 @@ void main() {
 
     expect(find.text('Nothing is waiting on you'), findsOneWidget);
     expect(find.text('Every resident has paid this month.'), findsOneWidget);
+    // Nothing outstanding, so there is no deadline to draw a gold banner for.
+    expect(find.text('Rent still to collect'), findsNothing);
   });
 
   testWidgets('the month totals are labelled apart from the 30-day chart', (tester) async {
     await _pumpDashboard(tester);
 
-    expect(find.text('AUGUST SO FAR'), findsOneWidget);
+    expect(find.text('August so far'), findsOneWidget);
     expect(find.text('₹45,200'), findsOneWidget);
     expect(find.text('₹50,400'), findsOneWidget);
     // The month is running at a loss, and the net figure says so rather than hiding the sign.
@@ -263,20 +283,35 @@ void main() {
     expect(find.textContaining('Fee collections are counted separately'), findsOneWidget);
   });
 
-  // RECENT ACTIVITY WAS REMOVED FROM THIS DASHBOARD, at the product owner's request, and the
-  // two tests that covered it went with it rather than being softened into passing. What it
-  // showed is not lost: complaints have their own screen behind the Complaints card (with the
-  // author, the photo and the timeline, which the feed never carried), and the latest notice
-  // is still on the dashboard in its own section. The replacement is asserted below.
-  testWidgets('the complaints card is the way into the complaints screen', (tester) async {
+  // RECENT ACTIVITY IS NOT A SECTION OF HOME, at the product owner's request: complaints have
+  // their own screen behind the Complaints tile (with the author, the photo and the timeline,
+  // which a feed never carried), and the latest notice has its own section. The timeline lives
+  // behind the header's bell instead, asserted further down.
+  testWidgets('the complaints tile is the way into the complaints screen', (tester) async {
     await _pumpDashboard(tester);
 
     // Present even when nothing is open: "None open" is a claim an owner may want to check.
-    // The label is drawn UPPERCASE by KpiTile — the design's caps eyebrow — so the finder has
-    // to match what is rendered, not what the source string says.
-    expect(find.text('COMPLAINTS'), findsOneWidget);
+    expect(find.text('Complaints'), findsOneWidget);
     expect(find.text('Tap to read them'), findsOneWidget);
     expect(find.textContaining('Nothing has happened yet'), findsNothing);
+  });
+
+  testWidgets("the quick actions are the owner's own screens, one tap from Home",
+      (tester) async {
+    await _pumpDashboard(tester);
+
+    for (final label in [
+      'Post a notice',
+      'Read complaints',
+      'See who paid',
+      'View rooms',
+      'Assign a task',
+      'Manage staff',
+      'Track expenses',
+      'Edit layout',
+    ]) {
+      expect(find.text(label), findsOneWidget, reason: '$label is missing from Home');
+    }
   });
 
   testWidgets('a lapsed subscription is stated, and offers no button it cannot honour', (
@@ -291,6 +326,8 @@ void main() {
     expect(find.textContaining('read-only'), findsOneWidget);
     // Renewal is a Super Admin write. A "Renew" button here would be a dead end.
     expect(find.widgetWithText(FilledButton, 'Renew'), findsNothing);
+    // And it is the ONE banner: the rent still owing waits behind it.
+    expect(find.text('Rent still to collect'), findsNothing);
   });
 
   testWidgets('being offline says so, and offers the retry that could actually work', (
@@ -299,7 +336,6 @@ void main() {
     await _pumpDashboard(tester, statsError: const OfflineFailure('no route to host'));
 
     expect(find.text('No connection'), findsOneWidget);
-    // Figma 4:1596: the retry on an error card is the CREAM filled button, not an outline.
     expect(find.widgetWithText(FilledButton, 'Try again'), findsOneWidget);
   });
 
@@ -311,9 +347,9 @@ void main() {
   });
 
   testWidgets('an owner with one PG gets a line of text, not a menu of one', (tester) async {
-    await _pumpDashboard(tester);
+    await _pumpDashboard(tester, throughShell: true);
     expect(find.text('Sunrise Residency'), findsOneWidget);
-    expect(find.byIcon(Icons.expand_more_rounded), findsNothing);
+    expect(find.byIcon(Icons.keyboard_arrow_down_rounded), findsNothing);
   });
 
   // Two pumps of two different ProviderScopes in one test would NOT re-run the overridden
@@ -331,16 +367,48 @@ void main() {
       createdAt: DateTime.utc(2026, 4, 1),
       updatedAt: DateTime.utc(2026, 4, 1),
     );
-    await _pumpDashboard(tester, owned: [_sunrise, second]);
-    expect(find.byIcon(Icons.expand_more_rounded), findsOneWidget);
+    await _pumpDashboard(tester, owned: [_sunrise, second], throughShell: true);
+    expect(find.byIcon(Icons.keyboard_arrow_down_rounded), findsOneWidget);
+
+    await tester.tap(find.text('Sunrise Residency'));
+    await _beat(tester);
+    expect(find.text('Your PGs'), findsOneWidget);
+    expect(find.text('Moonlight Stay'), findsOneWidget);
   });
 
-  testWidgets('the shell puts the dashboard behind the owner\'s first tab', (tester) async {
+  testWidgets('the bell opens what happened lately, with no invented unread count',
+      (tester) async {
+    await _pumpDashboard(tester, throughShell: true);
+
+    await tester.tap(find.byTooltip('Recent activity'));
+    await _beat(tester);
+
+    expect(find.text('Geyser not heating'), findsOneWidget);
+    expect(find.text('Water tanker on Sunday'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('unread')), findsNothing);
+  });
+
+  testWidgets('the search pill takes the owner to the residents', (tester) async {
+    await _pumpDashboard(tester, throughShell: true);
+
+    await tester.tap(find.text('Search residents by name or phone'));
+    await _beat(tester);
+    // The People tab's header.
+    expect(find.text('Residents'), findsOneWidget);
+  });
+
+  testWidgets("the shell puts the dashboard behind the owner's first tab", (tester) async {
     // The one line features/shell/role_shell.dart needs from this feature. Without it the
     // screens below are unreachable, which no analyzer would ever mention.
     await _pumpDashboard(tester, throughShell: true);
 
-    expect(find.text('COLLECTED IN AUGUST'), findsOneWidget);
+    expect(find.text('Collected in August'), findsOneWidget);
     expect(find.text('This screen is not built yet.'), findsNothing);
+    // The bar is the clay one, Home first.
+    expect(find.byType(ClayNavBar), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(ClayNavBar), matching: find.text('Home')),
+      findsOneWidget,
+    );
   });
 }

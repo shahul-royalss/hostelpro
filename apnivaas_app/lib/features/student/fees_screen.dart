@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
+import '../../data/models/stay.dart' show monthBeforeCheckIn;
 import '../../data/providers.dart';
+import '../../shared/clay/clay.dart' show SectionHeader;
 import '../../shared/illustrations.dart';
 import 'student_providers.dart';
 import 'widgets/common.dart';
@@ -106,24 +108,19 @@ class _Fees extends ConsumerWidget {
           ),
 
           const SizedBox(height: Space.xl),
-          const SectionHeading(
-            title: 'Payment history',
-            // Not a promise this screen invented: no retention step touches fee_payments, so a
-            // month recorded here stays here.
-            // The money domain's green on the receipt glyph — the ledger's own colour, and the
-            // one the Fees tab lights up in. The rows below keep their STATUS tones.
-            domain: ApnivaasDomain.money,
-            icon: Icons.receipt_long_rounded,
-          ),
+          // Every month on record, newest first. Not a promise this screen invented: no
+          // retention step touches fee_payments, so a month recorded here stays here.
+          const SectionHeader(title: 'Payment history'),
+          const SizedBox(height: Space.sm),
 
           AsyncSection<PagedResult<FeePayment>>(
             value: history,
             onRetry: () => ref.invalidate(studentFeeHistoryProvider(me.id)),
             loading: const Column(
               children: [
-                SkeletonCard(lines: 2),
-                SizedBox(height: Space.xs),
-                SkeletonCard(lines: 2),
+                SkeletonCard(lines: 3),
+                SizedBox(height: Space.sm),
+                SkeletonCard(lines: 3),
               ],
             ),
             builder: (page) {
@@ -138,13 +135,15 @@ class _Fees extends ConsumerWidget {
               }
               return Column(
                 children: [
-                  for (final payment in page.items) ...[
+                  // R2: no month before check-in is shown as owed.
+                  for (final payment in page.items.where((p) =>
+                      p.amountPaid > 0 || !monthBeforeCheckIn(p.periodMonth, me.dateOfJoining))) ...[
                     FeePaymentTile(
                       payment: payment,
                       payerName: me.fullName,
                       refunds: refunds.forMonth(me.id, payment.periodMonth),
                     ),
-                    const SizedBox(height: Space.xs),
+                    const SizedBox(height: Space.sm),
                   ],
                   // The rest of the record, on request. This list grows by one row a month
                   // forever and a resident of two years has more than one page of it; the
@@ -159,7 +158,8 @@ class _Fees extends ConsumerWidget {
                       padding: const EdgeInsets.only(top: Space.xs),
                       child: Text(
                         'That is every month on your record.',
-                        style: t.textTheme.bodySmall,
+                        style: t.textTheme.bodySmall
+                            ?.copyWith(color: t.colorScheme.onSurfaceVariant),
                         textAlign: TextAlign.center,
                       ),
                     ),

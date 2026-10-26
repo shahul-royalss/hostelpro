@@ -27,7 +27,7 @@ class SignInAgainButton extends ConsumerStatefulWidget {
   const SignInAgainButton({super.key, this.outlined = false});
 
   /// The Super Admin console's error panels use outlined actions; the four card-based kits use
-  /// the design's cream filled button. Same action, same label, the host's own weight.
+  /// the filled button. Same action, same label, the host's own weight.
   final bool outlined;
 
   @override

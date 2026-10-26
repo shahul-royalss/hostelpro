@@ -104,7 +104,7 @@ void main() {
       expect(drawn.first.day, _today);
 
       // Today's four meals, all of them, in the order they are eaten.
-      expect(find.text('BREAKFAST'), findsWidgets);
+      expect(find.text('Breakfast'), findsWidgets);
       expect(find.text('Idli, sambar, coconut chutney'), findsOneWidget);
       expect(find.text('Rice, dal, beans poriyal, curd'), findsOneWidget);
       expect(find.text('Tea and biscuits'), findsOneWidget);

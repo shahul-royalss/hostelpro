@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
-import '../../../shared/smiley.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
 import '../../common/refresh.dart';
+import '../../../shared/clay/clay.dart' show ClayIcon, ClayIcons, ListGroup, ListRow;
 import '../data/warden_providers.dart';
 import '../widgets/paged_list.dart';
 import '../widgets/warden_ui.dart';
@@ -31,7 +31,7 @@ class WardenComplaintsScreen extends ConsumerWidget {
     if (hostelId == null) {
       return const WardenScreen(
         title: 'Complaints',
-        child: EmptyState(
+        child: WardenEmptyState(
           icon: Icons.report_problem_rounded,
           title: 'No hostel on this account',
           detail: 'A warden is attached to one hostel. Ask the owner to check the assignment.',
@@ -47,6 +47,13 @@ class WardenComplaintsScreen extends ConsumerWidget {
     );
     final complaints = ref.watch(complaintsProvider(query));
 
+    // A count is only TRUE once the last page is in — `hasMore` is the server's own word for
+    // that. While more pages exist the heading carries no number rather than reporting the
+    // twenty rows that happen to be downloaded. Nor does it say "0": the empty state under it
+    // already says so in words.
+    final page = complaints.value;
+    final total = (page != null && !page.hasMore) ? page.items.length : null;
+
     return WardenScreen(
       title: 'Complaints',
       child: PagedList<Complaint>(
@@ -61,37 +68,43 @@ class WardenComplaintsScreen extends ConsumerWidget {
           return settleRefresh(context, () => ref.read(complaintsProvider(query).future));
         },
         onLoadMore: () => ref.read(complaintsProvider(query).notifier).loadMore(),
-        header: Padding(
-          padding: const EdgeInsets.only(bottom: Space.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // `chips` (4:747): the gold-filled chip is the filter that is on.
-              FilterBar<ComplaintFilter>(
-                options: ComplaintFilter.values,
-                selected: filter,
-                labelOf: (option) => option.label,
-                onSelected: (option) =>
-                    ref.read(complaintFilterProvider.notifier).set(option),
-              ),
-              // The design's list header over the queue. It names the filter that is actually
-              // on screen rather than a fixed word, so the heading and the chips cannot say
-              // different things.
-              SectionLabel(label: filter.label),
-            ],
-          ),
+        header: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FilterBar<ComplaintFilter>(
+              options: ComplaintFilter.values,
+              selected: filter,
+              labelOf: (option) => option.label,
+              onSelected: (option) => ref.read(complaintFilterProvider.notifier).set(option),
+            ),
+            // The heading over the queue names the filter that is actually on screen rather
+            // than a fixed word, with its count opposite — so the heading and the chips cannot
+            // say different things.
+            SectionLabel(
+              label: filter.label,
+              trailing: total == null || total == 0
+                  ? null
+                  : Text(
+                      countOf(total, 'complaint'),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+            ),
+          ],
         ),
         // THIS LIST IS FILTERED, and that changes what empty is allowed to say. On the
         // needs-action filter an empty queue means every complaint in the hostel has been
-        // dealt with — good news, and it gets the smile in mint. On any other filter it only
-        // means this filter matched nothing, and "No complaints yet" there would be a lie
-        // while open complaints sit one tab away. That arm keeps its filter-aware wording.
+        // dealt with — good news, and it gets the clay success art. On any other filter it only
+        // means this filter matched nothing, and "nothing needs you" there would be a lie
+        // while open complaints sit one chip away. That arm keeps its filter-aware wording.
         empty: filter == ComplaintFilter.needsAction
-            ? const SmileyEmpty(
-                title: 'No complaints yet',
+            ? const WardenEmptyState(
+                icon: Icons.task_alt_rounded,
                 tone: ApnivaasColors.success,
+                title: 'Nothing needs action',
+                detail: 'Every complaint in this hostel has been dealt with. '
+                    'New ones land here first.',
               )
-            : EmptyState(
+            : WardenEmptyState(
                 icon: Icons.inbox_outlined,
                 title: 'No ${filter.label.toLowerCase()} complaints',
                 detail: 'Try another filter.',
@@ -102,6 +115,13 @@ class WardenComplaintsScreen extends ConsumerWidget {
   }
 }
 
+/// One complaint, in a card of its own: what it is about as clay art, the subject in full, and
+/// under it the state chip with the category and how long it has been waiting.
+///
+/// THE SUBJECT GETS TWO LINES. It is the one thing on the row a warden has to read to know
+/// what they are walking towards, so the state moves under it instead of squeezing it to a
+/// fragment opposite. The facts are the two this app really has: public.complaints carries a
+/// student_id and no room at all, so no room number is invented for the row.
 class _ComplaintRow extends StatelessWidget {
   const _ComplaintRow({required this.complaint});
   final Complaint complaint;
@@ -109,59 +129,80 @@ class _ComplaintRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    // A third line from 1.3x text: a subject cut to "Geyser not heating in 2nd…" at large text
+    // has lost the floor and the room, which are the words a warden walks towards.
+    final scale = MediaQuery.textScalerOf(context).scale(1);
+    void open() => showComplaintSheet(context, complaintId: complaint.id);
 
-    // warden-maintenance-dashboard.png's ticket card: the subject on its own line with the
-    // state chip opposite it, a hairline, then the facts underneath in glyphed metadata. The
-    // mockup's facts are a room and a resident's name; the complaints query returns neither
-    // (public.complaints carries a student_id and no room at all), so the two this app really
-    // has take their place rather than a room number being invented.
-    return TapRow(
-      onTap: () => showComplaintSheet(context, complaintId: complaint.id),
-      padding: const EdgeInsets.all(Space.md),
-      semanticLabel:
-          '${complaint.title}, ${complaint.category.label}, ${complaint.status.label}, '
-          'raised ${age(complaint.createdAt)}',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  complaint.title,
-                  style: t.textTheme.titleSmall?.copyWith(color: t.colorScheme.onSurface),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+    return ListGroup(
+      children: [
+        Semantics(
+          button: true,
+          label: '${complaint.title}, ${complaint.category.label}, ${complaint.status.label}, '
+              'raised ${age(complaint.createdAt)}',
+          excludeSemantics: true,
+          onTap: open,
+          child: InkWell(
+            onTap: open,
+            excludeFromSemantics: true,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: ListRow.minHeight),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: Space.sm),
+                child: Row(
+                  children: [
+                    ClayIcon(categoryClay(complaint.category), size: ClaySize.list),
+                    const SizedBox(width: Space.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            complaint.title,
+                            style: t.textTheme.titleMedium,
+                            maxLines: scale >= 1.3 ? 3 : 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: Space.xs - Space.hair),
+                          Wrap(
+                            spacing: Space.xs,
+                            runSpacing: Space.xxs,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              StatusPill(status: complaint.status),
+                              Text(
+                                '${complaint.category.label} · ${age(complaint.createdAt)}',
+                                style: t.textTheme.bodySmall
+                                    ?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: Space.xs),
+                    Icon(Icons.chevron_right_rounded,
+                        size: IconSize.lg, color: t.colorScheme.onSurfaceVariant),
+                  ],
                 ),
               ),
-              const SizedBox(width: Space.xs),
-              // `complaint-card` (4:710) heads its row with the category badge and puts the
-              // age opposite it, both above the body copy. The status is the badge here
-              // because the CATEGORY is already spoken by the glyph on the meta line, and
-              // "which of these do I still have to do something about" is the question a queue
-              // is opened to answer.
-              StatusPill(status: complaint.status),
-            ],
+            ),
           ),
-          const SizedBox(height: Space.xs),
-          MetaLine([
-            (categoryIcon(complaint.category), complaint.category.label),
-            (Icons.schedule_rounded, age(complaint.createdAt)),
-          ]),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-/// One icon per public.complaint_category value. Exhaustive on purpose: adding a category to
-/// the enum makes this switch fail to compile rather than silently drawing the wrong picture.
-IconData categoryIcon(ComplaintCategory category) => switch (category) {
-      ComplaintCategory.food => Icons.restaurant_rounded,
-      ComplaintCategory.cleaning => Icons.cleaning_services_rounded,
-      ComplaintCategory.maintenance => Icons.handyman_rounded,
-      ComplaintCategory.wifi => Icons.wifi_rounded,
-      ComplaintCategory.roommate => Icons.groups_rounded,
-      ComplaintCategory.other => Icons.help_outline_rounded,
+/// The clay art for each public.complaint_category value. Exhaustive on purpose: adding a
+/// category to the enum makes this switch fail to compile rather than silently drawing the
+/// wrong picture. Maintenance takes the gear — the set has no wrench — and anything without a
+/// render of its own takes the complaint art itself.
+String categoryClay(ComplaintCategory category) => switch (category) {
+      ComplaintCategory.food => ClayIcons.food,
+      ComplaintCategory.cleaning => ClayIcons.housekeeping,
+      ComplaintCategory.maintenance => ClayIcons.settings,
+      ComplaintCategory.wifi => ClayIcons.wifi,
+      ComplaintCategory.roommate => ClayIcons.team,
+      ComplaintCategory.other => ClayIcons.complaint,
     };

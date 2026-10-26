@@ -6,11 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/clay/clay.dart';
 import '../../shared/glass/glass.dart';
-import '../../shared/illustrations.dart';
 import 'owner_format.dart';
 import 'owner_providers.dart';
-import 'widgets/states.dart';
+import 'widgets/owner_header.dart';
+import 'widgets/states.dart' show ErrorNote, whenAsync;
 
 /// WHO PAID.
 ///
@@ -39,6 +40,9 @@ import 'widgets/states.dart';
 ///
 /// Rent is handed over at the warden's desk — there is no in-app checkout in this version — so
 /// every row here was typed by a person, and the person is named on it.
+///
+/// THE MONEY TAB. The shell draws the forest header above it ("Payments", and the PG); this is
+/// the list under it.
 class OwnerPaymentsScreen extends ConsumerWidget {
   const OwnerPaymentsScreen({super.key});
 
@@ -55,10 +59,10 @@ class OwnerPaymentsScreen extends ConsumerWidget {
             child: ErrorNote(error: error, onRetry: () => ref.invalidate(myHostelsProvider)),
           ),
         AsyncData() => const _Page(
-            child: EmptyNote(
-              icon: Icons.apartment_rounded,
+            child: EmptyState(
+              icon: ClayIcons.rooms,
               title: 'No PG on your account yet',
-              message: 'Payments appear here once a PG is registered against your account.',
+              body: 'Payments appear here once a PG is registered against your account.',
             ),
           ),
         _ => const _Page(child: _PaymentsSkeleton()),
@@ -92,14 +96,13 @@ class OwnerPaymentsScreen extends ConsumerWidget {
         ),
         data: (page) => page.isEmpty
             ? const _Page(
-                child: EmptyNote(
-                  icon: Icons.receipt_long_outlined,
-                  illustration: EmptyArt.payments,
+                child: EmptyState(
+                  icon: ClayIcons.collectPayment,
                   title: 'No payments recorded yet',
                   // Says where the money comes from, because on this build that is the whole
                   // story: nobody can pay inside the app, so an empty list means the desk has
                   // not taken anything yet.
-                  message: "Rent is paid at the warden's desk. Every payment a warden "
+                  body: "Rent is paid at the warden's desk. Every payment a warden "
                       'records appears here, newest first.',
                 ),
               )
@@ -118,7 +121,7 @@ class _Page extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.huge),
+        padding: OwnerRhythm.pagePadding,
         children: [child],
       );
 }
@@ -172,14 +175,15 @@ class _PaymentRowsState extends ConsumerState<_PaymentRows> {
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.huge),
+      padding: OwnerRhythm.pagePadding,
       children: [
-        const SectionLabel(label: 'Recent payments'),
+        const SectionHeader(title: 'Recent payments', size: SectionHeaderSize.card),
+        const SizedBox(height: Space.xxs),
         Text(
           "Rent handed over at the desk, newest first. Each row is one resident's month.",
-          style: t.textTheme.bodySmall,
+          style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
         ),
-        const SizedBox(height: Space.sm),
+        const SizedBox(height: OwnerRhythm.headingGap),
         for (var i = 0; i < items.length; i++) ...[
           if (i > 0) const SizedBox(height: Space.sm),
           _PaymentCard(
@@ -219,9 +223,10 @@ class _PaymentCard extends StatelessWidget {
     final settled = payment.balance <= 0;
     // Green for a month that is square, amber for one still short. Nothing else on this row is
     // coloured: the figure is the fact, the colour is only whether it finished the job.
-    final tone = settled ? ApnivaasColors.success : ApnivaasColors.warning;
+    final tone = settled ? StatusTone.success : StatusTone.warning;
 
-    return GlassCard(
+    return FlatSurface(
+      borderRadius: Radii.rSurface,
       padding: const EdgeInsets.all(Space.md),
       // The refund is spoken immediately after the figure it qualifies, not appended at the
       // end. "Paid ₹8,500 for August, ₹2,000 of it refunded" is one claim; the same words in
@@ -238,7 +243,7 @@ class _PaymentCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              InitialsAvatar(name: payment.fullName, tone: tone),
+              InitialsDisc(name: payment.fullName),
               const SizedBox(width: Space.sm),
               Expanded(
                 child: Column(
@@ -246,36 +251,32 @@ class _PaymentCard extends StatelessWidget {
                   children: [
                     Text(
                       payment.fullName,
-                      style: t.textTheme.titleSmall,
+                      style: t.textTheme.titleMedium,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: Space.xxs / 2),
-                    Text(_placement(payment), style: t.textTheme.bodySmall),
+                    const SizedBox(height: Space.hair),
+                    Text(
+                      _placement(payment),
+                      style:
+                          t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(width: Space.xs),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    money(payment.amountPaid),
-                    style: t.textTheme.titleMedium
-                        ?.copyWith(color: context.tones.resolve(tone)),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: Space.xxs),
-                  // The status word is the trigger's own (app.fee_status_compute), so this row
-                  // and the warden's collections screen cannot disagree about the same month.
-                  StatusChip(label: payment.status.label, tone: tone, dot: true),
-                ],
+              // The status word is the trigger's own (app.fee_status_compute), so this row and
+              // the warden's collections screen cannot disagree about the same month.
+              ListRowAmount(
+                amount: money(payment.amountPaid),
+                status: payment.status.label,
+                tone: tone,
+                amountTone: tone,
               ),
             ],
           ),
           const SizedBox(height: Space.sm),
-          Divider(color: t.colorScheme.outlineVariant, height: Strokes.hairline),
+          Divider(color: t.dividerTheme.color, height: Strokes.hairline),
           const SizedBox(height: Space.sm),
           // ═══ WHAT AN OWNER READS THIS LIST FOR IS INCOME ═══
           //
@@ -306,7 +307,10 @@ class _PaymentCard extends StatelessWidget {
           _Fact(label: 'Recorded by', value: _recorder(payment)),
           if (payment.notes != null && payment.notes!.trim().isNotEmpty) ...[
             const SizedBox(height: Space.xs),
-            Text(payment.notes!.trim(), style: t.textTheme.bodySmall),
+            Text(
+              payment.notes!.trim(),
+              style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+            ),
           ],
         ],
       ),
@@ -444,7 +448,13 @@ class _Fact extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(flex: 6, child: Text(label, style: t.textTheme.bodySmall)),
+          Expanded(
+            flex: 6,
+            child: Text(
+              label,
+              style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+            ),
+          ),
           const SizedBox(width: Space.sm),
           Expanded(
             flex: 5,
@@ -461,14 +471,6 @@ class _PaymentsSkeleton extends StatelessWidget {
   const _PaymentsSkeleton();
 
   @override
-  Widget build(BuildContext context) => const Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SkeletonCard(lines: 3, height: 148),
-          SizedBox(height: Space.sm),
-          SkeletonCard(lines: 3, height: 148),
-          SizedBox(height: Space.sm),
-          SkeletonCard(lines: 3, height: 148),
-        ],
-      );
+  Widget build(BuildContext context) =>
+      const ListSkeleton(rows: 4, semanticLabel: 'Loading payments');
 }

@@ -30,10 +30,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
+import 'package:mobile/core/router/router.dart' show changePasswordRoute;
 import 'package:mobile/core/theme/theme.dart';
 import 'package:mobile/data/models/models.dart';
 import 'package:mobile/data/providers.dart';
@@ -454,7 +456,10 @@ void main() {
   // THE PROFILE SHEET
   // ───────────────────────────────────────────────────────────────────────────
   group('the staff profile sheet', () {
-    Future<void> openProfile(WidgetTester tester, List<String> allowed) async {
+    /// [routed] mounts it under a GoRouter, as the app does, with a stand-in at the
+    /// change-password route.
+    Future<void> openProfile(WidgetTester tester, List<String> allowed,
+        {bool routed = false}) async {
       final access = _FakeAccess(allowed: allowed, server: _sunriseId);
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -467,24 +472,35 @@ void main() {
             staffHostelAccessProvider.overrideWithValue(access),
             hostelProvider.overrideWith((ref, id) => _hostel(id)),
           ],
-          child: MaterialApp(
-            theme: ApnivaasTheme.light(),
-            home: Builder(
-              builder: (context) => Scaffold(
-                body: Center(
-                  child: TextButton(
-                    onPressed: () => showStaffProfile(context),
-                    child: const Text('open'),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          child: routed
+              ? MaterialApp.router(
+                  theme: ApnivaasTheme.light(),
+                  routerConfig: GoRouter(routes: [
+                    GoRoute(path: '/', builder: (_, _) => const _OpensProfile()),
+                    GoRoute(
+                      path: changePasswordRoute,
+                      builder: (_, _) => const Scaffold(body: Text('The password form')),
+                    ),
+                  ]),
+                )
+              : MaterialApp(theme: ApnivaasTheme.light(), home: const _OpensProfile()),
         ),
       );
       await tester.tap(find.text('open'));
       await _tick(tester);
     }
+
+    testWidgets('Change password closes the sheet and opens the password form', (tester) async {
+      // It called Navigator.pushNamed, which an app routed by GoRouter cannot resolve: GoRouter
+      // gives the Navigator no onGenerateRoute, so the tap threw instead of opening anything.
+      await openProfile(tester, const [_sunriseId], routed: true);
+      await tester.tap(find.text('Change password'));
+      await _tick(tester);
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('The password form'), findsOneWidget);
+      expect(find.text('Working in'), findsNothing, reason: 'the sheet closed first');
+    });
 
     testWidgets('names the PG and offers Switch PG to a warden with two', (tester) async {
       await openProfile(tester, const [_sunriseId, _lakeviewId]);
@@ -687,4 +703,19 @@ class _RealAuth extends AuthController {
     clientOverride = _client;
     return super.build();
   }
+}
+
+/// A page whose one button opens the staff profile sheet.
+class _OpensProfile extends StatelessWidget {
+  const _OpensProfile();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        body: Center(
+          child: TextButton(
+            onPressed: () => showStaffProfile(context),
+            child: const Text('open'),
+          ),
+        ),
+      );
 }

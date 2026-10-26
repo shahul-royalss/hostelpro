@@ -106,8 +106,9 @@ export default function PrivacyPolicyPage() {
         <Callout title="The short version">
           <ul>
             <li>
-              You did not create your account and you did not type your details in — hostel staff
-              did. There is no public sign-up.
+              If a hostel registered you, its staff created your account and typed your details
+              in. Owners, tenants and staff may also create their own account in the Android app;
+              a staff sign-up gets access only when a PG&rsquo;s owner accepts it.
             </li>
             <li>
               Nothing here is sold, shared with advertisers or data brokers, or used to train AI
@@ -143,7 +144,11 @@ export default function PrivacyPolicyPage() {
             <strong>{APP_NAME} the Data Processor</strong>, so your hostel is your first point of
             contact for anything about your own record. For a small set of data {APP_NAME} decides
             on its own — platform staff accounts, the security log and security alerts —{" "}
-            {APP_NAME} is the Data Fiduciary. This deployment is operated by{" "}
+            {APP_NAME} is the Data Fiduciary &mdash; and so it is for an account you create
+            yourself, with the photo, details and documents you add to it, the PGs you ask to join,
+            a demo you book and a plan you pay for, until a PG accepts you as its resident or its
+            staff. This
+            deployment is operated by{" "}
             <strong>{CONTACT.operatorName}</strong>, contactable at{" "}
             <a href={"mailto:" + CONTACT.email}>{CONTACT.email}</a>. Wherever this policy says
             that {APP_NAME} does something, or says &ldquo;we&rdquo; or &ldquo;us&rdquo;, it means{" "}
@@ -155,10 +160,18 @@ export default function PrivacyPolicyPage() {
           </p>
           <ul>
             <li>
-              <strong>Nobody signs themselves up.</strong> The platform administrator creates hostel
-              Owner accounts, an Owner creates Manager and Warden accounts, and a Warden registers
-              residents. Most of what is here was typed in by hostel staff, from documents you
-              handed them at the desk.
+              <strong>Owners, tenants and staff may sign themselves up</strong> in the Android app,
+              with an email address and a password, with Continue with Google and &mdash; only where
+              the app offers them &mdash; Continue with Facebook or Continue with Truecaller. The
+              website has no sign-up. A staff sign-up has no access to anything: it is a request to
+              join a PG, and only that PG&rsquo;s Owner can accept it and make the person a Manager
+              or Warden. The database never lets a sign-up create a staff role by itself.
+            </li>
+            <li>
+              <strong>Everybody else is given an account.</strong> The platform administrator
+              creates hostel Owner accounts, an Owner may create Manager and Warden accounts, and a
+              Warden registers residents. For those accounts most of what is here was typed in by
+              hostel staff, from documents you handed them at the desk.
             </li>
             <li>
               <strong>Residents sign in with their phone number</strong>, mapped internally to a
@@ -167,14 +180,17 @@ export default function PrivacyPolicyPage() {
               account operation performed by staff rather than a profile edit.
             </li>
             <li>
-              <strong>Every account must set a new password at first sign-in.</strong> Passwords are
-              hashed by the authentication service; the application itself never sees or stores one.
+              <strong>Every account given to you must set a new password at first sign-in.</strong>{" "}
+              Passwords are hashed by the authentication service; the application itself never sees
+              or stores one.
             </li>
             <li>
               <strong>Owners and residents may use Continue with Google</strong> instead of their
-              password, if their login is an email address that is also a Google account. Managers,
-              Wardens and platform administrators cannot: the database refuses it, and they sign in
-              only with the login they were given.
+              password, if their login is an email address that is also a Google account. A Manager
+              or Warden an Owner created, and every platform administrator, cannot use Google,
+              Facebook or Truecaller: the database refuses it, and they sign in only with the login
+              they were given. A Manager or Warden who signed up themselves may keep using the
+              sign-in they signed up with.
             </li>
             <li>A resident&rsquo;s account is deactivated when they check out of the hostel.</li>
           </ul>
@@ -210,9 +226,69 @@ export default function PrivacyPolicyPage() {
                 "Owners and residents who choose it",
               ],
               [
+                "Facebook or Truecaller sign-in",
+                "Only where the app offers it and you choose it. Facebook: your Facebook user ID, name and email address if it shares one. Truecaller: your Truecaller ID, the phone number Truecaller has verified, and your name. The ID is kept with your login and used only to sign you in; nothing is posted and nothing else is read",
+                "Owners and tenants who choose it",
+              ],
+              [
+                "Email and password sign-up",
+                "Name, phone number, email address and, for an Owner or a tenant, city and pincode. The password is hashed by the authentication service, and the email address is confirmed by a link",
+                "Anyone who signs up with a password",
+              ],
+              [
+                "Your own details",
+                "Gender, date of birth, and an emergency contact's name and phone number, typed in by a tenant who signs up, on their own details form",
+                "Tenants who sign themselves up, and their emergency contact",
+              ],
+              [
+                "Profile photo",
+                "A photo you choose for your account, from the camera or your gallery, cropped square and reduced to at most 512 pixels",
+                "Anyone with a login who adds one",
+              ],
+              [
+                "Identity documents you upload",
+                "The kind (masked Aadhaar, PAN, driving licence, voter ID, passport, college or work ID, other) and the image or PDF",
+                "Tenants and owners who upload one",
+              ],
+              [
+                "Join requests",
+                "Which PG a tenant asked to join, an optional message, when, and the answer — accepted, declined with an optional note, cancelled or lapsed — with who gave it",
+                "The tenant, and the staff member who answered",
+              ],
+              [
+                "Staff requests",
+                "Which PG a staff sign-up asked to join, an optional message, when, and the Owner's answer — the role given (Manager or Warden), or a note on declining",
+                "The applicant, and the Owner who answered",
+              ],
+              [
+                "Check-out requests",
+                "The preferred date, an optional reason, and the Warden's answer — the check-out date, or a note on declining",
+                "The tenant, and the Warden who answered",
+              ],
+              [
+                "Your PG",
+                "Its name, type, who it is for, address, locality, city, pincode, floors and rooms; only if the owner sets it, its exact map position, from the phone's precise location or a pin; and its profile: a logo, up to six cover photos, a description, amenities and house rules",
+                "The owner, by inference",
+              ],
+              [
+                "Reviews",
+                "A current tenant's rating of their PG (1 to 5) and optional comment, stored with their account and shown with their first name",
+                "The tenant who wrote it",
+              ],
+              [
+                "Plan payments and demo requests",
+                "The plan an owner paid for, the amount, the method, the Razorpay order and payment references and the outcome; and, for a demo, the name, phone number, PG name, city, size and time slot given",
+                "Owners",
+              ],
+              [
                 "Fee records",
-                "Month, amount due, amount paid, payment date, a cash / UPI / bank label, free-text notes, and the gateway's reference where rent was paid online",
+                "Month, amount due (from the tenant's check-in date), amount paid, payment date, a cash / UPI / bank label, free-text notes, and the gateway's reference where rent was paid online",
                 "The resident",
+              ],
+              [
+                "UPI rent payments",
+                "The Owner's UPI ID and payee name, which the tenants of that PG can see; and for each UPI payment a tenant submits, the amount, the month, the UTR (transaction ID) they enter, and whether staff confirmed or rejected it, with any note",
+                "The Owner, and the tenant who paid",
               ],
               [
                 "Complaints and leave",
@@ -236,7 +312,7 @@ export default function PrivacyPolicyPage() {
               ],
               [
                 "Security log and alerts",
-                "Who did what and when, plus the IP address and browser user-agent of the person who did it, and automated detections of unusual activity. Login rate limits are kept as irreversible SHA-256 hashes — never a readable phone number, email or IP address",
+                "Who did what and when, plus the IP address and browser user-agent of the person who did it, and automated detections of unusual activity. Login rate limits are kept as irreversible SHA-256 hashes — never a readable phone number, email or IP address. Also a list of deleted accounts: who, their role and PG, when, by whom and why",
                 "Everyone who signs in",
               ],
               [
@@ -259,22 +335,38 @@ export default function PrivacyPolicyPage() {
           </p>
           <ul>
             <li>
-              <strong>No date of birth or age.</strong> The system has no age field of any kind.
+              <strong>No date of birth from anybody a hostel registers.</strong> Only a tenant who
+              signs up gives one, on their own details form, and nothing in {APP_NAME} uses it to
+              decide anything about them.
             </li>
             <li>
-              <strong>No card number, bank account, UPI ID or CVV.</strong> This is still true now
+              <strong>No card number, bank account or CVV, and no tenant&rsquo;s UPI ID.</strong> This is still true now
               that rent can be paid inside the app: those details are typed into{" "}
               <strong>Razorpay&rsquo;s own checkout</strong> — which on Android runs inside the app — and go to Razorpay, never to {APP_NAME}. What
               comes back is a reference saying that a payment of a stated amount succeeded. Rent
-              paid at the desk in cash is recorded by your warden as a cash entry. {APP_NAME} never
-              holds your money in either case — see section 6.
+              paid at the desk in cash is recorded by your warden as a cash entry. Rent paid by UPI
+              to the Owner is paid in your own UPI app, straight to the Owner&rsquo;s UPI ID;{" "}
+              {APP_NAME} stores only the UTR, amount and month you enter, and staff confirm it
+              against their own UPI app or bank. {APP_NAME} never holds your money in any of these
+              cases — see section 6.
             </li>
             <li>
-              <strong>No location data, no device contacts, no calendar, no biometrics, no
-              advertising identifier.</strong> The Android build declares ten permissions and no
-              others. Four are ours: internet access; the ability to tell whether you are online;
-              the camera, used only when you choose to photograph an identity document, a receipt
-              or a complaint, and never opened on its own; and permission to post notifications.
+              <strong>No location history, no device contacts, no calendar, no biometric data, no
+              advertising identifier.</strong> The Android build declares thirteen permissions and
+              no others. Seven are ours: internet access; the ability to tell whether you are
+              online; the camera, used only when you choose to photograph yourself, an identity
+              document, a receipt, a complaint or your PG, and never opened on its own; permission
+              to post notifications; <strong>precise location</strong> and approximate location
+              (Android lets you choose which to give), asked for in words first and used only when
+              you tap &ldquo;PGs near you&rdquo; or set your PG&rsquo;s position; and the{" "}
+              <strong>biometric</strong> permission, used only by the optional app lock. Your
+              location is read once, sent to the server only to measure distances to PGs, and not
+              saved &mdash; not with your account and not in the security log. An owner&rsquo;s PG
+              position is different: that is saved, as the PG&rsquo;s location. The app lock
+              &mdash; on by default for Owners, optional for everyone else &mdash; asks your
+              phone&rsquo;s own fingerprint, face or screen lock to check it is you; the check
+              happens on the phone, nothing biometric reaches {APP_NAME}, and whether the lock is
+              on is kept only on the phone.
               Four more are pulled in by the notification machinery itself &mdash; waking the
               device, vibrating, receiving the message and an internal, app-scoped receiver
               permission. The last two come from Razorpay&rsquo;s checkout SDK: NFC, so a payment
@@ -346,13 +438,39 @@ export default function PrivacyPolicyPage() {
             claims, are capped at 8 MB, and documents are served as downloads so that a PDF cannot
             render inside the site&rsquo;s own origin.
           </p>
+          <p>
+            <strong>Profile photos and the identity documents you upload yourself</strong> are kept
+            in two more private buckets, each file filed under your own account, and only you can
+            add one. A profile photo can be seen by you; the Owner of your PG; its Wardens; its
+            Managers, except a resident&rsquo;s photo; and the Owner and Wardens of a PG you have
+            asked to join, while the request is open. An identity document can be seen by you, the
+            Owner and Wardens of your PG &mdash; never a Manager &mdash; and the Owner and Wardens of
+            a PG you have asked to join, while the request is open. Platform administrators can see
+            both, for support; other residents never can. Each is shown through a link that lasts{" "}
+            <strong>one minute</strong>. A photo is at most 1 MB; a document at most 5 MB, as an
+            image or a PDF.
+          </p>
+          <p>
+            The copy on your phone is not kept after an identity document is uploaded. A new profile
+            photo replaces the old one, which is deleted. When you leave a PG, its staff lose access
+            to your photo and documents. Both are deleted with your account, and anything uploaded
+            but never saved to your account is deleted after a day.
+          </p>
+          <p>
+            <strong>A PG&rsquo;s logo and cover photos</strong> are different: they are meant to be
+            seen. They are held in a private bucket under the PG, only its Owner can add them, and
+            they can be opened by the PG&rsquo;s own people and by anyone signed in while the PG is
+            listed and its plan or free month is running. Do not put people in them.
+          </p>
           <Callout tone="sand" title="A note on Aadhaar">
             <p>
               The ID-proof field accepts any identity document. Hostel operators are asked to prefer
               a non-Aadhaar document for residence verification, and to use a{" "}
               <strong>masked</strong> copy where an Aadhaar-based document is unavoidable. Operators
               may also record only the document type and skip the scan entirely — the system works
-              perfectly well with no image stored at all, and that is the safest option.
+              perfectly well with no image stored at all, and that is the safest option. If you
+              upload one yourself, upload a masked Aadhaar &mdash; downloaded from UIDAI with only
+              the last four digits showing &mdash; or a different document.
             </p>
           </Callout>
         </Section>
@@ -376,7 +494,15 @@ export default function PrivacyPolicyPage() {
             </li>
             <li>
               <strong>Staff and owners</strong> — the employment or commercial relationship with the
-              hostel, and administration of the {APP_NAME} subscription.
+              hostel, and administration of the {APP_NAME} subscription, including a plan an Owner
+              pays for and a demo an Owner asks for.
+            </li>
+            <li>
+              <strong>An account you create yourself</strong> — your consent, given when you sign up
+              and agree to this policy, to run the account, find you a PG, send your join or staff
+              request to the PG you chose, and let that PG check who you are. Your location is used
+              only on the occasion you ask for it. A review is published because you chose to write
+              it.
             </li>
             <li>
               <strong>The security log and security alerts</strong> — {APP_NAME}&rsquo;s own
@@ -419,8 +545,28 @@ export default function PrivacyPolicyPage() {
                 "Their own record, fees, complaints and leaves. Of their roommates they see a name and phone number only — no photographs, no documents",
               ],
               [
+                "Owner and Wardens of a PG you ask to join",
+                "Your name, phone number, email address, gender, date of birth, emergency contact and message; and your profile photo and identity documents, which they can open only until they answer. The request stays in their list until it is deleted. If they accept, they become your PG",
+              ],
+              [
+                "Owner of a PG a staff applicant asks to join",
+                "The applicant's name, phone number, email address and message. The Owner chooses whether to make them a Manager or Warden",
+              ],
+              [
+                "Wardens and Owner of your PG",
+                "Your check-out request; and each UPI payment you submit, which they confirm or reject",
+              ],
+              [
+                "Tenants of a PG",
+                "Its UPI ID and payee name, so they can pay",
+              ],
+              [
+                "Anyone signed in who is looking for a PG",
+                "The PG's name, type, who it is for, locality, city, distance, logo, cover photos, description, amenities, house rules, rating and reviews, each review with the reviewer's first name — never its full address, its map position or the Owner's contact details. A PG appears while it is listed and its plan or free month is running. The Owner can read reviews but not change or remove them",
+              ],
+              [
                 "Platform administrator",
-                "Platform-wide access for support and tenant administration. Every action is written to the security log",
+                "Platform-wide access for support and tenant administration, including demo requests, which platform staff use to call the Owner. Every action is written to the security log",
               ],
             ]}
           />
@@ -428,7 +574,8 @@ export default function PrivacyPolicyPage() {
           <h3>Outside your hostel</h3>
           <p>
             Five companies process some part of it, on our instructions and not for their own
-            purposes. This is the complete list — there is no analytics vendor, no advertising
+            purposes, and two more only if you choose to sign in with them. This is the complete
+            list — there is no analytics vendor, no advertising
             network, no crash-reporting service, no customer-messaging tool and no AI provider in
             the picture.
           </p>
@@ -452,7 +599,7 @@ export default function PrivacyPolicyPage() {
               ],
               [
                 "Razorpay",
-                "Processing an online rent payment, only when you choose to pay in the app",
+                "Processing an online rent payment, only when you choose to pay in the app, and an Owner's payment for an Apnivaas plan",
                 "Your name, email and phone, so the payment can be attributed to you. On Android its checkout runs inside the app: while a payment is open it takes the card, UPI or netbanking details you type and checks which UPI apps are installed so it can offer them, and those details go to Razorpay, never to us. We receive back only the amount, the identifiers and the method, and Razorpay keeps its own record under its own policy",
               ],
               [
@@ -460,8 +607,25 @@ export default function PrivacyPolicyPage() {
                 "Three separate jobs: delivering the account emails — a confirmation link, a password reset — and, through Firebase Cloud Messaging, delivering push notifications to the Android app; and, if you choose Continue with Google, confirming who you are when you sign in",
                 "For email: your address and the contents of those messages; no marketing email is ever sent. For notifications: your device's registration token, plus the title and body of each notification — which name the hostel and the amount or subject, and so should be read as visible to Google and on your lock screen. For sign-in: the fact that you signed in to this app",
               ],
+              [
+                "Meta (Facebook)",
+                "Only if the app offers Continue with Facebook and you choose it: confirming who you are when you sign in",
+                "The fact that you signed in to this app; it shares your Facebook user ID, name and email address with us",
+              ],
+              [
+                "Truecaller",
+                "Only if the app offers Continue with Truecaller and you choose it: confirming your phone number when you sign in",
+                "The fact that you signed in to this app; it shares your verified phone number, name and Truecaller ID with us",
+              ],
             ]}
           />
+          <p>
+            Your location is worked out by your phone&rsquo;s own location service &mdash; on most
+            Android phones that is Google Play services, under Google&rsquo;s own settings, which
+            also shows the &ldquo;Turn on location&rdquo; prompt &mdash; and {APP_NAME} passes it to
+            nobody. A UPI payment is handled by your own UPI app and bank, not by {APP_NAME} or any
+            company named above.
+          </p>
           <p>
             Data is encrypted in transit and at rest. The DPDP Act permits transfer of personal data
             outside India except to countries the Central Government has restricted.{" "}
@@ -488,7 +652,8 @@ export default function PrivacyPolicyPage() {
             </li>
             <li>
               <strong>Two-factor authentication (TOTP)</strong> is available to every role and is
-              required for the roles that carry the most access, and a{" "}
+              required for the roles that carry the most access, an optional{" "}
+              <strong>app lock</strong> on the phone, and a{" "}
               <strong>forced password change</strong> at first sign-in means a staff-issued password
               never stays in use.
             </li>
@@ -537,7 +702,22 @@ export default function PrivacyPolicyPage() {
               ],
               [
                 "A departed resident's record",
-                "Erased one month after check-out, and with it the photograph and identity document, the complaints, leave requests and visitor entries belonging to that resident, and the login itself. A re-admission before the date arrives cancels it",
+                "Erased one month after check-out, and with it the photograph and identity document, the complaints, leave requests and visitor entries belonging to that resident, and a login the hostel made. A re-admission before the date arrives cancels it. A tenant who made their own account keeps it on leaving, so they can find another PG; the PG loses access to it at once",
+              ],
+              [
+                "Profile photos and identity documents you upload",
+                "Kept while your account exists and deleted with it. A replaced photo is deleted at once, and an upload never saved to an account after a day",
+              ],
+              [
+                "Join requests",
+                "A request nobody answers lapses after 30 days. An answered, cancelled or lapsed request is deleted 180 days later",
+              ],
+              ["Demo requests", "Deleted 180 days after the booked time slot, and with the Owner's account"],
+              ["Your location", "Not kept at all. A PG's saved position stays with the PG"],
+              ["Staff requests", "Kept with the PG's records, and deleted with the applicant's account"],
+              [
+                "Reviews and check-out requests",
+                "A review stays after the tenant leaves the PG and is deleted with their account. A check-out request stays with the resident's record",
               ],
               [
                 "Complaints and notices",
@@ -558,8 +738,12 @@ export default function PrivacyPolicyPage() {
                 "Kept for as long as the hostel's workspace exists, and removed with it. The nightly job does not age these: a task names the staff member it was assigned to, and deleting it while that person still works there would erase the hostel's own operating history",
               ],
               [
-                "Fee, expense, revenue and subscription records",
+                "Fee, expense, revenue, UPI payment, subscription and plan payment records",
                 "Kept indefinitely. This is the one exception, and it is not the hostel's to waive: a business has a statutory duty to keep records of money received, and those duties run for years",
+              ],
+              [
+                "An account permanently deleted",
+                "When the platform administrator permanently deletes an account, the login, profile details, photos, documents, reviews and requests are erased. Payments, receipts, dues and the security log are kept, for legal and accounting reasons, and show the person as \"Deleted user\"",
               ],
               [
                 "Your acceptance of these documents",
@@ -621,8 +805,10 @@ export default function PrivacyPolicyPage() {
             That month is fixed; it is not shortened on request.{" "}
             <Link href="/legal/account-deletion">Delete your account and data</Link> sets out what
             gets deleted, what has to be kept, and how long it takes. If the hostel does not
-            respond, or your request is about the security log or a platform account, write to the
-            Grievance Officer at <a href={"mailto:" + CONTACT.email}>{CONTACT.email}</a>.
+            respond, or your request is about the security log, a platform account, or an account
+            you made yourself and is not in a PG, write to the Grievance Officer at{" "}
+            <a href={"mailto:" + CONTACT.email}>{CONTACT.email}</a>. Your own details and photo you
+            can change in the app at any time.
           </p>
           <p>
             Nothing erases your record on the spot, and that is deliberate rather than an omission:
@@ -648,9 +834,11 @@ export default function PrivacyPolicyPage() {
           <p>
             {APP_NAME} does no tracking, no behavioural monitoring, no profiling and no advertising
             of any kind, for anybody — so those prohibitions are met by the way the product is
-            built, not merely by promise. The system holds no date of birth or age, so it cannot
-            itself tell whether a resident is a minor.{" "}
-            <strong>Parental consent is obtained by the hostel</strong> as part of its own admission
+            built, not merely by promise. Only a tenant who signs up gives a date of birth, and
+            nothing checks it, so the system cannot itself tell whether a resident is a minor.{" "}
+            <strong>Creating your own account is for people aged 18 or over.</strong> A resident
+            under 18 is registered by their hostel, and{" "}
+            <strong>parental consent is obtained by the hostel</strong> as part of its own admission
             paperwork, before a minor is registered.
           </p>
         </Section>

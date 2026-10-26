@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
+import '../../../shared/clay/clay.dart';
 import 'common.dart';
 import 'format.dart';
 
@@ -20,6 +21,21 @@ IconData complaintIcon(ComplaintCategory category) => switch (category) {
       ComplaintCategory.other => Icons.chat_bubble_outline_rounded,
     };
 
+/// The clay art for a complaint category — the same one mapping for the list, the detail sheet
+/// and Home's updates, so a Wi-Fi complaint is the router everywhere it appears.
+///
+/// [complaintIcon] stays for the small places a 46dp figure would crowd: the category chips in
+/// the raise sheet. The category is always printed as a word beside either.
+String complaintClay(ComplaintCategory category) => switch (category) {
+      ComplaintCategory.food => ClayIcons.food,
+      ComplaintCategory.cleaning => ClayIcons.housekeeping,
+      // The complaint art itself carries a wrench, which is what most maintenance is.
+      ComplaintCategory.maintenance => ClayIcons.complaint,
+      ComplaintCategory.wifi => ClayIcons.wifi,
+      ComplaintCategory.roommate => ClayIcons.navPeople,
+      ComplaintCategory.other => ClayIcons.tasks,
+    };
+
 /// One of the resident's own complaints, in a list.
 class ComplaintTile extends StatelessWidget {
   const ComplaintTile({super.key, required this.complaint, this.onTap});
@@ -31,67 +47,63 @@ class ComplaintTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final tone = complaintTone(complaint.status);
-    // The design's activity row: a round tinted glyph, then the text, then the timestamp.
+    final muted = t.colorScheme.onSurfaceVariant;
+    // A list row on its own card: the category's clay art, the title, then the state.
     //
-    // THE GLYPH SAYS THE CATEGORY AND THE TINT SAYS THE STATUS, which is exactly what the
-    // mockups' own rows do (`bg-error/10 text-error` behind a wrench). The two are different
-    // facts and neither replaces the other — the status is still spelled out in a WORD by the
-    // pill on the footer line, because a row that distinguished open from resolved by hue alone
-    // would be unreadable to the ~8% of men with a red-green deficiency, several per floor in a
-    // full boys' PG.
+    // THE ART SAYS THE CATEGORY AND THE CHIP SAYS THE STATUS. The two are different facts and
+    // neither replaces the other — and the status is a WORD, because a row that distinguished
+    // open from resolved by hue alone would be unreadable to the ~8% of men with a red-green
+    // deficiency, several per floor in a full boys' PG.
     return OutlineCard(
       onTap: onTap,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ToneBadge(icon: complaintIcon(complaint.category), tone: tone),
+          ClayIcon(complaintClay(complaint.category), size: ClaySize.list),
           const SizedBox(width: Space.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  // Centres a one-line title against the badge beside it.
-                  padding: const EdgeInsets.only(top: Space.xxs),
-                  child: Text(
-                    complaint.title,
-                    style: t.textTheme.titleMedium,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                Text(
+                  complaint.title,
+                  style: t.textTheme.titleMedium,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 if (complaint.description != null &&
                     complaint.description!.trim().isNotEmpty) ...[
-                  const SizedBox(height: Space.xxs),
+                  const SizedBox(height: Space.hair),
                   Text(
                     complaint.description!.trim(),
-                    style: t.textTheme.bodySmall,
+                    style: t.textTheme.bodySmall?.copyWith(color: muted),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
                 const SizedBox(height: Space.xs),
-                // The status WORD sits on the footer beside the category and the age, rather
-                // than opposite the title. A title of unknown length and a pill of unknown
-                // length sharing one row is a layout with a breaking point — measured, this one
-                // was 320dp at 1.6x — and a Wrap has none. Nothing is lost: the badge at the
-                // head of the row already carries the status COLOUR, and this is the word it
-                // stands for, which is the half that has to survive a red-green deficiency.
+                // The status chip leads the footer, then the category and the age. A title of
+                // unknown length and a chip of unknown length sharing one row is a layout with a
+                // breaking point — measured, this one was 320dp at 1.6x — and a Wrap has none.
                 Wrap(
                   spacing: Space.xs,
                   runSpacing: Space.xs,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
+                    StatusPill(label: complaint.status.label, tone: tone, dot: true),
                     Text(
                       '${complaint.category.label} · raised ${relativeTime(complaint.createdAt)}',
-                      style: t.textTheme.labelSmall,
+                      style: t.textTheme.bodySmall?.copyWith(color: muted),
                     ),
-                    StatusPill(label: complaint.status.label, tone: tone),
                   ],
                 ),
               ],
             ),
           ),
+          if (onTap != null) ...[
+            const SizedBox(width: Space.xs),
+            Icon(Icons.chevron_right_rounded, size: IconSize.lg, color: muted),
+          ],
         ],
       ),
     );
@@ -111,10 +123,11 @@ class ComplaintTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (events.isEmpty) {
-      // Compact: this sits directly under the sheet's own "PROGRESS" label, and the design's
-      // raised state card there would be a card announcing a heading that has already been
-      // read. The full card is for a state that IS the screen.
+      // Compact: this sits directly under the sheet's own "Progress" heading, and a full-size
+      // state there would push the Close button off the sheet. The full size is for a state
+      // that IS the screen.
       return const EmptyNote(
+        clay: ClayIcons.calendar,
         icon: Icons.timeline_rounded,
         title: 'No updates yet',
         message: 'You will see every status change here as your warden works on it.',
@@ -144,6 +157,14 @@ class _Step extends StatelessWidget {
 
   final ComplaintEvent event;
   final bool isLast;
+
+  /// "19 Oct 2026 · 5d ago" — or the date alone, once the relative time has itself become that
+  /// date and the line would say it twice.
+  static String _when(DateTime at) {
+    final day = dayLabel(at.toLocal());
+    final ago = relativeTime(at);
+    return ago == day ? day : '$day · $ago';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -196,8 +217,8 @@ class _Step extends StatelessWidget {
                   Text(event.status.label, style: t.textTheme.titleMedium),
                   const SizedBox(height: Space.xxs),
                   Text(
-                    '${dayLabel(event.createdAt.toLocal())} · ${relativeTime(event.createdAt)}',
-                    style: t.textTheme.labelSmall,
+                    _when(event.createdAt),
+                    style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
                   ),
                   if (event.note != null && event.note!.trim().isNotEmpty) ...[
                     const SizedBox(height: Space.xxs),

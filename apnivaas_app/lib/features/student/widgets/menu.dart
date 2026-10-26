@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
-import '../../../shared/glass/glass.dart';
 import 'common.dart';
 
 /// The mess menu, as a resident reads it.
@@ -32,7 +31,7 @@ import 'common.dart';
 ///
 /// STACKED, NOT A LABEL-AND-VALUE ROW. `items` is one free-text column that a manager types
 /// into — "Idli, sambar, coconut chutney" is a short one — so the food gets the full width of
-/// the card. A two-column row would have put a 12dp caps label beside it, and at the 1.6x text
+/// the card. A two-column row would have put the meal's name beside it, and at the 1.6x text
 /// Android hands out on a 320dp phone the label alone eats a third of the line.
 class MealLine extends StatelessWidget {
   const MealLine({super.key, required this.meal, required this.items});
@@ -49,8 +48,8 @@ class MealLine extends StatelessWidget {
     final planned = items != null;
 
     return Semantics(
-      // One utterance per meal. Without this a screen reader reads the caps label as an
-      // initialism and then the dishes as a separate node, which is two swipes for one line.
+      // One utterance per meal. Without this a screen reader reads the meal's name and then the
+      // dishes as a separate node, which is two swipes for one line.
       label: planned
           ? '${meal.label}: ${items!}'
           : '${meal.label}: not planned yet',
@@ -59,12 +58,14 @@ class MealLine extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // The accent on a planned meal is the manager's own screen's (its meal cards head
-          // every written meal in the gold), so the two roles are looking at one object. An
-          // unplanned meal takes the muted ink in both places.
-          CapsLabel(
+          // A written meal is headed in the brand ink, an unwritten one in the muted ink, so a
+          // day with gaps shows them at a glance.
+          Text(
             meal.label,
-            tone: planned ? t.colorScheme.primary : ApnivaasColors.textMuted,
+            style: t.textTheme.titleSmall?.copyWith(
+              fontFeatures: const [],
+              color: planned ? t.colorScheme.primary : t.colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: Space.xxs),
           planned
@@ -83,28 +84,19 @@ class MealLine extends StatelessWidget {
 /// One day of the week, with its four meals — or with the sentence that says nobody has written
 /// it.
 ///
-/// [today] draws the leading accent rail and the pill. The design gives that rail to the row
-/// that matters most on a screen, and on a week of identical cards the only thing that
-/// distinguishes one is which one is now.
-///
-/// [hero] draws it as the screen's SUBJECT instead: the food [DomainCard], saffron on its
-/// ground, for the home screen where today's meals are the one card about food and carry no
-/// status of their own. The week view never sets it — seven tinted cards would say nothing.
+/// [isToday] draws the forest edge and the chip. On a week of identical cards the only thing
+/// that distinguishes one is which one is now, so that is the one thing the card marks.
 class DayMenuCard extends StatelessWidget {
   const DayMenuCard({
     super.key,
     required this.day,
     required this.week,
     this.isToday = false,
-    this.hero = false,
   });
 
   final MenuDay day;
   final WeeklyMenu week;
   final bool isToday;
-
-  /// The domain-tinted hero form. At most one card per screen may take it — see [DomainCard].
-  final bool hero;
 
   @override
   Widget build(BuildContext context) {
@@ -114,30 +106,20 @@ class DayMenuCard extends StatelessWidget {
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // A Wrap, not a Row: "Wednesday" and the pill both grow with the text scale, and two
+        // A Wrap, not a Row: "Wednesday" and the chip both grow with the text scale, and two
         // of them competing for one line is the layout that breaks at 1.6x on a 320dp phone.
         Wrap(
           spacing: Space.xs,
           runSpacing: Space.xxs,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Text(day.label, style: t.textTheme.titleMedium),
+            Text(day.label, style: t.textTheme.headlineSmall?.copyWith(fontFeatures: const [])),
             if (isToday)
-              hero
-                  // On the tinted ground the chip comes off and the word stays, in the ground's
-                  // own ink: a chip's fill is a tint of its tone, and a tint on a tint is the
-                  // pairing [ApnivaasSemantics.surfaceTintAlpha] forbids. Same construction as
-                  // the rent card's status word.
-                  ? StatusWord(
-                      label: 'Today',
-                      tone: ApnivaasDomain.food.tone,
-                      icon: Icons.today_rounded,
-                    )
-                  : StatusPill(
-                      label: 'Today',
-                      tone: t.colorScheme.primary,
-                      icon: Icons.today_rounded,
-                    ),
+              const StatusPill(
+                label: 'Today',
+                tone: ApnivaasColors.brand,
+                icon: Icons.today_rounded,
+              ),
           ],
         ),
         const SizedBox(height: Space.sm),
@@ -155,16 +137,16 @@ class DayMenuCard extends StatelessWidget {
       ],
     );
 
-    if (hero) return DomainCard(domain: ApnivaasDomain.food, child: body);
-
-    return OutlineCard(
-      accent: isToday ? t.colorScheme.primary : null,
-      // The rail eats into the leading edge, so a today card insets past it rather than
-      // starting under it. Same arithmetic as NoticeTile.
-      padding: isToday
-          ? const EdgeInsets.fromLTRB(Space.md + Space.xs, Space.md, Space.md, Space.md)
-          : const EdgeInsets.all(Space.md),
-      child: body,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cardSurfaceOf(context),
+        borderRadius: Radii.rSurface,
+        border: Border.all(
+          color: isToday ? t.colorScheme.primary : t.colorScheme.outlineVariant,
+          width: isToday ? Strokes.control : Strokes.hairline,
+        ),
+      ),
+      child: Padding(padding: const EdgeInsets.all(Space.md), child: body),
     );
   }
 }

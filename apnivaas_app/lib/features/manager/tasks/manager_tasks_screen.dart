@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/clay/clay.dart';
 import '../../common/refresh.dart';
 import '../data/manager_models.dart';
 import '../data/manager_providers.dart';
@@ -40,10 +41,10 @@ class ManagerTasksScreen extends ConsumerWidget {
         title: 'Tasks',
         child: SingleChildScrollView(
           padding: EdgeInsets.all(Space.md),
-          child: EmptyNote(
-            icon: Icons.checklist_rounded,
+          child: EmptyState(
+            icon: ClayIcons.navProperty,
             title: 'No hostel on this account',
-            detail: 'A manager runs exactly one hostel. Ask the owner to check the assignment.',
+            body: 'A manager runs exactly one hostel. Ask the owner to check the assignment.',
           ),
         ),
       );
@@ -69,23 +70,22 @@ class ManagerTasksScreen extends ConsumerWidget {
         },
         onLoadMore: () => ref.read(tasksProvider(query).notifier).loadMore(),
         header: const _Filters(),
-        empty: EmptyNote(
-          icon: filter == TaskFilter.needsAction
-              ? Icons.check_circle_outline_rounded
-              : Icons.checklist_rounded,
+        // THE TROPHY ONLY FOR GOOD NEWS. An empty "To do" is a clear desk; an empty "Done" or
+        // "Pending" is just a filter with nothing in it, and gets the board instead — a reward
+        // drawn over "no data yet" is the interface congratulating itself.
+        empty: EmptyState(
+          icon: filter == TaskFilter.needsAction ? ClayIcons.success : ClayIcons.tasks,
           title: switch (filter) {
             TaskFilter.needsAction => 'Nothing waiting on you',
             TaskFilter.done => 'Nothing finished yet',
             _ => 'No ${filter.label.toLowerCase()} jobs',
           },
-          detail: filter == TaskFilter.needsAction
+          body: filter == TaskFilter.needsAction
               ? 'New jobs arrive here when the owner assigns one.'
-              : null,
-          tone: filter == TaskFilter.needsAction ? ApnivaasColors.success : null,
+              : 'Try another filter to see the rest of your jobs.',
         ),
-        // EXACTLY the row the home screen's `TODAY'S TASKS` section draws — 4:1197 is the only
-        // list row on either of this role's frames, and one anatomy is what makes the dashboard
-        // and the tab read as the same product.
+        // EXACTLY the row the home screen's "Today's tasks" draws, in its own card here — one
+        // anatomy is what makes the dashboard and the tab read as the same product.
         itemBuilder: (context, task) => TaskLine(
           task: task,
           onTap: () => showTaskSheet(context, task: task),
@@ -127,7 +127,7 @@ class _Filters extends ConsumerWidget {
     final selected = ref.watch(taskFilterProvider);
     final notifier = ref.read(taskFilterProvider.notifier);
     return Padding(
-      padding: const EdgeInsets.only(bottom: Space.sm),
+      padding: const EdgeInsets.only(bottom: Space.xs),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(

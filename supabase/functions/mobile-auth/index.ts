@@ -1,11 +1,17 @@
 /**
  * POST /functions/v1/mobile-auth
  *
- * The phone's sign-in and second-factor endpoint. Three actions on one function:
+ * The phone's sign-in, sign-up and second-factor endpoint. Five actions on one function:
  *
- *   { "action": "signin", "identifier": "<resolved login address>", "password": "..." }
- *   { "action": "mfa",    "factorId": "<uuid>", "code": "123456" }
- *   { "action": "google", "idToken": "<Google ID token>", "nonce": "<raw nonce>" }
+ *   { "action": "signin",     "identifier": "<resolved login address>", "password": "..." }
+ *   { "action": "mfa",        "factorId": "<uuid>", "code": "123456" }
+ *   { "action": "google",     "idToken": "<Google ID token>", "nonce": "<raw nonce>", "persona"?: "owner"|"tenant" }
+ *   { "action": "facebook",   "accessToken": "...", "persona"?: "owner"|"tenant" }
+ *   { "action": "truecaller", "code": "...", "codeVerifier": "...", "persona"?: "owner"|"tenant"|"staff" }
+ *   { "action": "signup_password", "persona": "owner"|"tenant"|"staff", "fullName", "phone", "email", "password", "city"?, "pincode"? }
+ *
+ * A persona turns "no account yet" into self sign-up (owner or tenant only, enforced in the
+ * database). The app contract is docs/self-signup-api.md.
  *
  * The third is "Continue with Google" (2026-10-17). See the GOOGLE section below; it needs the
  * GOOGLE_WEB_CLIENT_ID secret and db/migrations/2026-10-17-google-sign-in.sql on the database.
@@ -61,6 +67,46 @@ import { clientIp, clientUserAgent, requireSession } from "../_shared/caller.ts"
 import { HttpError, ok, preflight, readJsonBody, toResponse } from "../_shared/http.ts";
 import { consumeRateLimit, LIMITS, reportOnce, throttled } from "../_shared/ratelimit.ts";
 import { anonKey, projectUrl, serviceClient } from "../_shared/supabase.ts";
+import {
+  AccountExistsError,
+  accountForExternal,
+  BAD_PERSONA_MESSAGE,
+  accountsForEmail,
+  assertMaySignIn,
+  createSelfSignupAccount,
+  displayName,
+  EMAIL_IN_USE_MESSAGE,
+  ERROR_CODES,
+  externalSignInAllowed,
+  type ExternalProvider,
+  FACEBOOK_FAILED,
+  FACEBOOK_NOT_SET_UP,
+  FACEBOOK_UNAVAILABLE,
+  facebookConfig,
+  indianMobile,
+  isPkceVerifier,
+  linkExternalIdentity,
+  type LoginAccount,
+  mintSessionForEmail,
+  NO_ACCOUNT_MESSAGE,
+  parsePersona,
+  type Persona,
+  passwordProblem,
+  personaRole,
+  PHONE_IN_USE_MESSAGE,
+  phoneInUse,
+  secureUnverifiedAccount,
+  SIGNUP_UNAVAILABLE,
+  type SignupSource,
+  syntheticEmail,
+  TRUECALLER_FAILED,
+  TRUECALLER_NOT_SET_UP,
+  TRUECALLER_UNAVAILABLE,
+  truecallerClientId,
+  verifyFacebookToken,
+  verifyTruecallerCode,
+} from "../_shared/identity.ts";
+import { Validator } from "../_shared/validate.ts";
 
 /**
  * ONE sentence for "no such account" and "wrong password" alike.
@@ -460,8 +506,10 @@ async function verifyMfa(req: Request, body: Record<string, unknown>): Promise<R
 // db/migrations/2026-10-17-google-sign-in.sql, where the link is written. Step 4 is what gives
 // the app a sentence instead of GoTrue's "Database error".
 //
-// New people (no account yet) are refused here on purpose: self sign-up is 1.3.0 work, and it
-// will create the account through the server, never by turning public sign-up on.
+// New people (no account yet) are refused unless the request carries a persona (2026-10-25):
+// then step 4b creates the account through the server (admin createUser, address confirmed
+// because Google verified it, then svc_create_self_signup_profile), never by turning public
+// sign-up on, and step 5 signs it in with the same id_token grant.
 
 const GOOGLE_UNAVAILABLE =
   "Google sign-in is temporarily unavailable. Please try again in a minute, or sign in with your password.";
@@ -471,7 +519,6 @@ const GOOGLE_FAILED = "Google sign-in didn't go through. Please try again.";
 const GOOGLE_STAFF =
   "Staff and administrator accounts sign in with the login they were given, not with Google.";
 const GOOGLE_ISSUERS = ["https://accounts.google.com", "accounts.google.com"];
-const STAFF_ROLES = new Set(["super_admin", "manager", "warden"]);
 
 /**
  * Google's signing keys, fetched once per warm isolate. jose refetches when a token names a key
@@ -494,13 +541,6 @@ function googleClientIds(): string[] {
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-interface LoginAccount {
-  user_id: string;
-  role: string | null;
-  status: string | null;
-  deleted_at: string | null;
 }
 
 async function signInWithGoogle(req: Request, body: Record<string, unknown>): Promise<Response> {
@@ -526,6 +566,8 @@ async function signInWithGoogle(req: Request, body: Record<string, unknown>): Pr
   ) {
     throw new HttpError(400, GOOGLE_FAILED);
   }
+  // Optional sign-up hint (2026-10-25). Checked against the allowlist before any budget is spent.
+  const persona = parsePersona(body["persona"]);
 
   // 1. The IP budget, before any work. Same key and same numbers as the password path, and the
   //    same rule about a missing address: no shared "unknown" bucket.
@@ -589,15 +631,34 @@ async function signInWithGoogle(req: Request, body: Record<string, unknown>): Pr
     console.error("[apnivaas] account lookup failed for a verified Google token:", lookupError.message);
     throw unavailable(GOOGLE_UNAVAILABLE);
   }
-  const accounts = (Array.isArray(rows) ? rows : []) as LoginAccount[];
+  let accounts = (Array.isArray(rows) ? rows : []) as LoginAccount[];
+  let createdNow = false;
 
+  // 4b. Self sign-up (2026-10-25). Only with a persona on the allowlist, and only when no
+  //     account uses the verified address. The database creates owner or student only.
   if (accounts.length === 0) {
-    await failed("no-account", idHash);
-    throw new HttpError(
-      403,
-      `No account uses ${email} yet. Sign in with your phone number or email and password, ` +
-        "or ask your PG to add this address to your account.",
-    );
+    if (!persona) {
+      await failed("no-account", idHash);
+      throw new HttpError(403, NO_ACCOUNT_MESSAGE, { extra: { code: ERROR_CODES.noAccount } });
+    }
+    await spendSignupBudget(ip, idHash);
+    try {
+      const role = personaRole(persona);
+      const userId = await createSelfSignupAccount({
+        email,
+        fullName: displayName(claims["name"], claims["given_name"], email.split("@")[0]),
+        phone: null,
+        role,
+        source: "self_google",
+      });
+      accounts = [{ user_id: userId, role, status: "active", deleted_at: null }];
+      createdNow = true;
+    } catch (e) {
+      if (!(e instanceof AccountExistsError)) throw e;
+      // Somebody created this address between the lookup and now: sign in to it instead.
+      accounts = await accountsForEmail(email, GOOGLE_UNAVAILABLE);
+      if (accounts.length === 0) throw unavailable(GOOGLE_UNAVAILABLE);
+    }
   }
   if (accounts.length > 1) {
     console.error("[apnivaas] two auth users share a login address; GoTrue would refuse to link");
@@ -610,14 +671,17 @@ async function signInWithGoogle(req: Request, body: Record<string, unknown>): Pr
     await failed("no-profile", idHash);
     throw new HttpError(403, "Your account isn't set up yet. Contact your administrator.");
   }
-  if (STAFF_ROLES.has(account.role)) {
+  if (!(await externalSignInAllowed(account, GOOGLE_UNAVAILABLE))) {
     await failed("staff-refused", idHash, { role: account.role });
-    throw new HttpError(403, GOOGLE_STAFF);
+    throw new HttpError(403, GOOGLE_STAFF, { extra: { code: ERROR_CODES.staffRefused } });
   }
   if (account.deleted_at || account.status !== "active") {
     await failed("inactive", idHash);
-    throw new HttpError(403, "This account has been deactivated. Contact your hostel owner.");
+    throw new HttpError(403, "This account has been deactivated. Contact your hostel owner.", { extra: { code: ERROR_CODES.inactive } });
   }
+
+  // 4c. Google proved the address: an unverified self_email account loses its password (2026-10-26).
+  if (!createdNow) await secureUnverifiedAccount(account.user_id, true, GOOGLE_UNAVAILABLE);
 
   // 5. GoTrue: the same token, the same raw nonce. It checks both again and links the identity.
   const call = await gotrue("token?grant_type=id_token", {
@@ -652,12 +716,328 @@ async function signInWithGoogle(req: Request, body: Record<string, unknown>): Pr
     throw unavailable(GOOGLE_UNAVAILABLE);
   }
 
+  if (createdNow) {
+    await auditSystem("auth.signup.success", {
+      targetType: "user",
+      targetId: account.user_id,
+      ip,
+      userAgent,
+      meta: { role: account.role, method: "google", surface: "mobile" },
+    });
+  }
   await auditSystem("auth.login.success", {
     targetType: "user",
     targetId: account.user_id,
     ip,
     userAgent,
-    meta: { role: account.role, method: "google", surface: "mobile" },
+    meta: { role: account.role, method: "google", surface: "mobile", signup: createdNow },
+  });
+  return grant(session);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+// SELF SIGN-UP SHARED BY ALL PROVIDERS, AND FACEBOOK / TRUECALLER (2026-10-25)
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+//
+//   { "action": "facebook",   "accessToken": "<Facebook user access token>", "persona"?: "owner"|"tenant"|"staff" }
+//   { "action": "truecaller", "code": "<authorization code>", "codeVerifier": "<PKCE verifier>",
+//                             "persona"?: "owner"|"tenant" }
+//
+// Neither provider is an OIDC provider GoTrue knows, so neither writes auth.identities: the
+// (provider, subject) pair lives in public.external_identities (service role only, staff refused
+// by its guard trigger), and the session is minted with an admin magic link verified here
+// (_shared/identity.ts, mintSessionForEmail). Both answer 503 "... is not set up yet" until
+// their secrets exist; the app keeps the buttons hidden until then.
+
+/** The sign-up budget, spent only when an account is about to be created. */
+async function spendSignupBudget(ip: string | null, idKey: string): Promise<void> {
+  if (ip) {
+    const ipWait = await consumeRateLimit(`signup:ip:${ip}`, LIMITS.signupPerIp, { unavailableMessage: SIGNUP_UNAVAILABLE });
+    if (ipWait > 0) throw tooManyAttempts(ipWait);
+  }
+  const idWait = await consumeRateLimit(`signup:id:${idKey}`, LIMITS.signupPerIdentifier, {
+    unavailableMessage: SIGNUP_UNAVAILABLE,
+  });
+  if (idWait > 0) throw tooManyAttempts(idWait);
+}
+
+async function spendIpBudget(ip: string | null, unavailableMessage: string): Promise<void> {
+  if (!ip) return;
+  const wait = await consumeRateLimit(`login:ip:${ip}`, LIMITS.loginPerIp, { unavailableMessage });
+  if (wait > 0) throw tooManyAttempts(wait);
+}
+
+interface ExternalLogin {
+  provider: ExternalProvider;
+  subject: string;
+  /** Facebook only: the address Facebook returned. Truecaller never matches by address. */
+  email: string | null;
+  /** Truecaller only: the verified 10-digit mobile. */
+  phone: string | null;
+  name: string | null;
+  persona: Persona | null;
+  source: SignupSource;
+  label: string;
+  unavailableMessage: string;
+}
+
+function notSetUp(message: string): HttpError {
+  return new HttpError(503, message, { extra: { code: ERROR_CODES.notConfigured } });
+}
+
+/** The create-or-sign-in core for a provider identity this function has already verified. */
+async function externalSignIn(req: Request, x: ExternalLogin): Promise<Response> {
+  const ip = clientIp(req);
+  const userAgent = clientUserAgent(req);
+  const subjectHash = await hashIdentifier(`${x.provider}:${x.subject}`);
+  const failed = (reason: string, extra: Record<string, unknown> = {}) =>
+    auditSystem("auth.login.failed", {
+      targetType: "identifier",
+      targetId: subjectHash,
+      ip,
+      userAgent,
+      meta: { reason, method: x.provider, surface: "mobile", ...extra },
+    });
+
+  const idWait = await consumeRateLimit(`login:id:${subjectHash}`, LIMITS.loginPerIdentifier, {
+    unavailableMessage: x.unavailableMessage,
+  });
+  if (idWait > 0) {
+    if (await reportOnce(`login:${subjectHash}`, LIMITS.loginPerIdentifier.windowSeconds)) {
+      await auditSystem("auth.login.rate_limited", { targetType: "identifier", targetId: subjectHash, ip, userAgent });
+    }
+    throw tooManyAttempts(idWait);
+  }
+
+  // 1. An existing link.
+  let account: LoginAccount | null = await accountForExternal(x.provider, x.subject, x.unavailableMessage);
+  let loginEmail: string | null = account?.email ?? null;
+  const loginEmailFromLink = account !== null;
+  let createdNow = false;
+
+  if (!account) {
+    // 2. Facebook: the address Facebook returned, under the same rules as Google.
+    if (x.provider === "facebook" && x.email) {
+      const emailHash = await hashIdentifier(x.email);
+      const emailWait = await consumeRateLimit(`login:id:${emailHash}`, LIMITS.loginPerIdentifier, {
+        unavailableMessage: x.unavailableMessage,
+      });
+      if (emailWait > 0) throw tooManyAttempts(emailWait);
+      const found = await accountsForEmail(x.email, x.unavailableMessage);
+      if (found.length > 1) {
+        await failed("duplicate-account");
+        throw new HttpError(403, "This address is on more than one account. Contact your administrator.");
+      }
+      if (found.length === 1) {
+        account = found[0];
+        loginEmail = x.email;
+      }
+    }
+    // 2'. Truecaller: a number that is already on an account is refused, never matched. A typed
+    //     phone was never verified, so matching it would hand that account to whoever owns the SIM.
+    if (!account && x.provider === "truecaller" && x.phone && await phoneInUse(x.phone)) {
+      await failed("phone-in-use");
+      throw new HttpError(409, PHONE_IN_USE_MESSAGE, { extra: { code: ERROR_CODES.phoneInUse } });
+    }
+  }
+
+  if (account) {
+    try {
+      await assertMaySignIn(
+        account,
+        `Staff and administrator accounts sign in with the login they were given, not with ${x.label}.`,
+        x.unavailableMessage,
+      );
+      // Matched by Facebook's address (not proved by us): an unverified self_email account loses its password.
+      if (x.provider === "facebook" && !loginEmailFromLink) await secureUnverifiedAccount(account.user_id, false, x.unavailableMessage);
+    } catch (e) {
+      await failed("refused", { role: account.role });
+      throw e;
+    }
+    if (!(await linkExternalIdentity(x.provider, x.subject, account.user_id))) {
+      await failed("already-linked");
+      throw new HttpError(
+        409,
+        `This account is already linked to a different ${x.label} profile. Sign in with your password.`,
+        { extra: { code: ERROR_CODES.alreadyLinked } },
+      );
+    }
+  } else {
+    // 3. Sign-up.
+    if (!x.persona) {
+      await failed("no-account");
+      throw new HttpError(403, NO_ACCOUNT_MESSAGE, { extra: { code: ERROR_CODES.noAccount } });
+    }
+    await spendSignupBudget(ip, subjectHash);
+    loginEmail = x.email ?? syntheticEmail(x.provider, x.subject);
+    const role = personaRole(x.persona);
+    let userId: string;
+    try {
+      userId = await createSelfSignupAccount({
+        email: loginEmail,
+        fullName: displayName(x.name),
+        phone: x.phone,
+        role,
+        source: x.source,
+      });
+    } catch (e) {
+      // Two taps racing: the other request is creating this very account. Trying again signs in.
+      if (e instanceof AccountExistsError) throw unavailable(x.unavailableMessage);
+      throw e;
+    }
+    account = { user_id: userId, role, status: "active", deleted_at: null };
+    createdNow = true;
+    if (!(await linkExternalIdentity(x.provider, x.subject, userId))) throw unavailable(x.unavailableMessage);
+  }
+
+  if (!loginEmail) {
+    console.error("[apnivaas] a linked external identity has no login address");
+    throw unavailable(x.unavailableMessage);
+  }
+  const session = await mintSessionForEmail(loginEmail, x.unavailableMessage);
+  if (session.user_id !== account.user_id) {
+    console.error("[apnivaas] magic-link session landed on a different account than the lookup named");
+    await revoke(session.access_token);
+    throw unavailable(x.unavailableMessage);
+  }
+
+  if (createdNow) {
+    await auditSystem("auth.signup.success", {
+      targetType: "user",
+      targetId: account.user_id,
+      ip,
+      userAgent,
+      meta: { role: account.role, method: x.provider, surface: "mobile" },
+    });
+  }
+  await auditSystem("auth.login.success", {
+    targetType: "user",
+    targetId: account.user_id,
+    ip,
+    userAgent,
+    meta: { role: account.role, method: x.provider, surface: "mobile", signup: createdNow },
+  });
+  return grant(session);
+}
+
+async function signInWithFacebook(req: Request, body: Record<string, unknown>): Promise<Response> {
+  if (!facebookConfig()) throw notSetUp(FACEBOOK_NOT_SET_UP);
+  const accessToken = body["accessToken"];
+  if (typeof accessToken !== "string" || accessToken.length < 20 || accessToken.length > 4096) {
+    throw new HttpError(400, FACEBOOK_FAILED);
+  }
+  const persona = parsePersona(body["persona"]);
+  await spendIpBudget(clientIp(req), FACEBOOK_UNAVAILABLE);
+  const profile = await verifyFacebookToken(accessToken);
+  return await externalSignIn(req, {
+    provider: "facebook",
+    subject: profile.id,
+    email: profile.email,
+    phone: null,
+    name: profile.name,
+    persona,
+    source: "self_facebook",
+    label: "Facebook",
+    unavailableMessage: FACEBOOK_UNAVAILABLE,
+  });
+}
+
+async function signInWithTruecaller(req: Request, body: Record<string, unknown>): Promise<Response> {
+  if (!truecallerClientId()) throw notSetUp(TRUECALLER_NOT_SET_UP);
+  const code = body["code"];
+  const codeVerifier = body["codeVerifier"];
+  if (typeof code !== "string" || !/^[A-Za-z0-9\-._~]{4,2048}$/.test(code) || !isPkceVerifier(codeVerifier)) {
+    throw new HttpError(400, TRUECALLER_FAILED);
+  }
+  const persona = parsePersona(body["persona"]);
+  await spendIpBudget(clientIp(req), TRUECALLER_UNAVAILABLE);
+  const profile = await verifyTruecallerCode(code, codeVerifier);
+  return await externalSignIn(req, {
+    provider: "truecaller",
+    subject: profile.sub,
+    email: null,
+    phone: profile.phone,
+    name: profile.name,
+    persona,
+    source: "self_truecaller",
+    label: "Truecaller",
+    unavailableMessage: TRUECALLER_UNAVAILABLE,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+// SIGN-UP WITH EMAIL AND PASSWORD (2026-10-26, round 3 R1)
+// ═══════════════════════════════════════════════════════════════════════════════════════════
+//
+// The GoTrue user is created confirmed (so a password grant can return a session at once), and
+// public.users.email_verified_at stays null: the app's existing email-verification hold proves the
+// address for owners and staff. If Google or Facebook later proves the same address, the
+// unverified account loses this password (svc_secure_unverified_account), so a squatter keeps nothing.
+
+const RESERVED_EMAIL = /@(identity\.apnivaas\.invalid|student\.hostelpro\.local)$/i;
+
+async function signUpWithPassword(req: Request, body: Record<string, unknown>): Promise<Response> {
+  const ip = clientIp(req);
+  const userAgent = clientUserAgent(req);
+  const persona = parsePersona(body["persona"]);
+  if (!persona) throw new HttpError(400, BAD_PERSONA_MESSAGE);
+
+  const v = new Validator(body);
+  const fullName = displayName(v.string("fullName", { min: 2, max: 80, message: "Enter a name between 2 and 80 characters." }));
+  const email = v.email("email").toLowerCase();
+  if (email && RESERVED_EMAIL.test(email)) v.reject("email", "Enter a valid email address");
+  const phone = indianMobile(body["phone"]);
+  if (!phone) v.reject("phone", "Enter a valid 10-digit mobile number.");
+  const rawPassword = typeof body["password"] === "string" ? body["password"] as string : "";
+  const pwProblem = passwordProblem(rawPassword);
+  if (pwProblem) v.reject("password", pwProblem);
+  const city = v.optionalString("city", 80);
+  if (city !== null && city.length < 2) v.reject("city", "Enter your city.");
+  const pincode = v.optionalString("pincode", 6);
+  if (pincode !== null && !/^[1-9][0-9]{5}$/.test(pincode)) v.reject("pincode", "Enter a valid 6-digit pincode.");
+  v.done();
+
+  // Budgets: the login IP and address keys (shared with every sign-in), then the sign-up keys.
+  await spendIpBudget(ip, SIGNUP_UNAVAILABLE);
+  const idHash = await hashIdentifier(email);
+  const idWait = await consumeRateLimit(`login:id:${idHash}`, LIMITS.loginPerIdentifier, { unavailableMessage: SIGNUP_UNAVAILABLE });
+  if (idWait > 0) throw tooManyAttempts(idWait);
+  await spendSignupBudget(ip, idHash);
+
+  const conflict = (message: string, code: string) => new HttpError(409, message, { extra: { code } });
+  if ((await accountsForEmail(email, SIGNUP_UNAVAILABLE)).length > 0) {
+    throw conflict(EMAIL_IN_USE_MESSAGE, ERROR_CODES.emailInUse);
+  }
+  if (await phoneInUse(phone!)) throw conflict(PHONE_IN_USE_MESSAGE, ERROR_CODES.phoneInUse);
+
+  const role = personaRole(persona);
+  let userId: string;
+  try {
+    userId = await createSelfSignupAccount({
+      email, fullName, phone, role, source: "self_email", password: rawPassword, city, pincode,
+    });
+  } catch (e) {
+    if (e instanceof AccountExistsError) throw conflict(EMAIL_IN_USE_MESSAGE, ERROR_CODES.emailInUse);
+    throw e;
+  }
+
+  const call = await gotrue("token?grant_type=password", { body: { email, password: rawPassword } });
+  const session = sessionFrom(call.body);
+  const signedInId = String((call.body["user"] as Record<string, unknown> | undefined)?.["id"] ?? "");
+  if (call.status !== 200 || !session || signedInId !== userId) {
+    // The account exists; only the first session failed. Signing in normally will work.
+    console.error(`[apnivaas] password sign-up created ${userId} but the first sign-in failed: ${call.status}`);
+    if (session) await revoke(session.access_token);
+    throw unavailable("Your account was created. Please sign in with your email and password.");
+  }
+
+  await auditSystem("auth.signup.success", {
+    targetType: "user", targetId: userId, ip, userAgent,
+    meta: { role, method: "password", surface: "mobile" },
+  });
+  await auditSystem("auth.login.success", {
+    targetType: "user", targetId: userId, ip, userAgent,
+    meta: { role, method: "password", surface: "mobile", signup: true },
   });
   return grant(session);
 }
@@ -675,6 +1055,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
         return await verifyMfa(req, body);
       case "google":
         return await signInWithGoogle(req, body);
+      case "facebook":
+        return await signInWithFacebook(req, body);
+      case "truecaller":
+        return await signInWithTruecaller(req, body);
+      case "signup_password":
+        return await signUpWithPassword(req, body);
       default:
         throw new HttpError(400, "Could not read the request.");
     }

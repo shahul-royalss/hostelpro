@@ -266,7 +266,7 @@ void main() {
         contacts: deskContacts,
       );
 
-      expect(find.text('RENT · AUGUST'), findsOneWidget);
+      expect(find.text('Rent · August'), findsOneWidget);
       expect(find.text('₹6,200'), findsWidgets);
       expect(find.text('still to pay'), findsOneWidget);
       expect(find.text('UNPAID'), findsOneWidget);
@@ -371,9 +371,10 @@ void main() {
       );
 
       expect(find.text('August 2026'), findsOneWidget);
-      expect(find.text('DUE'), findsOneWidget);
-      expect(find.text('PAID'), findsOneWidget);
-      expect(find.text('PENDING'), findsOneWidget);
+      expect(find.text('Due'), findsOneWidget);
+      expect(find.text('Paid'), findsOneWidget);
+      expect(find.text('Pending'), findsOneWidget);
+      expect(find.text('PARTLY PAID'), findsOneWidget);
       expect(find.text('₹6,000'), findsOneWidget);
       expect(find.text('₹3,000'), findsNWidgets(2)); // paid, and still pending
       expect(find.text('Received 16 Aug 2026 · UPI'), findsOneWidget);
@@ -445,7 +446,7 @@ void main() {
       // Room and bed came from a DIFFERENT read and are already known — the card must not hold
       // them back waiting for the count.
       expect(find.text('Room 101 · Bed 3'), findsOneWidget);
-      expect(find.byType(Skeleton), findsOneWidget);
+      expect(find.byType(StillSkeleton), findsOneWidget);
       expect(find.textContaining('Sharing with'), findsNothing);
       expect(find.text('You have the room to yourself'), findsNothing);
     });
@@ -468,7 +469,7 @@ void main() {
       );
       // A failed secondary read must never be dressed as an empty room.
       expect(find.text('You have the room to yourself'), findsNothing);
-      expect(find.byType(Skeleton), findsNothing);
+      expect(find.byType(StillSkeleton), findsNothing);
     });
 
     testWidgets('a refusal is said plainly and offers no retry', (tester) async {

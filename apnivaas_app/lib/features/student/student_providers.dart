@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../data/repositories/stay_repository.dart';
 import '../common/refresh.dart';
 
 /// Composition, not data access.
@@ -105,6 +106,8 @@ void refreshStudentData(WidgetRef ref) {
   ref.invalidate(roommatesProvider);
   ref.invalidate(hostelContactsProvider);
   ref.invalidate(unreadCountProvider);
+  ref.invalidate(myCheckoutRequestProvider);
+  ref.invalidate(myTimelineProvider);
 }
 
 /// Waits for the reads a pull-to-refresh actually shows, so the spinner disappears when the

@@ -11,6 +11,8 @@ import '../../../shared/brow.dart';
 import '../../../shared/brow_header.dart';
 import '../../../shared/glass/glass.dart';
 import '../../shell/staff_profile_sheet.dart';
+import '../../../data/people_providers.dart';
+import '../../../shared/person_avatar.dart' show watchAvatarUrl;
 import '../../../shared/sign_in_again.dart';
 import '../data/sa_models.dart';
 
@@ -300,7 +302,7 @@ class SaScreen extends StatelessWidget {
             // generous. The block's default leadingExtent is exactly this width, so the
             // greeting stays centred on the screen.
             padding: const EdgeInsets.all(Space.xs),
-            child: AccountAvatar(name: subtitle ?? 'Apnivaas', size: AvatarSize.header),
+            child: _SaAvatar(name: subtitle ?? 'Apnivaas'),
           ),
         ),
       ),
@@ -1824,6 +1826,44 @@ class SaLoadMoreFooter extends StatelessWidget {
               )
             : Text('${plural(shown, noun)} shown', style: t.textTheme.bodySmall),
       ),
+    );
+  }
+}
+
+
+/// The console's account disc with the Super Admin's own photo over it when there is one. The
+/// initials disc is always drawn underneath, so a photo that is missing, refused or still
+/// loading leaves exactly the disc this header has always had — and outside a ProviderScope
+/// (a bare header in a widget test) it is only that disc.
+class _SaAvatar extends StatelessWidget {
+  const _SaAvatar({required this.name});
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final disc = AccountAvatar(name: name, size: AvatarSize.header);
+    if (context.findAncestorWidgetOfExactType<UncontrolledProviderScope>() == null) return disc;
+    return Consumer(
+      builder: (context, ref, _) {
+        final url = watchAvatarUrl(ref, ref.watch(myAvatarPathProvider).value);
+        if (url == null) return disc;
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            disc,
+            ClipOval(
+              child: Image.network(
+                url,
+                width: AvatarSize.header,
+                height: AvatarSize.header,
+                fit: BoxFit.cover,
+                excludeFromSemantics: true,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

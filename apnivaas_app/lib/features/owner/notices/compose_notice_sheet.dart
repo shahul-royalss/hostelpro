@@ -7,8 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/clay/clay.dart';
 import '../../../shared/glass/glass.dart';
-import '../widgets/states.dart';
+import '../widgets/states.dart' show ErrorNote;
 import 'notice_draft.dart';
 import 'notice_providers.dart';
 
@@ -169,21 +170,12 @@ class _ComposeNoticeSheetState extends ConsumerState<_ComposeNoticeSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'NEW NOTICE',
-                        style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary),
-                      ),
-                      const SizedBox(height: Space.xxs / 2),
-                      Text(
-                        'Post a notice',
-                        style: t.textTheme.titleLarge,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                  child: SheetTitle(
+                    title: 'Post a notice',
+                    subtitle: widget.hostelName == null
+                        ? 'Everyone you choose gets a notification straight away.'
+                        : 'Posted to ${widget.hostelName}. Everyone you choose gets a '
+                            'notification straight away.',
                   ),
                 ),
                 IconButton(
@@ -192,14 +184,6 @@ class _ComposeNoticeSheetState extends ConsumerState<_ComposeNoticeSheet> {
                   icon: const Icon(Icons.close_rounded),
                 ),
               ],
-            ),
-            const SizedBox(height: Space.xxs),
-            Text(
-              widget.hostelName == null
-                  ? 'Everyone you choose gets a notification straight away.'
-                  : 'Posted to ${widget.hostelName}. Everyone you choose gets a notification '
-                      'straight away.',
-              style: t.textTheme.bodySmall,
             ),
             const SizedBox(height: Space.md),
             Flexible(
@@ -253,7 +237,7 @@ class _ComposeNoticeSheetState extends ConsumerState<_ComposeNoticeSheet> {
                     ),
                     const SizedBox(height: Space.md),
 
-                    Text('WHO SEES IT', style: t.textTheme.labelSmall),
+                    const SectionHeader(title: 'Who sees it', size: SectionHeaderSize.form),
                     const SizedBox(height: Space.xs),
                     for (final audience in noticeAudienceChoices) ...[
                       if (audience != noticeAudienceChoices.first)
@@ -277,7 +261,6 @@ class _ComposeNoticeSheetState extends ConsumerState<_ComposeNoticeSheet> {
                     const SizedBox(height: Space.md),
                     FilledButton(
                       onPressed: _busy ? null : _submit,
-                      style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
                       child: _busy
                           ? const SizedBox(
                               height: IconSize.md,
@@ -290,7 +273,8 @@ class _ComposeNoticeSheetState extends ConsumerState<_ComposeNoticeSheet> {
                     Text(
                       'A notice cannot be edited into a second notification — posting is what '
                       'notifies people, so it only happens once.',
-                      style: t.textTheme.bodySmall,
+                      style:
+                          t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -324,21 +308,26 @@ class NoticeAudienceCard extends StatelessWidget {
   final bool enabled;
   final VoidCallback onTap;
 
-  IconData get _icon => switch (audience) {
-        NoticeAudience.all => Icons.groups_rounded,
-        NoticeAudience.students => Icons.people_alt_rounded,
-        NoticeAudience.warden => Icons.shield_rounded,
-        NoticeAudience.manager => Icons.manage_accounts_rounded,
+  /// The clay art for each audience: the whole team for everyone, a resident, a warden.
+  String get _art => switch (audience) {
+        NoticeAudience.all => ClayIcons.team,
+        NoticeAudience.students => ClayIcons.roleTenant,
+        NoticeAudience.warden => ClayIcons.roleWarden,
+        NoticeAudience.manager => ClayIcons.roleManager,
       };
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final scheme = t.colorScheme;
+    final dark = t.brightness == Brightness.dark;
     // Same anatomy as StaffRoleCard in add_staff_sheet.dart: the choice is carried by the
-    // radio and the title's colour, not by a second fill or a thicker edge. The two sheets
-    // sit one tap apart in the same tab, so they read as one control or as two.
-    final accent = selected ? scheme.primary : scheme.outline;
+    // radio, the title's colour and the selected tint with a forest edge — the two sheets sit
+    // one tap apart, so they read as one control or as two.
+    final accent = selected ? scheme.primary : scheme.onSurfaceVariant;
+    final fill = selected
+        ? (dark ? ApnivaasColors.darkSelected : ApnivaasColors.selectedSurface)
+        : scheme.surface;
 
     return Semantics(
       button: true,
@@ -346,43 +335,54 @@ class NoticeAudienceCard extends StatelessWidget {
       enabled: enabled,
       label: '${audience.label}. ${noticeAudienceDescription(audience)}',
       child: Opacity(
-        opacity: enabled ? 1 : 0.5,
-        child: FlatSurface(
-          weight: GlassWeight.regular,
-          borderRadius: Radii.rControl,
-          padding: const EdgeInsets.all(Space.sm),
-          onTap: enabled ? onTap : null,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ToneBadge(icon: _icon, tone: accent, tinted: selected),
-              const SizedBox(width: Space.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      audience.label,
-                      style: t.textTheme.titleMedium
-                          ?.copyWith(color: selected ? scheme.primary : null),
+        opacity: enabled ? 1 : Dim.readOnly,
+        child: Material(
+          color: fill,
+          shape: RoundedRectangleBorder(
+            borderRadius: Radii.rCard,
+            side: BorderSide(
+              color: selected ? scheme.primary : scheme.outlineVariant,
+              width: selected ? Strokes.control : Strokes.hairline,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            child: Padding(
+              padding: const EdgeInsets.all(Space.sm),
+              child: Row(
+                children: [
+                  ClayIcon(_art, size: ClaySize.list),
+                  const SizedBox(width: Space.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          audience.label,
+                          style: t.textTheme.titleMedium
+                              ?.copyWith(color: selected ? scheme.primary : null),
+                        ),
+                        const SizedBox(height: Space.hair),
+                        Text(
+                          noticeAudienceDescription(audience),
+                          style: t.textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: Space.xxs / 2),
-                    Text(
-                      noticeAudienceDescription(audience),
-                      style: t.textTheme.bodySmall,
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: Space.xs),
+                  Icon(
+                    selected
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: IconSize.lg,
+                    color: accent,
+                  ),
+                ],
               ),
-              const SizedBox(width: Space.xs),
-              Icon(
-                selected
-                    ? Icons.radio_button_checked_rounded
-                    : Icons.radio_button_unchecked_rounded,
-                size: IconSize.lg,
-                color: accent,
-              ),
-            ],
+            ),
           ),
         ),
       ),

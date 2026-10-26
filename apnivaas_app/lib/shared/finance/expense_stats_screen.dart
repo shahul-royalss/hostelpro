@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
+import '../clay/app_header.dart';
+import '../clay/banners.dart';
 import '../glass/glass.dart';
 import 'expense_stats_view.dart';
 
@@ -45,42 +47,17 @@ class ExpenseStatsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
     final id = hostelId;
 
     return Scaffold(
       body: Column(
         children: [
-          GlassHeader(
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: 'Back',
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                ),
-                const SizedBox(width: Space.xxs),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Expenses month by month',
-                        style: t.textTheme.titleLarge?.copyWith(color: t.colorScheme.primary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        hostelName ?? 'This PG',
-                        style: t.textTheme.bodySmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          // The forest sub-page header every pushed screen in the owner's and the manager's
+          // apps wears, with the way back at its start.
+          AppHeader(
+            title: 'Expenses month by month',
+            subtitle: hostelName ?? 'This PG',
+            leading: const HeaderBackButton(),
           ),
           Expanded(
             child: ListView(
@@ -100,25 +77,10 @@ class ExpenseStatsScreen extends ConsumerWidget {
                   // public.fee_payments by the warden and is not an expense — a manager cannot
                   // read that table at all. Somebody reading a spending chart is entitled to
                   // know what it does not contain.
-                  FlatSurface(
-                    weight: GlassWeight.regular,
-                    borderRadius: Radii.rControl,
-                    padding: const EdgeInsets.all(Space.sm),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.info_outline_rounded,
-                            size: IconSize.sm, color: context.tones.muted),
-                        const SizedBox(width: Space.xs),
-                        Expanded(
-                          child: Text(
-                            'Money out only. Rent collected from residents is a separate '
-                            'ledger and is not in these bars.',
-                            style: t.textTheme.bodySmall,
-                          ),
-                        ),
-                      ],
-                    ),
+                  const InfoNote(
+                    icon: Icons.info_outline_rounded,
+                    message: 'Money out only. Rent collected from residents is a separate '
+                        'ledger and is not in these bars.',
                   ),
                 ],
                 const SizedBox(height: Space.xl),

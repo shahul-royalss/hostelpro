@@ -9,8 +9,10 @@ import '../../core/auth/auth_controller.dart';
 // landing the same person in two different places.
 import '../../core/router/router.dart';
 import '../../core/theme/tokens.dart';
-import '../../shared/beam_card.dart';
-import 'auth_band_layout.dart';
+import '../../shared/clay/clay_icons.dart';
+import '../../shared/glass/glass.dart' show FlatSurface;
+import '../common/form_parts.dart';
+import 'auth_scaffold.dart';
 // The policy, the validator and the meter, shared with the recovery-link screen so the three
 // places this app sets a password cannot drift into three different rules.
 import 'password_policy.dart';
@@ -213,45 +215,44 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     // it from the database: a client-supplied "this is forced" would skip reauthentication.
     final forced = session?.needsPasswordChange ?? true;
 
-    // ── 1.2.0: THE SIGN-IN SCREEN'S LAYOUT, COMPACT ─────────────────────────────────────────
+    // ── THE SIGN-IN SCREEN'S PAGE ────────────────────────────────────────────────────────────
     //
     // This used to be a plain page with the wordmark inside a card that was 644 dp tall on a
     // 360x640 phone (834 dp at text scale 1.4): it sat at the top, Save landed on the bottom
     // edge and Sign out was off the screen — on the first screen a brand-new account meets. It
-    // also changed the look abruptly one step after the sign-in screen. It now uses the same
-    // band-anchored layout as sign-in ([AuthBandLayout]), compact: the heading moves out of the
-    // card onto the band, the in-card wordmark is gone, and the card starts higher. At 360x640
-    // and text scale 1.0 every control, Save and Sign out included, is on screen.
-    return AuthBandLayout(
-      compact: true,
-      masthead: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            forced ? 'Set your password' : 'Change your password',
-            // 20/700, the design's heading step.
-            style: t.textTheme.titleLarge?.copyWith(color: onAuthBand),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: Space.xxs),
-          Text(
-            forced
-                ? 'Your account was created with a temporary password. Choose your own to continue.'
-                : 'Choose a new password for your account.',
-            style: t.textTheme.bodyMedium?.copyWith(color: onAuthBand.withValues(alpha: 0.76)),
-            textAlign: TextAlign.center,
-          ),
-        ],
+    // also changed the look abruptly one step after the sign-in screen. It now uses the sign-in
+    // screen's own page ([AuthScaffold]): the same brand bar and ground, the heading on the page
+    // with its clay icon beside it rather than above it, and the fields straight underneath. At
+    // 360x640 and text scale 1.0 every control, Save and Sign out included, is on screen.
+    return AuthScaffold(
+      // Opened from a profile, the voluntary change was pushed and has somewhere to go back
+      // to, so the bar carries a back arrow, as the verify screen's detour does. The forced
+      // change is a gate with nothing behind it and gets the plain bar.
+      topBar: AuthTopBar(
+        leading: !forced && Navigator.of(context).canPop()
+            ? IconButton(
+                tooltip: 'Back',
+                onPressed: () => Navigator.of(context).maybePop(),
+                icon: const Icon(Icons.arrow_back_rounded),
+              )
+            : null,
       ),
-      card: BeamCard(
-        padding: const EdgeInsets.all(Space.xl),
-        // The whole card is replaced rather than a banner being added above the form. A
-        // confirmation sitting on top of the fields that produced it leaves the person looking
-        // at a form they have already submitted and wondering whether to submit it again — and
-        // this one is a farewell, not a status line.
-        child: _done ? const _Confirmation() : _formBody(t, forced),
-      ),
+      children: [
+        const SizedBox(height: Space.md),
+        AuthHeading(
+          icon: ClayIcons.security,
+          title: forced ? 'Set your password' : 'Change your password',
+          message: forced
+              ? 'Your account was created with a temporary password. Choose your own to continue.'
+              : 'Choose a new password for your account.',
+        ),
+        const SizedBox(height: Space.lg),
+        // The form is replaced rather than a banner being added above it. A confirmation
+        // sitting on top of the fields that produced it leaves the person looking at a form they
+        // have already submitted and wondering whether to submit it again — and this one is a
+        // farewell, not a status line.
+        if (_done) const _Confirmation() else _formBody(t, forced),
+      ],
     );
   }
 
@@ -277,7 +278,6 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
               // Two lines, not one with an ellipsis: on a 360 dp phone the sentence was cut to
               // "The one you were given, to confirm it…", which is half an instruction.
               helperMaxLines: 2,
-              prefixIcon: const Icon(Icons.lock_outline_rounded),
             ),
             validator: (v) => (v == null || v.isEmpty)
                 ? (forced
@@ -298,7 +298,6 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
             scrollPadding: keepVisibleBelow(context, Space.xs + 64),
             decoration: InputDecoration(
               labelText: 'New password',
-              prefixIcon: const Icon(Icons.lock_reset_rounded),
               // The helper line that used to sit here — "At least 8 characters, with a letter
               // and a number" — is gone because the meter below says the same thing and then
               // keeps saying it as the password is typed. Two statements of one rule is one too
@@ -328,38 +327,21 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
             textInputAction: TextInputAction.done,
             onFieldSubmitted: (_) => _submit(forced: forced),
             // Save AND Sign out stay above the keyboard while the last field is being typed.
-            scrollPadding: keepVisibleBelow(context, Space.xl + 48 + Space.xxs + 40),
-            decoration: const InputDecoration(
-              labelText: 'Confirm new password',
-              prefixIcon: Icon(Icons.check_circle_outline_rounded),
-            ),
+            scrollPadding: keepVisibleBelow(context, Space.xl + 52 + Space.xxs + 48),
+            decoration: const InputDecoration(labelText: 'Confirm new password'),
             validator: (v) => v != _next.text ? "Passwords don't match" : null,
           ),
 
           if (_error != null) ...[
             const SizedBox(height: Space.sm),
-            // context.tones.error, not ApnivaasColors.error: the canonical red is a GRAPHIC colour
-            // and measures 4.05:1 on this card, below AA for type. See the header of tokens.dart.
-            Semantics(
-              liveRegion: true,
-              child: Text(
-                _error!,
-                style: t.textTheme.bodyMedium?.copyWith(color: context.tones.error),
-              ),
-            ),
+            FormNote(_error!),
           ],
 
           const SizedBox(height: Space.xl),
-          FilledButton(
-            onPressed: _busy ? null : () => _submit(forced: forced),
-            child: _busy
-                ? SizedBox(
-                    width: IconSize.md,
-                    height: IconSize.md,
-                    child: CircularProgressIndicator(
-                        strokeWidth: Strokes.glyph, color: t.colorScheme.onPrimary),
-                  )
-                : const Text('Save password'),
+          BusyFilledButton(
+            label: 'Save password',
+            busy: _busy,
+            onPressed: () => _submit(forced: forced),
           ),
           const SizedBox(height: Space.xxs),
           // The way out. Without this the screen is a trap for anyone who cannot complete it
@@ -391,8 +373,8 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
 /// It is NOT a new route. A whole screen for a state that lasts under a second would add a
 /// destination the router has to know about, a back stack entry pointing at a form that has
 /// already been submitted, and a second place for the redirect rules to disagree with
-/// themselves. Replacing the card's body says the same thing in the same place the person is
-/// already looking, and it cannot be navigated back to.
+/// themselves. Replacing the form says the same thing in the same place the person is already
+/// looking, and it cannot be navigated back to.
 ///
 /// A SNACKBAR WAS THE OTHER CANDIDATE AND IT IS THE WRONG SHAPE. It floats over the form,
 /// leaves the fields and the button standing behind it, and its whole design is to be ignorable
@@ -403,51 +385,37 @@ class _Confirmation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final tones = context.tones;
 
     return Semantics(
       liveRegion: true,
-      // One announcement, in the order it is read. Without this a screen reader meets a tick
+      // One announcement, in the order it is read. Without this a screen reader meets a picture
       // with no name and a heading that arrived from nowhere.
       label: 'Password changed. Taking you to your dashboard.',
       child: ExcludeSemantics(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // No wordmark here any more: the heading on the band above stays where it was, so
-            // the card reads as the same card answering rather than as a different screen
-            // arriving.
-            Center(
-              child: Container(
-                width: Space.huge,
-                height: Space.huge,
-                decoration: BoxDecoration(
-                  // The design's status shape: the tone at 10% behind the tone itself. Same
-                  // construction as the state badges on `screen-empty-error-skeleton`.
-                  color: tones.success.withValues(alpha: 0.10),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.check_rounded,
-                  size: IconSize.xl,
-                  color: tones.success,
-                ),
+        child: FlatSurface(
+          borderRadius: Radii.rSurface,
+          padding: const EdgeInsets.all(Space.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // The heading above stays where it was, so this reads as the same page answering
+              // rather than as a different screen arriving.
+              const Center(child: ClayWell(ClayIcons.success)),
+              const SizedBox(height: Space.md),
+              Text(
+                'Password changed',
+                style: t.textTheme.titleLarge,
+                textAlign: TextAlign.center,
               ),
-            ),
-            const SizedBox(height: Space.md),
-            Text(
-              'Password changed',
-              style: t.textTheme.titleLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: Space.xxs),
-            Text(
-              'Taking you to your dashboard.',
-              style: t.textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-          ],
+              const SizedBox(height: Space.xxs),
+              Text(
+                'Taking you to your dashboard.',
+                style: t.textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );

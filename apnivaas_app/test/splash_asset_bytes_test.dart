@@ -63,8 +63,11 @@ void main() {
   });
 
   test('the animation is small enough to ship', () {
-    // About 430 KB today. A re-export at full size or full length would quietly add megabytes.
-    expect(File(kSplashAnimationAsset).lengthSync(), lessThan(600 * 1024));
+    // About 2.09 MB today: 900px frames, keyed onto transparency, quality 87 with lossless alpha
+    // (scripts/gen-splash.mjs). The old 430 KB file was 720px at quality 74, and that compression
+    // was the blocky, flickering background the owner saw. Anything past this cap means a
+    // re-export at a bigger size, a longer cut or a lost key, not a quality decision.
+    expect(File(kSplashAnimationAsset).lengthSync(), lessThan(2300 * 1024));
   });
 
   test('the reduce-motion still is a real WebP', () {

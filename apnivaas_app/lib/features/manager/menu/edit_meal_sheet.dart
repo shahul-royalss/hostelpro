@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
+import '../../../shared/clay/clay.dart';
 import '../../../shared/glass/glass.dart';
 import '../data/manager_models.dart';
 import '../data/manager_providers.dart';
@@ -101,6 +102,7 @@ class _EditMealSheetState extends ConsumerState<_EditMealSheet> {
     return SheetBody(
       title: '${widget.day.label} ${widget.meal.label.toLowerCase()}',
       subtitle: 'Every resident of this hostel can read it',
+      trailing: const ClayIcon(ClayIcons.food, size: ClaySize.list),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -118,15 +120,12 @@ class _EditMealSheetState extends ConsumerState<_EditMealSheet> {
           const SizedBox(height: Space.xs),
           Text(
             'Leave it empty to clear this meal.',
-            style: t.textTheme.bodySmall,
+            style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
           ),
-          const SizedBox(height: Space.md),
+          const SizedBox(height: Space.lg),
           FilledButton(
             onPressed: _busy ? null : _save,
-            child: _busy
-                ? const SizedBox(
-                    width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Save'),
+            child: _busy ? const BusyMark() : const Text('Save'),
           ),
         ],
       ),

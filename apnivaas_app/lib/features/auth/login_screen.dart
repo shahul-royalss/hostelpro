@@ -1,40 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/auth/google_id_token.dart';
+import '../../core/router/routes.dart';
 import '../../core/theme/tokens.dart';
-import '../../shared/beam_card.dart';
+import '../../shared/clay/sheet.dart';
 import '../../shared/glass/glass.dart';
-import 'auth_band_layout.dart';
+import '../../shared/wordmark.dart';
+import '../common/form_parts.dart';
+import '../legal/legal_screen.dart';
+import 'auth_scaffold.dart';
+import 'social_buttons.dart';
 
-/// Sign in — `screen-signin`, node 4:60.
+/// Sign in — the sign-in board of the design canvas (`SignIn.dc.html`).
 ///
 /// One field for both audiences: staff type an email, students type their phone number, and
 /// resolveLoginEmail() maps the latter onto the synthetic address the database uses. That
 /// mapping has to match the web app exactly or the same person cannot sign in on both clients.
 ///
-/// ── WHAT THE RESTYLE CHANGED, AND WHAT IT DID NOT ────────────────────────────────────────
+/// ROUND 3 LAYOUT: the centred brand logo and "Apnivaas", then the form, the round Google
+/// button and "New here? Create an account". The documents stay linked at the foot; agreeing
+/// is the separate consent step after sign-in (features/legal/consent_gate.dart).
 ///
-/// Changed, all of it from the design's own nodes: the wordmark is the design's wordmark
-/// (4:69, 24/ExtraBold — it was a 10px tracked-out label), the heading is the design's
-/// heading step (4:73, 20/700), and the block rhythm is the design's own — 24 between blocks,
-/// 12 between fields. The input fill, the hairline and the cream CTA come from the theme,
-/// which already carries 4:77 and 4:83 verbatim.
+/// NOT changed either: everything about what this screen DOES. The 15-second deadline on each
+/// network step and the server-not-responding sentence ([serverNotResponding]) both live in
+/// [AuthController] and were added to fix a real field failure — a wedged backend completes the
+/// TLS handshake and then answers nothing, so the button span forever and the person holding the
+/// phone could not tell a dead server from a slow one. The quiet Google attempt, the error room
+/// that keeps the button still, the keyboard scroll padding and the arrival message are all as
+/// they were. This is a restyle. It does not get to touch any of that.
 ///
-/// NOT changed, deliberately: everything about what this screen DOES. The 15-second deadline
-/// on each network step and the server-not-responding sentence ([serverNotResponding]) both
-/// live in [AuthController] and were added to fix a real field failure — a wedged backend
-/// completes the TLS handshake and then answers nothing, so the button span forever and the
-/// person holding the phone could not tell a dead server from a slow one. This is a restyle.
-/// It does not get to touch that.
-///
-/// ── 1.2.0: ANCHORED TO THE BAND ──────────────────────────────────────────────────────────
-///
-/// The group is no longer centred in whatever space the keyboard leaves; it is placed from the
-/// window height by [AuthBandLayout], so opening the keyboard or showing an error moves
-/// nothing above the button. The why, with the measurements, is on that class.
+/// The page is anchored to the top ([AuthScaffold]), so opening the keyboard or showing an error
+/// moves nothing above the button. The why, with the measurements, is on that class.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
   @override
@@ -86,13 +85,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _googleBusy = true;
       if (!quietly) _error = null;
     });
-    final message =
-        await ref.read(authControllerProvider.notifier).signInWithGoogle(quietly: quietly);
+    final attempt =
+        await ref.read(authControllerProvider.notifier).continueWithGoogle(quietly: quietly);
     // On success the router navigates away and this widget is gone.
     if (!mounted) return;
+    // NO ACCOUNT FOR THIS GOOGLE ADDRESS: "Who are you?" is where an account is made
+    // (docs/self-signup-api.md §1.1). Branched on the code, never on the sentence, and never
+    // for the quiet attempt nobody asked for.
+    if (!quietly && attempt.noAccount) {
+      setState(() => _googleBusy = false);
+      GoRouter.of(context).go(startRoute);
+      return;
+    }
+    final message = attempt.message;
     setState(() {
       _googleBusy = false;
-      if (message != null) _error = message;
+      if (message != null && !(quietly && attempt.noAccount)) _error = message;
     });
   }
 
@@ -109,19 +117,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final email = await showGlassSheet<String>(
       context: context,
       builder: (sheetContext) {
-        final t = Theme.of(sheetContext);
         return Form(
           key: formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Reset your password', style: t.textTheme.titleLarge),
-              const SizedBox(height: Space.xxs),
-              Text(
-                'Enter the email address you sign in with. We will send you a link to set a '
-                'new password.',
-                style: t.textTheme.bodySmall,
+              const SheetTitle(
+                title: 'Reset your password',
+                subtitle: 'Enter the email address you sign in with. We will send you a link to '
+                    'set a new password.',
               ),
               const SizedBox(height: Space.md),
               TextFormField(
@@ -243,49 +248,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // refusals ("That login or password is not right.", "Cannot reach Apnivaas. Check your
     // connection and try again.") fit in two lines of the running-text step on a 360 dp phone,
     // so they land in space that was already there. Only a longer message — the server-down
-    // paragraph — grows the card, and it grows DOWNWARD: the anchored layout means nothing
-    // above it moves either way.
+    // paragraph — grows the form, and it grows DOWNWARD: the page is anchored to the top, so
+    // nothing above it moves either way.
     final bodyStyle = t.textTheme.bodyMedium;
     final errorSlot = MediaQuery.textScalerOf(context).scale(bodyStyle?.fontSize ?? 13) *
         (bodyStyle?.height ?? 1.4) *
         2;
 
-    return AuthBandLayout(
-      // ── THE MASTHEAD, ON THE BAND ────────────────────────────────────────────────────────
-      //
-      // These three lines used to be the first three rows INSIDE the card, which left the top
-      // 45% of this screen empty and the card floating in the middle of it. The competitor
-      // teardown in design-competitor/ is unambiguous that this is the single thing making
-      // their sign-in screen look designed and ours look assembled: they put their mark on the
-      // colour and let the card hold only the form.
-      masthead: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 4:69 — the design's wordmark step, 24/ExtraBold. The product's name exactly as the
-          // logo writes it: title case, never capitals.
-          Text(
-            'Apnivaas',
-            style: t.textTheme.displayMedium?.copyWith(color: onAuthBand),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: Space.md),
-          // 4:73. titleLarge is the design's 20/700 heading; headlineMedium is the same
-          // metrics with TABULAR figures, which is a stat card's slot, not a sentence's.
-          Text('Welcome back',
-              style: t.textTheme.titleLarge?.copyWith(color: onAuthBand),
-              textAlign: TextAlign.center),
-          const SizedBox(height: Space.xxs),
-          // 4:74 — body 13/400. 76% white on the band is 7.06:1, so the subtitle can be
-          // quieter than the heading without dropping under AA.
-          Text('Sign in to your PG workspace',
-              style: t.textTheme.bodyMedium?.copyWith(color: onAuthBand.withValues(alpha: 0.76)),
-              textAlign: TextAlign.center),
-        ],
-      ),
-      card: BeamCard(
-        padding: const EdgeInsets.all(Space.xl),
-        child: Form(
+    return AuthScaffold(
+      footer: const _Foot(),
+      // Round 3: no brand bar and no hero card — the logo itself heads the page.
+      topBar: const SizedBox.shrink(),
+      children: [
+        const SizedBox(height: Space.lg),
+        const _BrandLogo(),
+        const SizedBox(height: Space.lg),
+        Semantics(
+          header: true,
+          child: Text('Welcome back', style: t.textTheme.headlineSmall, textAlign: TextAlign.center),
+        ),
+        const SizedBox(height: Space.xxs),
+        Text(
+          'Use the email or phone number on your account.',
+          textAlign: TextAlign.center,
+          style: bodyStyle?.copyWith(color: t.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: Space.md),
+        Form(
           key: _form,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -302,7 +291,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 // keyboard with the focus here.
                 scrollPadding: keepVisibleBelow(
                   context,
-                  Space.sm + 56 + Space.xs + errorSlot + Space.sm + 48 + Space.md,
+                  Space.sm + 56 + Space.xs + errorSlot + Space.xs + 52 + Space.md,
                 ),
                 decoration: const InputDecoration(
                   // 'Email or phone', not '… phone number': the longer label was cut to
@@ -310,7 +299,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   // that is cut off is a label nobody can read. The validator below still
                   // says "phone number" in full, where the line is free to wrap.
                   labelText: 'Email or phone',
-                  prefixIcon: Icon(Icons.person_outline_rounded),
                 ),
                 validator: (v) => (v == null || v.trim().isEmpty)
                     ? 'Enter your email or phone number'
@@ -326,11 +314,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 onFieldSubmitted: (_) => _submit(),
                 scrollPadding: keepVisibleBelow(
                   context,
-                  Space.xs + errorSlot + Space.sm + 48 + Space.md,
+                  Space.xs + errorSlot + Space.xs + 52 + Space.md,
                 ),
                 decoration: InputDecoration(
                   labelText: 'Password',
-                  prefixIcon: const Icon(Icons.lock_outline_rounded),
                   suffixIcon: IconButton(
                     tooltip: _obscure ? 'Show password' : 'Hide password',
                     icon: Icon(
@@ -341,149 +328,137 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 validator: (v) => (v == null || v.isEmpty) ? 'Enter your password' : null,
               ),
               const SizedBox(height: Space.xs),
-              // Announced to a screen reader, and never a driver message.
-              //
-              // Two corrections here. The colour is `context.tones.error`, the theme-resolved
-              // TEXT red, not ApnivaasColors.error — that one is the canonical graphic red and
-              // measures 4.05:1 on this card, which is below AA for type; tokens.dart says in
-              // as many words not to set small text in it. And the size is the design's
-              // running text (13) rather than its metadata step (11), because the longest
-              // thing this line ever says is the two-sentence server-down message and 11px is
-              // not a size to read a paragraph at.
+              // Announced to a screen reader, and never a driver message. [FormNote] sets it in
+              // the theme-resolved TEXT red with a glyph in front, never colour alone, at the
+              // running-text size: the longest thing this line ever says is the two-sentence
+              // server-down message, and the metadata step is not a size to read a paragraph at.
               ConstrainedBox(
                 constraints: BoxConstraints(minHeight: errorSlot),
-                child: error == null
-                    ? const SizedBox.shrink()
-                    : Semantics(
-                        liveRegion: true,
-                        child: Text(
-                          error,
-                          style: bodyStyle?.copyWith(color: context.tones.error),
-                        ),
-                      ),
-              ),
-              const SizedBox(height: Space.sm),
-              FilledButton(
-                onPressed: busy ? null : _submit,
-                child: _busy
-                    ? SizedBox(
-                        width: IconSize.md,
-                        height: IconSize.md,
-                        // onPrimary, not the theme's progress colour: the default is the
-                        // gold, and gold on the cream button is a pairing you cannot see. In
-                        // BOTH themes onPrimary is the same value the filled button already
-                        // uses for its label.
-                        child: CircularProgressIndicator(
-                            strokeWidth: Strokes.glyph, color: t.colorScheme.onPrimary),
-                      )
-                    : const Text('Sign in'),
+                child: error == null ? const SizedBox.shrink() : FormNote(error),
               ),
               const SizedBox(height: Space.xs),
+              BusyFilledButton(
+                label: 'Sign in',
+                busy: _busy,
+                onPressed: busy ? null : _submit,
+              ),
+              const SizedBox(height: Space.xxs),
               // HERE, not behind a signed-in settings screen. A person who has forgotten their
               // password is standing on THIS screen and cannot get past it; a recovery link
               // anywhere else is a door on the inside of a locked room.
-              TextButton(
-                onPressed: busy ? null : _forgotPassword,
-                child: const Text('Forgot your password?'),
+              Center(
+                child: TextButton(
+                  onPressed: busy ? null : _forgotPassword,
+                  child: const Text('Forgot your password?'),
+                ),
               ),
-              // Only in a build that carries a Web client ID (Env.googleWebClientId). A button
-              // that can only fail is worse than no button.
-              if (google.isAvailable) ...[
-                const SizedBox(height: Space.xs),
-                const _OrDivider(),
-                const SizedBox(height: Space.sm),
-                _GoogleButton(busy: _googleBusy, onPressed: busy ? null : _google),
-                const SizedBox(height: Space.sm),
-              ],
-              // 4:86 puts a gold "Contact your hostel admin" here. It is a STATEMENT in this
-              // build, not the design's link: gold means interactive everywhere else in this
-              // app, and there is nothing a signed-out client could open — a user with no
-              // session cannot be shown their own hostel's contact details. A control that
-              // cannot act is worse than a plain sentence.
-              Text('Accounts are created by your administrator.',
-                  style: t.textTheme.bodySmall, textAlign: TextAlign.center),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// "or", between the password form and Google.
-class _OrDivider extends StatelessWidget {
-  const _OrDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return Row(
-      children: [
-        const Expanded(child: Divider()),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: Space.sm),
-          child: Text('or', style: t.textTheme.bodySmall),
+        // Only in a build that carries a Web client ID (Env.googleWebClientId). A button that
+        // can only fail is worse than no button.
+        if (google.isAvailable) ...[
+          const SizedBox(height: Space.sm),
+          const OrDivider(),
+          const SizedBox(height: Space.md),
+          SocialButtonRow(buttons: [
+            SocialCircleButton(
+              provider: SocialProvider.google,
+              busy: _googleBusy,
+              onPressed: busy ? null : _google,
+            ),
+          ]),
+        ],
+        const SizedBox(height: Space.sm),
+        // SELF SIGN-UP (1.3.0): owners and tenants make their own account from "Who are you?".
+        Center(
+          child: TextButton(
+            onPressed: busy ? null : () => GoRouter.of(context).go(startRoute),
+            child: const Text('New here? Create an account'),
+          ),
         ),
-        const Expanded(child: Divider()),
       ],
     );
   }
 }
 
-/// Google's button, to its published light-theme spec: white fill, #747775 hairline, #1F1F1F
-/// label, the four-colour "G" at 18 dp, and the words "Continue with Google". Google's branding
-/// rules say the mark and its colours are not to be restyled, so this one control does not take
-/// the app's theme colours.
-class _GoogleButton extends StatelessWidget {
-  const _GoogleButton({required this.busy, required this.onPressed});
+/// The brand mark, about 112dp wide and sharp at any density, with "Apnivaas" in Outfit.
+class _BrandLogo extends StatelessWidget {
+  const _BrandLogo();
 
-  final bool busy;
-  final VoidCallback? onPressed;
-
-  /// Google's "G", as published with its sign-in button assets.
-  static const _mark =
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">'
-      '<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 '
-      '14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>'
-      '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 '
-      '5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>'
-      '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 '
-      '16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>'
-      '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 '
-      '2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>'
-      '</svg>';
-
-  static const _ink = Color(0xFF1F1F1F);
+  static const asset = 'assets/brand/apnivaas_logo.webp';
+  static const width = 112.0;
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size.fromHeight(48),
-        backgroundColor: Colors.white,
-        foregroundColor: _ink,
-        disabledBackgroundColor: Colors.white,
-        disabledForegroundColor: _ink.withValues(alpha: 0.38),
-        side: const BorderSide(color: Color(0xFF747775)),
-        shape: const StadiumBorder(),
-        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 20 / 14),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+    final t = Theme.of(context);
+    return Semantics(
+      label: 'Apnivaas',
+      excludeSemantics: true,
+      child: Column(
         children: [
-          if (busy)
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, color: _ink),
-            )
-          else
-            SvgPicture.string(_mark, width: 18, height: 18),
-          const SizedBox(width: 12),
-          const Flexible(child: Text('Continue with Google', overflow: TextOverflow.ellipsis)),
+          Image.asset(
+            asset,
+            width: width,
+            height: width * 349 / 480,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.medium,
+            errorBuilder: (_, _, _) =>
+                Icon(Icons.home_rounded, size: width / 2, color: t.colorScheme.primary),
+          ),
+          const SizedBox(height: Space.sm),
+          MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 1.3,
+            child: ApnivaasTypeMark(color: t.colorScheme.primary, fontSize: 30, letterSpacing: 0.2),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _Foot extends StatelessWidget {
+  const _Foot();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final muted = t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const _DocumentLink(label: 'Terms of Use', document: 'terms'),
+            ExcludeSemantics(child: Text('·', style: muted)),
+            const _DocumentLink(label: 'Privacy Policy', document: 'privacy'),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DocumentLink extends StatelessWidget {
+  const _DocumentLink({required this.label, required this.document});
+
+  final String label;
+
+  /// A [LegalDocument] id.
+  final String document;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return TextButton(
+      onPressed: () => openLegal(context, initial: document),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: Space.xs),
+        textStyle: t.textTheme.labelMedium,
+      ),
+      child: Text(label),
     );
   }
 }

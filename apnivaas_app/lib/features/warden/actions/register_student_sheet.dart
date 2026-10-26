@@ -582,7 +582,7 @@ class _RegisterStudentSheetState extends ConsumerState<_RegisterStudentSheet> {
 
             const SizedBox(height: Space.lg),
             // assign-bed-review.png's billing notice, which is the design's one aside: a
-            // `surface-container-highest` well, `rounded-lg`, a violet glyph, body copy. This
+            // `surface-container-highest` well, `rounded-lg`, a quiet glyph, body copy. This
             // and the refusal below used to be two hand-rolled boxes at 0.08 / 0.32 — numbers
             // nobody could re-derive, and not the measured chip recipe either.
             InfoCallout(

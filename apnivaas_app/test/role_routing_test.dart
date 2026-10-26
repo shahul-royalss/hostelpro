@@ -66,6 +66,10 @@ void main() {
         mustChangePassword: mustChangePassword,
         email: email,
         emailVerifiedAt: verified ? DateTime.utc(2026, 1, 1) : null,
+        // A RESIDENT WHO BELONGS TO A PG. Since 1.3.0 a student with no hostel is a self-signed-up
+        // tenant still joining one, and SignupGate shows them Your details / Find your PG instead
+        // of the shell (test/signup_flow_test.dart covers that branch).
+        hostelId: role == UserRole.student ? '00000000-0000-0000-0000-0000000000a1' : null,
       );
 
   /// [consent] is the state of this user's agreement to the legal documents.

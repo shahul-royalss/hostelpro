@@ -50,8 +50,9 @@ import 'release_check.dart';
 /// Wrapping it is therefore ONE mounting point that reaches every signed-in screen, instead of
 /// five edits in five feature directories that four future roles would have to remember.
 ///
-/// THE STATUS-BAR INSET MOVES WITH THE BAR. [GlassHeader] adds `MediaQuery.paddingOf().top` to
-/// its own padding, so a bar placed above it would sit UNDER the clock and the battery icon
+/// THE STATUS-BAR INSET MOVES WITH THE BAR. Every header — the forest `AppHeader`, and
+/// [GlassHeader] on the screens still built on it — adds `MediaQuery.paddingOf().top` to its
+/// own padding, so a bar placed above it would sit UNDER the clock and the battery icon
 /// while the header below reserved space for a notch that was no longer at the top of the
 /// screen. This widget takes the top inset itself and then removes it from the subtree, so the
 /// header underneath draws flush and nothing is counted twice.

@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
+import '../../core/theme/typography.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/clay/clay.dart';
 import '../../shared/glass/glass.dart';
 import '../../shared/rooms/edit_room_sheet.dart';
 import 'owner_format.dart';
 import 'owner_providers.dart';
 import 'rooms/floor_plan_screen.dart';
 import 'widgets/meter.dart';
-import 'widgets/states.dart';
+import 'widgets/owner_header.dart';
+import 'widgets/states.dart' show EmptyNote, ErrorNote, whenAsync;
 
 /// One PG, floor by floor: which rooms have space and who is in which bed.
 ///
@@ -28,44 +31,13 @@ class OwnerPgDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
     final hostel = ref.watch(hostelProvider(hostelId));
     final rooms = ref.watch(roomOccupancyProvider(hostelId));
 
     return Scaffold(
       body: Column(
         children: [
-          GlassHeader(
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: 'Back',
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                ),
-                const SizedBox(width: Space.xxs),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Rooms & beds',
-                        style: t.textTheme.titleLarge?.copyWith(color: t.colorScheme.primary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        hostel.value?.name ?? 'PG',
-                        style: t.textTheme.bodySmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          OwnerSubpageHeader(title: 'Rooms & beds', subtitle: hostel.value?.name ?? 'PG'),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
@@ -81,20 +53,14 @@ class OwnerPgDetailScreen extends ConsumerWidget {
               child: whenAsync(
                 rooms,
                 loading: () => ListView(
-                  padding: const EdgeInsets.all(Space.md),
-                  // Heights are the card's own business. Pinning them meant the real
-                  // cards outgrew the placeholder at 1.4x text scale and the page jumped.
-                  children: const [
-                    SkeletonCard(lines: 1),
-                    SizedBox(height: Space.md),
-                    SkeletonCard(lines: 2),
-                    SizedBox(height: Space.md),
-                    SkeletonCard(lines: 2),
-                  ],
+                  padding: OwnerRhythm.pagePadding,
+                  // Heights are the card's own business. Pinning them meant the real cards
+                  // outgrew the placeholder at 1.4x text scale and the page jumped.
+                  children: const [ListSkeleton(rows: 3, semanticLabel: 'Loading rooms')],
                 ),
                 error: (error) => ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(Space.md),
+                  padding: OwnerRhythm.pagePadding,
                   children: [
                     ErrorNote(
                       error: error,
@@ -123,12 +89,12 @@ class _Floors extends StatelessWidget {
     if (rooms.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(Space.md),
+        padding: OwnerRhythm.pagePadding,
         children: [
-          EmptyNote(
-            icon: Icons.meeting_room_outlined,
+          EmptyState(
+            icon: ClayIcons.rooms,
             title: 'No rooms set up yet',
-            message: 'Apnivaas scaffolds the floors, rooms and beds when a PG is created. '
+            body: 'Apnivaas scaffolds the floors, rooms and beds when a PG is created. '
                 'You can also map the building yourself.',
             action: OutlinedButton.icon(
               onPressed: () =>
@@ -151,7 +117,7 @@ class _Floors extends StatelessWidget {
 
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.huge),
+      padding: OwnerRhythm.pagePadding,
       // One extra leading item: the building-wide summary.
       itemCount: floors.length + 1,
       itemBuilder: (context, index) {
@@ -183,29 +149,29 @@ class _BuildingSummary extends StatelessWidget {
     }
     final rate = capacity == 0 ? null : occupied / capacity;
 
-    // The dashboard's Occupancy card, on the screen it opens onto: the same eyebrow, the same
-    // figure size and the same meter, so the tap does not land somewhere that looks like a
-    // different app. The `bed` glyph at its head is in the rooms colour — this card IS the
-    // building, and violet is what says "rooms" everywhere. Only the icon: the meter below
-    // is a figure, and the card stays a plain card rather than a [DomainCard].
+    // The Beds tile on Home, opened out: the same clay art and the same figure, so the tap does
+    // not land somewhere that looks like a different app — with the meter and the room counts
+    // the tile had no room for.
     return Padding(
-      padding: const EdgeInsets.only(bottom: Space.lg),
-      child: GlassCard(
-        padding: const EdgeInsets.all(Space.lg),
+      padding: const EdgeInsets.only(bottom: OwnerRhythm.sectionGap),
+      child: FlatSurface(
+        borderRadius: Radii.rSurface,
+        padding: const EdgeInsets.all(Space.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const CardEyebrow(
-              label: 'Occupancy',
-              trailing: DomainIcon(
-                domain: ApnivaasDomain.rooms,
-                icon: Icons.bed_rounded,
-                size: DomainIconSize.sm,
-              ),
+            Row(
+              children: [
+                const ClayIcon(ClayIcons.beds, size: ClaySize.list),
+                const SizedBox(width: Space.sm),
+                const Expanded(
+                  child: SectionHeader(title: 'Occupancy', size: SectionHeaderSize.form),
+                ),
+              ],
             ),
-            const SizedBox(height: Space.md),
+            const SizedBox(height: Space.sm),
             Text('$occupied of $capacity beds filled', style: t.textTheme.headlineMedium),
-            const SizedBox(height: Space.md),
+            const SizedBox(height: Space.sm),
             ProportionMeter(value: rate, semanticLabel: 'Beds occupied'),
             const SizedBox(height: Space.sm),
             Text(
@@ -214,7 +180,7 @@ class _BuildingSummary extends StatelessWidget {
                   : '${percentLabel(rate)} full · '
                       '${countLabel(roomsWithSpace, 'room')} with space · '
                       '${countLabel(rooms.length, 'room')} in total',
-              style: t.textTheme.bodySmall,
+              style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
             ),
             // THE WAY INTO THE BUILDING'S SHAPE, on the card that states it. "3 rooms in
             // total" is the sentence whose next question is "and I want a fourth" — the room
@@ -222,11 +188,11 @@ class _BuildingSummary extends StatelessWidget {
             // for the storey. Quiet on purpose: it edits the building, and the tiles are what
             // an owner came here to read.
             Align(
-              alignment: Alignment.centerLeft,
+              alignment: AlignmentDirectional.centerStart,
               child: TextButton.icon(
                 onPressed: () =>
                     Navigator.of(context).push(FloorPlanScreen.route(hostelId)),
-                icon: const Icon(Icons.dashboard_customize_outlined, size: IconSize.sm),
+                icon: const Icon(Icons.dashboard_customize_outlined, size: IconSize.md),
                 label: const Text('Edit layout'),
               ),
             ),
@@ -249,20 +215,27 @@ class _FloorBlock extends StatelessWidget {
     for (final r in rooms) {
       free += r.free;
     }
+    final t = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: Space.lg),
+      padding: const EdgeInsets.only(bottom: OwnerRhythm.sectionGap),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionHeading(
+          SectionHeader(
             // Floor numbering is whatever the hostel was scaffolded with — ground floor may be
             // 0 or 1 — so the number is printed as stored, never as `n + 1`. See Floor. The
             // NAME, when the PG has given the storey one, replaces it outright: see floorLabel.
             title: floorLabel(floorNumber, rooms.isEmpty ? null : rooms.first.floorName),
-            caption: free == 0
+            size: SectionHeaderSize.card,
+          ),
+          const SizedBox(height: Space.xxs),
+          Text(
+            free == 0
                 ? '${countLabel(rooms.length, 'room')} · full'
                 : '${countLabel(rooms.length, 'room')} · ${countLabel(free, 'bed')} free',
+            style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
           ),
+          const SizedBox(height: OwnerRhythm.headingGap),
           Wrap(
             spacing: Space.sm,
             runSpacing: Space.sm,
@@ -296,10 +269,9 @@ class _RoomTile extends ConsumerWidget {
       // room number and the "3 free" line under it both grew and the tile clipped.
       width: MediaQuery.textScalerOf(context).scale(_tileWidth),
       child: Material(
-        // A step UP the container ramp: the tiles sit on the page ground, and in the dark
-        // theme a `thin` tile on that ground is barely a shape. `surface-container` is what
-        // the design paints a block that content sits ON rather than under.
-        color: GlassWeight.regular.surfaceOf(t.colorScheme),
+        // The card fill on the cream ground, with its hairline — or the success edge — doing
+        // the separating, exactly as every other card on the page.
+        color: t.colorScheme.surface,
         borderRadius: Radii.rCard,
         child: InkWell(
           borderRadius: Radii.rCard,
@@ -322,14 +294,17 @@ class _RoomTile extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(room.roomNumber,
-                    style: t.textTheme.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    style: context.textRoles.tileTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
                 const SizedBox(height: Space.xs),
                 _BedDots(capacity: room.capacity, occupied: room.occupied),
                 const SizedBox(height: Space.xs),
                 Text(
                   hasSpace ? '${room.free} free' : 'Full',
                   style: t.textTheme.bodySmall?.copyWith(
-                    color: hasSpace ? tones.success : null,
+                    color: hasSpace ? tones.success : t.colorScheme.onSurfaceVariant,
+                    fontWeight: hasSpace ? FontWeight.w700 : null,
                   ),
                 ),
               ],
@@ -394,7 +369,10 @@ class _BedSheet extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Room ${room.roomNumber}', style: t.textTheme.titleLarge),
+        Semantics(
+          header: true,
+          child: Text('Room ${room.roomNumber}', style: t.textTheme.titleLarge),
+        ),
         // EDIT LIVES HERE, not on the tile. The tile's tap already means "show me this room",
         // and re-pointing an established gesture at a write is how people change something
         // they only meant to look at.
@@ -425,18 +403,21 @@ class _BedSheet extends ConsumerWidget {
         ),
         Text(
           'Floor ${room.floorNumber} · ${room.occupied} of ${room.capacity} beds taken',
-          style: t.textTheme.bodySmall,
+          style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: Space.md),
         whenAsync(
           beds,
-          loading: () => const Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Skeleton(widthFactor: 0.65),
-              SizedBox(height: Space.sm),
-              Skeleton(widthFactor: 0.5),
-            ],
+          loading: () => const SkeletonPulse(
+            semanticLabel: 'Loading beds',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Skeleton(widthFactor: 0.65),
+                SizedBox(height: Space.sm),
+                Skeleton(widthFactor: 0.5),
+              ],
+            ),
           ),
           error: (error) => ErrorNote(
             error: error,
@@ -476,21 +457,23 @@ class _BedRow extends ConsumerWidget {
         ? null
         : ref.watch(studentProvider(studentId)).value?.fullName;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: Space.sm),
+    return ConstrainedBox(
+      // Each bed is a 48dp line, the height of a tap target, so the list reads at the same
+      // rhythm as every other list in the app even though the rows are not tappable.
+      constraints: const BoxConstraints(minHeight: 48),
       child: Row(
         children: [
           Icon(
             bed.isFree ? Icons.bed_outlined : Icons.person_rounded,
-            size: IconSize.md,
-            color: bed.isFree ? context.tones.success : t.colorScheme.outline,
+            size: IconSize.lg,
+            color: bed.isFree ? context.tones.success : t.colorScheme.onSurfaceVariant,
           ),
           const SizedBox(width: Space.xs),
           Expanded(
             child: Text('Bed ${bed.bedNumber}', style: t.textTheme.titleMedium),
           ),
           if (bed.isFree)
-            const StatusChip(label: 'Free', tone: ApnivaasColors.success)
+            const StatusChip(label: 'Free', tone: StatusTone.success)
           else if (name != null)
             Flexible(
               child: Text(name,
@@ -499,7 +482,10 @@ class _BedRow extends ConsumerWidget {
           else
             // Occupied, name still in flight — or hidden from this caller by RLS. Either way
             // the bed is taken, and saying so is more honest than an empty gap.
-            Text(bed.status.label, style: t.textTheme.bodySmall),
+            Text(
+              bed.status.label,
+              style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+            ),
         ],
       ),
     );

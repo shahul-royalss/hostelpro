@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/clay/clay.dart' show ClayIcon, ClayIcons, ListGroup, ListSkeleton;
 import '../../../shared/glass/glass.dart';
 import '../actions/assign_bed_sheet.dart';
 import '../actions/record_payment_sheet.dart';
@@ -51,7 +52,7 @@ class _StudentSheet extends ConsumerWidget {
         if (row == null) {
           return const SheetBody(
             title: 'Resident',
-            child: EmptyState(
+            child: WardenEmptyState(
               icon: Icons.person_off_outlined,
               title: 'That record is not visible',
               detail: 'It may have been removed, or it belongs to another hostel.',
@@ -77,30 +78,26 @@ class _Loaded extends ConsumerWidget {
     return SheetBody(
       title: student.fullName,
       subtitle: student.phone,
-      // `sheet-header` (4:796): avatar, name, second line, state badge hard right.
-      leading: Avatar(
-        name: student.fullName,
-        tone: toneFor(context, student.status),
-        size: Space.xxxl,
-      ),
+      // The resident's initials, the name with their phone under it, and their state hard
+      // against the trailing edge.
+      leading: Avatar(name: student.fullName, size: AvatarSize.list),
       trailing: StatusPill(status: student.status),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (resident) ...[
             // resident-profile.png pairs TWO buttons under the name — one quiet, one filled —
-            // and puts the destructive one alone at the very bottom of the page as a coral
+            // and puts the destructive one alone at the very bottom of the page as a red
             // outline. That is the shape below: the two everyday actions here, check-out after
             // everything a warden should have read first.
             //
-            // Payment is the sheet's one cream [FilledButton] — the thing a warden opens a
+            // Payment is the sheet's one forest [FilledButton] — the thing a warden opens a
             // resident to do. The bed action beside it is a shortcut into the rooms flow, so it
-            // is a [DomainButton] in that domain's violet: the same colour "Assign bed" wears on
-            // the home screen and the Rooms tab, which is how a warden learns that violet means
-            // "beds" before reading a label. A button that looks like a button is still the
-            // difference between "I can do this" and "this is a stat"; the tint says where it
-            // goes. See [ApnivaasDomain] for the rule that keeps the two colours on different
-            // objects.
+            // is a [DomainButton]: the tonal Mist button with the bed glyph, quieter than the
+            // payment beside it so the eye lands on the money first. A button that looks like a
+            // button is still the difference between "I can do this" and "this is a stat"; the
+            // glyph says where it goes. See [ApnivaasDomain] for the rule that keeps the two
+            // kinds of colour on different objects.
             Row(
               children: [
                 Expanded(
@@ -227,10 +224,10 @@ class _Loaded extends ConsumerWidget {
 
 /// Where this resident sleeps — resident-profile.png's CURRENT ASSIGNMENT card.
 ///
-/// The mockup's anatomy exactly: a `label-caps` eyebrow with a bed glyph opposite it, the
-/// room and bed as the card's title, a hairline, then the supporting facts underneath. The
-/// mockup's second fact is a roommate; this sheet does not read the room's other residents and
-/// is not about to start, so the pair here is the check-in date the row already carries.
+/// The clay bed at the leading edge, a small label over the room and bed as the card's title,
+/// a hairline, then the supporting facts underneath. The mockup's second fact is a roommate;
+/// this sheet does not read the room's other residents and is not about to start, so the pair
+/// here is the check-in date the row already carries.
 ///
 /// students carries room_id and bed_id — ids, not numbers. The room number comes from
 /// rpc_room_occupancy (already loaded for the room grid, so usually free) and the bed number
@@ -285,19 +282,22 @@ class _Placement extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const Expanded(child: CapsLabel('Current assignment')),
-              // The rooms domain's plate rather than a bare gold glyph: this card is about
-              // where they sleep, and violet is what a bed is painted everywhere else in the
-              // app. The card itself stays neutral — it carries no status.
-              const DomainIcon(
-                domain: ApnivaasDomain.rooms,
-                icon: Icons.bed_outlined,
-                size: DomainIconSize.sm,
+              // The same clay bed the room grid and the home's "Beds free" tile draw: this card
+              // is about where they sleep. The card itself stays neutral — it carries no status.
+              const ClayIcon(ClayIcons.beds, size: ClaySize.list),
+              const SizedBox(width: Space.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const EyebrowLabel('Current assignment'),
+                    const SizedBox(height: Space.hair),
+                    Text(placement, style: t.textTheme.titleLarge),
+                  ],
+                ),
               ),
             ],
           ),
-          const SizedBox(height: Space.xxs),
-          Text(placement, style: t.textTheme.titleLarge),
           const SizedBox(height: Space.sm),
           Divider(color: t.colorScheme.outlineVariant, height: Strokes.hairline),
           const SizedBox(height: Space.sm),
@@ -326,58 +326,63 @@ class _FeeHistory extends ConsumerWidget {
     return AsyncSection<PagedResult<FeePayment>>(
       value: history,
       onRetry: () => ref.invalidate(studentFeeHistoryProvider(studentId)),
-      loading: const Padding(
-        padding: EdgeInsets.symmetric(vertical: Space.md),
-        child: Center(
-          child: InlineSpinner(),
-        ),
-      ),
+      loading: const ListSkeleton(rows: 2, leading: false, semanticLabel: 'Loading rent history'),
       builder: (page) {
         if (page.isEmpty) {
-          return Text(
-            'No payment has been recorded for this resident yet.',
-            style: t.textTheme.bodySmall,
+          // Held to the start edge, under its heading, rather than floating in the middle of
+          // the sheet where the arrival animation would otherwise centre it.
+          return Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              'No payment has been recorded for this resident yet.',
+              style: t.textTheme.bodySmall,
+            ),
           );
         }
         final rows = page.items.take(_shown).toList(growable: false);
         return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final row in rows)
-              Padding(
-                padding: const EdgeInsets.only(bottom: Space.xxs),
-                child: Row(
-                  children: [
-                    // Flex rather than a fixed 108: "September 2026" at 1.4x is wider than
-                    // that, and the amount beside it was the half getting squeezed.
-                    Expanded(
-                      flex: 4,
-                      child: Text(monthLabel(row.periodMonth),
-                          style: t.textTheme.bodyMedium,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+            // One card for the months, a hairline between them — the clay list group, so the
+            // history reads as one record rather than as loose lines on the sheet.
+            ListGroup(
+              children: [
+                for (final row in rows)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: Space.sm),
+                    child: Row(
+                      children: [
+                        // Flex rather than a fixed 108: "September 2026" at 1.4x is wider than
+                        // that, and the amount beside it was the half getting squeezed.
+                        Expanded(
+                          flex: 4,
+                          child: Text(monthLabel(row.periodMonth),
+                              style: t.textTheme.bodyMedium,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        const SizedBox(width: Space.xs),
+                        Expanded(
+                          flex: 5,
+                          child: Text(
+                            row.balance > 0
+                                ? '${money(row.amountPaid)} of ${money(row.amountDue)}'
+                                : money(row.amountPaid),
+                            style: t.textTheme.titleSmall
+                                ?.copyWith(color: t.colorScheme.onSurface),
+                          ),
+                        ),
+                        StatusPill(status: row.status),
+                      ],
                     ),
-                    const SizedBox(width: Space.xs),
-                    Expanded(
-                      flex: 5,
-                      child: Text(
-                        row.balance > 0
-                            ? '${money(row.amountPaid)} of ${money(row.amountDue)}'
-                            : money(row.amountPaid),
-                        style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurface),
-                      ),
-                    ),
-                    StatusPill(status: row.status),
-                  ],
-                ),
-              ),
+                  ),
+              ],
+            ),
             if (page.items.length > _shown || page.hasMore)
               Padding(
-                padding: const EdgeInsets.only(top: Space.xxs),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Earlier months are on the web console.',
-                      style: t.textTheme.bodySmall),
-                ),
+                padding: const EdgeInsets.only(top: Space.xs),
+                child: Text('Earlier months are on the web console.',
+                    style: t.textTheme.bodySmall),
               ),
           ],
         );
@@ -476,7 +481,7 @@ class _CredentialsBlockState extends ConsumerState<_CredentialsBlock> {
                 icon: _busy
                     ? const SizedBox.square(
                         dimension: IconSize.md,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(strokeWidth: InlineSpinner.stroke),
                       )
                     : const Icon(Icons.key_rounded, size: IconSize.md),
                 label: const Text('New password'),

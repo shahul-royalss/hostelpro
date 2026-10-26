@@ -96,6 +96,104 @@ interface PaymentEntity {
   method?: unknown;
   error_description?: unknown;
   error_reason?: unknown;
+  notes?: unknown;
+}
+
+interface OrderEntity {
+  id?: unknown;
+  notes?: unknown;
+}
+
+interface WebhookPayload {
+  payment?: { entity?: PaymentEntity };
+  refund?: { entity?: RefundEntity };
+  order?: { entity?: OrderEntity };
+}
+
+function notePurpose(notes: unknown): string | null {
+  return notes && typeof notes === "object" && !Array.isArray(notes)
+    ? str((notes as Record<string, unknown>)["purpose"])
+    : null;
+}
+
+/**
+ * PLAN PAYMENTS (subscription-order). An event is a plan payment when its order or payment
+ * carries notes.purpose = 'subscription', or when its order id is in subscription_payments
+ * (a payment's own notes are what checkout sent, not the order's, so the table is the backstop).
+ * Returns null for everything else, which then takes the rent path unchanged.
+ *
+ * Activation is svc_activate_subscription_payment: service role only, idempotent on the payment
+ * id (order.paid and payment.captured both arrive for one payment; the second is 'duplicate'),
+ * refuses an amount that is not the order's. The checkout path (subscription-order verify) calls
+ * the same routine, so whichever lands first extends the plan and the other is a no-op.
+ */
+async function handleSubscription(
+  db: ReturnType<typeof serviceClient>,
+  kind: string | null,
+  payload: WebhookPayload,
+): Promise<Response | null> {
+  if (kind !== "order.paid" && kind !== "payment.captured" && kind !== "payment.failed") return null;
+  const entity = payload.payment?.entity ?? {};
+  const orderId = str(entity.order_id) ?? str(payload.order?.entity?.id);
+  const paymentId = str(entity.id);
+  if (!orderId || !ORDER_ID_RE.test(orderId)) return null;
+
+  let isSubscription = notePurpose(payload.order?.entity?.notes) === "subscription" ||
+    notePurpose(entity.notes) === "subscription";
+  if (!isSubscription) {
+    const { data, error } = await db.from("subscription_payments").select("id").eq("razorpay_order_id", orderId)
+      .maybeSingle();
+    if (error) {
+      console.error("[payments] subscription lookup failed:", error.message);
+      return retryable("subscription_lookup_error");
+    }
+    isSubscription = !!data;
+  }
+  if (!isSubscription) return null;
+
+  if (kind === "payment.failed") {
+    const { error } = await db.rpc("svc_mark_subscription_payment_failed", {
+      p_order_id: orderId,
+      p_reason: str(entity.error_description) ?? str(entity.error_reason) ?? "payment failed",
+    });
+    if (error) {
+      console.error("[payments] could not record a failed plan payment:", error.message);
+      return retryable("subscription_failed_record_error");
+    }
+    return done("subscription_failed_recorded");
+  }
+
+  if (!paymentId || !PAYMENT_ID_RE.test(paymentId)) return done("subscription_ignored_no_payment");
+  const amountPaise = typeof entity.amount === "number" ? entity.amount : Number.NaN;
+  if (!Number.isInteger(amountPaise) || amountPaise <= 0) return done("subscription_ignored_bad_amount");
+  if (str(entity.currency) !== "INR") return done("subscription_ignored_currency");
+
+  const { data, error } = await db.rpc("svc_activate_subscription_payment", {
+    p_order_id: orderId,
+    p_payment_id: paymentId,
+    p_amount_paise: amountPaise,
+    p_method: str(entity.method),
+    p_via: "webhook",
+  });
+  if (error) {
+    const message = error.message ?? "";
+    // Verdicts, not outages: retrying cannot change them, so take the 200 and route to a person.
+    const permanent =
+      /Unknown subscription order|already settled by a different payment|does not match the order|Invalid payment/i
+        .test(message);
+    await auditSystem("payment.reconcile.required", {
+      targetType: "subscription_payment",
+      targetId: paymentId,
+      meta: { orderId, amountPaise, stage: "subscription", permanent, source: "edge", reason: message.slice(0, 180) },
+    });
+    if (!permanent) {
+      console.error("[payments] plan payment could not be activated:", message);
+      return retryable("subscription_error");
+    }
+    return done("subscription_rejected");
+  }
+  const outcome = str((data as Record<string, unknown> | null)?.["outcome"]);
+  return done(outcome === "duplicate" ? "subscription_duplicate" : "subscription_activated");
 }
 
 interface CaptureResult {
@@ -388,7 +486,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // ── 3. Only now is any of this treated as data ─────────────────────────────
   let event: {
     event?: unknown;
-    payload?: { payment?: { entity?: PaymentEntity }; refund?: { entity?: RefundEntity } };
+    payload?: WebhookPayload;
   };
   try {
     event = JSON.parse(raw);
@@ -433,6 +531,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
     return done("dispute_noted");
   }
+
+  /* ── plan payments (2026-10-25): order.paid | payment.captured | payment.failed ──────────
+   * Routed before the rent path, which knows nothing about these orders. See handleSubscription. */
+  const subscription = await handleSubscription(db, kind, event.payload ?? {});
+  if (subscription) return subscription;
 
   const entity = event.payload?.payment?.entity ?? {};
   const paymentId = str(entity.id);

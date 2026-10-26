@@ -182,9 +182,13 @@ class PasswordStrengthMeter extends StatelessWidget {
                       curve: Motion.move,
                       height: Space.xxs,
                       decoration: BoxDecoration(
-                        // The design's meter track is the hairline as a filled channel — the
-                        // same token theme.dart gives LinearProgressIndicator.
-                        color: i < met ? accent : t.colorScheme.outlineVariant,
+                        // An empty segment is the progress track theme.dart gives every
+                        // LinearProgressIndicator — the warm track in light, the dark hairline in
+                        // dark — so the meter reads as a measure rather than as four dividers.
+                        color: i < met
+                            ? accent
+                            : (t.progressIndicatorTheme.linearTrackColor ??
+                                t.colorScheme.outlineVariant),
                         borderRadius: Radii.rPill,
                       ),
                     ),
@@ -194,17 +198,17 @@ class PasswordStrengthMeter extends StatelessWidget {
             ),
             const SizedBox(height: Space.xs),
             // SIDE BY SIDE WHERE THERE IS ROOM, STACKED WHERE THERE IS NOT. On a 360 dp phone the
-            // card leaves the meter about 264 dp, and 'PASSWORD STRENGTH' beside the hint
-            // squeezed the hint into a four-line column a word or two wide. Below
+            // form leaves the meter about 320 dp, and 'Password strength' beside the hint
+            // squeezed the hint into a column a few words wide. Below
             // [_sideBySideMinWidth] the label goes above the hint and the hint gets the full
             // width; on anything wider the original row is kept.
             LayoutBuilder(
               builder: (context, box) {
-                // labelSmall is the design's chip step, 10/600. A TextStyle cannot uppercase,
-                // so the string does.
+                // labelMedium, 12/700, in sentence case: the type scale carries no caps
+                // tracking, and the verdict is a word to read, not a stamp.
                 final labelText = Text(
-                  label.toUpperCase(),
-                  style: t.textTheme.labelSmall?.copyWith(color: accent),
+                  label,
+                  style: t.textTheme.labelMedium?.copyWith(color: accent),
                 );
                 final hintText = Text(hint, style: t.textTheme.bodySmall);
                 if (box.maxWidth < _sideBySideMinWidth) {

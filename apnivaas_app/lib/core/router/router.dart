@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../boot/splash_gate.dart';
 import '../auth/auth_controller.dart';
 import '../auth/session.dart';
+import 'routes.dart';
+
+export 'routes.dart';
 import '../../features/auth/change_password_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/onboarding/onboarding_gate.dart';
@@ -13,6 +16,9 @@ import '../../features/legal/consent_gate.dart';
 import '../../features/settings/security_screen.dart';
 import '../../features/shell/role_shell.dart';
 import '../../features/auth/verify_email_screen.dart';
+import '../../features/signup/create_account_screen.dart';
+import '../../features/signup/role_picker_screen.dart';
+import '../../features/signup/signup_gate.dart';
 import '../../features/splash/splash_screen.dart';
 
 /// Routing, and the role → home mapping.
@@ -34,7 +40,11 @@ const roleHome = <UserRole, String>{
 /// on the splash screen forever: the signed-out branch returned "stay put" for every public
 /// route, so an app with no session held the spinner indefinitely. No crash, no error in the
 /// log, nothing to diagnose — it simply looked like the app would not open.
-const _publicRoutes = {loginRoute};
+///
+/// SELF SIGN-UP (1.3.0) adds "Who are you?" and Create your account. Both are public, so a
+/// signed-in user who lands on either is sent home by the rule below exactly as from /login —
+/// which is also how a successful sign-up leaves Create your account.
+const _publicRoutes = {loginRoute, startRoute, createAccountRoute};
 
 const splashRoute = '/splash';
 const loginRoute = '/login';
@@ -81,7 +91,14 @@ final appScreens = <String, WidgetBuilder>{
   // it. The gate reads a marker file and shows the child immediately if it exists, so this
   // costs a repeat launch nothing. See features/onboarding/onboarding_gate.dart for why it is
   // a wrapper here rather than a phase in [resolveRedirect].
-  loginRoute: (_) => const OnboardingGate(child: LoginScreen()),
+  // FIRST LAUNCH (1.3.0): the tour is step 1 and "Who are you?" is step 2, so finishing the tour
+  // goes there rather than straight to the sign-in form. A returning launch is unchanged.
+  loginRoute: (_) => OnboardingGate(
+        onFirstRunDone: (context) => GoRouter.of(context).go(startRoute),
+        child: const LoginScreen(),
+      ),
+  startRoute: (_) => const RolePickerScreen(),
+  createAccountRoute: (_) => const CreateAccountScreen(),
   mfaRoute: (_) => const MfaScreen(),
   // The ONLY destination this app draws for AuthNeedsMfaEnrolment. See [mfaEnrolRoute].
   mfaEnrolRoute: (_) => const SecurityScreen(required: true),
@@ -123,8 +140,11 @@ final appScreens = <String, WidgetBuilder>{
   //
   // Every role's subtree renders through its role home, so one wrapper per home covers all
   // five without a redirect arm.
+  //
+  // SignupGate sits INSIDE ConsentGate: an owner with no PG or a tenant with no PG meets the
+  // onboarding steps only after every gate above has passed (features/signup/signup_gate.dart).
   for (final entry in roleHome.entries)
-    entry.value: (_) => ConsentGate(child: RoleShell(role: entry.key)),
+    entry.value: (_) => ConsentGate(child: SignupGate(child: RoleShell(role: entry.key))),
 };
 
 /// Every location the app can legitimately be at. Derived, never restated.

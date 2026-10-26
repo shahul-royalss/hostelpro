@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
+import 'package:mobile/core/router/router.dart' show changePasswordRoute;
 import 'package:mobile/core/theme/theme.dart';
 import 'package:mobile/data/models/models.dart';
 import 'package:mobile/data/providers.dart';
@@ -159,6 +161,10 @@ Future<void> showScreen(
   /// file that is not about the menu should be looking at, because it draws a sentence rather
   /// than an error panel and so cannot be mistaken for one.
   WeeklyMenu? menu,
+
+  /// Mounts the screen under a GoRouter, as the app does, with a stand-in at the
+  /// change-password route — for the tests that follow a tap out of the screen.
+  bool routed = false,
 }) async {
   // A tall viewport, because these are lazily-built lists: on a 600dp test window the sections
   // below the fold are never built, and "the notice is not on screen" would look identical to
@@ -204,10 +210,21 @@ Future<void> showScreen(
           return null;
         }),
       ],
-      child: MaterialApp(
-        theme: ApnivaasTheme.light(),
-        home: Scaffold(body: screen),
-      ),
+      child: routed
+          ? MaterialApp.router(
+              theme: ApnivaasTheme.light(),
+              routerConfig: GoRouter(routes: [
+                GoRoute(path: '/', builder: (_, _) => Scaffold(body: screen)),
+                GoRoute(
+                  path: changePasswordRoute,
+                  builder: (_, _) => const Scaffold(body: Text('The password form')),
+                ),
+              ]),
+            )
+          : MaterialApp(
+              theme: ApnivaasTheme.light(),
+              home: Scaffold(body: screen),
+            ),
     ),
   );
   await tester.pumpAndSettle();
@@ -233,27 +250,34 @@ void main() {
       notices: [_notice],
     );
 
-    // The greeting is now "Hi Rohan," with the time of day and the date beneath it, which is
-    // the reference's shape. The hostel name moved to the trailing slot of the same card.
-    expect(find.text('Hi Rohan,'), findsOneWidget);
+    // The greeting is the shell's forest header now ("Hello Rohan"), so the body does not say
+    // it a second time. The hostel's name — the one fact that situates the reader — sits beside
+    // the overview's heading.
+    expect(find.text('Hi Rohan,'), findsNothing);
     expect(find.text('Sunrise Residency'), findsOneWidget);
 
-    // Rent, first and loudest, still full width and still carrying the one cream button.
-    expect(find.text('RENT · AUGUST'), findsOneWidget);
+    // Rent, first and loudest, still full width and still carrying the one filled button.
+    expect(find.text('Rent · August'), findsOneWidget);
     expect(find.text('still to pay'), findsOneWidget);
 
-    // Then the band. Each tile is a count and a destination; the lists they replaced live on
-    // the screens the tiles open.
-    expect(find.text('ESSENTIALS'), findsOneWidget);
+    // Then the overview. Each tile is a figure and a destination; the lists they replaced live
+    // on the screens the tiles open.
+    expect(find.text('Overview'), findsOneWidget);
     expect(find.text('Your room'), findsOneWidget);
-    expect(find.text('Room 101 · Bed 3'), findsOneWidget);
-    expect(find.text('Complaints'), findsOneWidget);
-    expect(find.text('Notices'), findsOneWidget);
+    expect(find.text('Room 101'), findsOneWidget);
+    expect(find.text('Bed 3'), findsOneWidget);
+    expect(find.text('Open complaints'), findsOneWidget);
+    expect(find.text('Notices'), findsWidgets, reason: 'the tile, and the quick action');
 
-    // And the band really is BELOW the rent, which is the one ordering constraint the owner
-    // set on this screen: nothing may push "still to pay" off the first view.
-    final rent = tester.getTopLeft(find.text('RENT · AUGUST')).dy;
-    final band = tester.getTopLeft(find.text('ESSENTIALS')).dy;
+    // The open complaint and the newest notice, by name, under "Recent updates".
+    expect(find.text('Recent updates'), findsOneWidget);
+    expect(find.text('Bathroom tap leaking on 1st floor'), findsOneWidget);
+    expect(find.text('Water supply maintenance on Sunday'), findsOneWidget);
+
+    // And the overview really is BELOW the rent, which is the one ordering constraint the
+    // owner set on this screen: nothing may push "still to pay" off the first view.
+    final rent = tester.getTopLeft(find.text('Rent · August')).dy;
+    final band = tester.getTopLeft(find.text('Overview')).dy;
     expect(rent, lessThan(band), reason: 'rent must stay first on the screen');
   });
 
@@ -273,7 +297,7 @@ void main() {
       ]),
     );
 
-    final rent = tester.getTopLeft(find.text('RENT · AUGUST')).dy;
+    final rent = tester.getTopLeft(find.text('Rent · August')).dy;
     final food = tester.getTopLeft(find.text("Today's food")).dy;
     expect(rent, lessThan(food), reason: 'rent must stay first on the screen');
 
@@ -302,10 +326,12 @@ void main() {
     await showScreen(tester, const StudentHomeScreen(), rent: partialRow);
 
     // The old home drew three empty-state cards here, one under another, for the three things
-    // that happened to be empty. The band says the same thing in three figures.
-    expect(find.text('Complaints'), findsOneWidget);
-    expect(find.text('Notices'), findsOneWidget);
+    // that happened to be empty. The overview says the same thing in figures — and the updates
+    // section, with nothing to say, is not drawn at all.
+    expect(find.text('Open complaints'), findsOneWidget);
+    expect(find.text('Notices'), findsWidgets);
     expect(find.text('0'), findsNWidgets(2));
+    expect(find.text('Recent updates'), findsNothing);
     expect(find.byType(ErrorNote), findsNothing);
   });
 
@@ -398,6 +424,23 @@ void main() {
     expect(find.text('Account'), findsOneWidget);
     expect(find.text('Change password'), findsOneWidget);
     expect(find.text('Sign out'), findsOneWidget);
+  });
+
+  testWidgets('Change password opens the password form, and back returns to the profile',
+      (tester) async {
+    // It called Navigator.pushNamed, which an app routed by GoRouter cannot resolve: GoRouter
+    // gives the Navigator no onGenerateRoute, so the tap threw instead of opening anything.
+    await showScreen(tester, const StudentProfileScreen(), rent: partialRow, routed: true);
+
+    await tester.tap(find.text('Change password'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('The password form'), findsOneWidget);
+
+    // Pushed over the profile rather than swapped in for it.
+    GoRouter.of(tester.element(find.text('The password form'))).pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Account'), findsOneWidget);
   });
 
   testWidgets('the noticeboard renders the notices RLS returned', (tester) async {
@@ -501,11 +544,12 @@ void main() {
       complaintsFailure: const ServerFailure('502'),
     );
 
+    // The tonal tile: the destination's name and where it leads, with no figure.
     expect(find.text('Complaints'), findsOneWidget);
-    // "Still open" is the label that only appears ABOVE a figure, so its absence is the
+    // "Open complaints" is the label that only appears UNDER a figure, so its absence is the
     // absence of the figure. Asserting no '0' anywhere would be wrong: the notices tile on
     // the same screen legitimately shows 0, because THAT read succeeded and was empty.
-    expect(find.text('Still open'), findsNothing);
+    expect(find.text('Open complaints'), findsNothing);
   });
 
   testWidgets('a refusal is not dressed up as a retry', (tester) async {

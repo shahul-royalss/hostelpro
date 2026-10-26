@@ -6,7 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
-import '../../../shared/glass/glass.dart';
+import '../../../shared/clay/clay.dart';
+import '../../../shared/illustrations.dart';
 import '../../../shared/sign_in_again.dart';
 
 /// The small kit every student screen is built from.
@@ -15,6 +16,12 @@ import '../../../shared/sign_in_again.dart';
 /// their own, and their wording is written for staff. A resident is not a colleague of the
 /// warden — "ask your warden" is the right next step here and the wrong one there — so the copy
 /// diverges even where the shape does not.
+///
+/// THE SHAPES ARE THE CLAY KIT'S NOW. Cards are the card fill at the surface radius with a
+/// hairline, empty and failed states are [EmptyState] with clay art, status words are
+/// [StatusChip]s and avatars are [InitialsDisc]s — so a resident's screens and an owner's are
+/// visibly one product. What stays here is the resident's half: the words, and the few
+/// constructions only these screens need.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FAILURE → WHAT TO DO NEXT
@@ -86,22 +93,20 @@ import '../../../shared/sign_in_again.dart';
 /// A skeleton rather than a spinner: it keeps the layout the resident already knows and fills
 /// it in, instead of replacing the screen with a grey void and then snapping back.
 ///
-/// THE BAR IS #1D2227 ON #111417, which is the pairing `screen-empty-error-skeleton` draws
-/// (4:1604, 4:1605, 4:1609, 4:1610 — `bg-[#1d2227] rounded-[4px]`) and measures 1.15:1. That
-/// is a whisper on purpose: a placeholder that is easy to read is a placeholder people try to
-/// read. It used to be the hairline #292E33 at the control radius, which was both the wrong
-/// colour and the wrong corner.
-///
-/// The light theme cannot use that hex — a near-black bar on a white card is not a placeholder,
-/// it is a redaction — so it takes the hairline, which is the light palette's own quiet fill.
-/// Both come off the scheme; neither is named here.
-class Skeleton extends StatelessWidget {
-  const Skeleton({
+/// THE CLAY KIT'S FILL, HELD STILL. The colour is the one the kit's own skeleton bars use — the
+/// warm `skeleton` beige on a card in light, the raised surface in dark — at the kit's pill
+/// corner. What it leaves out is [SkeletonPulse]: a looping animation never settles, and these
+/// placeholders sit on screens whose every test waits for the frame to settle. A still bar says
+/// "not here yet" just as plainly. Named for that difference, so it never shadows the kit's own
+/// [Skeleton], which pulses.
+class StillSkeleton extends StatelessWidget {
+  const StillSkeleton({
     super.key,
     this.width,
     this.widthFactor,
-    this.height = Space.xs,
-    this.radius = Radii.tiny,
+    this.height = Space.sm,
+    this.radius,
+    this.circle = false,
   });
 
   final double? width;
@@ -111,32 +116,32 @@ class Skeleton extends StatelessWidget {
   /// narrow one; a fraction reads as the same placeholder on both.
   final double? widthFactor;
 
-  /// The design's bars are 6, 8 and 14 high — a text line, a label and a value. [Space.xs] and
-  /// [Space.sm] are those two steps on the 4dp grid.
+  /// A text line is [Space.sm]; a figure is taller. The kit's bars are pills, so the corner
+  /// follows the height unless [radius] says otherwise.
   final double height;
-  final double radius;
+  final double? radius;
 
-  /// The design's shimmer fill in the dark theme, and something visible in the light one.
-  static Color barColor(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return scheme.brightness == Brightness.dark
-        ? scheme.surfaceBright
-        : scheme.outlineVariant;
-  }
+  /// A disc the size of [height] — the stand-in for a 46dp clay icon or an avatar.
+  final bool circle;
+
+  /// The fill: the kit's own block colour for this theme, so the two cannot drift apart.
+  static Color barColor(BuildContext context) => Skeleton.colorOf(context);
 
   @override
   Widget build(BuildContext context) {
     final box = Container(
-      width: width,
+      width: circle ? height : width,
       height: height,
       decoration: BoxDecoration(
         color: barColor(context),
-        borderRadius: BorderRadius.all(Radius.circular(radius)),
+        shape: circle ? BoxShape.circle : BoxShape.rectangle,
+        borderRadius:
+            circle ? null : BorderRadius.all(Radius.circular(radius ?? height / 2)),
       ),
     );
-    if (widthFactor == null) return box;
+    if (widthFactor == null || circle) return box;
     return FractionallySizedBox(
-      alignment: Alignment.centerLeft,
+      alignment: AlignmentDirectional.centerStart,
       widthFactor: widthFactor,
       child: box,
     );
@@ -145,11 +150,12 @@ class Skeleton extends StatelessWidget {
 
 /// A card-shaped placeholder for a section that has not arrived yet.
 ///
-/// The design's `skeleton-layout` (4:1602) is a RAISED card carrying a short title bar, then
-/// the pending content inside a block at the CARD fill one rung down. That inner block is what
-/// makes the bars legible: #1D2227 on #111417 is the pairing Figma draws, and on the raised
-/// surface alone the bars all but vanish. This used to be an [OutlineCard] — the card rung,
-/// with the bars painted straight onto it — which is one surface short of the mockup.
+/// Drawn in the shape most of these sections arrive as — a clay icon's disc and two lines of
+/// words, on the same card a list row sits on — so the screen does not change shape when the
+/// data lands. [lines] beyond two become full-width lines beneath, for the taller cards (the
+/// rent card, a day of the menu).
+///
+/// One "Loading" for a screen reader, rather than a run of unlabelled boxes.
 class SkeletonCard extends StatelessWidget {
   const SkeletonCard({super.key, this.lines = 2, this.height});
 
@@ -158,41 +164,49 @@ class SkeletonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StateCard(
-      child: SizedBox(
-        height: height,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Skeleton(width: 60, height: Space.xs),
-            ),
-            const SizedBox(height: Space.sm),
-            FlatSurface(
-              borderRadius: Radii.rControl,
-              // The design draws this inner block as a bare fill: a hairline inside a hairlined
-              // card reads as a table.
-              border: false,
-              padding: const EdgeInsets.all(Space.sm),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (var i = 0; i < lines; i++) ...[
-                    // The first bar is the value (14 in the design, 12 on the grid); the rest
-                    // are the 8dp text lines, alternating full width and short.
-                    Skeleton(
-                      widthFactor: i == 0 ? 0.62 : (i.isOdd ? 1 : 0.6),
-                      height: i == 0 ? Space.sm : Space.xs,
+    final t = Theme.of(context);
+    return Semantics(
+      container: true,
+      label: 'Loading',
+      excludeSemantics: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: t.colorScheme.surface,
+          borderRadius: Radii.rSurface,
+          border: Border.all(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Space.md, vertical: Space.md),
+          child: SizedBox(
+            height: height,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Row(
+                  children: [
+                    StillSkeleton(height: ClaySize.list, circle: true),
+                    SizedBox(width: Space.sm),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          StillSkeleton(widthFactor: 0.6),
+                          SizedBox(height: Space.xs),
+                          StillSkeleton(widthFactor: 0.4),
+                        ],
+                      ),
                     ),
-                    if (i != lines - 1) const SizedBox(height: Space.xs),
                   ],
+                ),
+                for (var i = 2; i < lines; i++) ...[
+                  const SizedBox(height: Space.sm),
+                  StillSkeleton(widthFactor: i.isEven ? 1 : 0.7),
                 ],
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -202,14 +216,16 @@ class SkeletonCard extends StatelessWidget {
 /// Nothing here — which, for a resident, is usually good news. Says what WOULD appear rather
 /// than sitting blank: an empty list and a broken one look identical otherwise.
 ///
-/// The standalone form is the design's empty-state card (4:1575): a raised card, an outlined
-/// 54dp glyph, a title, a support line and at most one button. It replaces the tinted circle
-/// and left-aligned sentence that were here, which came from the Stitch activity row and are
-/// not a state treatment in this design at all.
+/// THE KIT'S EMPTY STATE: clay art on a Mist disc, a title, one helpful sentence and at most one
+/// button. [clay] names the art; a first-run state can name its [EmptyArt] state through
+/// [illustration] instead, and gets the art drawn for that state. The words are always real
+/// Text, never baked into the picture.
 ///
-/// [compact] keeps that older shape for the one job it is still right for — an empty section
-/// INSIDE a card that already has its own heading, where a second card would be a card in a
-/// card. The design has no such variant; the app has several.
+/// [icon] is the fallback — a glyph on the same Mist disc, for a caller that names no art. Every
+/// screen in this feature names some.
+///
+/// [compact] is the small form, for an empty section inside a sheet or a card that already has
+/// its own heading.
 class EmptyNote extends StatelessWidget {
   const EmptyNote({
     super.key,
@@ -217,83 +233,113 @@ class EmptyNote extends StatelessWidget {
     required this.title,
     this.message,
     this.compact = false,
-    this.tone,
-    this.badge,
     this.action,
     this.illustration,
+    this.clay,
   });
 
   final IconData icon;
   final String title;
   final String? message;
 
-  /// Inside a card that already has its own heading.
+  /// Inside a sheet or a card that already has its own heading.
   final bool compact;
 
-  /// NULL IS THE COMMON CASE NOW, and it is the design's neutral outline rather than the green
-  /// this used to default to. "Nothing recorded yet" is not good news; a reassuring green tick
-  /// over it is the interface congratulating itself. Pass a tone only where empty genuinely
-  /// means something.
-  final Color? tone;
-
-  /// The design's caps tag. Left off by default — 4:1577's own "EMPTY STATE" is the spec frame
-  /// labelling its examples for a designer, not a word a resident should read.
-  final String? badge;
-
-  /// The design's one button (4:1586 — a hairline outlined box, not the cream filled one).
-  /// Most empty states here have nothing useful to offer, and a button that does nothing is
-  /// worse than no button.
+  /// The one button. Most empty states here have nothing useful to offer, and a button that
+  /// does nothing is worse than no button.
   final Widget? action;
 
-  /// An [EmptyArt] path drawn at 160dp INSTEAD of the outlined glyph square.
-  ///
-  /// Only the states a brand-new account lands on get one — see the note on
-  /// [StateBody.illustration]. IGNORED WHEN [compact] IS SET: a compact note is an empty
-  /// section inside a card that already has a heading, and 160dp of artwork in that slot would
-  /// be larger than the card it is explaining. [icon] stays required either way, because it is
-  /// both the compact drawing and what the artwork falls back to.
+  /// An [EmptyArt] state name. The art drawn is [EmptyArt.clayFor] of it.
   final String? illustration;
+
+  /// A [ClayIcons] path. Wins over [illustration] when both are given.
+  final String? clay;
+
+  @override
+  Widget build(BuildContext context) {
+    final art = clay ?? (illustration == null ? null : EmptyArt.clayFor(illustration!));
+    if (art != null) {
+      return EmptyState(
+        icon: art,
+        title: title,
+        body: message,
+        action: action,
+        compact: compact,
+      );
+    }
+    return _GlyphEmpty(
+      icon: icon,
+      title: title,
+      message: message,
+      action: action,
+      compact: compact,
+    );
+  }
+}
+
+/// [EmptyState]'s anatomy with a glyph where the clay art would be.
+class _GlyphEmpty extends StatelessWidget {
+  const _GlyphEmpty({
+    required this.icon,
+    required this.title,
+    this.message,
+    this.action,
+    this.compact = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? message;
+  final Widget? action;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final accent = tone == null ? t.colorScheme.outline : context.tones.resolve(tone!);
-
-    if (compact) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: Space.sm),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: IconSize.md, color: accent),
-            const SizedBox(width: Space.xs),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: t.textTheme.labelLarge),
-                  if (message != null) ...[
-                    const SizedBox(height: Space.xxs),
-                    Text(message!, style: t.textTheme.bodySmall),
-                  ],
-                ],
+    final dark = t.brightness == Brightness.dark;
+    final disc = compact ? ClaySize.tile : ClaySize.promo;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: EmptyState.maxWidth),
+        child: Padding(
+          padding: EdgeInsets.all(compact ? Space.md : Space.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: disc,
+                  height: disc,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: dark ? ApnivaasColors.darkMist : ApnivaasColors.mist,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    icon,
+                    size: compact ? IconSize.action : IconSize.xl,
+                    color: t.colorScheme.primary,
+                  ),
+                ),
               ),
-            ),
-          ],
+              SizedBox(height: compact ? Space.sm : Space.md),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: compact ? t.textTheme.titleMedium : t.textTheme.headlineSmall,
+              ),
+              if (message != null) ...[
+                const SizedBox(height: Space.tight),
+                Text(message!, textAlign: TextAlign.center, style: t.textTheme.bodyMedium),
+              ],
+              if (action != null) ...[
+                SizedBox(height: compact ? Space.md : Space.lg),
+                action!,
+              ],
+            ],
+          ),
         ),
-      );
-    }
-
-    return StateCard(
-      badge: badge,
-      tone: tone,
-      child: StateBody(
-        icon: icon,
-        illustration: illustration,
-        title: title,
-        message: message,
-        tone: tone,
-        action: action,
       ),
     );
   }
@@ -301,77 +347,101 @@ class EmptyNote extends StatelessWidget {
 
 /// A failure, with the next step spelled out and a retry only where retrying could work.
 ///
-/// THE RED PANEL IS GONE. The design's error card (4:1588) is the same raised, hairlined box as
-/// the empty and skeleton states, and the red lives in the caps badge and nowhere else. On a
-/// screen where one section failed and three did not, a red rectangle reads as "the app is
-/// broken" rather than "this list did not load" — and on the home screen a resident sees
-/// exactly that arrangement most of the time.
+/// THE KIT'S ERROR STATE, WITH THIS FEATURE'S WORDS. The title and the sentence come from
+/// [errorGuidance], so the honesty lives in one switch; the drawing is [EmptyState]'s — clay
+/// art, a headline, the sentence and at most one button — and no red panel. On a screen where
+/// one section failed and three did not, a red rectangle reads as "the app is broken" rather
+/// than "this did not load".
 ///
-/// The retry is the CREAM FILLED BUTTON (4:1596), not the outlined one that was here. It is the
-/// only action on the card, so it is the primary one.
+/// The retry is the FILLED button: it is the only action in the state, so it is the primary
+/// one.
+///
+/// [compact] is the inline form, for a failure inside a form or a sheet — a full-size state
+/// there would push the fields the resident was typing into off the screen.
 class ErrorNote extends StatelessWidget {
   const ErrorNote({super.key, required this.error, this.onRetry, this.compact = false});
 
   final Object error;
   final VoidCallback? onRetry;
 
-  /// Inside a card that already has its own heading — the same exception [EmptyNote] makes.
+  /// Inline, inside a form or a sheet.
   final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final guidance = errorGuidance(error);
+
+    // Only where trying again could plausibly work. A retry under a permission refusal teaches
+    // people to tap it forever.
+    //
+    // A DEAD SIGN-IN IS THE ONE CASE WITH A THIRD ANSWER. Retrying cannot help and there is
+    // nobody to ask, but one tap fixes it — and a resident told "sign in again" with no way to
+    // do it from here goes looking for their warden instead.
+    final Widget? action = AppFailure.from(error).needsSignIn
+        ? const SignInAgainButton()
+        : guidance.canRetry && onRetry != null
+            ? FilledButton(onPressed: onRetry, child: const Text('Try again'))
+            : null;
+
+    if (compact) {
+      return _InlineError(title: guidance.title, message: guidance.next, action: action);
+    }
+    return EmptyState(
+      icon: ClayIcons.complaint,
+      title: guidance.title,
+      body: guidance.next,
+      action: action,
+    );
+  }
+}
+
+/// The inline failure: the error ink's glyph and words on a well, under the field they are
+/// about.
+class _InlineError extends StatelessWidget {
+  const _InlineError({required this.title, required this.message, this.action});
+
+  final String title;
+  final String message;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final tones = context.tones;
-    final guidance = errorGuidance(error);
-
-    if (compact) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: Space.sm),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.error_outline_rounded, size: IconSize.md, color: tones.error),
-            const SizedBox(width: Space.xs),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(guidance.title, style: t.textTheme.labelLarge),
-                  const SizedBox(height: Space.xxs),
-                  Text(guidance.next, style: t.textTheme.bodySmall),
-                ],
-              ),
-            ),
-          ],
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          // The neutral well rather than a red wash: the glyph and the title carry the state,
+          // and the sentence stays in the ordinary ink where it is easiest to read.
+          color: t.colorScheme.surfaceContainer,
+          borderRadius: Radii.rButton,
         ),
-      );
-    }
-
-    return StateCard(
-      // A real word, not the mockup's "ERROR STATE". The tag SLOT is worth keeping — colour-
-      // coding the state at a glance is genuinely useful — but what goes in it is English.
-      badge: 'Error',
-      tone: ApnivaasColors.error,
-      child: StateBody(
-        title: guidance.title,
-        message: guidance.next,
-        // Only where trying again could plausibly work. A retry under a permission refusal
-        // teaches people to tap it forever.
-        //
-        // A DEAD SIGN-IN IS THE ONE CASE WITH A THIRD ANSWER. Retrying cannot help and there is
-        // nobody to ask, but one tap fixes it — and a resident told "sign in again" with no way
-        // to do it from here goes looking for their warden instead.
-        action: AppFailure.from(error).needsSignIn
-            ? const SignInAgainButton()
-            : guidance.canRetry && onRetry != null
-                ? FilledButton(
-                    onPressed: onRetry,
-                    // Width 0 so it hugs its label rather than inheriting the theme's full-bleed
-                    // Size.fromHeight; the height stays at the 48dp tap target.
-                    style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-                    child: const Text('Try again'),
-                  )
-                : null,
+        child: Padding(
+          padding: const EdgeInsets.all(Space.sm),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.error_outline_rounded, size: IconSize.lg, color: tones.error),
+              const SizedBox(width: Space.xs),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(title, style: t.textTheme.titleSmall?.copyWith(color: tones.error)),
+                    const SizedBox(height: Space.xxs),
+                    Text(message, style: t.textTheme.bodyMedium),
+                    if (action != null) ...[
+                      const SizedBox(height: Space.sm),
+                      Align(alignment: AlignmentDirectional.centerStart, child: action),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -410,326 +480,51 @@ class AsyncSection<T> extends StatelessWidget {
 // SMALL PRIMITIVES
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// A section title, optionally with one action on the right.
-///
-/// [domain] puts the domain's coloured icon before the title — the saffron plate before
-/// "Today's food", the blue megaphone before "Notices" — so a resident scrolling the home
-/// screen finds a section by its colour before reading a word. Drawn at [DomainIconSize.sm],
-/// the same 28dp plate the owner kit's `SectionHeading` and the SA kit's `SaHeading` put before
-/// their own headings: one object is one size product-wide, and a heading is a title with a
-/// mark beside it rather than a 40dp box with a title beside IT — three of those stacked down
-/// the resident's home is the furniture outranking the data. The 40dp default stays where it
-/// belongs, in a list tile's leading slot. See [ApnivaasDomain] for the rule.
-class SectionHeading extends StatelessWidget {
-  const SectionHeading({
-    super.key,
-    required this.title,
-    this.caption,
-    this.trailing,
-    this.domain,
-    this.icon,
-  });
-
-  final String title;
-  final String? caption;
-  final Widget? trailing;
-
-  /// Which area of the product this section belongs to. Null draws no icon.
-  final ApnivaasDomain? domain;
-
-  /// A glyph more specific than the domain's own. Ignored without [domain].
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: Space.sm),
-      child: Row(
-        children: [
-          if (domain != null) ...[
-            DomainIcon(domain: domain!, icon: icon, size: DomainIconSize.sm),
-            const SizedBox(width: Space.sm),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: t.textTheme.titleLarge),
-                if (caption != null) ...[
-                  const SizedBox(height: Space.xxs),
-                  Text(caption!, style: t.textTheme.bodySmall),
-                ],
-              ],
-            ),
-          ),
-          ?trailing,
-        ],
-      ),
-    );
-  }
-}
-
-/// The fill a resting card paints in the current theme.
-///
-/// `surface-container-low` on dark, `surface` on light — [GlassWeight.thin] makes that decision
-/// once for the whole app and this is the way a widget outside `shared/glass/` asks it. Anything
-/// that has to sit flush with a card (an avatar's cut-out ring, a skeleton) reads it from here
-/// rather than naming a hex.
+/// The fill a resting card paints in the current theme — the card in light, one rung up in
+/// dark. [GlassWeight.thin] makes that decision once for the whole app; anything that has to
+/// sit flush with a card (an avatar's cut-out ring) reads it from here rather than naming a hex.
 Color cardSurfaceOf(BuildContext context) =>
     GlassWeight.thin.surfaceOf(Theme.of(context).colorScheme);
 
-/// The fill a RAISED card paints — `surface raised` #171A1E on dark.
+/// A plain card: the card fill at the surface radius, with a hairline.
 ///
-/// The design gives this rung to a specific short list, and one of them is on this screen:
-/// "icon buttons (4:454), inputs (4:77), **the room card**, the activity feed's disc, the chart
-/// panel". See [RaisedCard].
-Color raisedSurfaceOf(BuildContext context) =>
-    GlassWeight.regular.surfaceOf(Theme.of(context).colorScheme);
-
-/// A plain bordered card.
+/// FLAT, AS EVERY RESTING CARD IN THE KIT IS. Elevation is spent on the bar and the sheets;
+/// a list of shadowed cards is a list of things shouting over each other.
 ///
-/// Deliberately NOT glass. Glass marks one step of elevation, so a screen where every row is a
-/// glass pane has flattened the very distinction the material exists to draw — and the glass
-/// primitive asserts against that nesting for the same reason. One glass card per screen
-/// carries the thing that matters; everything else sits quietly behind an outline.
-///
-/// IT IS ALWAYS FILLED NOW, AND ON THE DARK PALETTE THAT IS THE WHOLE CARD. It used to paint a
-/// fill only when it was tappable, which made a notice (not tappable) an outline drawn straight
-/// onto the ground and a complaint (tappable) a filled card, side by side on the home screen.
-/// Nobody noticed on the old light palette, where the ground and the card were both near-white.
-/// On the design's ground they are two different colours: a card is `surface-container-low`,
-/// one rung up, and the hairline is the boundary of a surface rather than the surface itself.
-/// [cardSurfaceOf] now fills every one of them — which is also what [SkeletonCard]'s own
-/// doc-comment has always claimed happened here.
+/// The fill is on the Material, not in a decoration over it, so an ink splash lands ON the
+/// card rather than under it. A null [onTap] leaves the InkWell inert rather than absorbing the
+/// gesture — and a card that cannot be tapped draws no ripple, because a ripple promises
+/// something will happen.
 class OutlineCard extends StatelessWidget {
-  const OutlineCard({super.key, required this.child, this.padding, this.onTap, this.accent});
+  const OutlineCard({super.key, required this.child, this.padding, this.onTap});
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
   final VoidCallback? onTap;
 
-  /// A coloured rail down the leading edge — the mockups' accented notice card.
-  ///
-  /// Pass a CANONICAL tone; it is resolved here. Null is the common case: a rail is an accent
-  /// and a screen where every row has one has said nothing.
-  final Color? accent;
-
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    // The fill is on the Material, not in this decoration, so an ink splash lands ON the card
-    // rather than under it. An opaque box over a Material's ink is how a tappable row stops
-    // responding to the eye while still responding to the finger.
-    Widget inner = Container(
-      width: double.infinity,
-      padding: padding ?? const EdgeInsets.all(Space.md),
-      decoration: BoxDecoration(
-        borderRadius: Radii.rCard,
-        // outlineVariant, not outline: this is a card's decorative edge, not a control's.
-        border: Border.all(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
-      ),
-      child: child,
-    );
-
-    if (accent != null) {
-      // A positioned strip under the Material's clip, not a thicker BorderSide: a BoxDecoration
-      // asserts that a border with unequal sides cannot carry a borderRadius, and a
-      // square-cornered card here would be the one square thing on the screen.
-      inner = Stack(
-        children: [
-          inner,
-          Positioned(
-            top: 0,
-            bottom: 0,
-            left: 0,
-            // The design's `border-l-4`.
-            width: Space.xxs,
-            child: ColoredBox(color: context.tones.resolve(accent!)),
-          ),
-        ],
-      );
-    }
-
     return Material(
       color: cardSurfaceOf(context),
-      borderRadius: Radii.rCard,
-      // Only where something actually overflows the corners. A clip layer on every row of a
-      // long list is not free, and the splash is already clipped by the InkWell's own radius.
-      clipBehavior: accent == null ? Clip.none : Clip.antiAlias,
-      // A null onTap leaves the InkWell inert rather than absorbing the gesture.
-      child: InkWell(borderRadius: Radii.rCard, onTap: onTap, child: inner),
-    );
-  }
-}
-
-/// A card one rung UP — `surface raised` #171A1E, with the same hairline.
-///
-/// Not a decoration: the design assigns this rung by name, and on `screen-student-dashboard`
-/// the room card is one of the things it assigns it to (see [raisedSurfaceOf]). The rent card
-/// above it stays on the card rung #111417, and the one-step difference is what makes the pair
-/// read as "the figure that matters, and the fact underneath it" rather than as two cards.
-///
-/// In the light theme both rungs are white and the hairline does the separating, which is why
-/// this is a WEIGHT and not a colour.
-class RaisedCard extends StatelessWidget {
-  const RaisedCard({super.key, required this.child, this.padding, this.onTap});
-
-  final Widget child;
-  final EdgeInsetsGeometry? padding;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) => FlatSurface(
-        weight: GlassWeight.regular,
-        padding: padding ?? const EdgeInsets.all(Space.md),
-        onTap: onTap,
-        child: child,
-      );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// THE DESIGN'S CARD FURNITURE
-//
-// Four small pieces, each lifted from a specific construction in the Stitch markup rather than
-// invented to look like it. They are here and not in `shared/` for the same reason the rest of
-// this file is: the owner and warden apps have their own kit, and a resident's card says
-// different things from a manager's.
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// The small icon box in a card's top-right corner.
-///
-/// The design's `bg-surface-bright p-1.5 rounded-md text-{tone}` for the neutral case and
-/// `bg-{tone}/10 p-1.5 rounded-md text-{tone}` for a semantic one — the two variants that appear
-/// on every KPI card in `owner-dashboard.html`. It is decoration with a job: it says what KIND
-/// of fact the card holds before the figure has been read.
-///
-/// THE NEUTRAL FILL IS `surfaceBright` #1D2227 IN THE DARK THEME. tokens.dart names that hex
-/// as "the brightest fill in the file … what an icon badge sits on", and it has to be that hex
-/// rather than the "chips and inputs" step this used to take: [RaisedCard] IS that step, so a
-/// tile drawn at `surfaceContainerHighest` inside the room card was the same colour as the card
-/// and simply disappeared. In the light theme `fromSeed` puts `surfaceBright` a hair off white
-/// and it would vanish the other way, so there the tile keeps the chips-and-inputs grey. Both
-/// come off the scheme.
-class IconTile extends StatelessWidget {
-  const IconTile({super.key, required this.icon, this.tone});
-
-  final IconData icon;
-
-  /// A CANONICAL tone, resolved here. Null paints the neutral tile with a primary glyph.
-  final Color? tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final tones = context.tones;
-    final accent = tone == null ? scheme.primary : tones.resolve(tone!);
-    final neutral = scheme.brightness == Brightness.dark
-        ? scheme.surfaceBright
-        : scheme.surfaceContainerHighest;
-    return Container(
-      padding: const EdgeInsets.all(Space.xs),
-      decoration: BoxDecoration(
-        color: tone == null ? neutral : tones.chipFill(accent),
-        borderRadius: Radii.rControl,
+      shape: RoundedRectangleBorder(
+        borderRadius: Radii.rSurface,
+        // outlineVariant, not outline: this is a card's decorative edge, not a control's.
+        side: BorderSide(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
       ),
-      child: Icon(icon, size: IconSize.md, color: accent),
-    );
-  }
-}
-
-/// The round tinted glyph that opens a row in the design's activity lists.
-///
-/// `bg-{tone}/10 p-2 rounded-full text-{tone}` — the same recipe as [IconTile] in a circle,
-/// which is what the markup uses to separate "a fact about a thing" (square, in a card's
-/// corner) from "a thing that happened" (round, at the head of a row).
-class ToneBadge extends StatelessWidget {
-  const ToneBadge({super.key, required this.icon, this.tone});
-
-  final IconData icon;
-
-  /// A CANONICAL tone, resolved here. Null falls back to primary.
-  final Color? tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final tones = context.tones;
-    final accent =
-        tone == null ? Theme.of(context).colorScheme.primary : tones.resolve(tone!);
-    return Container(
-      padding: const EdgeInsets.all(Space.xs),
-      decoration: BoxDecoration(color: tones.chipFill(accent), shape: BoxShape.circle),
-      child: Icon(icon, size: IconSize.sm, color: accent),
-    );
-  }
-}
-
-/// The design's `label-caps` — Inter 12/600 at +0.05em, uppercase.
-///
-/// A TextStyle cannot uppercase, so the string is uppercased here and callers pass it however
-/// it reads best in source. This exists because four screens had grown their own
-/// `Text('PROGRESS', style: labelSmall)` — hand-shouted strings at the CHIP step, one size
-/// below the step `DESIGN-SYSTEM.md` reserves for exactly this job ("label-caps 12/600
-/// UPPERCASE · section labels"; 10/600 is "badges, avatar initials"). One widget, so a section
-/// label cannot be two different sizes on two different screens again.
-class CapsLabel extends StatelessWidget {
-  const CapsLabel(this.label, {super.key, this.tone});
-
-  final String label;
-
-  /// Resolved here if given. Null is the design's secondary ink, which is what a label is.
-  final Color? tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return Text(
-      label.toUpperCase(),
-      style: t.textTheme.labelMedium
-          ?.copyWith(color: tone == null ? null : context.tones.resolve(tone!)),
-    );
-  }
-}
-
-/// A card's top line: an uppercase eyebrow, and one thing on the right.
-///
-/// The design's `flex justify-between items-start` header, with the eyebrow at [CapsLabel]'s
-/// 12/600.
-class CardHeader extends StatelessWidget {
-  const CardHeader({super.key, required this.label, this.trailing});
-
-  final String label;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Padding(
-            // Centres a one-line eyebrow against a 32dp icon tile without a Stack.
-            padding: const EdgeInsets.only(top: Space.xs),
-            child: Text(
-              label.toUpperCase(),
-              style: t.textTheme.labelMedium,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: padding ?? const EdgeInsets.all(Space.md),
+          child: SizedBox(width: double.infinity, child: child),
         ),
-        if (trailing != null) ...[const SizedBox(width: Space.xs), trailing!],
-      ],
+      ),
     );
   }
 }
 
-/// The design's filled meter: `w-full bg-surface-bright h-1.5 rounded-full` with a tone fill.
-///
-/// A [LinearProgressIndicator] rather than two Containers, because the theme already describes
-/// exactly this object — `linearTrackColor: surfaceContainerHighest`, `linearMinHeight: 6` —
-/// so the channel is one edit away in `theme.dart` like every other surface in the app.
+/// The design's filled meter: a 7dp pill on the warm track, filled in the state's ink.
 ///
 /// WHAT IT IS ALLOWED TO MEAN. [fraction] must be a ratio of two values the server returned,
 /// and both of them must be stated as text somewhere on the same card. A meter is a graphic; it
@@ -739,84 +534,48 @@ class Meter extends StatelessWidget {
 
   final double fraction;
 
-  /// A CANONICAL tone, resolved here. The bar is a graphical object, so the canonical value
-  /// would have been legal — it is resolved anyway so the bar and the pill above it are one
-  /// colour rather than two shades of an argument.
+  /// A CANONICAL tone, resolved here — so the bar and the chip above it are one colour rather
+  /// than two shades of an argument.
   final Color tone;
 
   final String? semanticLabel;
 
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: semanticLabel,
-      excludeSemantics: semanticLabel != null,
-      child: LinearProgressIndicator(
-        value: fraction.clamp(0, 1),
-        color: context.tones.resolve(tone),
-        borderRadius: Radii.rPill,
-      ),
-    );
-  }
-}
-
-/// The one or two letters that stand for a person when there is no photo.
-///
-/// `students.photo_url` is a Supabase Storage key that has to be signed before it can be
-/// fetched and this app has no signing path, so every face in the resident app is initials. One
-/// function, so the avatar beside a name on Profile and the cluster on the home room card can
-/// never disagree about a person's mark.
-String initialsOf(String? fullName) {
-  final parts =
-      (fullName ?? '').trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-  if (parts.isEmpty) return '?';
-  if (parts.length == 1) return parts.first.characters.first.toUpperCase();
-  return (parts.first.characters.first + parts.last.characters.first).toUpperCase();
-}
-
-/// One initials disc.
-class InitialsAvatar extends StatelessWidget {
-  const InitialsAvatar({super.key, required this.name, this.size = _default});
-
-  static const _default = Space.xxl; // 32
-
-  /// Above this, the letters step up from an eyebrow to a title. Two 12px characters centred in
-  /// a 52dp disc read as a typo rather than as a face.
-  static const _largeAbove = Space.xxxl; // 40
-
-  final String? name;
-  final double size;
+  static const _height = 7.0;
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    // A COLOUR OF THEIR OWN, from the name — the way Google Contacts gives every face a hue,
-    // so three roommates in a cluster are three people and not three gold discs. Stable across
-    // screens and sessions (see [avatarToneFor]); the chip recipe, so it is measured.
-    final tone = context.tones.resolve(avatarToneFor(name));
-    return Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: context.tones.chipFill(tone),
-      ),
-      child: Text(
-        initialsOf(name),
-        style: (size >= _largeAbove ? t.textTheme.titleLarge : t.textTheme.labelSmall)
-            ?.copyWith(color: tone),
-        maxLines: 1,
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final bar = ClipRRect(
+      borderRadius: Radii.rPill,
+      child: SizedBox(
+        height: _height,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: ColoredBox(
+                color: dark ? ApnivaasColors.surfaceContainerHighest : ApnivaasColors.track,
+              ),
+            ),
+            FractionallySizedBox(
+              widthFactor: fraction.clamp(0.0, 1.0),
+              heightFactor: 1,
+              alignment: AlignmentDirectional.centerStart,
+              child: ColoredBox(color: context.tones.resolve(tone)),
+            ),
+          ],
+        ),
       ),
     );
+    if (semanticLabel == null) return ExcludeSemantics(child: bar);
+    return Semantics(label: semanticLabel, excludeSemantics: true, child: bar);
   }
 }
 
 /// The overlapping discs the mockups put beside a room's occupancy line.
 ///
 /// NO NAME IS PRINTED, and no name is needed: the initials come from `st_my_roommates()`, which
-/// is the same read the sentence beside it already counts. The ring is [cardSurfaceOf] so the
-/// overlap reads as a cut-out in the card rather than as a grey halo.
+/// is the same read the sentence beside it already counts. The ring is the surface the cluster
+/// sits on, so the overlap reads as a cut-out in the card rather than as a grey halo.
 class AvatarCluster extends StatelessWidget {
   const AvatarCluster({super.key, required this.names, this.max = 3, this.ring});
 
@@ -825,173 +584,77 @@ class AvatarCluster extends StatelessWidget {
   /// Beyond this the cluster stops adding discs. It is a texture, not a list.
   final int max;
 
-  /// The surface the cluster is sitting ON, so the overlap reads as a cut-out. Defaults to the
-  /// card rung; the room card passes [raisedSurfaceOf] because it is one rung up, and a ring in
-  /// the wrong fill is a grey halo rather than a gap.
+  /// The surface the cluster is sitting ON. Defaults to the card.
   final Color? ring;
 
-  static const _disc = Space.xl; // 24
-  static const _overlap = Space.xs; // 8
+  static const _disc = Space.xxl; // 32
+  static const _overlap = Space.sm; // 12
 
   @override
   Widget build(BuildContext context) {
     if (names.isEmpty) return const SizedBox.shrink();
     final shown = names.take(max).toList();
     final ring = this.ring ?? cardSurfaceOf(context);
-    return SizedBox(
-      height: _disc,
-      width: _disc + (shown.length - 1) * (_disc - _overlap),
-      child: Stack(
-        children: [
-          for (var i = shown.length - 1; i >= 0; i--)
-            Positioned(
-              left: i * (_disc - _overlap),
-              child: Container(
-                padding: const EdgeInsets.all(Strokes.hairline),
-                decoration: BoxDecoration(color: ring, shape: BoxShape.circle),
-                child: InitialsAvatar(name: shown[i], size: _disc - Strokes.hairline * 2),
+    return ExcludeSemantics(
+      child: SizedBox(
+        height: _disc,
+        width: _disc + (shown.length - 1) * (_disc - _overlap),
+        child: Stack(
+          children: [
+            for (var i = shown.length - 1; i >= 0; i--)
+              PositionedDirectional(
+                start: i * (_disc - _overlap),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(color: ring, shape: BoxShape.circle),
+                  child: Padding(
+                    padding: const EdgeInsets.all(Strokes.focus),
+                    child: InitialsDisc(name: shown[i], size: _disc - Strokes.focus * 2),
+                  ),
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-/// The quiet "see the rest of them" action beside a section title.
-///
-/// `text-primary text-label-caps` with a `chevron_right`, which is how the design draws every
-/// one of these — VIEW ALL, VIEW REPORT. It is 12px uppercase Inter and NOT the app's 14px
-/// button label: this is a link at the end of a heading, not a call to action.
-class SeeAllButton extends StatelessWidget {
-  const SeeAllButton({super.key, required this.onPressed, this.label = 'See all'});
-
-  final VoidCallback onPressed;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        // The theme's 48dp minimum is for a CTA. This one hugs its label, and keeps the 44dp
-        // height so it is still a tap target.
-        minimumSize: const Size(0, 44),
-        padding: const EdgeInsets.symmetric(horizontal: Space.xs),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary),
-          ),
-          Icon(Icons.chevron_right_rounded, size: IconSize.sm, color: t.colorScheme.primary),
-        ],
-      ),
-    );
-  }
-}
-
-/// A status word, tinted by meaning.
+/// A status word, tinted by meaning — the kit's [StatusChip], in capitals.
 ///
 /// The WORD is always present, not just the colour. A pill that distinguishes paid from unpaid
 /// by hue alone is unreadable to the roughly eight percent of men with a red-green deficiency —
 /// which, in a full boys' PG, is several residents per floor.
+///
+/// CAPITALS, AND ONE CASE FOR EVERY CHIP IN THE RESIDENT'S APP. The rent states are matched by
+/// that case in tests outside this feature (UNPAID, PARTLY PAID, PAID), and a resident who saw
+/// "PAID" on the rent card and "In progress" on a complaint would be reading two systems. So
+/// every chip here takes the same case from one place.
+///
+/// [tone] is CANONICAL — [feeTone] and [complaintTone] are pure functions with no
+/// BuildContext — and the chip resolves it for today's theme.
 class StatusPill extends StatelessWidget {
-  const StatusPill({super.key, required this.label, required this.tone, this.icon});
+  const StatusPill({
+    super.key,
+    required this.label,
+    required this.tone,
+    this.icon,
+    this.dot = false,
+  });
 
   final String label;
   final Color tone;
   final IconData? icon;
 
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final tones = context.tones;
-    // [feeTone] and [complaintTone] are pure functions with no BuildContext, so what arrives
-    // here is CANONICAL. Resolving at the paint site is the whole point of the tone system:
-    // the caller keeps naming the meaning, this decides what is legible on today's theme.
-    final accent = tones.resolve(tone);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: Space.xs, vertical: Space.xxs),
-      decoration: BoxDecoration(
-        color: tones.chipFill(accent),
-        borderRadius: Radii.rControl,
-        border: Border.all(color: tones.chipBorder(accent), width: Strokes.hairline),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: IconSize.xs, color: accent),
-            const SizedBox(width: Space.xxs),
-          ],
-          Flexible(
-            child: Text(
-              label.toUpperCase(),
-              style: t.textTheme.labelSmall?.copyWith(color: accent),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The same status word as a [StatusPill], with the chip taken off.
-///
-/// FOR ONE SITUATION ONLY: a surface that is already tinted with this tone. See
-/// [ApnivaasSemantics.surfaceTintAlpha] — a chip's fill is a tint of its tone, so on a ground
-/// that is already a tint of the same tone it lands twice as far toward its own label and the
-/// pair measures 3.98:1 in the DARK theme, which no alpha rescues. (Light measures 5.03:1 and
-/// could have kept its chip; it does not, because one widget cannot be two designs.) The
-/// tinted GROUND is the chip; drawing a second one inside it is both the contrast failure and
-/// a box inside a box.
-///
-/// What does not change is the part that matters: the status is still a WORD. Hue alone is
-/// unreadable to the roughly eight percent of men with a red-green deficiency — several
-/// residents per floor in a full boys' PG — and that guarantee belongs to the label, never to
-/// the decoration around it.
-///
-/// On the tint, at the 10/600 chip step, this measures 4.56:1 at its worst across both themes.
-class StatusWord extends StatelessWidget {
-  const StatusWord({super.key, required this.label, required this.tone, this.icon});
-
-  final String label;
-
-  /// Canonical or resolved — resolved here, as everywhere else.
-  final Color tone;
-  final IconData? icon;
+  /// The kit's leading dot, for a chip that sits in a dense row.
+  final bool dot;
 
   @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final accent = context.tones.resolve(tone);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (icon != null) ...[
-          Icon(icon, size: IconSize.xs, color: accent),
-          const SizedBox(width: Space.xxs),
-        ],
-        Flexible(
-          child: Text(
-            label.toUpperCase(),
-            // The same labelSmall step the pill uses, so a tinted card and a pill state their
-            // status in identical type and only the box differs.
-            style: t.textTheme.labelSmall?.copyWith(color: accent),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => StatusChip(
+        label: label.toUpperCase(),
+        tone: StatusTone.fromCanonical(tone),
+        icon: icon,
+        dot: dot,
+      );
 }
 
 /// The colour that carries a fee state's meaning. Defined once, so the home card and a history
@@ -1009,7 +672,10 @@ Color complaintTone(ComplaintStatus status) => switch (status) {
       ComplaintStatus.resolved => ApnivaasColors.success,
     };
 
-/// One labelled fact. Used by "My details" and the contact card.
+/// One labelled fact. Used by "My details".
+///
+/// The label is the quiet half and the value the one worth reading, so the value takes the
+/// ink and the weight. A divider between facts is the card's business, not the row's.
 class DetailRow extends StatelessWidget {
   const DetailRow({super.key, required this.label, required this.value, this.missing = 'Not recorded'});
 
@@ -1024,30 +690,43 @@ class DetailRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final shown = (value ?? '').trim();
+    final labelText = Text(
+      label,
+      style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+    );
+    // Selectable so a resident can copy their guardian's number or their own address out of
+    // the app instead of retyping it.
+    final valueText = SelectionArea(
+      child: Text(
+        shown.isEmpty ? missing : shown,
+        style: shown.isEmpty
+            ? t.textTheme.bodyMedium?.copyWith(color: context.tones.muted)
+            : t.textTheme.titleSmall?.copyWith(fontFeatures: const []),
+      ),
+    );
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Space.xs),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Was a fixed 112dp. On a 320dp phone at 1.4x that left the value about 160dp, and
-          // an address wrapped to five lines beside a one-word label. Flexes hand the extra
-          // width to the half worth reading.
-          Expanded(flex: 4, child: Text(label, style: t.textTheme.bodySmall)),
-          const SizedBox(width: Space.sm),
-          Expanded(
-            flex: 6,
-            // Selectable so a resident can copy their guardian's number or their own address
-            // out of the app instead of retyping it.
-            child: SelectionArea(
-              child: Text(
-                shown.isEmpty ? missing : shown,
-                style: shown.isEmpty
-                    ? t.textTheme.bodyMedium?.copyWith(color: context.tones.muted)
-                    : t.textTheme.bodyLarge,
-              ),
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(vertical: Space.sm),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          // Side by side while there is room for both halves to read; stacked once large text
+          // would leave the value a sliver. Was a fixed 112dp label once — on a 320dp phone at
+          // 1.4x an address wrapped to five lines beside a one-word label.
+          final stacked = box.maxWidth < 260 || MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+          if (stacked) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [labelText, const SizedBox(height: Space.xxs), valueText],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 4, child: labelText),
+              const SizedBox(width: Space.sm),
+              Expanded(flex: 6, child: valueText),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1067,36 +746,60 @@ class DetailRow extends StatelessWidget {
 /// A STAFF ACCOUNT LANDING HERE GETS THE EMPTY STATE, NOT AN ERROR. `StudentRepository.me()`
 /// returns null for anyone without a resident row, which is exactly what a warden opening this
 /// route would be. Saying so plainly beats an exception that reads like a bug.
+///
+/// EVERY STATE HERE SCROLLS. These three are drawn straight into a tab body, under the header
+/// and over the bar, and at 2.0x text on a 320dp phone a failure's art and sentence are taller
+/// than the space between them. A list cannot overflow; it scrolls.
 class ResidentBuilder extends ConsumerWidget {
   const ResidentBuilder({super.key, required this.builder});
 
   final Widget Function(BuildContext context, WidgetRef ref, Student me) builder;
 
+  static const _padding = EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.xxxl);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return AsyncSection<Student?>(
-      value: ref.watch(myStudentProvider),
-      onRetry: () => ref.invalidate(myStudentProvider),
-      loading: const Padding(
-        padding: EdgeInsets.all(Space.md),
-        child: SkeletonCard(lines: 3),
-      ),
-      builder: (me) {
-        if (me == null) {
-          return const Padding(
-            padding: EdgeInsets.all(Space.md),
-            child: EmptyNote(
-              icon: Icons.person_off_rounded,
-              title: 'No resident record for this account',
-              message: 'These screens are for residents. If you live here and are seeing this, '
-                  'ask your warden to check your registration.',
-              tone: ApnivaasColors.textMuted,
-            ),
-          );
-        }
-        return builder(context, ref, me);
-      },
+    Widget scroll(Widget child) => ListView(
+          padding: _padding,
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [child],
+        );
+    // The cold first paint: a page's worth of placeholders — a tall card and two rows — so the
+    // screen arrives at roughly the shape it is about to have, rather than one card adrift.
+    const firstPaint = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SkeletonCard(lines: 4),
+        SizedBox(height: Space.sm),
+        SkeletonCard(),
+        SizedBox(height: Space.sm),
+        SkeletonCard(),
+      ],
     );
+    // The same three branches [AsyncSection] draws, spelled out so each can be put inside the
+    // list — and with the same two flags, so a refresh keeps the screen instead of blanking it.
+    return ref.watch(myStudentProvider).when(
+          skipLoadingOnRefresh: true,
+          skipLoadingOnReload: true,
+          loading: () => scroll(firstPaint),
+          error: (error, _) => scroll(
+            ErrorNote(error: error, onRetry: () => ref.invalidate(myStudentProvider)),
+          ),
+          data: (me) {
+            if (me == null) {
+              return scroll(
+                const EmptyNote(
+                  clay: ClayIcons.roleTenant,
+                  icon: Icons.person_off_rounded,
+                  title: 'No resident record for this account',
+                  message: 'These screens are for residents. If you live here and are seeing '
+                      'this, ask your warden to check your registration.',
+                ),
+              );
+            }
+            return builder(context, ref, me);
+          },
+        );
   }
 }
 
@@ -1106,6 +809,10 @@ class ResidentBuilder extends ConsumerWidget {
 /// therefore PUSHES rather than switching tabs — a resident who taps into their notices from
 /// the home screen expects Back to return them home, not to be left on another tab with no
 /// memory of how they got there.
+///
+/// The page wears the forest header every screen in the app does, with the back button in its
+/// leading slot, so a pushed page reads as a deeper level of the same app rather than a
+/// different one.
 class StudentPushPage extends StatelessWidget {
   const StudentPushPage({super.key, required this.title, required this.child});
 
@@ -1114,28 +821,10 @@ class StudentPushPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
     return Scaffold(
       body: Column(
         children: [
-          GlassHeader(
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: 'Back',
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                ),
-                const SizedBox(width: Space.xxs),
-                Expanded(
-                  child: Text(title,
-                      style: t.textTheme.titleLarge,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                ),
-              ],
-            ),
-          ),
+          AppHeader(title: title, leading: const HeaderBackButton()),
           Expanded(child: child),
         ],
       ),

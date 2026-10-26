@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
+import '../../../shared/clay/clay.dart';
 import '../../../shared/glass/glass.dart';
 import 'staff_models.dart';
 import 'staff_providers.dart';
@@ -159,22 +160,10 @@ class _StaffAccessSheetState extends ConsumerState<StaffAccessSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'PG ACCESS',
-                style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary),
-              ),
-              const SizedBox(height: Space.xxs / 2),
-              Text(
-                member.fullName,
-                style: t.textTheme.titleLarge,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: Space.xxs),
-              Text(
-                'Choose the PGs this ${member.role.label.toLowerCase()} can work in. They work '
-                'in one at a time and switch between them in the app.',
-                style: t.textTheme.bodySmall,
+              SheetTitle(
+                title: member.fullName,
+                subtitle: 'Choose the PGs this ${member.role.label.toLowerCase()} can work in. '
+                    'They work in one at a time and switch between them in the app.',
               ),
               const SizedBox(height: Space.md),
               StaffPgChecklist(
@@ -222,7 +211,6 @@ class _StaffAccessSheetState extends ConsumerState<StaffAccessSheet> {
                 // Dark until something changed: saving the list it already has would spend a
                 // round trip to be told nothing happened.
                 onPressed: _busy || !_changed ? null : _save,
-                style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
                 child: _busy
                     ? const SizedBox(
                         height: IconSize.md,
@@ -272,8 +260,7 @@ class StaffPgChecklist extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return FlatSurface(
-      weight: GlassWeight.regular,
-      borderRadius: Radii.rControl,
+      borderRadius: Radii.rCard,
       padding: const EdgeInsets.symmetric(vertical: Space.xxs),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -291,7 +278,10 @@ class StaffPgChecklist extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               subtitle: h.id == workingIn
-                  ? Text('Working here now', style: t.textTheme.bodySmall)
+                  ? Text(
+                      'Working here now',
+                      style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.primary),
+                    )
                   : (h.address?.trim().isNotEmpty ?? false)
                   ? Text(
                       h.address!.trim(),
@@ -315,23 +305,6 @@ class _Note extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final tones = context.tones;
-    return Container(
-      padding: const EdgeInsets.all(Space.sm),
-      decoration: BoxDecoration(
-        color: tones.chipFill(ApnivaasColors.info),
-        borderRadius: Radii.rControl,
-        border: Border.all(color: tones.chipBorder(ApnivaasColors.info), width: Strokes.hairline),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline_rounded, size: IconSize.sm, color: tones.info),
-          const SizedBox(width: Space.xs),
-          Expanded(child: Text(text, style: t.textTheme.bodySmall)),
-        ],
-      ),
-    );
+    return InfoNote(icon: Icons.info_outline_rounded, message: text);
   }
 }

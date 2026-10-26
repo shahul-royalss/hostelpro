@@ -6,11 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/clay/clay.dart';
 import '../../../shared/glass/glass.dart';
-import '../../../shared/illustrations.dart';
 import '../owner_format.dart';
 import '../owner_providers.dart';
-import '../widgets/states.dart';
+import '../widgets/owner_header.dart';
+import '../widgets/states.dart' show ErrorNote, whenAsync;
 import 'compose_notice_sheet.dart';
 import 'notice_providers.dart';
 
@@ -34,11 +35,9 @@ import 'notice_providers.dart';
 class OwnerNoticesScreen extends ConsumerWidget {
   const OwnerNoticesScreen({super.key, required this.hostelId});
 
-  /// Pushed rather than given a tab. The owner's five slots are spoken for in
-  /// features/shell/role_shell.dart, which is shared with every other role and is the file a
-  /// reader goes to to learn what a role's navigation is — quietly renaming one of its labels
-  /// from inside the notices feature is how two files start disagreeing about which tab is
-  /// third. The dashboard's own Notices section is the way in.
+  /// Pushed rather than given a tab: the owner's five slots are Home, Money, People, Property
+  /// and More (see OwnerTab), and a noticeboard is something an owner writes to now and then
+  /// rather than a place they live. Home's Notices section and More are the ways in.
   static Route<void> route(String hostelId) => MaterialPageRoute<void>(
         builder: (_) => OwnerNoticesScreen(hostelId: hostelId),
       );
@@ -47,44 +46,14 @@ class OwnerNoticesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
+    final scheme = Theme.of(context).colorScheme;
     final hostel = ref.watch(hostelProvider(hostelId));
     final notices = ref.watch(noticesProvider(hostelId));
 
     return Scaffold(
       body: Column(
         children: [
-          GlassHeader(
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: 'Back',
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                ),
-                const SizedBox(width: Space.xxs),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Notices',
-                        style: t.textTheme.titleLarge?.copyWith(color: t.colorScheme.primary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        hostel.value?.name ?? 'PG',
-                        style: t.textTheme.bodySmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          OwnerSubpageHeader(title: 'Notices', subtitle: hostel.value?.name ?? 'PG'),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
@@ -98,17 +67,11 @@ class OwnerNoticesScreen extends ConsumerWidget {
               child: whenAsync(
                 notices,
                 loading: () => ListView(
-                  padding: const EdgeInsets.all(Space.md),
-                  children: const [
-                    SkeletonCard(),
-                    SizedBox(height: Space.sm),
-                    SkeletonCard(),
-                    SizedBox(height: Space.sm),
-                    SkeletonCard(),
-                  ],
+                  padding: OwnerRhythm.pagePadding,
+                  children: const [ListSkeleton(rows: 3, semanticLabel: 'Loading notices')],
                 ),
                 error: (error) => ListView(
-                  padding: const EdgeInsets.all(Space.md),
+                  padding: OwnerRhythm.pagePadding,
                   physics: const AlwaysScrollableScrollPhysics(),
                   children: [
                     ErrorNote(
@@ -127,12 +90,15 @@ class OwnerNoticesScreen extends ConsumerWidget {
           ),
         ],
       ),
+      // The page's one filled action, in the brand, rather than Material's tonal default.
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => showComposeNoticeSheet(
           context,
           hostelId: hostelId,
           hostelName: hostel.value?.name,
         ),
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
         icon: const Icon(Icons.campaign_rounded),
         label: const Text('New notice'),
       ),
@@ -151,16 +117,15 @@ class _NoticeList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (page.isEmpty) {
       return ListView(
-        padding: const EdgeInsets.all(Space.md),
+        padding: OwnerRhythm.pagePadding,
         physics: const AlwaysScrollableScrollPhysics(),
         children: const [
-          // No tone. An empty noticeboard is neither good news nor bad — it is a PG where
-          // nothing has needed saying yet.
-          EmptyNote(
-            icon: Icons.campaign_outlined,
-            illustration: EmptyArt.notices,
+          // An empty noticeboard is neither good news nor bad — it is a PG where nothing has
+          // needed saying yet, and the first-run art says exactly that.
+          EmptyState(
+            icon: ClayIcons.announcement,
             title: 'No notices yet',
-            message: 'Write one and it goes out to whoever you address it to, with a '
+            body: 'Write one and it goes out to whoever you address it to, with a '
                 'notification, straight away.',
           ),
         ],
@@ -168,7 +133,8 @@ class _NoticeList extends ConsumerWidget {
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.huge * 2),
+      // Room at the foot for the floating button, so the last card is never under it.
+      padding: const EdgeInsets.fromLTRB(Space.md, Space.lg, Space.md, Space.huge * 2),
       physics: const AlwaysScrollableScrollPhysics(),
       // One extra row at the end when the server said there was more, so a long noticeboard
       // pages rather than stopping silently at twenty.
@@ -239,8 +205,8 @@ class _LoadMoreState extends ConsumerState<_LoadMore> {
 /// the distinction that matters to them is "is this just for us". The owner is looking at four,
 /// and WHO THEY SENT IT TO is the first thing they need to check — so the audience is always
 /// named here, and it is the chip's colour as well as its word. The row's HEAD is the notices
-/// glyph in the notices colour — identity, the same on every screen — and the audience chip
-/// beneath it is the classification; see [ApnivaasDomain] for why the two never share an object.
+/// clay icon — identity, the same on every screen — and the audience chip beneath it is the
+/// classification; the two never share an object.
 ///
 /// PUBLIC because owner_notices_test.dart drives the retraction through it.
 class OwnerNoticeCard extends ConsumerStatefulWidget {
@@ -258,13 +224,13 @@ class _OwnerNoticeCardState extends ConsumerState<OwnerNoticeCard> {
   AppFailure? _failure;
 
   /// The audience's colour. Not decoration: `all` is the loud one — it reaches residents AND
-  /// both staff — and a staff-only notice is the quiet one. Canonical tones, resolved at the
-  /// paint site by StatusChip. See tokens.dart.
-  Color get _tone => switch (widget.notice.audience) {
-        NoticeAudience.all => ApnivaasColors.success,
-        NoticeAudience.students => ApnivaasColors.info,
-        NoticeAudience.warden => ApnivaasColors.warning,
-        NoticeAudience.manager => ApnivaasColors.warning,
+  /// both staff — and a staff-only notice is the quiet one. Resolved to the theme's ink at the
+  /// paint site by StatusChip.
+  StatusTone get _tone => switch (widget.notice.audience) {
+        NoticeAudience.all => StatusTone.success,
+        NoticeAudience.students => StatusTone.info,
+        NoticeAudience.warden => StatusTone.warning,
+        NoticeAudience.manager => StatusTone.warning,
       };
 
   String get _audienceLabel => switch (widget.notice.audience) {
@@ -327,23 +293,23 @@ class _OwnerNoticeCardState extends ConsumerState<OwnerNoticeCard> {
     final t = Theme.of(context);
     final notice = widget.notice;
 
-    return GlassCard(
+    return FlatSurface(
+      borderRadius: Radii.rSurface,
+      padding: const EdgeInsets.fromLTRB(Space.md, Space.sm, Space.xxs, Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Small, so the title's optical centre stays where the 28dp badge put it.
-              const DomainIcon(
-                domain: ApnivaasDomain.notices,
-                icon: Icons.campaign_rounded,
-                size: DomainIconSize.sm,
+              const Padding(
+                padding: EdgeInsets.only(top: Space.xxs),
+                child: ClayIcon(ClayIcons.announcement, size: ClaySize.list),
               ),
               const SizedBox(width: Space.sm),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.only(top: Space.xxs),
+                  padding: const EdgeInsets.only(top: Space.sm),
                   child: Text(
                     notice.title,
                     style: t.textTheme.titleMedium,
@@ -352,7 +318,6 @@ class _OwnerNoticeCardState extends ConsumerState<OwnerNoticeCard> {
                   ),
                 ),
               ),
-              const SizedBox(width: Space.xs),
               // Disabled rather than hidden while a retraction is in flight: a control that
               // vanishes mid-tap is a control the owner will go looking for.
               IconButton(
@@ -364,34 +329,43 @@ class _OwnerNoticeCardState extends ConsumerState<OwnerNoticeCard> {
                         width: IconSize.md,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.delete_outline_rounded),
+                    : Icon(Icons.delete_outline_rounded, color: t.colorScheme.onSurfaceVariant),
               ),
             ],
           ),
-          const SizedBox(height: Space.xs),
-          SelectionArea(
-            child: Text(notice.body.trim(), style: t.textTheme.bodyMedium),
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: Space.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: Space.xs),
+                SelectionArea(
+                  child: Text(notice.body.trim(), style: t.textTheme.bodyMedium),
+                ),
+                const SizedBox(height: Space.sm),
+                // Wrap, not Row: two labels of unknown length in one row is a layout that works
+                // until someone turns their text up. Same reasoning as the resident's tile.
+                Wrap(
+                  spacing: Space.xs,
+                  runSpacing: Space.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    StatusChip(label: _audienceLabel, tone: _tone, dot: true),
+                    Text(
+                      '${dayLabel(notice.createdAt.toLocal())} · '
+                      '${relativeTime(notice.createdAt)}',
+                      style: t.textTheme.bodySmall
+                          ?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+                if (_failure != null) ...[
+                  const SizedBox(height: Space.sm),
+                  ErrorNote(error: _failure!, compact: true, onRetry: _retract),
+                ],
+              ],
+            ),
           ),
-          const SizedBox(height: Space.sm),
-          // Wrap, not Row: two labels of unknown length in one row is a layout that works
-          // until someone turns their text up. Same reasoning as the resident's tile.
-          Wrap(
-            spacing: Space.xs,
-            runSpacing: Space.xs,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              StatusChip(label: _audienceLabel, tone: _tone, dot: true),
-              Text(
-                '${dayLabel(notice.createdAt.toLocal())} · '
-                '${relativeTime(notice.createdAt)}',
-                style: t.textTheme.labelSmall,
-              ),
-            ],
-          ),
-          if (_failure != null) ...[
-            const SizedBox(height: Space.sm),
-            ErrorNote(error: _failure!, compact: true, onRetry: _retract),
-          ],
         ],
       ),
     );

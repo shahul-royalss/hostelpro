@@ -10,7 +10,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
-import '../../shared/glass/glass.dart';
+import '../../shared/clay/app_header.dart';
+import '../common/form_parts.dart';
+import '../common/refresh.dart' show snackbarErrorInk;
 import 'receipt.dart';
 import 'receipt_export.dart';
 import 'receipt_printer.dart';
@@ -69,14 +71,14 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
         break;
       case ReceiptExportFailed(:final message):
         // The tone is carried by an icon, NOT by the bar's fill. `ApnivaasColors.error` was
-        // painted here as a background under the snackbar theme's own #DAE2FD content colour,
+        // painted here as a background under the snackbar theme's own light content colour,
         // which measures 2.4:1 — the one place in the resident app where a failure was harder
-        // to read than a success. The theme's snackbar is the deepest well in the design in
-        // both themes and its text is measured against it; the error says so in a glyph.
+        // to read than a success. The snackbar's text is measured against the bar itself, and
+        // so is the glyph's red ([snackbarErrorInk]: the bar is the inverse of the page).
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Row(
             children: [
-              Icon(Icons.error_outline_rounded, size: IconSize.md, color: context.tones.error),
+              Icon(Icons.error_outline_rounded, size: IconSize.md, color: snackbarErrorInk(context)),
               const SizedBox(width: Space.xs),
               Expanded(child: Text(message)),
             ],
@@ -95,27 +97,24 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-
     return Scaffold(
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          GlassHeader(
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: 'Close',
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.close_rounded),
-                ),
-                const SizedBox(width: Space.xxs),
-                Expanded(child: Text('Your receipt', style: t.textTheme.titleLarge)),
-              ],
+          // The forest header of every sub-page, with a close rather than a back arrow: this is
+          // a full-screen dialog over whatever the resident was looking at.
+          AppHeader(
+            leading: HeaderIconButton(
+              icon: Icons.close_rounded,
+              label: 'Close',
+              onPressed: () => Navigator.of(context).maybePop(),
             ),
+            title: 'Your receipt',
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(Space.md, Space.lg, Space.md, Space.xxl),
+              padding: EdgeInsets.fromLTRB(Space.md, Space.lg, Space.md,
+                  Space.xxl + MediaQuery.paddingOf(context).bottom),
               child: ReceiptPrinterStage(
                 receipt: widget.receipt,
                 paperKey: _paperKey,
@@ -172,31 +171,22 @@ class _Actions extends StatelessWidget {
       );
     }
 
-    final shareButton = FilledButton.icon(
+    // Keeps its forest while it prepares the image, so the spinner in it reads as working
+    // rather than as a button that has gone grey and dead.
+    final shareButton = BusyFilledButton(
       key: shareButtonKey,
-      onPressed: sharing ? null : onShare,
-      icon: sharing
-          ? SizedBox(
-              width: IconSize.md,
-              height: IconSize.md,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                // `Colors.white` was a raw colour AND the wrong one: a spinner inside a filled
-                // button is drawn on `primary`, so it takes that button's own foreground.
-                color: Theme.of(context).colorScheme.onPrimary,
-              ),
-            )
-          : const Icon(Icons.ios_share_rounded, size: IconSize.md),
-      label: Text(sharing ? 'Preparing' : 'Share or save'),
+      label: 'Share or save',
+      icon: Icons.ios_share_rounded,
+      busy: sharing,
+      busyLabel: 'Preparing',
+      onPressed: onShare,
     );
 
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 420),
       child: Column(
-        // Stretch: the theme's filled button fixes its HEIGHT at 48 and leaves its minimum
-        // width at zero, so under the default centre alignment the cream "Share or save"
-        // button was hugging its label in the middle of a 420-point column. The design's
-        // actions run the width of the block they are in.
+        // Stretch: the design's actions run the width of the block they are in, rather than
+        // hugging their labels in the middle of a 420-point column.
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (phase == PrinterPhase.printed) ...[

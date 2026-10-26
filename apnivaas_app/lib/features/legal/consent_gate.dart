@@ -10,7 +10,9 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/notify/push_service.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/failure.dart';
-import '../../shared/glass/glass.dart';
+import '../../shared/clay/clay_icons.dart';
+import '../auth/auth_scaffold.dart';
+import '../common/form_parts.dart';
 import 'legal_documents.dart';
 import 'legal_providers.dart';
 import 'legal_screen.dart';
@@ -177,26 +179,23 @@ class _ConsentGateState extends ConsumerState<ConsentGate> {
 
     // 2. FAILED or REFUSED, including while a retry is still scheduled.
     if (consent.hasError) {
-      return _GateScaffold(
-        child: _CheckFailed(
-          failure: AppFailure.from(consent.error!),
-          onRetry: () => ref.invalidate(legalConsentProvider),
-        ),
+      return _CheckFailed(
+        failure: AppFailure.from(consent.error!),
+        onRetry: () => ref.invalidate(legalConsentProvider),
       );
     }
 
-    // 3. CHECKING. No answer and no error yet — the only honest thing to draw is a wait.
-    if (consent.isLoading) {
-      return const _GateScaffold(child: Center(child: CircularProgressIndicator()));
-    }
+    // 3. CHECKING. No answer and no error yet — the only honest thing to draw is a wait. A
+    //    spinner rather than a skeleton of the documents: for nearly everybody the answer is
+    //    "already agreed" and the next frame is their home, so a page of document-shaped bars
+    //    would be a preview of something they are not about to see.
+    if (consent.isLoading) return const _Checking();
 
     // 4. A successful read that found no acceptance. The gate proper.
-    return _GateScaffold(
-      child: _ConsentPrompt(
-        busy: _busy,
-        error: _writeError,
-        onAccept: _accept,
-      ),
+    return _ConsentPrompt(
+      busy: _busy,
+      error: _writeError,
+      onAccept: _accept,
     );
   }
 
@@ -232,21 +231,42 @@ class _ConsentGateState extends ConsumerState<ConsentGate> {
   }
 }
 
-/// The shell every non-passing state is drawn in. One place, so the four states cannot drift
-/// into four different-looking screens.
-class _GateScaffold extends StatelessWidget {
-  const _GateScaffold({required this.child});
-  final Widget child;
+//// The checking state: a wait, said in words, on the page's own ground.
+class _Checking extends StatelessWidget {
+  const _Checking();
 
   @override
   Widget build(BuildContext context) {
+    final t = Theme.of(context);
     return Scaffold(
-      body: SafeArea(child: child),
+      body: SafeArea(
+        child: Center(
+          child: Semantics(
+            liveRegion: true,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: Space.md),
+                Text(
+                  'Checking your agreement…',
+                  style: t.textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
 
 /// FAILED and REFUSED, told apart.
+///
+/// Drawn on the sign-in family's page, because this is the first screen after sign-in and the
+/// person has not been anywhere else in the app yet: the brand bar, a heading with its clay
+/// icon, the honest sentence, and the actions.
 class _CheckFailed extends ConsumerWidget {
   const _CheckFailed({required this.failure, required this.onRetry});
 
@@ -259,30 +279,27 @@ class _CheckFailed extends ConsumerWidget {
     // repeating it do harm. A read cannot do harm, so this is purely "is it worth a button".
     final canRetry = failure.isRetryable;
 
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(Space.xl),
-        child: StateCard(
-          badge: failure.needsSignIn ? 'SIGN IN AGAIN' : 'CANNOT CHECK',
-          tone: ApnivaasColors.warning,
-          child: StateBody(
-            title: failure.needsSignIn
-                ? 'Your session has ended'
-                : 'Cannot check your agreement',
-            message: canRetry || failure.needsSignIn
-                ? failure.message
-                : '${failure.message}\n\nApnivaas cannot let you in until it can confirm that '
-                    'you have agreed to the Terms of Use and Privacy Policy.',
-            action: canRetry
-                ? FilledButton(onPressed: onRetry, child: const Text('Try again'))
-                : null,
-            link: TextButton(
-              onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
-              child: const Text('Sign out'),
-            ),
-          ),
+    return AuthScaffold(
+      children: [
+        const SizedBox(height: Space.md),
+        AuthHeading(
+          icon: failure.needsSignIn ? ClayIcons.security : ClayIcons.agreement,
+          title: failure.needsSignIn ? 'Your session has ended' : 'Cannot check your agreement',
+          message: canRetry || failure.needsSignIn
+              ? failure.message
+              : '${failure.message}\n\nApnivaas cannot let you in until it can confirm that '
+                  'you have agreed to the Terms of Use and Privacy Policy.',
         ),
-      ),
+        const SizedBox(height: Space.xl),
+        if (canRetry) ...[
+          FilledButton(onPressed: onRetry, child: const Text('Try again')),
+          const SizedBox(height: Space.xxs),
+        ],
+        TextButton(
+          onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
+          child: const Text('Sign out'),
+        ),
+      ],
     );
   }
 }
@@ -360,79 +377,89 @@ class _ConsentPromptState extends ConsumerState<_ConsentPrompt> {
     // The heading, the introduction and the switcher used to be a FIXED block above the
     // document list, with the agree bar pinned below it. Measured on a 360x640 phone that left
     // about 150 dp for the documents themselves — and about 10 dp at text scale 1.4, which is
-    // a screen asking somebody to agree to text they physically cannot read. Now the heading
-    // and introduction are the first thing IN the scroll view and leave as the reader scrolls;
-    // only the two-way switcher stays pinned (so the other document is always one tap away),
-    // and the agree bar stays below.
-    return Column(
-      children: [
-        Expanded(
-          child: CustomScrollView(
-            controller: _scroll,
-            slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  key: _introKey,
-                  padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.xs),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('BEFORE YOU START', style: t.textTheme.labelSmall),
-                      const SizedBox(height: Space.xxs),
-                      Text('Please read and agree', style: t.textTheme.titleLarge),
-                      const SizedBox(height: Space.xxs),
-                      Text(
-                        'Apnivaas keeps personal information about you and, if you are staff, '
-                        'about the residents you look after. These two documents say exactly '
-                        'what is kept, who can see it and how long it is held. You can read them '
-                        'again at any time from the header of any screen.',
-                        style: t.textTheme.bodyMedium,
+    // a screen asking somebody to agree to text they physically cannot read. Now the brand bar,
+    // the heading and the introduction are the first thing IN the scroll view and leave as the
+    // reader scrolls; only the two-way switcher stays pinned (so the other document is always
+    // one tap away), and the agree bar stays below.
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: CustomScrollView(
+                controller: _scroll,
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      key: _introKey,
+                      padding: const EdgeInsets.fromLTRB(Space.lg, Space.md, Space.lg, Space.sm),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const AuthTopBar(),
+                          const SizedBox(height: Space.md),
+                          const AuthHeading(
+                            icon: ClayIcons.agreement,
+                            title: 'Please read and agree',
+                          ),
+                          const SizedBox(height: Space.xs),
+                          Text(
+                            'Apnivaas keeps personal information about you and, if you are staff, '
+                            'about the residents you look after. These two documents say exactly '
+                            'what is kept, who can see it and how long it is held. You can read '
+                            'them again at any time from Security.',
+                            style: t.textTheme.bodyMedium,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-              ),
-              // Pinned, and sized by its child — so a larger text size grows it rather than
-              // clipping the labels. Painted on the page's own ground so the document text
-              // scrolling underneath it is hidden, not overprinted.
-              PinnedHeaderSliver(
-                child: ColoredBox(
-                  color: t.scaffoldBackgroundColor,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(Space.md, Space.xs, Space.md, Space.xs),
-                    child: SegmentedButton<int>(
-                      segments: [
-                        for (var i = 0; i < kLegalDocuments.length; i++)
-                          ButtonSegment<int>(value: i, label: Text(kLegalDocuments[i].title)),
-                      ],
-                      selected: {_index},
-                      onSelectionChanged: (s) => _show(s.first),
-                      showSelectedIcon: false,
                     ),
                   ),
-                ),
+                  // Pinned, and sized by its child — so a larger text size grows it rather than
+                  // clipping the labels. Painted on the page's own ground so the document text
+                  // scrolling underneath it is hidden, not overprinted.
+                  PinnedHeaderSliver(
+                    child: ColoredBox(
+                      color: t.scaffoldBackgroundColor,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(Space.lg, Space.xs, Space.lg, Space.xs),
+                        child: SegmentedButton<int>(
+                          segments: [
+                            for (var i = 0; i < kLegalDocuments.length; i++)
+                              ButtonSegment<int>(value: i, label: Text(kLegalDocuments[i].title)),
+                          ],
+                          selected: {_index},
+                          onSelectionChanged: (s) => _show(s.first),
+                          showSelectedIcon: false,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(Space.lg, Space.md, Space.lg, Space.lg),
+                    sliver: SliverToBoxAdapter(child: LegalDocumentView(document: document)),
+                  ),
+                ],
               ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(Space.md, Space.sm, Space.md, Space.md),
-                sliver: SliverToBoxAdapter(child: LegalDocumentView(document: document)),
-              ),
-            ],
-          ),
+            ),
+            _AgreeBar(
+              agreed: _agreed,
+              busy: widget.busy,
+              error: widget.error,
+              onChanged: (v) => setState(() => _agreed = v),
+              onAccept: widget.onAccept,
+              onDecline: () => setState(() => _declined = true),
+            ),
+          ],
         ),
-        _AgreeBar(
-          agreed: _agreed,
-          busy: widget.busy,
-          error: widget.error,
-          onChanged: (v) => setState(() => _agreed = v),
-          onAccept: widget.onAccept,
-          onDecline: () => setState(() => _declined = true),
-        ),
-      ],
+      ),
     );
   }
 }
 
 /// The pinned bottom bar: the tick, the two buttons and any failure from the write.
+///
+/// The card, lifted off the page by a hairline and the tab bar's soft upward shadow, so the
+/// decision reads as the thing every scroll of the documents ends at.
 class _AgreeBar extends StatelessWidget {
   const _AgreeBar({
     required this.agreed,
@@ -453,79 +480,53 @@ class _AgreeBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return FlatSurface(
-      weight: GlassWeight.regular,
-      padding: const EdgeInsets.fromLTRB(Space.md, Space.sm, Space.md, Space.md),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // The whole row is the tap target, not just the 20dp box.
-          InkWell(
-            onTap: busy ? null : () => onChanged(!agreed),
-            borderRadius: Radii.rControl,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: Space.xxs),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Checkbox(
-                    value: agreed,
-                    onChanged: busy ? null : (v) => onChanged(v ?? false),
-                  ),
-                  const SizedBox(width: Space.xxs),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: Space.sm),
-                      child: Text(
-                        'I have read and agree to the Terms of Use and the Privacy Policy.',
-                        style: t.textTheme.bodyMedium,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+    final light = t.brightness == Brightness.light;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: t.colorScheme.surface,
+        border: Border(
+          top: BorderSide(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
+        ),
+        boxShadow: light ? Shadows.bar : null,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(Space.lg, Space.sm, Space.lg, Space.sm),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // The whole row is the tap target, not just the box.
+            CheckRow(
+              value: agreed,
+              onChanged: busy ? null : onChanged,
+              label: 'I have read and agree to the Terms of Use and the Privacy Policy.',
             ),
-          ),
-          if (error != null) ...[
-            const SizedBox(height: Space.xs),
-            Semantics(
-              liveRegion: true,
-              child: Text(
-                // A write that timed out is not reported as a failure anywhere else in this
-                // app and is not reported as one here either — accept_legal_terms() is
-                // idempotent, so the honest instruction is simply to try again.
-                error!.message,
-                style: t.textTheme.bodyMedium?.copyWith(color: context.tones.error),
-              ),
+            if (error != null) ...[
+              const SizedBox(height: Space.xs),
+              // A write that timed out is not reported as a failure anywhere else in this app and
+              // is not reported as one here either — accept_legal_terms() is idempotent, so the
+              // honest instruction is simply to try again.
+              FormNote(error!.message),
+            ],
+            const SizedBox(height: Space.sm),
+            BusyFilledButton(
+              label: 'Agree and continue',
+              busy: busy,
+              // Disabled until the box is ticked. The button being dead is the feedback that the
+              // tick is required; the tick row above is one tap away and clearly the thing to do.
+              onPressed: agreed ? () => onAccept() : null,
+            ),
+            const SizedBox(height: Space.xxs),
+            // A REAL OPTION, not a decoration. It is never disabled — including while a write is
+            // in flight, for the same reason Sign out on the change-password screen is not: the
+            // one moment somebody most needs a door is the moment the button they pressed has not
+            // come back.
+            TextButton(
+              onPressed: onDecline,
+              child: const Text('I do not agree'),
             ),
           ],
-          const SizedBox(height: Space.sm),
-          FilledButton(
-            // Disabled until the box is ticked. The button being dead is the feedback that the
-            // tick is required; the tick row above is one tap away and clearly the thing to do.
-            onPressed: agreed && !busy ? () => onAccept() : null,
-            child: busy
-                ? SizedBox(
-                    width: IconSize.md,
-                    height: IconSize.md,
-                    child: CircularProgressIndicator(
-                      strokeWidth: Strokes.glyph,
-                      color: t.colorScheme.onPrimary,
-                    ),
-                  )
-                : const Text('Agree and continue'),
-          ),
-          const SizedBox(height: Space.xxs),
-          // A REAL OPTION, not a decoration. It is never disabled — including while a write is
-          // in flight, for the same reason Sign out on the change-password screen is not: the
-          // one moment somebody most needs a door is the moment the button they pressed has not
-          // come back.
-          TextButton(
-            onPressed: onDecline,
-            child: const Text('I do not agree'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -543,33 +544,31 @@ class _DeclinedNotice extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(Space.xl),
-        child: StateCard(
-          badge: 'NOT AGREED',
-          tone: ApnivaasColors.warning,
-          child: StateBody(
-            title: 'Apnivaas cannot be used without agreeing',
-            message:
-                'That is a genuine choice, and nothing has been recorded. But the app keeps '
-                'personal information about you in order to work at all, and it may not do '
-                'that without your agreement — so there is no version of it that runs from '
-                'here.\n\n'
-                'If something in the documents is the problem, your hostel can raise it, or '
-                'you can write to the address in the Privacy Policy. Your account stays as it '
-                'is either way, and you can come back and agree at any time.',
-            action: FilledButton(
-              onPressed: onBack,
-              child: const Text('Back to the documents'),
-            ),
-            link: TextButton(
-              onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
-              child: const Text('Sign out'),
-            ),
-          ),
+    return AuthScaffold(
+      children: [
+        const SizedBox(height: Space.md),
+        const AuthHeading(
+          icon: ClayIcons.agreement,
+          title: 'Apnivaas cannot be used without agreeing',
+          message: 'That is a genuine choice, and nothing has been recorded. But the app keeps '
+              'personal information about you in order to work at all, and it may not do '
+              'that without your agreement — so there is no version of it that runs from '
+              'here.\n\n'
+              'If something in the documents is the problem, your hostel can raise it, or '
+              'you can write to the address in the Privacy Policy. Your account stays as it '
+              'is either way, and you can come back and agree at any time.',
         ),
-      ),
+        const SizedBox(height: Space.xl),
+        FilledButton(
+          onPressed: onBack,
+          child: const Text('Back to the documents'),
+        ),
+        const SizedBox(height: Space.xxs),
+        TextButton(
+          onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
+          child: const Text('Sign out'),
+        ),
+      ],
     );
   }
 }

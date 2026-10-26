@@ -93,8 +93,8 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
               No `uppercase` on this line: it would print the operator as "SHARESHI TECH", and a
               name is written as it is registered. */}
           <p className="mt-4 text-caption text-muted/80">
-            © {new Date().getFullYear()} {LEGAL.operatorName}. Accounts are created by your hostel
-            administrator — there is no public sign-up.
+            © {new Date().getFullYear()} {LEGAL.operatorName}. Staff accounts are created by the
+            hostel&rsquo;s owner; owners and tenants can sign up in the Android app.
           </p>
         </div>
       </footer>

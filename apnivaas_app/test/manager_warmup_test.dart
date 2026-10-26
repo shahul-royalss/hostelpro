@@ -6,7 +6,7 @@
 // BEHIND the shown value.
 //
 // Every fetch below takes a real (fake-clock) 300ms, so if a tab tap had to fetch on arrival
-// the arrival frame COULD NOT show data — the row assertions would fail and the spinner finder
+// the arrival frame COULD NOT show data — the row assertions would fail and the skeleton finder
 // would fire. Passing therefore proves the tap rendered from warm state, not from a lucky
 // instant network. Without this file, the next refactor of ManagerShell quietly reintroduces
 // the lazy load and nobody notices until the product owner does.
@@ -16,8 +16,8 @@
 // last group then runs the REAL providers over a stubbed transport, so a holdForSession
 // deleted from manager_providers.dart fails here even though the widget stubs mirror it.
 //
-// No ApnivaasTheme, same as manager_test.dart: it is built on google_fonts, which reaches for
-// the network from inside the test binary. Nothing here depends on the typeface.
+// The stock theme, same as manager_test.dart: nothing here depends on the typeface or the
+// palette.
 // ignore_for_file: depend_on_referenced_packages
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +32,7 @@ import 'package:mobile/data/providers.dart';
 import 'package:mobile/features/manager/data/manager_models.dart';
 import 'package:mobile/features/manager/data/manager_providers.dart';
 import 'package:mobile/features/manager/manager_shell.dart';
+import 'package:mobile/shared/clay/clay.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const _hostelId = 'h1';
@@ -91,7 +92,7 @@ void main() {
       ];
 
   Future<void> pumpShell(WidgetTester tester) async {
-    // Tall, so every home section (including "Next up", which shares the Tasks tab's query)
+    // Tall, so every home section (including "Today's tasks", which shares the Tasks tab's query)
     // is genuinely mounted in the first frame, the way it is on a phone that scrolls.
     tester.view.physicalSize = const Size(1000, 3000);
     tester.view.devicePixelRatio = 1;
@@ -106,11 +107,14 @@ void main() {
 
   /// A destination on the bottom bar, told apart from a screen title wearing the same word.
   Finder destination(String label) =>
-      find.descendant(of: find.byType(NavigationBar), matching: find.text(label));
+      find.descendant(of: find.byType(ClayNavBar), matching: find.text(label));
 
-  /// The one shape of "still loading" a manager screen can draw. (RefreshIndicator's spinner
-  /// exists only while a pull gesture is in progress, so this finder is exactly the skeleton.)
+  /// Every shape of "still loading" a manager screen can draw: the skeleton a section sketches
+  /// while its first answer is coming (every one of them pulses inside a [SkeletonPulse]), and
+  /// the small spinner the hostel-status banner wears while it checks. (RefreshIndicator's
+  /// spinner exists only while a pull gesture is in progress, so it never trips this.)
   void expectNoSpinner() {
+    expect(find.byType(SkeletonPulse), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   }
 
@@ -121,11 +125,11 @@ void main() {
     await pumpShell(tester);
 
     // FRAME ONE. Home and the shell's own chrome dispatch, and nothing else: the badge's
-    // count, the hostel status row, the finance window, and the "Next up" jobs (the same
-    // TaskQuery the Tasks tab will watch). The spinners here are the one legitimate loading
+    // count, the hostel status row, the finance window, and "Today's tasks" (the same
+    // TaskQuery the Tasks tab will watch). The skeletons here are the one legitimate loading
     // face of the whole session: the genuinely cold first paint of home.
     expect(log, ['taskLoad', 'hostel', 'finance', 'tasks(open) p0']);
-    expect(find.byType(CircularProgressIndicator), findsWidgets);
+    expect(find.byType(SkeletonPulse), findsWidgets);
 
     // Inside the head start (the first warmer fires at +150ms): still only home's requests.
     await tester.pump(const Duration(milliseconds: 100));
@@ -150,7 +154,7 @@ void main() {
     );
 
     // Home is now fully drawn — and from here on, NOTHING may show a spinner.
-    expect(find.text('4'), findsWidgets, reason: 'the jobs-open hero figure');
+    expect(find.text('4'), findsWidgets, reason: 'the jobs-open figure');
     expectNoSpinner();
 
     // ── EXPENSES, one frame after the tap. The fetch takes 300ms, so this ledger row can

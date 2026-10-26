@@ -7,7 +7,16 @@ import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
 import '../../common/refresh.dart';
-import '../../../shared/glass/glass.dart';
+import '../../../shared/clay/clay.dart'
+    show
+        ClayIcons,
+        ListGroup,
+        ListRow,
+        ListRowAmount,
+        StatTile,
+        StatTileStyle,
+        StatusTone,
+        TileSkeleton;
 import '../../../shared/illustrations.dart';
 import '../actions/record_payment_sheet.dart';
 import '../data/warden_providers.dart';
@@ -27,6 +36,10 @@ import '../widgets/warden_ui.dart';
 /// The summary above the list comes from rpc_hostel_stats FOR THE SAME MONTH, which is computed
 /// from the same ledger function. Totals and rows therefore cannot drift apart — they are two
 /// readings of one query, not two queries that ought to agree.
+///
+/// THE MONTH LIVES IN THE HEADER. Its name is the header's second line and the two arrows that
+/// step it sit beside it, so the month a warden is reading and the control that changes it are
+/// one object — and the page below starts with the money, not with a row of controls.
 class WardenFeesScreen extends ConsumerWidget {
   const WardenFeesScreen({super.key});
 
@@ -36,7 +49,7 @@ class WardenFeesScreen extends ConsumerWidget {
     if (hostelId == null) {
       return const WardenScreen(
         title: 'Collections',
-        child: EmptyState(
+        child: WardenEmptyState(
           icon: Icons.payments_rounded,
           title: 'No hostel on this account',
           detail: 'A warden is attached to one hostel. Ask the owner to check the assignment.',
@@ -45,6 +58,7 @@ class WardenFeesScreen extends ConsumerWidget {
     }
 
     final month = ref.watch(selectedMonthProvider);
+    final current = ref.watch(currentPeriodMonthProvider);
     final filter = ref.watch(feeFilterProvider);
     final query = FeeLedgerQuery(hostelId: hostelId, periodMonth: month, status: filter);
     final ledger = ref.watch(feeLedgerProvider(query));
@@ -59,9 +73,28 @@ class WardenFeesScreen extends ConsumerWidget {
                 .value ??
             RefundIndex.empty;
 
+    // One month ahead is allowed — advance rent is ordinary. Further forward is not: a ledger
+    // for a month nobody has lived through is a screen with nothing true on it.
+    final canGoForward = month.compareTo(_next(current)) < 0;
+
     return WardenScreen(
       title: 'Collections',
-      subtitle: monthLabel(month),
+      subtitle: month == current
+          ? monthLabel(month)
+          : '${monthLabel(month)} · ${month.compareTo(current) < 0 ? 'past month' : 'next month'}',
+      actions: [
+        HeaderAction(
+          tooltip: 'Previous month',
+          icon: Icons.chevron_left_rounded,
+          onPressed: () => ref.read(selectedMonthProvider.notifier).step(-1),
+        ),
+        HeaderAction(
+          tooltip: 'Next month',
+          icon: Icons.chevron_right_rounded,
+          onPressed:
+              canGoForward ? () => ref.read(selectedMonthProvider.notifier).step(1) : null,
+        ),
+      ],
       child: PagedList<FeeLedgerRow>(
         value: ledger,
         // Bounded, and it says what happened. See features/common/refresh.dart: an invalidate
@@ -78,19 +111,17 @@ class WardenFeesScreen extends ConsumerWidget {
         },
         onLoadMore: () => ref.read(feeLedgerProvider(query).notifier).loadMore(),
         header: Padding(
-          padding: const EdgeInsets.only(bottom: Space.sm),
+          padding: const EdgeInsets.only(bottom: Space.xxs),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const _MonthStepper(),
-              const SizedBox(height: Space.sm),
               _MonthSummary(hostelId: hostelId, month: month),
-              const SizedBox(height: Space.sm),
+              const SizedBox(height: Space.md),
               const _FeeFilterChips(),
             ],
           ),
         ),
-        empty: EmptyState(
+        empty: WardenEmptyState(
           // Only the whole month with nobody on it. "Nobody is unpaid this month" is a filter
           // result, not an empty ledger, and keeps the glyph.
           illustration: filter == null ? EmptyArt.payments : null,
@@ -110,52 +141,6 @@ class WardenFeesScreen extends ConsumerWidget {
       ),
     );
   }
-}
-
-/// ‹ October 2026 ›
-class _MonthStepper extends ConsumerWidget {
-  const _MonthStepper();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
-    final month = ref.watch(selectedMonthProvider);
-    final current = ref.watch(currentPeriodMonthProvider);
-    // One month ahead is allowed — advance rent is ordinary. Further forward is not: a ledger
-    // for a month nobody has lived through is a screen with nothing true on it.
-    final canGoForward = month.compareTo(_next(current)) < 0;
-
-    return Row(
-      children: [
-        // The file's only icon button is `bell-icon-container` (4:656): a 32dp raised square
-        // at the 8 corner. Material's filledTonal circle in `secondaryContainer` is not a
-        // shape this design draws.
-        HeaderAction(
-          tooltip: 'Previous month',
-          icon: Icons.chevron_left_rounded,
-          onPressed: () => ref.read(selectedMonthProvider.notifier).step(-1),
-        ),
-        Expanded(
-          child: Column(
-            children: [
-              Text(monthLabel(month), style: t.textTheme.titleMedium, textAlign: TextAlign.center),
-              if (month != current)
-                Text(
-                  month.compareTo(current) < 0 ? 'Past month' : 'Next month',
-                  style: t.textTheme.labelSmall,
-                ),
-            ],
-          ),
-        ),
-        HeaderAction(
-          tooltip: 'Next month',
-          icon: Icons.chevron_right_rounded,
-          onPressed:
-              canGoForward ? () => ref.read(selectedMonthProvider.notifier).step(1) : null,
-        ),
-      ],
-    );
-  }
 
   static String _next(String periodMonth) {
     final parts = periodMonth.split('-');
@@ -163,12 +148,12 @@ class _MonthStepper extends ConsumerWidget {
   }
 }
 
-/// Collected against outstanding, for the month on screen.
+/// Where the month on screen stands: what has come in, how much of the billing that is, and
+/// what is still owed.
 ///
-/// THE SHAPE IS resident-profile.png's two-up: a pair of figure cards side by side, the money
-/// already in in a neutral card and the money still owed in a card tinted its own colour, each
-/// under a `label-caps` eyebrow. The meter runs the full width underneath, on the design's own
-/// `bg-surface-bright` track.
+/// The clay hero tile — forest, the figure in white, the gold bar for the share collected — the
+/// same object as the home screen's "Collected" tile, so the two read as one fact seen from two
+/// places. Under it, the two head-counts in words: how many have paid and how many still owe.
 class _MonthSummary extends ConsumerWidget {
   const _MonthSummary({required this.hostelId, required this.month});
   final String hostelId;
@@ -176,128 +161,49 @@ class _MonthSummary extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
     final stats = ref.watch(
       hostelStatsProvider(StatsQuery(hostelId: hostelId, periodMonth: month)),
     );
 
     return AsyncSection<HostelStats?>(
       value: stats,
-      loading: const SkeletonBlock(lines: 1),
+      loading: const TileSkeleton(semanticLabel: 'Loading the month'),
       builder: (data) {
         if (data == null) return const SizedBox.shrink();
         final total = data.feesCollected + data.feesPending;
         // Guarded rather than assumed: a month with no residents divides by zero, and a
         // progress bar that reports 100% collected on an empty hostel is a lie.
         final ratio = total <= 0 ? null : (data.feesCollected / total).clamp(0.0, 1.0);
-        final owing = data.feesPending > 0;
 
-        return GlassCard(
-          padding: const EdgeInsets.all(Space.md),
-          semanticLabel: '${money(data.feesCollected)} collected, '
-              '${money(data.feesPending)} outstanding',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: _Figure(
-                        label: 'Collected',
-                        value: money(data.feesCollected),
-                        tone: ApnivaasColors.success,
-                      ),
-                    ),
-                    const SizedBox(width: Space.xs),
-                    Expanded(
-                      child: _Figure(
-                        label: 'Outstanding',
-                        value: money(data.feesPending),
-                        tone: owing ? ApnivaasColors.error : null,
-                        tinted: owing,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (ratio != null) ...[
-                const SizedBox(height: Space.md),
-                ClipRRect(
-                  borderRadius: Radii.rPill,
-                  child: LinearProgressIndicator(
-                    value: ratio,
-                    // The design's meter: `bg-surface-bright` channel, `bg-primary` fill. The
-                    // track used to be a red tint, which drew the eye to the part of the month
-                    // that had not happened yet.
-                    backgroundColor: t.colorScheme.surfaceBright,
-                    valueColor: AlwaysStoppedAnimation(context.tones.success),
-                  ),
-                ),
-              ],
-              const SizedBox(height: Space.sm),
-              MetaLine([
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            StatTile(
+              style: StatTileStyle.hero,
+              icon: ClayIcons.money,
+              label: 'Collected in ${monthName(month)}',
+              value: money(data.feesCollected),
+              // The percentage is in words as well as in the bar: a bar alone is a shape, and
+              // a screen reader cannot hear a shape.
+              caption: ratio == null
+                  ? 'Nothing billed yet'
+                  : data.feesPending > 0
+                      ? '${(ratio * 100).round()}% collected · '
+                          '${money(data.feesPending)} outstanding'
+                      : 'Everyone has paid',
+              progress: ratio,
+            ),
+            const SizedBox(height: Space.sm),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Space.xxs),
+              child: MetaLine([
                 (Icons.check_circle_outline_rounded, '${data.studentsPaid} paid'),
                 (Icons.schedule_rounded, '${data.studentsUnpaid} still owing'),
               ]),
-            ],
-          ),
+            ),
+          ],
         );
       },
-    );
-  }
-}
-
-/// One half of the two-up: a `label-caps` eyebrow over a `title-md` figure, in a well of its
-/// own when the figure carries a meaning.
-class _Figure extends StatelessWidget {
-  const _Figure({
-    required this.label,
-    required this.value,
-    this.tone,
-    this.tinted = false,
-  });
-
-  final String label;
-  final String value;
-  final Color? tone;
-
-  /// Tints the whole well, the way the mockup's TOTAL DUES card is tinted coral. Reserved for
-  /// the figure that is a call to act.
-  final bool tinted;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final accent = tone == null ? null : context.tones.resolve(tone!);
-    return Container(
-      padding: const EdgeInsets.all(Space.sm),
-      decoration: BoxDecoration(
-        color: tinted && accent != null
-            ? context.tones.chipFill(accent)
-            : t.colorScheme.surfaceContainer,
-        borderRadius: Radii.rControl,
-        border: Border.all(
-          color: tinted && accent != null
-              ? context.tones.chipBorder(accent)
-              : t.colorScheme.outlineVariant,
-          width: Strokes.hairline,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CapsLabel(label, tone: accent, dot: accent != null),
-          const SizedBox(height: Space.xxs),
-          Text(
-            value,
-            style: t.textTheme.headlineSmall?.copyWith(color: accent),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
     );
   }
 }
@@ -322,8 +228,8 @@ class _FeeFilterChips extends ConsumerWidget {
     final selected = ref.watch(feeFilterProvider);
     final notifier = ref.read(feeFilterProvider.notifier);
 
-    // `chips` (4:747). The filter is a NULLABLE status rather than a plain enum, so this
-    // builds the row out of [FilterPill] directly instead of going through [FilterBar].
+    // The filter is a NULLABLE status rather than a plain enum, so this builds the row out of
+    // [FilterPill] directly instead of going through [FilterBar].
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -351,6 +257,13 @@ class _FeeFilterChips extends ConsumerWidget {
   }
 }
 
+/// One resident's month: their initials, where they sleep, and the money — the balance in red
+/// while there is one, what they paid in green once there is not — with the state as a chip
+/// under it.
+///
+/// A CARD OF ITS OWN, like every row on the warden's lists, and the resident's refunds for the
+/// month as a footnote inside the same card under a hairline: the refund belongs to this row,
+/// not to the list.
 class _LedgerRow extends StatelessWidget {
   const _LedgerRow({required this.row, required this.month, this.refunds = const []});
   final FeeLedgerRow row;
@@ -362,101 +275,97 @@ class _LedgerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final tone = toneFor(context, row.status);
     final placement = row.roomNumber == null
         ? 'No bed'
         : row.bedNumber == null
             ? 'Room ${row.roomNumber}'
             : 'Room ${row.roomNumber} · Bed ${row.bedNumber}';
+    final owes = row.balance > 0;
 
-    return TapRow(
-      semanticLabel: '${row.fullName}, ${row.status.label}, '
-          '${money(row.balance)} outstanding'
-          '${refunds.map((r) => ', ${money(r.amount)} '
-              '${r.isSettled ? 'refunded' : 'refund pending'}').join()}',
-      // The row IS the action. A separate "collect" button would be a second target to hit and
-      // a second thing to explain; the only reason to open a ledger row is to take money.
-      onTap: () => showRecordPaymentSheet(
-        context,
-        studentId: row.studentId,
-        studentName: row.fullName,
-        monthlyFee: row.monthlyFee,
-        periodMonth: month,
-      ),
-      child: Row(
-        children: [
-          Avatar(name: row.fullName, tone: tone),
-          const SizedBox(width: Space.sm),
-          Expanded(
+    return ListGroup(
+      children: [
+        ListRow(
+          avatarName: row.fullName,
+          title: row.fullName,
+          subtitle: placement,
+          semanticLabel: '${row.fullName}, $placement, ${row.status.label}, '
+              '${money(row.balance)} outstanding'
+              '${refunds.map((r) => ', ${money(r.amount)} '
+                  '${r.isSettled ? 'refunded' : 'refund pending'}').join()}',
+          // The row IS the action. A separate "collect" button would be a second target to hit
+          // and a second thing to explain; the only reason to open a ledger row is to take
+          // money.
+          onTap: () => showRecordPaymentSheet(
+            context,
+            studentId: row.studentId,
+            studentName: row.fullName,
+            monthlyFee: row.monthlyFee,
+            periodMonth: month,
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListRowAmount(
+                amount: owes ? money(row.balance) : money(row.amountPaid),
+                status: row.status.label,
+                tone: statusToneOf(row.status),
+                amountTone: owes ? StatusTone.error : StatusTone.success,
+              ),
+              // The resident, one tap away from the money they owe — a person glyph rather than
+              // a chevron, because the row itself already opens something else.
+              IconButton(
+                tooltip: 'Open resident',
+                icon: const Icon(Icons.person_outline_rounded),
+                color: t.colorScheme.onSurfaceVariant,
+                onPressed: () => showStudentSheet(context, studentId: row.studentId),
+              ),
+            ],
+          ),
+        ),
+        // ═══ THE WARDEN IS THE ONE WHO GETS ASKED, IN PERSON ═══
+        //
+        // A refund reaches this screen as a status that has quietly moved from PAID back to
+        // PARTLY PAID or UNPAID — indistinguishable, at the desk, from a resident who simply
+        // never paid. So the row says it in words, in the resident's own card, where a warden
+        // reading the list finds it before the conversation starts rather than during it.
+        //
+        // [ApnivaasColors.info] and not the amber the status chip beside it may be wearing: two
+        // different facts about the same month must not wear one colour. See [RefundNote] in
+        // features/student/widgets/rent.dart for the full reasoning behind the tone; it is the
+        // same decision, made once.
+        //
+        // A pending refund says so in its own words. The warden is the person who will be
+        // asked "where is my money", and "instructed" and "gone" are the two different answers
+        // to that question.
+        if (refunds.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: Space.sm),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(row.fullName,
-                    style: t.textTheme.titleSmall?.copyWith(color: t.colorScheme.onSurface),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: Space.xxs / 2),
-                Text(placement,
-                    style: t.textTheme.bodySmall,
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                // ═══ THE WARDEN IS THE ONE WHO GETS ASKED, IN PERSON ═══
-                //
-                // A refund reaches this screen as a status that has quietly moved from PAID
-                // back to PARTLY PAID or UNPAID — indistinguishable, at the desk, from a
-                // resident who simply never paid. So the row says it in words, on the resident's
-                // own line, where a warden reading the list finds it before the conversation
-                // starts rather than during it.
-                //
-                // [ApnivaasColors.info] and not the amber the status pill beside it may be
-                // wearing: two different facts about the same month must not wear one colour.
-                // See [RefundNote] in features/student/widgets/rent.dart for the full reasoning
-                // behind the tone; it is the same decision, made once.
-                //
-                // A pending refund says so in its own words. The warden is the person who will
-                // be asked "where is my money", and "instructed" and "gone" are the two
-                // different answers to that question.
-                for (final r in refunds) ...[
-                  const SizedBox(height: Space.xxs / 2),
-                  Row(
-                    children: [
-                      Icon(Icons.assignment_return_rounded,
-                          size: IconSize.sm, color: context.tones.info),
-                      const SizedBox(width: Space.xxs),
-                      Expanded(
-                        child: Text(
-                          _refundLine(r),
-                          style: t.textTheme.bodySmall
-                              ?.copyWith(color: context.tones.info),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                for (final r in refunds)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: Space.hair),
+                    child: Row(
+                      children: [
+                        Icon(Icons.assignment_return_rounded,
+                            size: IconSize.sm, color: context.tones.info),
+                        const SizedBox(width: Space.xs),
+                        Expanded(
+                          child: Text(
+                            _refundLine(r),
+                            style: t.textTheme.bodySmall?.copyWith(color: context.tones.info),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ],
               ],
             ),
           ),
-          const SizedBox(width: Space.xs),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                row.balance > 0 ? money(row.balance) : money(row.amountPaid),
-                style: t.textTheme.titleSmall?.copyWith(
-                  color: row.balance > 0 ? context.tones.error : context.tones.success,
-                ),
-              ),
-              const SizedBox(height: Space.xxs),
-              StatusPill(status: row.status),
-            ],
-          ),
-          IconButton(
-            tooltip: 'Open resident',
-            icon: const Icon(Icons.chevron_right_rounded),
-            onPressed: () => showStudentSheet(context, studentId: row.studentId),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }

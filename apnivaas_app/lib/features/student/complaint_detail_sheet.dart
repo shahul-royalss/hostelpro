@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/clay/clay.dart';
 import '../../shared/glass/glass.dart';
 import 'widgets/common.dart';
 import 'widgets/complaint.dart';
@@ -42,23 +43,35 @@ class _ComplaintDetailSheet extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // The same round tinted glyph the list row uses, carrying the same two facts:
-                // the SHAPE is the category and the TINT is the status. A plain gold icon here
-                // said neither, and made the sheet and the row it was opened from look like two
-                // different objects.
-                ToneBadge(icon: complaintIcon(complaint.category), tone: tone),
+                // The same clay art the list row uses, so the sheet and the row it was opened
+                // from read as one object.
+                ClayIcon(complaintClay(complaint.category), size: ClaySize.tile),
                 const SizedBox(width: Space.sm),
-                Expanded(child: Text(complaint.title, style: t.textTheme.titleLarge)),
-                const SizedBox(width: Space.xs),
-                StatusPill(label: complaint.status.label, tone: tone),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(complaint.title, style: t.textTheme.titleLarge),
+                      const SizedBox(height: Space.xxs),
+                      Text(
+                        '${complaint.category.label} · raised '
+                        '${dayLabel(complaint.createdAt.toLocal())}',
+                        style: t.textTheme.bodySmall
+                            ?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: Space.xxs),
-            Text(
-              '${complaint.category.label} · raised ${dayLabel(complaint.createdAt.toLocal())}',
-              style: t.textTheme.labelSmall,
+            const SizedBox(height: Space.sm),
+            // Under the title rather than beside it: a long title and the chip used to share
+            // one row, and the title lost.
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: StatusPill(label: complaint.status.label, tone: tone, dot: true),
             ),
 
             if (complaint.description != null && complaint.description!.trim().isNotEmpty) ...[
@@ -68,28 +81,23 @@ class _ComplaintDetailSheet extends ConsumerWidget {
               ),
             ],
 
+            // What the hostel did, on the Mist banner with the trophy: a resolution is the one
+            // good-news moment a complaint has, and it reads as one.
             if (complaint.resolutionNote != null &&
                 complaint.resolutionNote!.trim().isNotEmpty) ...[
               const SizedBox(height: Space.md),
-              OutlineCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const CapsLabel('What the hostel did'),
-                    const SizedBox(height: Space.xxs),
-                    Text(complaint.resolutionNote!.trim(), style: t.textTheme.bodyMedium),
-                    if (complaint.resolvedAt != null) ...[
-                      const SizedBox(height: Space.xs),
-                      Text('Closed ${dayLabel(complaint.resolvedAt!.toLocal())}',
-                          style: t.textTheme.labelSmall),
-                    ],
-                  ],
-                ),
+              InfoBanner(
+                title: 'What the hostel did',
+                message: complaint.resolvedAt == null
+                    ? complaint.resolutionNote!.trim()
+                    : '${complaint.resolutionNote!.trim()}\n'
+                        'Closed ${dayLabel(complaint.resolvedAt!.toLocal())}',
+                icon: ClayIcons.success,
               ),
             ],
 
-            const SizedBox(height: Space.md),
-            const CapsLabel('Progress'),
+            const SizedBox(height: Space.lg),
+            const SectionHeader(title: 'Progress', size: SectionHeaderSize.card),
             const SizedBox(height: Space.sm),
             AsyncSection<List<ComplaintEvent>>(
               value: timeline,

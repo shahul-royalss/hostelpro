@@ -260,7 +260,7 @@ void main() {
     await _pump(tester, fake);
 
     // Where every account starts, and it says so rather than saying nothing.
-    expect(find.text('OFF'), findsOneWidget);
+    expect(find.text('Off'), findsOneWidget);
     expect(find.text('Two-factor authentication'), findsOneWidget);
 
     final start = find.widgetWithText(FilledButton, 'Set up two-factor authentication');
@@ -274,7 +274,7 @@ void main() {
 
     // The key, in full, next to the QR rather than behind a "can't scan?" link.
     expect(find.text(fake.issued.single), findsOneWidget);
-    expect(find.text('SETUP KEY'), findsOneWidget);
+    expect(find.text('Setup key'), findsOneWidget);
     expect(find.text('I have saved this key'), findsOneWidget);
 
     // BOTH GATES. A correct code alone must not finish setup — someone who never stored the
@@ -298,7 +298,7 @@ void main() {
     await _settle(tester);
 
     // It is on, and the screen says so from the server's own answer, not from optimism.
-    expect(find.text('ON'), findsOneWidget);
+    expect(find.text('On'), findsOneWidget);
     expect(find.text('Added 23 Aug 2026'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Turn off two-factor authentication'),
         findsOneWidget);
@@ -324,10 +324,10 @@ void main() {
 
     // AND NOTHING WAS SWITCHED ON. The panel is still open, the badge has not flipped, and the
     // "turn it off" control — which only exists for an enrolled account — is nowhere.
-    expect(find.text('ON'), findsNothing);
+    expect(find.text('On'), findsNothing);
     expect(find.widgetWithText(OutlinedButton, 'Turn off two-factor authentication'),
         findsNothing);
-    expect(find.text('Setting up'.toUpperCase()), findsOneWidget);
+    expect(find.text('Setting up'), findsOneWidget);
 
     // The field is cleared so the retry is a fresh code rather than an edit of a rejected one,
     // and the button is disarmed again until six digits are back in it.
@@ -357,9 +357,9 @@ void main() {
     await _settle(tester);
 
     // It is on, and the key is off the screen — the app keeps no copy to show again.
-    expect(find.text('ON'), findsOneWidget);
+    expect(find.text('On'), findsOneWidget);
     expect(find.text(first), findsNothing);
-    expect(find.text('SETUP KEY'), findsNothing);
+    expect(find.text('Setup key'), findsNothing);
   });
 
   testWidgets('abandoning setup discards the key; starting again issues a different one',
@@ -426,7 +426,7 @@ void main() {
     final fake = _FakeMfa(enrolled: true);
     await _pump(tester, fake);
 
-    expect(find.text('ON'), findsOneWidget);
+    expect(find.text('On'), findsOneWidget);
     await tester.tap(find.widgetWithText(OutlinedButton, 'Turn off two-factor authentication'));
     await tester.pump();
 
@@ -442,8 +442,8 @@ void main() {
 
     // Refused, and still on.
     expect(find.textContaining('That code is not right'), findsOneWidget);
-    expect(find.text('ON'), findsOneWidget);
-    expect(find.text('OFF'), findsNothing);
+    expect(find.text('On'), findsOneWidget);
+    expect(find.text('Off'), findsNothing);
 
     await tester.enterText(_codeField('Current code'), _FakeMfa.goodCode);
     await tester.pump();
@@ -451,7 +451,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Turn off'));
     await _settle(tester);
 
-    expect(find.text('OFF'), findsOneWidget);
+    expect(find.text('Off'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Set up two-factor authentication'),
         findsOneWidget);
   });
@@ -610,7 +610,7 @@ void main() {
       final auth = await _pumpRequired(tester, _FakeMfa(enrolled: true));
 
       expect(find.text('Required'), findsNothing);
-      expect(find.text('ON'), findsOneWidget);
+      expect(find.text('On'), findsOneWidget);
 
       final continueButton = find.widgetWithText(FilledButton, 'Continue to Apnivaas');
       expect(continueButton, findsOneWidget);
@@ -658,7 +658,7 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Turn off'));
       await _settle(tester);
 
-      expect(find.text('OFF'), findsOneWidget);
+      expect(find.text('Off'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Continue to Apnivaas'), findsNothing);
       expect(find.text('Required'), findsOneWidget);
       expect(find.widgetWithText(TextButton, 'Sign out'), findsOneWidget);
@@ -741,7 +741,7 @@ void main() {
 
       await _enrol(tester);
 
-      expect(find.text('ON'), findsOneWidget);
+      expect(find.text('On'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Continue to Apnivaas'), findsNothing);
       expect(find.text('Required'), findsNothing);
       expect(_backChevron(), findsOneWidget);

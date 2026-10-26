@@ -5,7 +5,7 @@ import 'package:mobile/features/student/widgets/common.dart';
 import 'package:mobile/features/warden/widgets/warden_ui.dart';
 import 'package:mobile/shared/illustrations.dart';
 
-/// The empty-state artwork, and the two rules that keep it honest.
+/// The first-run empty states' artwork, and the two rules that keep it honest.
 ///
 /// This file exists because the failure it catches is SILENT. An asset can be referenced by a
 /// constant, pass the analyzer, pass every widget test, and still be absent from the shipped
@@ -25,6 +25,17 @@ void main() {
       final data = await rootBundle.load(path);
       // A declared-but-empty file would still "load". These are 12-36KB each.
       expect(data.lengthInBytes, greaterThan(1000), reason: '$path is missing or truncated');
+    }
+  });
+
+  testWidgets('the clay icon drawn for every state is in the bundle too', (tester) async {
+    // What is DRAWN for a first-run state is EmptyArt.clayFor's clay icon; the PNG path is
+    // the state's name. Both halves have to be packaged for the state to look finished.
+    final drawn = {for (final path in all) EmptyArt.clayFor(path)};
+    expect(drawn, hasLength(all.length), reason: 'four states, four different pictures');
+    for (final clay in drawn) {
+      final data = await rootBundle.load(clay);
+      expect(data.lengthInBytes, greaterThan(1000), reason: '$clay is missing or truncated');
     }
   });
 
@@ -57,7 +68,7 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: EmptyState(icon: Icons.search_off_rounded, title: 'No match for "kumar"'),
+          body: WardenEmptyState(icon: Icons.search_off_rounded, title: 'No match for "kumar"'),
         ),
       ),
     );

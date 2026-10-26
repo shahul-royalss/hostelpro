@@ -106,8 +106,19 @@ export const LEGAL = {
  *
  * 2026-10-17: "Continue with Google" — who may use it, what Google shares, and Google's third job
  * as a recipient. Row: db/migrations/2026-10-17-legal-version-google.sql, same order as above.
+ *
+ * 2026-10-25: self sign-up for owners and tenants (Google; Facebook and Truecaller once switched
+ * on), profile photos, identity documents, the tenant's own details, approximate location for
+ * "PGs near you", the PG's position, join requests, demo requests and Razorpay plan payments; the
+ * permission count goes to eleven. Row: db/migrations/2026-10-25-legal-version-signup.sql, same
+ * order as above.
+ *
+ * 2026-10-26 (round 3): email and password sign-up, staff sign-up requests, precise location, the
+ * on-device biometric lock, PG profiles and reviews, check-out requests, UPI rent paid straight to
+ * the owner, and what a permanent deletion keeps; the permission count goes to thirteen. Row:
+ * db/migrations/2026-10-26-legal-version-round3.sql, same order as above.
  */
-export const LEGAL_VERSION = "2026-10-17";
+export const LEGAL_VERSION = "2026-10-26";
 
 /**
  * Android application id, so the deletion page can name the app Play users installed.

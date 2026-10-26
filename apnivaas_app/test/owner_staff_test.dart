@@ -552,8 +552,8 @@ void main() {
         ]),
       );
 
-      expect(find.text('MANAGER'), findsOneWidget);
-      expect(find.text('WARDEN'), findsOneWidget);
+      expect(find.text('Managers'), findsOneWidget);
+      expect(find.text('Wardens'), findsOneWidget);
       expect(find.text('Ravi Kulkarni'), findsOneWidget);
       expect(find.text('Priya Nair'), findsOneWidget);
       // The login id is on screen — it is what the owner has to read out to them.
@@ -788,7 +788,7 @@ void main() {
         reason: 'the rule is only useful with the way out of it attached',
       );
       // The sheet stays open — nothing was created, and the typing is still worth something.
-      expect(find.text('ADD STAFF'), findsOneWidget);
+      expect(find.textContaining('Enter the personal details'), findsOneWidget);
     });
 
     testWidgets('a duplicate email is put under the email box', (tester) async {
@@ -878,9 +878,9 @@ void main() {
       await _pump(tester, _overrides(staff: [multi()], owned: _threePgs));
 
       expect(find.text('Anil Warden'), findsOneWidget);
-      expect(find.text('WORKING IN NOW'), findsOneWidget);
+      expect(find.text('Working in now'), findsOneWidget);
       expect(find.text('Lakeview PG'), findsOneWidget);
-      expect(find.text('OTHER PGS'), findsOneWidget);
+      expect(find.text('Other PGs'), findsOneWidget);
       expect(find.text('Sunrise Residency, Hilltop House'), findsOneWidget);
       // Counted against Sunrise's five: access is what the limit counts, not where they are.
       expect(find.text('1 of 5'), findsOneWidget);
@@ -894,16 +894,16 @@ void main() {
         _overrides(staff: [multi(status: StaffStatus.inactive)], owned: _threePgs),
       );
 
-      expect(find.text('WORKING IN NOW'), findsNothing);
-      expect(find.text('LAST WORKED IN'), findsOneWidget);
+      expect(find.text('Working in now'), findsNothing);
+      expect(find.text('Last worked in'), findsOneWidget);
       expect(find.text('Lakeview PG'), findsOneWidget);
     });
 
     testWidgets('a single-PG member keeps today\'s card, with no PG lines on it', (tester) async {
       await _pump(tester, _overrides(staff: [_member()], owned: _threePgs));
 
-      expect(find.text('WORKING IN NOW'), findsNothing);
-      expect(find.text('OTHER PGS'), findsNothing);
+      expect(find.text('Working in now'), findsNothing);
+      expect(find.text('Other PGs'), findsNothing);
       expect(find.text('PG access'), findsOneWidget, reason: 'the owner has three PGs');
     });
 
@@ -946,9 +946,9 @@ void main() {
 
       await tester.tap(find.text('Add warden'));
       await tester.pumpAndSettle();
-      // The fixed ASSIGNED PROPERTY fact became a choice, with this PG already ticked.
-      expect(find.text('ASSIGNED PROPERTY'), findsNothing);
-      expect(find.text('ASSIGNED PGS'), findsOneWidget);
+      // The fixed Assigned PG fact became a choice, with this PG already ticked.
+      expect(find.text('Assigned PG'), findsNothing);
+      expect(find.text('Assigned PGs'), findsOneWidget);
       CheckboxListTile box(String name) => tester.widget<CheckboxListTile>(
             find.widgetWithText(CheckboxListTile, name),
           );
@@ -1017,13 +1017,13 @@ void main() {
       expect(find.text('Keep at least one PG.'), findsOneWidget);
     });
 
-    testWidgets('a single-PG owner keeps the ASSIGNED PROPERTY fact, not a picker',
+    testWidgets('a single-PG owner keeps the Assigned PG fact, not a picker',
         (tester) async {
       await _pump(tester, _overrides(writes: _FakeWrites()));
 
       await tester.tap(find.text('Add manager'));
       await tester.pumpAndSettle();
-      expect(find.text('ASSIGNED PROPERTY'), findsOneWidget);
+      expect(find.text('Assigned PG'), findsOneWidget);
       expect(find.byType(CheckboxListTile), findsNothing);
     });
 
@@ -1039,7 +1039,7 @@ void main() {
 
       await tester.tap(find.text('PG access'));
       await tester.pumpAndSettle();
-      expect(find.text('PG ACCESS'), findsOneWidget);
+      expect(find.byType(StaffAccessSheet), findsOneWidget);
 
       FilledButton save() => tester.widget<FilledButton>(
             find.ancestor(of: find.text('Save PG access'), matching: find.byType(FilledButton)),
@@ -1136,7 +1136,7 @@ void main() {
         find.text('This PG already has 5 active wardens. Remove one from it first.'),
         findsOneWidget,
       );
-      expect(find.text('PG ACCESS'), findsOneWidget);
+      expect(find.byType(StaffAccessSheet), findsOneWidget);
     });
   });
 
@@ -1247,7 +1247,7 @@ void main() {
     // The dialog is up and the sheet is still behind it — the password has crossed no route
     // boundary on its way to the screen.
     expect(find.text('Tx7-quiet-lamp'), findsOneWidget);
-    expect(find.text('ADD STAFF'), findsOneWidget);
+    expect(find.textContaining('Enter the personal details'), findsOneWidget);
 
     await tester.tap(find.text('I have saved these credentials'));
     await tester.pumpAndSettle();
@@ -1255,6 +1255,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Tx7-quiet-lamp'), findsNothing);
-    expect(find.text('ADD STAFF'), findsNothing, reason: 'the sheet closes on its own after');
+    expect(find.textContaining('Enter the personal details'), findsNothing,
+        reason: 'the sheet closes on its own after');
   });
 }

@@ -87,11 +87,13 @@ import { serviceClient } from "./supabase.ts";
 
 /** Mirrors STUDENT_LOGIN_DOMAIN in validate.ts and app.email_is_reachable() in the database. */
 const STUDENT_LOGIN_DOMAIN = "student.hostelpro.local";
+/** Synthetic sign-up addresses (Facebook without an email, Truecaller). Mirrors _shared/identity.ts. */
+const SYNTHETIC_IDENTITY_DOMAIN = "identity.apnivaas.invalid";
 
 /** Can this address actually receive mail? Mirrors app.email_is_reachable() in Postgres. */
 export function isReachableAddress(email: string | null | undefined): boolean {
   const e = (email ?? "").trim().toLowerCase();
-  return e.length > 0 && !e.endsWith("@" + STUDENT_LOGIN_DOMAIN);
+  return e.length > 0 && !e.endsWith("@" + STUDENT_LOGIN_DOMAIN) && !e.endsWith("@" + SYNTHETIC_IDENTITY_DOMAIN);
 }
 
 /**

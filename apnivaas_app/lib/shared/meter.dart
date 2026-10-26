@@ -10,15 +10,13 @@ import '../core/theme/tokens.dart';
 /// divide by, and an empty track with an explanation underneath is the truthful drawing of
 /// "no beds configured", where a donut at 0% would look like a business with no customers.
 ///
-/// ── THE TRACK IS THE HAIRLINE, NOT A SURFACE ─────────────────────────────────────────────
+/// ── THE TRACK IS A TRACK, NOT A SURFACE ──────────────────────────────────────────────────
 ///
-/// Figma 4:437 draws the two dashboard meters as a fill over `#292E33` — the same colour every
-/// card border, divider and avatar ring in this file uses ([ColorScheme.outlineVariant]). This
-/// used to paint `surfaceBright` (`#1D2227`), which is the design's SKELETON bar rather than
-/// its meter track, and at 1.15:1 on a card the unfilled remainder all but disappeared, so the
-/// bar read as a floating stub instead of a share of something. Measured against the two tones
-/// this app puts in a meter, on the hairline track: gold 6.12:1, green 5.13:1 — both far past
-/// the 3:1 a graphical object owes its background.
+/// Light: [ApnivaasColors.track], the same warm grey the theme's progress indicators run on,
+/// 1.31:1 against the card — enough that the unfilled remainder reads as the rest of a whole,
+/// not as a floating stub. Dark: the card hairline. The fill is a graphical object, so it owes
+/// 3:1 against the track: forest measures 7.13:1 there, and every resolved status ink clears it
+/// (the tightest, warning, 4.44:1).
 class ProportionMeter extends StatelessWidget {
   const ProportionMeter({
     super.key,
@@ -39,8 +37,8 @@ class ProportionMeter extends StatelessWidget {
   final double height;
   final String? semanticLabel;
 
-  /// The design's trailing figure — `[▬▬▬▬░░] 77%` on both of 4:437's top cards, set in the
-  /// bar's own tone so the colour pairs the number with the shape it belongs to.
+  /// A trailing figure — `[▬▬▬▬░░] 77%` — set in the bar's own tone so the colour pairs the
+  /// number with the shape it belongs to.
   ///
   /// Suppressed when [value] is null: there is no percentage of nothing, and "0%" there would
   /// state a fact the database never counted.
@@ -52,7 +50,9 @@ class ProportionMeter extends StatelessWidget {
     // A filled bar is a graphical object, so 3:1 against the track applies to it. Resolving
     // keeps that true in the dark theme, where the canonical inks were authored for white.
     final fill = context.tones.resolve(tone ?? theme.colorScheme.primary);
-    final track = theme.colorScheme.outlineVariant;
+    final track = theme.brightness == Brightness.dark
+        ? theme.colorScheme.outlineVariant
+        : ApnivaasColors.track;
     final target = (value ?? 0).clamp(0.0, 1.0);
 
     final bar = SizedBox(

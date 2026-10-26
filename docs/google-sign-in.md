@@ -63,7 +63,27 @@ Supabase dashboard → **Authentication → Sign In / Providers**:
   email-verification link sends with "don't create users", so nothing that exists depends on this.
   Google sign-up (1.3.0) will also create accounts through the server, so it stays off then too.
 
-### Step 1 — Google Cloud (about 15 minutes, your Google account)
+### Step 1 — Google Cloud — DONE 2026-10-17, except the Play signing-key client
+
+Done in project **Nivora** (`nivorapg`), owned by dhrishta2025@gmail.com:
+- Google Auth Platform: app name Apnivaas, External, home/privacy/terms on hostelpro-three.vercel.app,
+  authorized domain `hostelpro-three.vercel.app`, no logo, **In production**.
+- Web client "Apnivaas server": `936348627987-jbbh27e045cukq0mb2eqa3pvp31rg8a9.apps.googleusercontent.com`
+  (no origins, no redirect URIs). Its secret is with the owner only.
+- Android client "Apnivaas Android (upload key)": `936348627987-fmfqh8nmivter5hlkbbq9ftmfj062pj6.apps.googleusercontent.com`,
+  package `com.nivorasr.app`, SHA-1 `DA:61:61:66:77:D2:59:8C:42:EF:E1:4C:72:80:E5:9C:48:EB:D2:77`
+  (upload key `CN=HostelPro`, read from the signed release APK with `apksigner verify --print-certs`).
+- Android clients for Play's signing keys (read from Play Console → App integrity on the ShaReshi Tech
+  account, 2026-10-17): current `D8:43:BE:F9:F0:0A:C7:6C:FB:0B:92:0D:DF:2C:F5:7C:CA:00:57:5E` →
+  `936348627987-27ajgev4raqfth13goli2ae97lkd3dcm`; the two from the 19 Sep 2026 key upgrade,
+  `9E:F6:5B:20:F5:FD:74:20:78:3E:9D:03:EE:05:E4:EC:39:99:DA:CB` → `936348627987-7upi6tad96cdevlac1rl1v5k12fj8qha`
+  and `CB:39:60:F8:03:1F:63:31:C5:44:A9:B0:47:59:53:9C:68:B8:F2:1F` → `936348627987-33pqhalbrvs85j78vet8l0e97ooqn66p`.
+- **Steps 3 and 4 are DONE too (2026-10-17):** `GOOGLE_WEB_CLIENT_ID` secret set and mobile-auth v13 deployed
+  (smoke-tested: boots, Google path answers, password path intact; v12 source kept for rollback). Supabase:
+  Google ON with the Web client ID, **no client secret** (the native flow never uses it), Skip nonce checks OFF;
+  GitHub OFF; "Allow new users to sign up" OFF. Left: legal row → website push → build with the client ID.
+
+The original instructions, kept for reference:
 
 Use the Google Cloud project that already holds Firebase for push (`nivorapg`), signed in with the
 account that owns it. One project is simpler than two, and the consent screen shows the app name,

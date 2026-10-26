@@ -294,11 +294,10 @@ void main() {
 
     testWidgets('storeys are grouped and labelled', (tester) async {
       await _pumpRooms(tester, rooms: _threeRooms());
-      // UPPERCASE, because Figma's section headings are (`quick-actions-section` 4:691,
-      // `complaints-section` 4:708, `list-header` 4:758 are all `uppercase`). The title-case
-      // heading with a rule running off to the right came from the superseded Stitch screens.
-      expect(find.text('FLOOR 1'), findsOneWidget);
-      expect(find.text('FLOOR 2'), findsOneWidget);
+      // Sentence case: the clay section heading speaks at a reading volume rather than in
+      // capitals, and it is still one heading per storey, in walking order.
+      expect(find.text('Floor 1'), findsOneWidget);
+      expect(find.text('Floor 2'), findsOneWidget);
     });
 
     testWidgets('a hostel with no rooms says so rather than showing an empty grid',
@@ -315,8 +314,8 @@ void main() {
       // The standalone pip legend is gone: the summary card labels each figure with the very
       // dot colour the pips are painted, so the figures are the key.
       await _pumpRooms(tester, rooms: _threeRooms());
-      expect(find.text('OCCUPIED'), findsOneWidget);
-      expect(find.text('FREE'), findsOneWidget);
+      expect(find.text('Occupied'), findsOneWidget);
+      expect(find.text('Free'), findsOneWidget);
       expect(find.textContaining('aintenance'), findsNothing);
       expect(find.textContaining('AINTENANCE'), findsNothing);
     });
@@ -371,14 +370,16 @@ void main() {
     testWidgets('each queue shows its own count', (tester) async {
       await _pumpHome(tester, stats: _stats(), onSite: 2);
 
-      // The stat card's eyebrow is UPPERCASE — `stats-grid` (4:672, 4:677, 4:682, 4:686) sets
-      // every one of them `text-[10px] uppercase`. The sentence-case version came from the
-      // superseded Stitch dashboard.
-      expect(find.text('RENT OWED'), findsOneWidget);
-      expect(find.text('6'), findsOneWidget); // students unpaid
-      expect(find.text('3'), findsOneWidget); // complaints not resolved
-      expect(find.text('1'), findsOneWidget); // leave requests pending
-      expect(find.text('₹33,800 outstanding'), findsOneWidget);
+      // Each queue is a line of "Needs your attention", its count in its own words, so the
+      // number and the thing it counts cannot be read apart. The list sits under the overview
+      // and the quick actions — past the first screenful of the test surface — so it is
+      // scrolled to first; the page's ListView only builds what is near the viewport.
+      await tester.scrollUntilVisible(find.text('1 leave request'), 200,
+          scrollable: find.byType(Scrollable).first);
+      expect(find.text('6 residents owe rent'), findsOneWidget); // students unpaid
+      expect(find.text('3 complaints open'), findsOneWidget); // complaints not resolved
+      expect(find.text('1 leave request'), findsOneWidget); // leave requests pending
+      expect(find.text('₹33,800 outstanding this month'), findsOneWidget);
     });
 
     testWidgets('an expired subscription is announced before a write is refused',

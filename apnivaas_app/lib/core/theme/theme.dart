@@ -5,86 +5,113 @@ import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'tokens.dart';
 import 'typography.dart';
 
-/// Apnivaas's two themes.
+/// Apnivaas's two themes — Forest & Cream, and its dark twin.
 ///
-/// ── THE DARK ONE IS THE PRODUCT ──────────────────────────────────────────────────────────
+/// [light] is the product: cream ground, warm white cards, forest for every primary action,
+/// Outfit headings over Manrope text. [dark] is designed and measured to the same rules and
+/// stays wired, but main.dart pins `ThemeMode.light` at the product owner's request.
 ///
-/// [dark] is the Figma design, written out role by role from `design-figma/DESIGN-SYSTEM.md`
-/// and the frames themselves, with nothing inferred. All nineteen `screen-*` frames are dark;
-/// this is the app.
+/// ── FOUR THINGS HERE ARE LOAD-BEARING AND EASY TO UNDO BY ACCIDENT ───────────────────────
 ///
-/// [light] is `ColorScheme.fromSeed(seedColor: ApnivaasColors.seed)` — derived from the design's
-/// own gold accent, not drawn — and it is included because the app currently runs
-/// `ThemeMode.system` and a light-mode phone has to get something legible. It measures clean
-/// (worst text pair 5.01:1) but it is a generic Material page in the right family, because
-/// `fromSeed` pulls most of the chroma out of #C9A96E and nobody designed a light Apnivaas. See
-/// [ApnivaasColors.lightPrimary]. The honest recommendation is `themeMode: ThemeMode.dark` in
-/// main.dart; that file is outside this change, so both themes are here and both are correct.
+/// 1. `colorScheme.surface` IS THE CARD, NOT THE GROUND. Call sites across `features/` paint a
+///    card with `colorScheme.surface`, and wiring the ground there makes every one of them
+///    vanish into the page. The ground is `scaffoldBackgroundColor`.
 ///
-/// ── FIVE THINGS HERE ARE LOAD-BEARING AND EASY TO UNDO BY ACCIDENT ───────────────────────
+/// 2. [ApnivaasSemantics] and [ApnivaasTextRoles] are registered as ThemeExtensions on BOTH
+///    themes. The first is what makes `context.tones.error` legible in whichever theme is
+///    current; the second carries the type roles the Material slots have no name for.
 ///
-/// 1. `colorScheme.surface` IS THE CARD, NOT THE GROUND. The design's `background` role is
-///    #0B0D0F, the page ground — but 17 call sites across `features/` paint a card with
-///    `colorScheme.surface`, and wiring the ground there makes every one of them vanish into
-///    the background. So `surface` is the design's card #111417 and the ground is
-///    `scaffoldBackgroundColor`. Screens being restyled against a mockup should name the
-///    surface they mean — `surfaceContainerLow`, `surfaceContainer`, `surfaceBright` — all of
-///    which carry the design's exact values.
+/// 3. `colorScheme.outline` and `outlineVariant` are TWO DIFFERENT JOBS. `outlineVariant` is a
+///    card's decorative edge (1.13:1 on the ground — seen, never read). `outline` is a
+///    CONTROL's edge — a text field, a chip, a radio, a drag handle — where WCAG 1.4.11 asks for
+///    3:1 and it measures 3.53:1 on the card. Collapse them and either every card looks like a
+///    text field or every field loses its edge.
 ///
-/// 2. THE FILLED BUTTON IS CREAM, AND IT IS WIRED TO `primaryContainer`. This is the reverse
-///    of the previous theme and of Material's default, and it is the design's most
-///    distinctive decision: 4:83 ("Continue") and 4:1596 ("Retry") are `bg-[#f5f3ee]` with
-///    `text-[#0b0d0f]`, 17.56:1. `primary` is the GOLD, which is what links, active tabs,
-///    focus rings and emphasis figures use, and which fills exactly one button in the file —
-///    the renew CTA on `screen-subscription-expired` (4:1537). A screen that wants that button
-///    asks for `colorScheme.primary` explicitly; the default is cream.
-///
-/// 3. [ApnivaasSemantics] is registered as a ThemeExtension on BOTH themes. It is what makes
-///    `context.tones.error` legible in whichever theme is current. See the proof in tokens.dart
-///    for why a single flat colour cannot do that job.
-///
-/// 4. `colorScheme.outline` and `outlineVariant` are TWO DIFFERENT JOBS. `outlineVariant`
-///    #292E33 is the design's hairline — every card edge and divider in the file, 1.35:1, a
-///    line you see and never read. `outline` #6F747A is the design's quietest INK, used here
-///    for the boundary of a control (a text field, an outlined button, a drag handle), where
-///    WCAG 1.4.11 pushes it to 3:1 and it measures 3.70:1 on the field fill. Do not collapse
-///    them: either every card grows a heavy outline, or every input loses its edge.
-///
-/// 5. NOTHING CASTS A SHADOW EXCEPT A MODAL. Every `elevation:` here is 0 and every surface is
-///    separated by the hairline, because that is what the design does — see [Shadows].
+/// 4. THE FILLED BUTTON IS FOREST IN LIGHT AND MIST IN DARK. In both it is the single most
+///    contrasty object on the screen; a cream button on a cream page, or a forest one on a
+///    near-black page, would not be.
 abstract final class ApnivaasTheme {
-  /// The Figma dark scheme, role by role. Every hex is [ApnivaasColors]; nothing is literal.
+  /// A text field's inner padding — the canvas's 14 across and 15 down, which with a 22dp line
+  /// lands the field at 52dp. Off the 4dp grid on purpose, so named rather than written inline.
+  static const _fieldInsetX = 14.0;
+  static const _fieldInsetY = 15.0;
+
+  static const ColorScheme _lightScheme = ColorScheme.light(
+    brightness: Brightness.light,
+
+    primary: ApnivaasColors.forest, //          9.36:1 on the card
+    onPrimary: Color(0xFFFFFFFF), //             9.51:1
+    primaryContainer: ApnivaasColors.mist,
+    onPrimaryContainer: ApnivaasColors.forest, // 7.54:1
+
+    // Leaf is a graphic green: white on it 4.72:1, but 4.23:1 as text on the ground, so it is
+    // never a text colour. Supporting text uses `onSurfaceVariant`.
+    secondary: ApnivaasColors.leaf,
+    onSecondary: Color(0xFFFFFFFF),
+    secondaryContainer: ApnivaasColors.well,
+    onSecondaryContainer: ApnivaasColors.ink, //  13.23:1
+
+    // Gold, as a fill only.
+    tertiary: ApnivaasColors.gold,
+    onTertiary: ApnivaasColors.ink, //            7.30:1
+    tertiaryContainer: ApnivaasColors.bannerTop,
+    onTertiaryContainer: ApnivaasColors.bannerTitle,
+
+    // ONE RED: the semantic ink, so a scheme red and a chip red are not a shade apart.
+    error: ApnivaasColors.errorInk,
+    onError: Color(0xFFFFFFFF), //               6.54:1
+    errorContainer: ApnivaasColors.errorContainerLight,
+    onErrorContainer: ApnivaasColors.errorInk, // 5.48:1
+
+    // See note 1: `surface` is the CARD.
+    surface: ApnivaasColors.card,
+    onSurface: ApnivaasColors.ink, //             14.53:1
+    onSurfaceVariant: ApnivaasColors.inkMuted, // 6.06:1
+    surfaceDim: ApnivaasColors.cream,
+    surfaceBright: Color(0xFFFFFFFF),
+    surfaceContainerLowest: ApnivaasColors.card,
+    surfaceContainerLow: ApnivaasColors.card,
+    surfaceContainer: ApnivaasColors.well,
+    surfaceContainerHigh: ApnivaasColors.card,
+    surfaceContainerHighest: ApnivaasColors.lightField,
+    surfaceTint: Colors.transparent,
+
+    outline: ApnivaasColors.controlBorder, //     3.53:1 — §1.4.11
+    outlineVariant: ApnivaasColors.cardBorder,
+
+    inverseSurface: ApnivaasColors.ink,
+    onInverseSurface: ApnivaasColors.onSurface, // 12.86:1
+    inversePrimary: ApnivaasColors.primary, //      7.69:1 on ink
+    shadow: ApnivaasColors.forestDeep,
+    scrim: ApnivaasColors.forestDeep,
+  );
+
   static const ColorScheme _darkScheme = ColorScheme.dark(
     brightness: Brightness.dark,
 
-    // GOLD is `primary`: links, active state, emphasis, focus, the renew CTA.
-    primary: ApnivaasColors.primary,
-    onPrimary: ApnivaasColors.onPrimary, // 8.70:1
-    // CREAM is the filled button. See note 2.
-    primaryContainer: ApnivaasColors.primaryContainer,
-    onPrimaryContainer: ApnivaasColors.onPrimaryContainer, // 17.56:1
+    primary: ApnivaasColors.primary, //           6.43:1 worst
+    onPrimary: ApnivaasColors.onPrimary, //       9.59:1
+    primaryContainer: ApnivaasColors.primaryContainer, // the Mist filled button
+    onPrimaryContainer: ApnivaasColors.onPrimaryContainer, // 7.54:1
 
-    // AMBER is `secondary`: due, expiring, the subscription banner.
     secondary: ApnivaasColors.secondary,
-    onSecondary: ApnivaasColors.onSecondary, // 8.70:1
+    onSecondary: ApnivaasColors.onSecondary,
     secondaryContainer: ApnivaasColors.secondaryContainer,
-    onSecondaryContainer: ApnivaasColors.onSecondaryContainer, // 7.03:1
+    onSecondaryContainer: ApnivaasColors.onSecondaryContainer,
 
-    // POSITIVE lives on `tertiary`: paid, occupied, resolved.
     tertiary: ApnivaasColors.tertiary,
-    onTertiary: ApnivaasColors.onTertiary, // 7.29:1
+    onTertiary: ApnivaasColors.onTertiary,
     tertiaryContainer: ApnivaasColors.tertiaryContainer,
-    onTertiaryContainer: ApnivaasColors.onTertiaryContainer, // 6.03:1
+    onTertiaryContainer: ApnivaasColors.onTertiaryContainer,
 
     error: ApnivaasColors.errorTone,
-    onError: ApnivaasColors.onErrorTone, // 5.76:1
+    onError: ApnivaasColors.onErrorTone,
     errorContainer: ApnivaasColors.errorContainer,
-    onErrorContainer: ApnivaasColors.onErrorContainer, // 4.89:1
+    onErrorContainer: ApnivaasColors.onErrorContainer,
 
-    // See note 1: `surface` is the CARD. The ground is scaffoldBackgroundColor.
     surface: ApnivaasColors.surfaceContainerLow,
-    onSurface: ApnivaasColors.onSurface, // 16.67:1
-    onSurfaceVariant: ApnivaasColors.onSurfaceVariant, // 7.55:1
+    onSurface: ApnivaasColors.onSurface,
+    onSurfaceVariant: ApnivaasColors.onSurfaceVariant,
     surfaceDim: ApnivaasColors.ground,
     surfaceBright: ApnivaasColors.surfaceBright,
     surfaceContainerLowest: ApnivaasColors.surfaceContainerLowest,
@@ -92,125 +119,82 @@ abstract final class ApnivaasTheme {
     surfaceContainer: ApnivaasColors.surfaceContainer,
     surfaceContainerHigh: ApnivaasColors.surfaceContainerHigh,
     surfaceContainerHighest: ApnivaasColors.surfaceContainerHighest,
+    surfaceTint: Colors.transparent,
 
     outline: ApnivaasColors.outline,
     outlineVariant: ApnivaasColors.outlineVariant,
-    surfaceTint: ApnivaasColors.primary,
-    inversePrimary: ApnivaasColors.seed,
     inverseSurface: ApnivaasColors.onSurface,
-    onInverseSurface: ApnivaasColors.ground, // 17.56:1
+    onInverseSurface: ApnivaasColors.ink, //       12.86:1
+    inversePrimary: ApnivaasColors.forest,
     shadow: Color(0xFF000000),
     scrim: Color(0xFF000000),
   );
 
-  /// THE LIGHT SCHEME, DRAWN — and it used to be `ColorScheme.fromSeed(#C9A96E)`.
-  ///
-  /// WHY THAT HAD TO GO. The quantiser answered the gold with #79590C, a dark bronze, and every
-  /// filled button, link and focus ring in the light theme painted it. The file above this one
-  /// said so in its own voice — "nobody designed a light Apnivaas" — and recommended shipping
-  /// `ThemeMode.dark`. main.dart ships `ThemeMode.system`, so on a light-mode phone the
-  /// quantiser's bronze WAS the product. Every hex below was chosen and measured instead; see
-  /// the light block of tokens.dart for the ratios and design-competitor/APNIVAAS-REDESIGN-SPEC.md
-  /// for why the brand moved off the gold.
-  ///
-  /// `const` rather than `static final` now: there is no quantiser left to run once.
-  static const ColorScheme _lightScheme = ColorScheme.light(
-    brightness: Brightness.light,
-
-    // THE BRAND. #6C4AA5 — 6.64:1 on the card and 6.64:1 for white on it, which is the rare
-    // pairing that works in both directions and is why this colour can be both the link and
-    // the button without a second token.
-    primary: ApnivaasColors.lightPrimary,
-    onPrimary: Color(0xFFFFFFFF), // 6.64:1
-    // The full-bleed brand, shared with the dark theme and the hero brow.
-    primaryContainer: ApnivaasColors.brandDeep,
-    onPrimaryContainer: Color(0xFFFFFFFF), // 10.20:1
-
-    // SLATE is `secondary`: the quieter of the two inks, for supporting emphasis.
-    secondary: ApnivaasColors.softBlueInk, // 8.20:1 on the card
-    onSecondary: Color(0xFFFFFFFF),
-    secondaryContainer: ApnivaasColors.lightField,
-    onSecondaryContainer: ApnivaasColors.textPrimary, // 13.98:1
-
-    // The metal, kept reachable as a container for the subscription accent. Never as text.
-    tertiary: ApnivaasColors.foodInk, // 4.52:1 worst, on a chip of itself
-    onTertiary: Color(0xFFFFFFFF),
-    tertiaryContainer: ApnivaasColors.lightSheet,
-    onTertiaryContainer: ApnivaasColors.textPrimary,
-
-    // ONE RED. The semantic ink, so a scheme red and a chip red are not a shade apart.
-    error: ApnivaasColors.errorInk, // 6.82:1 for white on it
-    onError: Color(0xFFFFFFFF),
-    errorContainer: ApnivaasColors.lightField,
-    onErrorContainer: ApnivaasColors.errorInk,
-
-    // THE FOUR SURFACES. `surface` is the CARD, not the canvas — the same inversion the dark
-    // scheme makes, and for the same reason: GlassWeight.thin reads scheme.surface.
-    surface: ApnivaasColors.surface, // #FFFFFF, the card
-    onSurface: ApnivaasColors.textPrimary, // 18.07:1
-    onSurfaceVariant: ApnivaasColors.textSecondary, // 9.12:1
-    surfaceContainerLowest: ApnivaasColors.surface,
-    surfaceContainerLow: ApnivaasColors.lightSheet, // #F7F8FC
-    surfaceContainer: ApnivaasColors.lightSheet,
-    surfaceContainerHigh: ApnivaasColors.lightSheet,
-    surfaceContainerHighest: ApnivaasColors.lightField, // #DFE2EE
-    surfaceTint: ApnivaasColors.lightPrimary,
-
-    outline: ApnivaasColors.controlBorder, // 3.26:1 worst — §1.4.11
-    outlineVariant: ApnivaasColors.cardBorder,
-
-    inverseSurface: ApnivaasColors.textPrimary,
-    onInverseSurface: ApnivaasColors.surface,
-    shadow: Color(0xFF000000),
-    scrim: Color(0xFF000000),
-  );
+  static ThemeData light() => _base(
+        scheme: _lightScheme,
+        background: ApnivaasColors.background,
+        textPrimary: ApnivaasColors.textPrimary,
+        textSecondary: ApnivaasColors.inkMuted,
+        labelInk: ApnivaasColors.inkStrong,
+        muted: ApnivaasColors.mutedInk,
+        placeholder: ApnivaasColors.placeholder,
+        controlBorder: ApnivaasColors.controlBorder,
+        cardBorder: ApnivaasColors.cardBorder,
+        divider: ApnivaasColors.hairline,
+        track: ApnivaasColors.track,
+        fieldFill: ApnivaasColors.card,
+        tonalFill: ApnivaasColors.mist,
+        filledButtonBackground: ApnivaasColors.forest,
+        filledButtonForeground: const Color(0xFFFFFFFF),
+        filledButtonPressed: ApnivaasColors.forestPressed,
+        disabledFill: ApnivaasColors.track,
+        disabledInk: ApnivaasColors.disabledInk,
+        snackBackground: ApnivaasColors.ink,
+        snackInk: ApnivaasColors.onSurface,
+        snackAction: ApnivaasColors.primary,
+        barrier: ApnivaasColors.scrim,
+        semantics: ApnivaasSemantics.light,
+      );
 
   static ThemeData dark() => _base(
         scheme: _darkScheme,
         background: ApnivaasColors.ground,
         textPrimary: ApnivaasColors.onSurface,
         textSecondary: ApnivaasColors.onSurfaceVariant,
+        labelInk: ApnivaasColors.onSurfaceVariant,
         muted: ApnivaasColors.darkMuted,
+        placeholder: ApnivaasColors.darkPlaceholder,
         controlBorder: ApnivaasColors.darkControlBorder,
-        // 4:77 — the design's own text field is the raised surface, not a step above it.
-        fieldFill: ApnivaasColors.surfaceContainerHighest,
-        // The design's filled action: cream with near-black text.
+        cardBorder: ApnivaasColors.darkCardBorder,
+        divider: ApnivaasColors.darkHairline,
+        track: ApnivaasColors.darkHairline,
+        fieldFill: ApnivaasColors.surfaceContainerHigh,
+        tonalFill: ApnivaasColors.darkMist,
         filledButtonBackground: ApnivaasColors.primaryContainer,
         filledButtonForeground: ApnivaasColors.onPrimaryContainer,
+        filledButtonPressed: ApnivaasColors.primary,
+        disabledFill: ApnivaasColors.surfaceBright,
+        disabledInk: ApnivaasColors.darkMuted,
+        snackBackground: ApnivaasColors.onSurface,
+        snackInk: ApnivaasColors.ink,
+        snackAction: ApnivaasColors.forest,
+        barrier: ApnivaasColors.darkScrim,
         semantics: ApnivaasSemantics.dark,
-      );
-
-  static ThemeData light() => _base(
-        scheme: _lightScheme,
-        background: ApnivaasColors.background,
-        textPrimary: ApnivaasColors.textPrimary,
-        textSecondary: ApnivaasColors.textSecondary,
-        muted: ApnivaasColors.mutedInk,
-        controlBorder: ApnivaasColors.controlBorder,
-        fieldFill: ApnivaasColors.lightField,
-        // THE FULL-BLEED BRAND, not the lighter link colour. #4D2896 with white on it is
-        // 10.20:1, and it is the same object the hero brow and the onboarding pages paint, so
-        // the primary action on a light phone is recognisably the same colour as the product.
-        filledButtonBackground: ApnivaasColors.brandDeep,
-        filledButtonForeground: const Color(0xFFFFFFFF),
-        semantics: ApnivaasSemantics.light,
       );
 
   /// The Android status and navigation bars, for a theme of this [brightness].
   ///
   /// ── THIS WAS NOT SET ANYWHERE, AND THE RESULT WAS INVISIBLE STATUS-BAR ICONS ─────────────
   ///
-  /// Most screens draw their own header ([GlassHeader]) rather than an [AppBar], and an AppBar
-  /// is the only Material widget that sets the overlay style on its own. With no AppBar on the
-  /// screen, Android keeps whatever it had — its default, which is DARK icons — and dark icons
-  /// on the design's #0B0D0F ground are a clock nobody can read. The first screen a person sees
-  /// (sign-in) is one of those. This is the single most common "it looks like a Flutter app"
-  /// tell, and the fix is one region at the root that follows the theme.
+  /// Most screens draw their own header rather than an [AppBar], and an AppBar is the only
+  /// Material widget that sets the overlay style on its own. With no AppBar on the screen,
+  /// Android keeps whatever it had. This is one region at the root that follows the theme:
+  /// dark icons over the cream ground. The forest header sets LIGHT icons over itself with its
+  /// own region, which wins for the strip it covers.
   ///
   /// EDGE TO EDGE, WHICH TARGET SDK 36 ENFORCES ANYWAY: both bars are transparent so the ground
-  /// runs under them, and the three-button navigation bar's contrast scrim is off, because the
-  /// bar sits on the app's own opaque surface. Icon brightness is the opposite of the theme's:
-  /// light icons over the dark ground, dark icons over the ivory one.
+  /// runs under them, and the three-button bar's contrast scrim is off, because the bar sits on
+  /// the app's own opaque surface.
   static SystemUiOverlayStyle systemBars(Brightness brightness) {
     final dark = brightness == Brightness.dark;
     return SystemUiOverlayStyle(
@@ -225,207 +209,366 @@ abstract final class ApnivaasTheme {
     );
   }
 
+  /// Light icons, for anything drawn over the forest header in either theme.
+  static const SystemUiOverlayStyle onForest = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+  );
+
   static ThemeData _base({
     required ColorScheme scheme,
     required Color background,
     required Color textPrimary,
     required Color textSecondary,
+    required Color labelInk,
     required Color muted,
+    required Color placeholder,
     required Color controlBorder,
+    required Color cardBorder,
+    required Color divider,
+    required Color track,
     required Color fieldFill,
+    required Color tonalFill,
     required Color filledButtonBackground,
     required Color filledButtonForeground,
+    required Color filledButtonPressed,
+    required Color disabledFill,
+    required Color disabledInk,
+    required Color snackBackground,
+    required Color snackInk,
+    required Color snackAction,
+    required Color barrier,
     required ApnivaasSemantics semantics,
   }) {
     final text = ApnivaasType.textTheme(textPrimary, textSecondary);
+    final roles = ApnivaasTextRoles.of(textPrimary);
+    final brand = scheme.primary;
+    // A pressed or hovered surface: the brand at 8%, which is a tint you feel rather than see.
+    final overlay = brand.withValues(alpha: 0.08);
+
+    OutlineInputBorder field(Color c, double w) => OutlineInputBorder(
+          borderRadius: Radii.rControl,
+          borderSide: BorderSide(color: c, width: w),
+        );
+
+    final inputTheme = InputDecorationTheme(
+      filled: true,
+      fillColor: fieldFill,
+      // 15 + 22 + 15 lands the field at 52dp at 1.0x; no fixed height, so it grows at 2.0x.
+      contentPadding: const EdgeInsets.symmetric(horizontal: _fieldInsetX, vertical: _fieldInsetY),
+      border: field(controlBorder, Strokes.control),
+      enabledBorder: field(controlBorder, Strokes.control),
+      focusedBorder: field(brand, Strokes.focus),
+      errorBorder: field(semantics.error, Strokes.focus),
+      focusedErrorBorder: field(semantics.error, Strokes.focus),
+      disabledBorder: field(divider, Strokes.control),
+      labelStyle: text.bodyLarge?.copyWith(color: muted),
+      floatingLabelStyle: text.labelSmall?.copyWith(color: muted),
+      // A placeholder is text, so 4.5:1 applies to it — against the FIELD FILL: 4.77:1.
+      hintStyle: roles.fieldValue.copyWith(color: placeholder),
+      helperStyle: text.bodySmall?.copyWith(color: muted),
+      // An error is never colour alone: the border thickens and the sentence says it.
+      errorStyle: text.bodySmall?.copyWith(color: semantics.error, fontWeight: FontWeight.w600),
+      prefixIconColor: muted,
+      suffixIconColor: muted,
+    );
+
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: background,
+      canvasColor: background,
       textTheme: text,
-      splashFactory: InkSparkle.splashFactory,
-      extensions: <ThemeExtension<dynamic>>[semantics],
+      // The calmer ripple, and the cheaper one on the budget phones this ships to.
+      splashFactory: InkRipple.splashFactory,
+      splashColor: overlay,
+      highlightColor: overlay,
+      hoverColor: overlay,
+      focusColor: brand.withValues(alpha: 0.12),
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      extensions: <ThemeExtension<dynamic>>[semantics, roles],
 
-      iconTheme: IconThemeData(color: textSecondary, size: IconSize.md),
+      iconTheme: IconThemeData(color: textSecondary, size: IconSize.lg),
 
-      // Headers are ours to draw (see GlassHeader), so the stock AppBar is stripped rather
-      // than styled — a half-configured AppBar peeking through is how wrappers look cheap.
+      // Cream and ink — the bar of a pushed screen that does not draw the forest header.
       appBarTheme: AppBarTheme(
-        backgroundColor: Colors.transparent,
+        backgroundColor: background,
+        foregroundColor: textPrimary,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        titleTextStyle: text.titleMedium,
-        iconTheme: IconThemeData(color: textPrimary, size: IconSize.lg),
+        titleTextStyle: text.titleLarge,
+        iconTheme: IconThemeData(color: textPrimary, size: IconSize.action),
+        systemOverlayStyle: systemBars(scheme.brightness),
       ),
 
-      // The design's filled action. See note 2 — this is the cream one in the dark theme.
       filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: filledButtonBackground,
-          foregroundColor: filledButtonForeground,
-          // 48dp: Material's minimum, and above Apple's 44pt, so one number satisfies both.
-          // The design's own button is 44 high, which is under Material's floor.
-          minimumSize: const Size.fromHeight(48),
-          // A PILL. Three things agree on this and they rarely do: Material 3's own default
-          // button shape is a stadium, the competitor's primary CTA is fully rounded, and
-          // Radii's rule for `pill` — "only for things genuinely capsule-shaped that never
-          // wrap" — is satisfied by a full-width button whose label is one or two words.
-          // It was a 12dp rectangle, which is the shape of a dialog's OK.
-          shape: const RoundedRectangleBorder(borderRadius: Radii.rPill),
-          textStyle: text.labelLarge,
-          padding: const EdgeInsets.symmetric(horizontal: Space.lg),
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith((s) {
+            if (s.contains(WidgetState.disabled)) return disabledFill;
+            if (s.contains(WidgetState.pressed)) return filledButtonPressed;
+            return filledButtonBackground;
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith((s) =>
+              s.contains(WidgetState.disabled) ? disabledInk : filledButtonForeground),
+          overlayColor: WidgetStateProperty.all(Colors.transparent),
+          elevation: const WidgetStatePropertyAll(0),
+          // 52: the canvas's button, and clear of Material's 48 and Apple's 44.
+          minimumSize: const WidgetStatePropertyAll(Size.fromHeight(52)),
+          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: Space.lg)),
+          shape: const WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: Radii.rButton)),
+          // Focus is a 2px ring in the brand, never colour alone.
+          side: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.focused)
+              ? BorderSide(color: textPrimary, width: Strokes.focus)
+              : BorderSide.none),
+          textStyle: WidgetStatePropertyAll(roles.cta),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(48),
-          // Matches the filled button it stands beside; a pill next to a rectangle reads as
-          // two different systems.
-          shape: const RoundedRectangleBorder(borderRadius: Radii.rPill),
-          // The control's only boundary. 3:1, not the decorative card hairline.
-          side: BorderSide(color: controlBorder, width: Strokes.hairline),
+          minimumSize: const Size.fromHeight(52),
+          shape: const RoundedRectangleBorder(borderRadius: Radii.rButton),
+          side: BorderSide(color: brand, width: Strokes.control),
+          foregroundColor: brand,
+          disabledForegroundColor: disabledInk,
+          overlayColor: brand,
           textStyle: text.labelLarge,
-          // The design's own secondary button ("Learn More", 4:1587) is cream on a hairline
-          // box, not a coloured label: the outline is what says "button", so the text stays
-          // ordinary.
-          foregroundColor: textPrimary,
+          padding: const EdgeInsets.symmetric(horizontal: Space.lg),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          minimumSize: const Size(48, 44),
-          textStyle: text.labelLarge,
-          // "Contact Support" (4:1598) and "Contact your hostel admin" (4:86) are both gold.
-          foregroundColor: scheme.primary,
+          minimumSize: const Size(48, 48),
+          padding: const EdgeInsets.symmetric(horizontal: Space.sm, vertical: Space.xs),
+          foregroundColor: brand,
+          overlayColor: brand,
+          shape: const RoundedRectangleBorder(borderRadius: Radii.rControl),
+          textStyle: text.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          iconSize: IconSize.action,
+          overlayColor: brand,
         ),
       ),
 
-      // The FAB is the gold — the design's one coloured fill — with [Shadows.glow] for the
-      // screen that draws one. Near-black on gold measures 8.70:1.
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: scheme.primary,
-        foregroundColor: scheme.onPrimary,
+        backgroundColor: filledButtonBackground,
+        foregroundColor: filledButtonForeground,
         elevation: 0,
         focusElevation: 0,
         hoverElevation: 0,
         highlightElevation: 0,
-        shape: const CircleBorder(),
+        shape: const RoundedRectangleBorder(borderRadius: Radii.rButtonLarge),
       ),
 
-      // A bar is the raised surface with a hairline; the active destination is the gold on a
-      // 10% wash of itself, which is the design's own chip recipe applied to a nav pill.
+      // The FALLBACK bar, for any shell not yet on ClayNavBar: the card with a Mist pill under
+      // the selected destination, forest for selected and the muted ink for the rest.
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: GlassWeight.regular.surfaceOf(scheme),
+        backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
-        indicatorColor: semantics.chipFill(scheme.primary),
-        indicatorShape: const RoundedRectangleBorder(borderRadius: Radii.rControl),
+        shadowColor: Colors.transparent,
+        indicatorColor: tonalFill,
+        indicatorShape: const RoundedRectangleBorder(borderRadius: Radii.rButton),
         elevation: 0,
-        height: 64,
+        height: 68,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
-              ? text.labelSmall?.copyWith(color: scheme.primary)
-              : text.labelSmall?.copyWith(color: muted),
+              ? text.labelMedium?.copyWith(color: brand)
+              : text.labelMedium?.copyWith(color: muted, fontWeight: FontWeight.w600),
         ),
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
-            size: IconSize.lg,
-            color: states.contains(WidgetState.selected) ? scheme.primary : muted,
+            size: IconSize.action,
+            color: states.contains(WidgetState.selected) ? brand : muted,
           ),
         ),
       ),
 
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        // 4:77: `bg-[#171a1e] border border-[#292e33] rounded-[10px] h-[44px] px-[14px]`.
-        // The fill and the hairline are the design's; the radius rounds to the vocabulary's 8
-        // and the height goes to the 48dp tap floor.
-        fillColor: fieldFill,
-        // TALLER, AND STILL FILLED — a deliberate half-adoption of the competitor's field.
-        //
-        // Theirs is ~64dp, unfilled, hairline-outlined. Ours measured ~50dp. The teardown put
-        // the whole difference down to generosity, but rendering both side by side, the fill
-        // is not the problem: Figma 4:77 specifies `bg-[#171a1e]` and a filled field on a dark
-        // card is more legible than an outline, not less. The HEIGHT was the problem.
-        //
-        // So the padding goes 16 → 20, which lands the field near 58dp: most of the reference's
-        // generosity, none of its rethinking of a decision the design already made.
-        contentPadding: const EdgeInsets.symmetric(horizontal: Space.md, vertical: Space.lg),
-        border: OutlineInputBorder(
-          borderRadius: Radii.rControl,
-          borderSide: BorderSide(color: controlBorder, width: Strokes.hairline),
+      inputDecorationTheme: inputTheme,
+      dropdownMenuTheme: DropdownMenuThemeData(
+        inputDecorationTheme: inputTheme,
+        textStyle: roles.fieldValue,
+        menuStyle: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(scheme.surface),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          shape: const WidgetStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: Radii.rControl)),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: Radii.rControl,
-          borderSide: BorderSide(color: controlBorder, width: Strokes.hairline),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: Radii.rControl,
-          borderSide: BorderSide(color: scheme.primary, width: Strokes.focus),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: Radii.rControl,
-          borderSide: BorderSide(color: semantics.error, width: Strokes.hairline),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: Radii.rControl,
-          borderSide: BorderSide(color: semantics.error, width: Strokes.focus),
-        ),
-        labelStyle: text.bodyMedium,
-        // A placeholder is text, so 4.5:1 applies to it — against the FIELD FILL. The design
-        // sets its own placeholder in #6F747A, which measures 3.70:1 there and fails; this is
-        // the lifted value. See ApnivaasColors.darkMuted.
-        hintStyle: text.bodyMedium?.copyWith(color: muted),
-        errorStyle: text.bodySmall?.copyWith(color: semantics.error),
+      ),
+
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: brand,
+        selectionColor: brand.withValues(alpha: 0.2),
+        selectionHandleColor: brand,
       ),
 
       cardTheme: CardThemeData(
         color: scheme.surface,
         surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
-        shape: const RoundedRectangleBorder(borderRadius: Radii.rCard),
+        shape: RoundedRectangleBorder(
+          borderRadius: Radii.rCard,
+          side: BorderSide(color: cardBorder, width: Strokes.hairline),
+        ),
       ),
 
-      dividerTheme: DividerThemeData(
-        color: scheme.outlineVariant,
-        thickness: Strokes.hairline,
-        space: Strokes.hairline,
+      // Choice and filter chips: an outlined pill that fills with the brand when chosen. The
+      // border AND the fill change, so the state is never colour alone.
+      chipTheme: ChipThemeData(
+        shape: const StadiumBorder(),
+        color: WidgetStateProperty.resolveWith((s) {
+          if (s.contains(WidgetState.disabled)) return disabledFill;
+          if (s.contains(WidgetState.selected)) return filledButtonBackground;
+          return scheme.surface;
+        }),
+        side: WidgetStateBorderSide.resolveWith((s) => BorderSide(
+              color: s.contains(WidgetState.selected) ? filledButtonBackground : controlBorder,
+              width: Strokes.control,
+            )),
+        labelStyle: text.labelMedium?.copyWith(
+          color: WidgetStateColor.resolveWith((s) {
+            if (s.contains(WidgetState.disabled)) return disabledInk;
+            if (s.contains(WidgetState.selected)) return filledButtonForeground;
+            return textPrimary;
+          }),
+        ),
+        checkmarkColor: filledButtonForeground,
+        showCheckmark: false,
+        padding: const EdgeInsets.symmetric(horizontal: Space.xxs, vertical: Space.xxs),
+        labelPadding: const EdgeInsets.symmetric(horizontal: Space.xs),
+        iconTheme: IconThemeData(color: textPrimary, size: IconSize.md),
+        elevation: 0,
+        pressElevation: 0,
       ),
+
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: SegmentedButton.styleFrom(
+          backgroundColor: scheme.surface,
+          foregroundColor: textPrimary,
+          selectedBackgroundColor: tonalFill,
+          selectedForegroundColor: brand,
+          side: BorderSide(color: controlBorder, width: Strokes.control),
+          textStyle: text.labelLarge?.copyWith(fontSize: 13),
+          minimumSize: const Size(0, 44),
+        ),
+      ),
+
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? brand : Colors.transparent),
+        checkColor: WidgetStatePropertyAll(scheme.onPrimary),
+        side: BorderSide(color: controlBorder, width: Strokes.focus),
+        shape: const RoundedRectangleBorder(borderRadius: Radii.rCheck),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? brand : controlBorder),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? scheme.onPrimary : controlBorder),
+        trackColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? brand : scheme.surface),
+        trackOutlineColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? brand : controlBorder),
+      ),
+
+      listTileTheme: ListTileThemeData(
+        contentPadding: const EdgeInsets.symmetric(horizontal: Space.md),
+        minVerticalPadding: Space.sm,
+        iconColor: muted,
+        textColor: textPrimary,
+        titleTextStyle: text.titleMedium,
+        subtitleTextStyle: text.bodySmall,
+        leadingAndTrailingTextStyle: text.titleSmall,
+        selectedColor: brand,
+        selectedTileColor: tonalFill,
+        shape: const RoundedRectangleBorder(borderRadius: Radii.rControl),
+      ),
+
+      dividerTheme: DividerThemeData(color: divider, thickness: Strokes.hairline, space: Strokes.hairline),
 
       progressIndicatorTheme: ProgressIndicatorThemeData(
-        color: scheme.primary,
-        // 4:466 — the meter track is the hairline colour as a filled channel, 6px high with a
-        // fully rounded end.
-        linearTrackColor: scheme.outlineVariant,
+        color: brand,
+        linearTrackColor: track,
+        circularTrackColor: track,
         linearMinHeight: 6,
       ),
 
+      // A sheet opened straight through showModalBottomSheet gets the same object
+      // showGlassSheet draws: the card, a 28dp top, the brand-ink barrier and a grip.
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: Colors.transparent,
+        backgroundColor: scheme.surfaceContainerHigh,
         surfaceTintColor: Colors.transparent,
+        modalBackgroundColor: scheme.surfaceContainerHigh,
+        modalBarrierColor: barrier,
         elevation: 0,
+        modalElevation: 0,
         shape: const RoundedRectangleBorder(borderRadius: Radii.rSheetTop),
         showDragHandle: true,
-        // A drag handle is a control, so 3:1 applies.
+        // A drag handle is a control, so 3:1 applies: 3.53:1 on the card.
         dragHandleColor: controlBorder,
+        dragHandleSize: const Size(36, 4),
       ),
 
-      // The deepest well in the design, in both themes — a snackbar is the one surface that
-      // should read as being in front of the whole app rather than part of it. In the dark
-      // theme that is the ground itself, so it carries the hairline the design gives every
-      // other surface, drawn by the shape's side.
+      dialogTheme: DialogThemeData(
+        backgroundColor: scheme.surfaceContainerHigh,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(borderRadius: Radii.rHero),
+        titleTextStyle: text.headlineSmall,
+        contentTextStyle: text.bodyLarge?.copyWith(color: labelInk),
+        barrierColor: barrier,
+        insetPadding: const EdgeInsets.symmetric(horizontal: Space.lg, vertical: Space.xl),
+      ),
+
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: scheme.surfaceContainerHigh,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(borderRadius: Radii.rHero),
+        headerBackgroundColor: ApnivaasColors.forest,
+        headerForegroundColor: ApnivaasColors.headerTitle,
+        headerHeadlineStyle: text.displaySmall,
+        todayBorder: BorderSide(color: brand, width: Strokes.control),
+        dividerColor: divider,
+      ),
+
+      popupMenuTheme: PopupMenuThemeData(
+        color: scheme.surfaceContainerHigh,
+        surfaceTintColor: Colors.transparent,
+        elevation: 3,
+        shadowColor: scheme.shadow.withValues(alpha: 0.3),
+        shape: RoundedRectangleBorder(
+          borderRadius: Radii.rControl,
+          side: BorderSide(color: cardBorder, width: Strokes.hairline),
+        ),
+        textStyle: text.bodyLarge,
+      ),
+
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(color: snackBackground, borderRadius: Radii.rTiny),
+        textStyle: text.bodySmall?.copyWith(color: snackInk),
+      ),
+
+      // Ink on cream — the one surface that reads as in front of the whole app rather than as
+      // part of it. Inverted in dark.
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: ApnivaasColors.midnight,
-        contentTextStyle: text.bodyMedium?.copyWith(color: ApnivaasColors.onSurface), // 17.56:1
-        shape: const RoundedRectangleBorder(
-          borderRadius: Radii.rControl,
-          // The DARK hairline in both themes, because the snackbar is the dark ground in both.
-          side: BorderSide(color: ApnivaasColors.outlineVariant, width: Strokes.hairline),
-        ),
+        backgroundColor: snackBackground,
+        contentTextStyle: text.bodyMedium?.copyWith(color: snackInk), // 12.86:1
+        actionTextColor: snackAction, //                                   7.69:1
+        insetPadding: const EdgeInsets.all(Space.md),
+        elevation: 0,
+        shape: const RoundedRectangleBorder(borderRadius: Radii.rControl),
       ),
 
       pageTransitionsTheme:

@@ -15,10 +15,11 @@ import '../../shared/motion/tab_swap.dart';
 
 /// The student app, as five tab bodies.
 ///
-/// HOW THIS PLUGS INTO THE SHELL. `features/shell/role_shell.dart` owns the header, the
-/// sign-out button and the `NavigationBar`, and already lists these five destinations for
-/// `UserRole.student`. This file supplies the bodies and nothing else — one widget, driven by
-/// the index the shell is already tracking, wired in `_RoleShellState._body`:
+/// HOW THIS PLUGS INTO THE SHELL. `features/shell/role_shell.dart` owns the forest header and
+/// the bottom bar (a `ClayNavBar`, with its own clay art for each tab), and already lists these
+/// five destinations for `UserRole.student`. This file supplies the bodies and nothing else —
+/// one widget, driven by the index the shell is already tracking, wired in
+/// `_RoleShellState._body`:
 ///
 ///     if (widget.role == UserRole.student) return StudentSection(tabIndex: _index);
 ///

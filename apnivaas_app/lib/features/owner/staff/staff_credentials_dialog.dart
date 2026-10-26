@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/theme/tokens.dart';
+import '../../../shared/clay/clay_icons.dart';
 import '../../../shared/glass/glass.dart';
 import 'staff_models.dart';
 
@@ -90,7 +91,7 @@ class _StaffCredentialsDialogState extends State<StaffCredentialsDialog> {
         child: GlassSurface(
           weight: GlassWeight.thick,
           borderRadius: Radii.rCard,
-          shadows: Shadows.level3,
+          shadows: Shadows.dialog,
           padding: const EdgeInsets.all(Space.lg),
           // THE ACTION BLOCK IS PINNED, THE STORY SCROLLS. add-staff-success.png is a full
           // page; this is a dialog on whatever phone the owner is holding, and stacking the
@@ -120,7 +121,8 @@ class _StaffCredentialsDialogState extends State<StaffCredentialsDialog> {
                         // Two lines, because an account made for several PGs names them all,
                         // and the one cut off the end is the one the owner will look for.
                         Text(widget.hostelName!,
-                            style: t.textTheme.bodySmall,
+                            style: t.textTheme.bodySmall
+                                ?.copyWith(color: t.colorScheme.onSurfaceVariant),
                             textAlign: TextAlign.center,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis),
@@ -222,28 +224,21 @@ class _StaffCredentialsDialogState extends State<StaffCredentialsDialog> {
 class _SuccessMark extends StatelessWidget {
   const _SuccessMark();
 
-  static const _disc = Space.huge + Space.md; // 64
-
   @override
   Widget build(BuildContext context) {
-    final tone = context.tones.success;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // The clay tick on a Mist disc — the same seat every clay icon in an empty or finished state
+    // sits on — rather than a glyph with a glow. The heading under it says what happened.
     return Center(
       child: Container(
-        width: _disc,
-        height: _disc,
+        width: ClaySize.promo,
+        height: ClaySize.promo,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: Theme.of(context).colorScheme.surfaceContainerHigh,
-          border: Border.all(color: context.tones.chipBorder(tone), width: Strokes.hairline),
-          // The design's glow, in the positive tone rather than the FAB's violet. Same shape,
-          // same radius, one call site.
-          boxShadow: [
-            for (final s in Shadows.glow)
-              BoxShadow(color: context.tones.chipBorder(tone), blurRadius: s.blurRadius),
-          ],
+          color: dark ? ApnivaasColors.darkMist : ApnivaasColors.mist,
         ),
-        child: Icon(Icons.check_circle_outline_rounded, size: IconSize.xl, color: tone),
+        child: const ClayIcon(ClayIcons.success, size: ClaySize.banner),
       ),
     );
   }
@@ -270,11 +265,12 @@ class _CredentialRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    // The mockup sets the one-time password in a well of its own — a step up the container
-    // ramp from the sheet behind it, at the control radius, with the value in `primary`.
-    // Anything worth copying by hand should look like a field you could put a cursor in.
+    // The one-time password sits in a well of its own, at the control radius, with the value in
+    // `primary`. Anything worth copying by hand should look like a field you could put a cursor
+    // in.
     return FlatSurface(
       weight: GlassWeight.regular,
+      border: false,
       borderRadius: Radii.rControl,
       padding: const EdgeInsets.fromLTRB(Space.sm, Space.xs, Space.xxs, Space.xs),
       child: Row(
@@ -283,7 +279,10 @@ class _CredentialRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label.toUpperCase(), style: t.textTheme.labelSmall),
+                Text(
+                  label,
+                  style: t.textTheme.labelMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                ),
                 const SizedBox(height: Space.xxs / 2),
                 SelectableText(
                   value,
@@ -354,7 +353,7 @@ class _StaffCopyButtonState extends State<StaffCopyButton> {
     if (!mounted) return;
     setState(() => _copied = true);
     // Long enough to be read, short enough that a second copy is obviously a second copy.
-    await Future<void>.delayed(const Duration(milliseconds: 1600));
+    await Future<void>.delayed(Motion.confirmed);
     if (mounted) setState(() => _copied = false);
   }
 

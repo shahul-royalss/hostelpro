@@ -59,7 +59,7 @@ Future<void> settleRefresh(
   // Both resolved BEFORE the await. After it this context may be gone — the tab was swapped,
   // the sheet was dismissed — and reading either off a defunct element throws.
   final messenger = ScaffoldMessenger.maybeOf(context);
-  final errorTone = context.tones.error;
+  final errorTone = snackbarErrorInk(context);
 
   AppFailure failure;
   try {
@@ -74,11 +74,23 @@ Future<void> settleRefresh(
   _say(messenger, errorTone, failure);
 }
 
+/// The red for a glyph on a snackbar.
+///
+/// THE SNACKBAR IS THE INVERSE OF THE PAGE — ink in the light theme, cream in the dark — so it
+/// takes the OTHER theme's red. `context.tones.error` is the light page's #B3261E, and on the
+/// light theme's ink bar that is a dark red on near-black that nobody can see; the dark set's
+/// #F08C82 is the red that is legible there, and the light set's is the one legible on the dark
+/// theme's cream bar.
+Color snackbarErrorInk(BuildContext context) => Theme.of(context).brightness == Brightness.dark
+    ? ApnivaasSemantics.light.error
+    : ApnivaasSemantics.dark.error;
+
 /// The failure, in the snackbar shape the rest of the app already uses for one.
 ///
 /// The tone is carried by a GLYPH and not by the bar's fill. Repainting the bar
 /// [ApnivaasColors.error] puts the snackbar theme's own light content colour on it at 2.4:1 —
-/// owner_staff_screen.dart and receipt_screen.dart both measured that and both landed here.
+/// owner_staff_screen.dart and receipt_screen.dart both measured that and both landed here. The
+/// glyph's own red is [snackbarErrorInk], measured against the bar rather than the page.
 void _say(ScaffoldMessengerState? messenger, Color errorTone, AppFailure failure) {
   if (messenger == null || !messenger.mounted) return;
   messenger

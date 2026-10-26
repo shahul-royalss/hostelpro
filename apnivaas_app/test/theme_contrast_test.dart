@@ -2,38 +2,36 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile/core/theme/theme.dart';
 import 'package:mobile/core/theme/tokens.dart';
 import 'package:mobile/core/theme/typography.dart';
-import 'package:mobile/features/owner/widgets/states.dart';
+import 'package:mobile/shared/clay/skeleton.dart';
 import 'package:mobile/shared/glass/glass.dart';
+
+import 'flutter_test_config.dart' show appFonts;
 
 /// The design system, held to its own numbers.
 ///
 /// Three jobs, and they are different:
 ///
-/// 1. **The dark scheme IS the design.** Every hex in it was read out of Figma file
-///    `8qkhZArLAz9KVOIiWF8ZTG`, so the first group below pins them literally. If one of those
-///    tests fails, either somebody adjusted the design by eye in Dart — which is the wrong
-///    place to adjust it — or Figma changed and `design-figma/DESIGN-SYSTEM.md` needs
-///    re-exporting first. The light scheme is not drawn at all; it is `fromSeed` output, and
-///    the second group re-derives it to prove the pinned consts have not become hand-picked.
+/// 1. **The palette is the canvas, minus what failed.** Forest & Cream comes from the design
+///    canvas (`apnivaas_canvas/project/*.dc.html`). Five of its values could not carry their own
+///    contrast and were replaced; the group "the canvas values that failed" pins each original's
+///    failure, so "restoring the design value" fails here with the number it measured.
 ///
 /// 2. **Contrast is measurable, so it is measured.** tokens.dart quotes a ratio next to almost
-///    every colour. Comments rot; these do not, because every one is recomputed here from the
-///    token itself. A colour nudged by eye fails with the number it actually measured. Three
-///    design values could not carry their own contrast and were lifted along their own hue;
-///    the tests below pin how far each moved, so "lifted minimally" stays true.
+///    every colour. Comments rot; these do not, because each is recomputed here from the token
+///    itself. A colour nudged by eye fails with the number it actually measured.
 ///
 /// 3. **The font bundle is checked, not assumed.** This project has twice shipped
-///    byte-identical files under different weight names, which registers N copies of the same
-///    400 face and makes every heading render regular while the pubspec looks correct. The
-///    typography group reads the five `.ttf` files off disk and proves they are five different
-///    faces at five different weights.
+///    byte-identical files under different weight names, which registers N copies of one face
+///    and makes every heading render regular while the pubspec looks correct. The typography
+///    group reads the seven `.ttf` files off disk — weight class, outlines, the rupee glyph,
+///    tabular figures — and then lays text out in them to prove the engine resolves each weight.
 ///
 /// The maths is WCAG 2.1 §1.4.3 (text, 4.5:1) and §1.4.11 (graphical objects and UI
 /// components, 3:1), unmodified.
@@ -60,37 +58,66 @@ Color _over(Color fg, Color bg) => Color.alphaBlend(fg, bg);
 String _hex(Color c) =>
     '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).toUpperCase().padLeft(6, '0')}';
 
+/// A ratio as the two decimals the comments in tokens.dart quote.
+String _fixed(Color a, Color b) => _ratio(a, b).toStringAsFixed(2);
+
 // ── THE SURFACES A COLOUR CAN LAND ON ────────────────────────────────────────────────────
 //
 // Split in two on purpose, and the split is the contract:
 //
-//   *Surfaces  — everything, including the light input fill and the dark `surface-bright`.
-//                TEXT tokens must be AA on all of these, because a hint sits on the fill and
-//                a label can land on a badge.
-//   *Grounds   — the rungs a CHIP can sit on. In the dark theme that is three, because the
-//                design's sheet and input fill ARE the raised surface; `surface-bright` is
-//                excluded because nothing paints a chip on a skeleton bar or an icon badge,
-//                and a 10% chip there measures 4.16:1.
+//   *Surfaces  — everything a TEXT token can be printed on, including the darker light fills
+//                (Mist, the neutral chip) and the darker dark ones. Text is AA on all of these.
+//   *Grounds   — the rungs a status CHIP may sit on: the ground, a card, a well. A chip's fill
+//                is a tint of its own ink, so a darker rung moves the fill towards the text;
+//                Mist and the neutral chip are excluded, and the test that says why is in the
+//                chip group.
 //
 // Keys carry the hex so a failure names the surface rather than an index.
 const _lightSurfaces = <String, Color>{
-  'canvas #FFF8F3': ApnivaasColors.background,
-  'card #FFFFFF': ApnivaasColors.surface,
-  'sheet #F1E7D9': ApnivaasColors.lightSheet,
-  'field #EBE1D4': ApnivaasColors.lightField,
+  'cream #F6F2EA': ApnivaasColors.cream,
+  'card #FFFDF9': ApnivaasColors.card,
+  'well #EEF4EF': ApnivaasColors.well,
+  'chip #EAE3D6': ApnivaasColors.lightField,
+  'mist #DCE8DF': ApnivaasColors.mist,
+  'selected #F2F8F3': ApnivaasColors.selectedSurface,
 };
-const _lightGrounds = _lightSurfaces;
+const _lightGrounds = <String, Color>{
+  'cream #F6F2EA': ApnivaasColors.cream,
+  'card #FFFDF9': ApnivaasColors.card,
+  'well #EEF4EF': ApnivaasColors.well,
+};
+
+/// The four light fills a CONTROL can sit on — the field fill is the card, a radio can be on a
+/// selected persona. The chip fill and Mist are not: nothing draws a text field on them.
+const _lightControlGrounds = <String, Color>{
+  'cream #F6F2EA': ApnivaasColors.cream,
+  'card #FFFDF9': ApnivaasColors.card,
+  'well #EEF4EF': ApnivaasColors.well,
+  'selected #F2F8F3': ApnivaasColors.selectedSurface,
+};
+
+/// Where a CANONICAL (context-free) colour can be painted in light: the four neutral fills.
+const _lightCanonicalGrounds = <String, Color>{
+  'cream #F6F2EA': ApnivaasColors.cream,
+  'card #FFFDF9': ApnivaasColors.card,
+  'well #EEF4EF': ApnivaasColors.well,
+  'chip #EAE3D6': ApnivaasColors.lightField,
+};
 
 const _darkSurfaces = <String, Color>{
-  'ground #0B0D0F': ApnivaasColors.ground,
-  'card #111417': ApnivaasColors.surfaceContainerLow,
-  'raised #171A1E': ApnivaasColors.surfaceContainer,
-  'bright #1D2227': ApnivaasColors.surfaceBright,
+  'ground #0D1613': ApnivaasColors.ground,
+  'card #15221D': ApnivaasColors.surfaceContainerLow,
+  'raised #1B2B25': ApnivaasColors.surfaceContainer,
+  'chip #26342F': ApnivaasColors.surfaceContainerHighest,
+  'bright #22352E': ApnivaasColors.surfaceBright,
+  'mist #1D3A31': ApnivaasColors.darkMist,
+  'well #1F302A': ApnivaasColors.darkWell,
+  'selected #1A3029': ApnivaasColors.darkSelected,
 };
 const _darkGrounds = <String, Color>{
-  'ground #0B0D0F': ApnivaasColors.ground,
-  'card #111417': ApnivaasColors.surfaceContainerLow,
-  'raised #171A1E': ApnivaasColors.surfaceContainer,
+  'ground #0D1613': ApnivaasColors.ground,
+  'card #15221D': ApnivaasColors.surfaceContainerLow,
+  'raised #1B2B25': ApnivaasColors.surfaceContainer,
 };
 
 void _expectAtLeast(double measured, double required_, String what) {
@@ -102,9 +129,7 @@ void _expectAtLeast(double measured, double required_, String what) {
   );
 }
 
-/// The opposite bar: a pair that must stay QUIET. Used where two surfaces have to be
-/// distinguishable without becoming two different colours — the light theme's bar against its
-/// card, where too much separation reads as a grey band rather than a page.
+/// The opposite bar: a pair that must stay QUIET — a fill step that should be felt, not seen.
 void _expectBelowRatio(Color a, Color b, double ceiling, String what) {
   final measured = _ratio(a, b);
   expect(
@@ -123,74 +148,273 @@ void _againstAll(Map<String, Color> surfaces, Color fg, double need, String name
 
 // ── THE FONT BUNDLE ──────────────────────────────────────────────────────────────────────
 
-/// The five faces the scale asks for, in weight order. Filenames are the contract: google_fonts
-/// resolves a bundled asset by parsing `Inter-<Variant>.ttf`, so `Inter-ExtraBold.ttf` IS w800.
-const _interFaces = <String, int>{
-  'Inter-Regular.ttf': 400,
-  'Inter-SemiBold.ttf': 600,
-  'Inter-Bold.ttf': 700,
-  'Inter-ExtraBold.ttf': 800,
-};
-
-/// Reads `OS/2.usWeightClass` and the byte range of one table out of an sfnt file.
+/// What one sfnt file actually contains, read off its table directory.
 ///
 /// Deliberately hand-rolled rather than pulled in as a dependency: the whole point is to read
-/// what actually shipped, and thirty lines of table-directory walking is cheaper than trusting
-/// a filename.
-({int weightClass, Uint8List glyf, bool hasFvar}) _sfnt(File f) {
+/// what actually shipped, and a page of table-walking is cheaper than trusting a filename.
+typedef _Face = ({
+  int weightClass,
+  Uint8List glyf,
+  bool hasFvar,
+  bool hasRupee,
+  Set<String> gsubFeatures,
+});
+
+_Face _sfnt(File f) {
   final d = f.readAsBytesSync();
-  final view = ByteData.sublistView(d);
-  final numTables = view.getUint16(4);
+  final v = ByteData.sublistView(d);
+  final numTables = v.getUint16(4);
   final tables = <String, (int, int)>{};
   for (var i = 0; i < numTables; i++) {
     final o = 12 + 16 * i;
-    final tag = String.fromCharCodes(d.sublist(o, o + 4));
-    tables[tag] = (view.getUint32(o + 8), view.getUint32(o + 12));
+    tables[String.fromCharCodes(d.sublist(o, o + 4))] = (v.getUint32(o + 8), v.getUint32(o + 12));
   }
-  final os2 = tables['OS/2']!;
-  final glyf = tables['glyf']!;
+  final (os2, _) = tables['OS/2']!;
+  final (glyfAt, glyfLength) = tables['glyf']!;
   return (
-    weightClass: view.getUint16(os2.$1 + 4),
-    glyf: Uint8List.sublistView(d, glyf.$1, glyf.$1 + glyf.$2),
+    weightClass: v.getUint16(os2 + 4),
+    glyf: Uint8List.sublistView(d, glyfAt, glyfAt + glyfLength),
     hasFvar: tables.containsKey('fvar'),
+    hasRupee: _cmapMaps(v, tables['cmap']!.$1, 0x20B9),
+    gsubFeatures:
+        tables.containsKey('GSUB') ? _gsubFeatures(v, tables['GSUB']!.$1) : const <String>{},
   );
 }
 
+/// Whether any cmap subtable maps [cp] to a real glyph (not .notdef). Formats 4 and 12 are the
+/// two every Google Fonts file carries.
+bool _cmapMaps(ByteData v, int cmap, int cp) {
+  final count = v.getUint16(cmap + 2);
+  for (var i = 0; i < count; i++) {
+    final sub = cmap + v.getUint32(cmap + 4 + 8 * i + 4);
+    switch (v.getUint16(sub)) {
+      case 4:
+        final segX2 = v.getUint16(sub + 6);
+        for (var s = 0; s < segX2 ~/ 2; s++) {
+          final end = v.getUint16(sub + 14 + 2 * s);
+          final start = v.getUint16(sub + 16 + segX2 + 2 * s);
+          if (cp < start || cp > end) continue;
+          final delta = v.getInt16(sub + 16 + 2 * segX2 + 2 * s);
+          final rangeAt = sub + 16 + 3 * segX2 + 2 * s;
+          final range = v.getUint16(rangeAt);
+          var glyph = 0;
+          if (range == 0) {
+            glyph = (cp + delta) & 0xFFFF;
+          } else {
+            glyph = v.getUint16(rangeAt + range + 2 * (cp - start));
+            if (glyph != 0) glyph = (glyph + delta) & 0xFFFF;
+          }
+          if (glyph != 0) return true;
+        }
+      case 12:
+        final groups = v.getUint32(sub + 12);
+        for (var g = 0; g < groups; g++) {
+          final start = v.getUint32(sub + 16 + 12 * g);
+          final end = v.getUint32(sub + 20 + 12 * g);
+          if (cp >= start && cp <= end && v.getUint32(sub + 24 + 12 * g) + (cp - start) != 0) {
+            return true;
+          }
+        }
+    }
+  }
+  return false;
+}
+
+/// The four-letter tags in a GSUB FeatureList — `tnum` is the one this app needs.
+Set<String> _gsubFeatures(ByteData v, int gsub) {
+  final list = gsub + v.getUint16(gsub + 6);
+  final count = v.getUint16(list);
+  return {
+    for (var i = 0; i < count; i++)
+      String.fromCharCodes(
+          List.generate(4, (k) => v.getUint8(list + 2 + 6 * i + k))),
+  };
+}
+
+/// The `fonts:` block of pubspec.yaml as family → (asset → weight). Parsed by indentation,
+/// which is all YAML this block uses.
+Map<String, Map<String, int>> _declaredFonts() {
+  final lines = File('pubspec.yaml').readAsLinesSync();
+  final start = lines.indexWhere((l) => l == '  fonts:');
+  expect(start, isNot(-1), reason: 'pubspec.yaml has no `fonts:` block under `flutter:`');
+  final families = <String, Map<String, int>>{};
+  String? family;
+  String? asset;
+  for (final raw in lines.skip(start + 1)) {
+    if (raw.trim().isEmpty || raw.trimLeft().startsWith('#')) continue;
+    if (!raw.startsWith('    ')) break; // back out to the next `flutter:` key
+    final line = raw.trim();
+    if (line.startsWith('- family:')) {
+      family = line.substring('- family:'.length).trim();
+      families[family] = {};
+    } else if (line.startsWith('- asset:')) {
+      asset = line.substring('- asset:'.length).trim();
+      families[family]![asset] = 400;
+    } else if (line.startsWith('weight:')) {
+      families[family]![asset!] = int.parse(line.substring('weight:'.length).trim());
+    }
+  }
+  return families;
+}
+
+/// The weights each family ships, as the theme sees them. Not const: FontWeight is compared by
+/// value, and Dart refuses a const set of a type that overrides `==`.
+final _bundledWeights = <String, Set<FontWeight>>{
+  ApnivaasType.display: {FontWeight.w500, FontWeight.w600, FontWeight.w700},
+  ApnivaasType.family: {FontWeight.w400, FontWeight.w500, FontWeight.w600, FontWeight.w700},
+};
+
+double _widthOf(String text, TextStyle style) {
+  final painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  final w = painter.width;
+  painter.dispose();
+  return w;
+}
+
 void main() {
-  // Keeps google_fonts able to reach the bundled Inter files instead of printing a page of
-  // binding warnings on every run.
   TestWidgetsFlutterBinding.ensureInitialized();
 
   // ═══════════════════════════════════════════════════════════════════════════════════════
-  group('the dark scheme IS the Figma design, hex for hex', () {
+  group('the light scheme is Forest & Cream', () {
+    final light = ApnivaasTheme.light();
+    final scheme = light.colorScheme;
+
+    test('the brand values are the canvas\'s, hex for hex', () {
+      expect(_hex(ApnivaasColors.forest), '#174E43');
+      expect(_hex(ApnivaasColors.leaf), '#3F7F68');
+      expect(_hex(ApnivaasColors.sage), '#7A9684');
+      expect(_hex(ApnivaasColors.mist), '#DCE8DF');
+      expect(_hex(ApnivaasColors.cream), '#F6F2EA');
+      expect(_hex(ApnivaasColors.card), '#FFFDF9');
+      expect(_hex(ApnivaasColors.gold), '#E2AE4A');
+      expect(_hex(ApnivaasColors.ink), '#1C2B26');
+      expect(_hex(ApnivaasColors.inkMuted), '#55655E');
+    });
+
+    test('the ground is cream and colorScheme.surface is the CARD, not the ground', () {
+      // ~150 call sites paint a card with colorScheme.surface. Wiring the ground there makes
+      // every one of them vanish into the page.
+      expect(light.scaffoldBackgroundColor, ApnivaasColors.cream);
+      expect(scheme.surface, ApnivaasColors.card);
+      expect(scheme.surfaceDim, ApnivaasColors.cream);
+      expect(scheme.surfaceContainer, ApnivaasColors.well);
+      expect(scheme.surfaceContainerHighest, ApnivaasColors.lightField);
+      expect(scheme.onSurface, ApnivaasColors.ink);
+      expect(scheme.onSurfaceVariant, ApnivaasColors.inkMuted);
+      expect(scheme.outline, ApnivaasColors.controlBorder);
+      expect(scheme.outlineVariant, ApnivaasColors.cardBorder);
+    });
+
+    test('forest is the brand in both directions — the link AND the button fill', () {
+      expect(scheme.primary, ApnivaasColors.forest);
+      expect(scheme.onPrimary, const Color(0xFFFFFFFF));
+      _expectAtLeast(_ratio(ApnivaasColors.forest, ApnivaasColors.card), 4.5, 'forest on the card');
+      _expectAtLeast(_ratio(const Color(0xFFFFFFFF), ApnivaasColors.forest), 4.5,
+          'white on forest');
+      expect(scheme.primaryContainer, ApnivaasColors.mist);
+      expect(scheme.onPrimaryContainer, ApnivaasColors.forest);
+    });
+
+    test('the light aliases still point where the call sites expect', () {
+      // Each legacy name kept its MEANING and took the new value, so unconverted screens moved
+      // with the redesign instead of breaking.
+      expect(ApnivaasColors.background, ApnivaasColors.cream);
+      expect(ApnivaasColors.surface, ApnivaasColors.card);
+      expect(ApnivaasColors.lightSheet, ApnivaasColors.card);
+      expect(ApnivaasColors.chipNeutral, ApnivaasColors.lightField);
+      expect(ApnivaasColors.textPrimary, ApnivaasColors.ink);
+      expect(ApnivaasColors.textSecondary, ApnivaasColors.inkStrong);
+      expect(ApnivaasColors.mutedInk, ApnivaasColors.inkMuted);
+      expect(ApnivaasColors.lightPrimary, ApnivaasColors.forest);
+      expect(ApnivaasColors.indigo, ApnivaasColors.forest, reason: 'the name is historical');
+      expect(ApnivaasColors.brandDeep, ApnivaasColors.forest);
+      expect(ApnivaasColors.brandInk, ApnivaasColors.forest);
+      expect(ApnivaasColors.softBlueInk, ApnivaasColors.mistInk);
+      expect(ApnivaasColors.seed, ApnivaasColors.forest);
+      expect(ApnivaasColors.starDots, same(HeaderStars.dots));
+      expect(ApnivaasColors.hairline, isNot(ApnivaasColors.cardBorder),
+          reason: 'a divider and a card edge are two jobs and two tokens');
+    });
+
+    test('no purple is left anywhere in the live theme', () {
+      // The redesign exists to remove the violet brow and the rainbow of domain hues. Every
+      // colour the light theme can paint without a call site choosing it is checked for a
+      // violet or magenta hue at any real saturation.
+      final semantics = light.extension<ApnivaasSemantics>()!;
+      final painted = <String, Color>{
+        'primary': scheme.primary,
+        'primaryContainer': scheme.primaryContainer,
+        'secondary': scheme.secondary,
+        'secondaryContainer': scheme.secondaryContainer,
+        'tertiary': scheme.tertiary,
+        'tertiaryContainer': scheme.tertiaryContainer,
+        'error': scheme.error,
+        'errorContainer': scheme.errorContainer,
+        'surface': scheme.surface,
+        'surfaceContainer': scheme.surfaceContainer,
+        'surfaceContainerHighest': scheme.surfaceContainerHighest,
+        'onSurface': scheme.onSurface,
+        'onSurfaceVariant': scheme.onSurfaceVariant,
+        'outline': scheme.outline,
+        'outlineVariant': scheme.outlineVariant,
+        'inverseSurface': scheme.inverseSurface,
+        'inversePrimary': scheme.inversePrimary,
+        'scaffold': light.scaffoldBackgroundColor,
+        'success': semantics.success,
+        'warning': semantics.warning,
+        'semantic error': semantics.error,
+        'info': semantics.info,
+        'muted': semantics.muted,
+        'rooms': semantics.rooms,
+        'people': semantics.people,
+        'food': semantics.food,
+        for (final (i, c) in ApnivaasColors.headerGradient.colors.indexed) 'header stop $i': c,
+        for (final (i, s) in HeaderStars.dots.indexed) 'star $i': s.color,
+        'banner top': ApnivaasColors.bannerTop,
+        'banner bottom': ApnivaasColors.bannerBottom,
+      };
+      painted.forEach((name, c) {
+        final hsl = HSLColor.fromColor(c);
+        final violet = hsl.hue >= 250 && hsl.hue <= 330 && hsl.saturation > 0.15;
+        expect(violet, isFalse,
+            reason: '$name ${_hex(c)} is violet (hue ${hsl.hue.round()}°) — purple is back');
+      });
+    });
+
+    test('gold is never light-theme text or a graphic on cream', () {
+      // It lives on forest and on dark surfaces only. Restated as a number so nobody "brightens
+      // up" a cream screen with a gold glyph.
+      expect(_ratio(ApnivaasColors.gold, ApnivaasColors.cream), lessThan(3.0));
+      expect(_ratio(ApnivaasColors.gold, ApnivaasColors.card), lessThan(3.0));
+      expect(_fixed(ApnivaasColors.gold, ApnivaasColors.cream), '1.81');
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  group('the dark scheme is designed and measured, and stays wired', () {
     final dark = ApnivaasTheme.dark();
     final scheme = dark.colorScheme;
 
-    test('surfaces — three of them, plus one brighter fill', () {
-      expect(_hex(ApnivaasColors.ground), '#0B0D0F');
-      expect(_hex(ApnivaasColors.surfaceContainerLow), '#111417');
-      expect(_hex(ApnivaasColors.surfaceContainer), '#171A1E');
-      expect(_hex(ApnivaasColors.surfaceBright), '#1D2227');
-
-      // The design ships nothing below its background and nothing between its raised surface
-      // and #1D2227, so these three roles are aliases rather than invented neighbours.
+    test('surfaces — a four-rung ladder, and the rungs nothing needs are aliases', () {
+      expect(_hex(ApnivaasColors.ground), '#0D1613');
+      expect(_hex(ApnivaasColors.surfaceContainerLow), '#15221D');
+      expect(_hex(ApnivaasColors.surfaceContainer), '#1B2B25');
+      expect(_hex(ApnivaasColors.surfaceBright), '#22352E');
       expect(ApnivaasColors.surfaceContainerLowest, ApnivaasColors.ground);
       expect(ApnivaasColors.surfaceContainerHigh, ApnivaasColors.surfaceContainer);
-      expect(ApnivaasColors.surfaceContainerHighest, ApnivaasColors.surfaceContainer);
+      // In the dark, elevation gets LIGHTER as it rises.
+      expect(_luminance(ApnivaasColors.surfaceContainerLow),
+          greaterThan(_luminance(ApnivaasColors.ground)));
+      expect(_luminance(ApnivaasColors.surfaceContainer),
+          greaterThan(_luminance(ApnivaasColors.surfaceContainerLow)));
     });
 
-    test('key colours', () {
-      expect(_hex(ApnivaasColors.gold), '#C9A96E', reason: 'the Figma accent, still exact');
-      expect(_hex(ApnivaasColors.primary), '#997FC5',
-          reason: 'primary is the brand now — the gold kept its hex and lost the job');
-      expect(_hex(ApnivaasColors.primaryContainer), '#F5F3EE', reason: 'the CREAM filled button');
-      expect(_hex(ApnivaasColors.secondary), '#D5A64C', reason: 'the amber');
-      expect(_hex(ApnivaasColors.tertiary), '#5FAE82', reason: 'positive');
-      // Every on-colour in the dark scheme is the ground itself — the design never puts white
-      // on a fill, it puts its own near-black.
+    test('every on-colour on a dark fill is the ground itself', () {
       for (final on in [
         ApnivaasColors.onPrimary,
-        ApnivaasColors.onPrimaryContainer,
         ApnivaasColors.onSecondary,
         ApnivaasColors.onTertiary,
         ApnivaasColors.onErrorTone,
@@ -199,44 +423,30 @@ void main() {
       }
     });
 
-    test('ink and lines', () {
-      expect(_hex(ApnivaasColors.onSurface), '#F5F3EE', reason: 'warm cream, NOT white');
-      expect(_hex(ApnivaasColors.onSurfaceVariant), '#A2A6AB');
-      expect(_hex(ApnivaasColors.outline), '#6F747A', reason: 'the design tertiary, as a shape');
-      expect(_hex(ApnivaasColors.outlineVariant), '#292E33', reason: 'the one hairline');
-    });
-
-    test('the container fills are the design\'s own 10% tint, flattened', () {
-      // `rgba(213,166,76,0.1)` and friends, composited over the card. A container role that is
-      // secretly translucent composites twice the moment somebody stacks it, so they are
-      // pinned flat — but they must still BE the tint.
+    test('the container fills are the dark inks at the chip tint, flattened', () {
+      // A container role that is secretly translucent composites twice the moment somebody
+      // stacks it, so they are pinned flat — but they must still BE the tint.
       for (final e in {
         'secondary': (ApnivaasColors.secondary, ApnivaasColors.secondaryContainer),
         'tertiary': (ApnivaasColors.tertiary, ApnivaasColors.tertiaryContainer),
         'error': (ApnivaasColors.errorTone, ApnivaasColors.errorContainer),
+        'info': (ApnivaasColors.infoDark, ApnivaasColors.darkInfoContainer),
       }.entries) {
         final (tone, container) = e.value;
         final expected = _over(
           tone.withValues(alpha: ApnivaasSemantics.dark.chipFillAlpha),
           ApnivaasColors.surfaceContainerLow,
         );
-        for (final ch in [
-          ((expected.r - container.r).abs(), 'red'),
-          ((expected.g - container.g).abs(), 'green'),
-          ((expected.b - container.b).abs(), 'blue'),
-        ]) {
-          expect(ch.$1 * 255, lessThanOrEqualTo(1.0),
-              reason: '${e.key}Container drifted off the design tint in ${ch.$2}: '
-                  '${_hex(expected)} vs ${_hex(container)}');
-        }
+        expect(_hex(container), _hex(expected),
+            reason: '${e.key}Container drifted off the tint it is defined as');
       }
     });
 
-    test('the legacy names point at the design, so unconverted screens moved with us', () {
+    test('the legacy names point at the dark tokens, so unconverted screens moved with us', () {
       expect(ApnivaasColors.darkBackground, ApnivaasColors.ground);
       expect(ApnivaasColors.darkSurface, ApnivaasColors.surfaceContainerLow);
       expect(ApnivaasColors.darkElevated, ApnivaasColors.surfaceContainer);
-      expect(ApnivaasColors.midnight, ApnivaasColors.surfaceContainerLowest);
+      expect(ApnivaasColors.midnight, ApnivaasColors.forestDeep);
       expect(ApnivaasColors.darkIndigo, ApnivaasColors.primary);
       expect(ApnivaasColors.softBlue, ApnivaasColors.secondary);
       expect(ApnivaasColors.darkTextPrimary, ApnivaasColors.onSurface);
@@ -247,24 +457,18 @@ void main() {
       expect(ApnivaasColors.successDark, ApnivaasColors.tertiary);
       expect(ApnivaasColors.warningDark, ApnivaasColors.secondary);
       expect(ApnivaasColors.errorDark, ApnivaasColors.errorTone);
+      expect(ApnivaasColors.brandDark, ApnivaasColors.primary);
     });
 
     test('the theme wires every one of those roles through, nothing literal', () {
       expect(dark.scaffoldBackgroundColor, ApnivaasColors.ground);
-      // `surface` is the CARD, not the ground. 17 call sites paint a card with it and the
-      // ground would make every one of them vanish.
       expect(scheme.surface, ApnivaasColors.surfaceContainerLow);
       expect(scheme.surfaceDim, ApnivaasColors.ground);
       expect(scheme.surfaceBright, ApnivaasColors.surfaceBright);
-      expect(scheme.surfaceContainerLow, ApnivaasColors.surfaceContainerLow);
       expect(scheme.surfaceContainer, ApnivaasColors.surfaceContainer);
-      // `primary` is THE BRAND now, not the gold — see ApnivaasColors.gold for the arithmetic
-      // that forced the move. The Figma accent is still pinned, under the name it kept.
       expect(scheme.primary, ApnivaasColors.brandDark);
-      expect(ApnivaasColors.gold, const Color(0xFFC9A96E),
-          reason: 'the Figma accent has not moved; only its job has');
       expect(scheme.onPrimary, ApnivaasColors.onPrimary);
-      expect(scheme.primaryContainer, ApnivaasColors.primaryContainer);
+      expect(scheme.primaryContainer, ApnivaasColors.mist);
       expect(scheme.secondary, ApnivaasColors.secondary);
       expect(scheme.tertiary, ApnivaasColors.tertiary);
       expect(scheme.error, ApnivaasColors.errorTone);
@@ -274,88 +478,14 @@ void main() {
       expect(scheme.outlineVariant, ApnivaasColors.outlineVariant);
     });
 
-    test('THE FILLED BUTTON IS CREAM — the design\'s most distinctive decision', () {
-      // 4:83 "Continue" and 4:1596 "Retry" are bg #F5F3EE with #0B0D0F text. Wiring
-      // FilledButton to `primary` instead would make every CTA in the app the brand colour,
-      // which is the exact "fix" DESIGN-SYSTEM.md warns against. The LIGHT theme does not
-      // share this decision — cream on white is 1.07:1 — and its own test says so.
-      final style = ApnivaasTheme.dark().filledButtonTheme.style!;
-      const enabled = <WidgetState>{};
-      expect(style.backgroundColor!.resolve(enabled), ApnivaasColors.primaryContainer);
-      expect(style.foregroundColor!.resolve(enabled), ApnivaasColors.onPrimaryContainer);
-      _expectAtLeast(
-        _ratio(ApnivaasColors.onPrimaryContainer, ApnivaasColors.primaryContainer),
-        4.5,
-        'the cream button\'s own label',
-      );
-
-      // The light theme cannot use it — cream on a white card is 1.07:1 — so it paints the
-      // brand block instead. Asserted in full by its own test in the light-scheme group.
-      final lightStyle = ApnivaasTheme.light().filledButtonTheme.style!;
-      expect(lightStyle.backgroundColor!.resolve(enabled), ApnivaasColors.brandDeep);
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════════════════════════════════════
-  group('the light scheme is DRAWN — and here is what it must never go back to', () {
-    // THIS GROUP USED TO ASSERT THE OPPOSITE. It pinned every light const to
-    // `ColorScheme.fromSeed(#C9A96E)` output, which is why the light theme shipped a
-    // quantiser's bronze #79590C as its brand for as long as it did: the seed produced a
-    // colour nobody chose, this test froze it, and the freeze read as rigour.
-    //
-    // Gold cannot be a light-theme brand, and that is arithmetic rather than taste. #C9A96E on
-    // white is 2.24:1; to clear 4.5:1 a gold has to darken to about L 0.30, and a gold at
-    // L 0.30 is a brown. The seed was always going to answer with a brown. So the light scheme
-    // is hand-drawn around hue 262 now, and what this group guards is that it can never
-    // quietly become derived output again.
-    final derived = ColorScheme.fromSeed(seedColor: ApnivaasColors.gold);
-
-    test('the light brand is NOT what the seed would have produced', () {
-      expect(ApnivaasColors.lightPrimary, isNot(derived.primary),
-          reason: 'if these are ever equal again, someone has reverted to fromSeed');
-      expect(ApnivaasColors.lightPrimary, ApnivaasColors.brandInk);
-      expect(_ratio(ApnivaasColors.gold, ApnivaasColors.surface), lessThan(3.0),
-          reason: 'the reason gold cannot be light-theme text, restated as a number');
-    });
-
-    test('the light brand works in BOTH directions, which is why it needs no second token', () {
-      // The rare property that lets one hex be the link AND the button fill.
-      _expectAtLeast(_ratio(ApnivaasColors.lightPrimary, ApnivaasColors.surface), 4.5,
-          'the brand as text on the card');
-      _expectAtLeast(_ratio(const Color(0xFFFFFFFF), ApnivaasColors.lightPrimary), 4.5,
-          'white as text on the brand');
-    });
-
-    test('the LIGHT filled button is the brand block, because cream on white is invisible', () {
-      final style = ApnivaasTheme.light().filledButtonTheme.style!;
-      final bg = style.backgroundColor!.resolve({})!;
-      final fg = style.foregroundColor!.resolve({})!;
-      expect(bg, ApnivaasColors.brandDeep);
-      expect(fg, const Color(0xFFFFFFFF));
-      _expectAtLeast(_ratio(fg, bg), 4.5, 'white on the light filled button');
-      // The mistake this exists to prevent: the dark theme's cream, pasted across.
-      expect(_ratio(ApnivaasColors.primaryContainer, ApnivaasColors.surface), lessThan(1.5),
-          reason: 'cream on the light card is not a button and never was');
-    });
-
     test('the brand block is the SAME object in both themes', () {
-      // The one surface a light phone and a dark phone show identically. It is what makes the
-      // product recognisable before a word is read, and a light-only competitor cannot do it.
-      expect(ApnivaasTheme.light().colorScheme.primaryContainer, ApnivaasColors.brandDeep);
-      expect(ApnivaasColors.brandDeep, const Color(0xFF4D2896));
-      _expectAtLeast(_ratio(const Color(0xFFFFFFFF), ApnivaasColors.brandDeep), 4.5,
-          'white on the brand block');
-      _expectAtLeast(_ratio(ApnivaasColors.gold, ApnivaasColors.brandDeep), 4.5,
-          'the metal still reads as TEXT on the block, which is where gold belongs now');
-    });
-
-    test('the light aliases still point where the app expects', () {
-      expect(ApnivaasColors.indigo, ApnivaasColors.lightPrimary);
-      expect(ApnivaasColors.brand, ApnivaasColors.rooms, reason: 'the brand is the rooms violet');
-      expect(ApnivaasColors.brandInk, ApnivaasColors.roomsInk);
-      expect(ApnivaasColors.brandDark, ApnivaasColors.roomsDark);
-      expect(ApnivaasColors.hairline, isNot(ApnivaasColors.lightField),
-          reason: 'the divider is lighter than the field now; they used to be one token');
+      // The header gradient, the forest hero tile and gold are identical on a light and a dark
+      // phone; it is what makes the product recognisable before a word is read.
+      final lightHeader = ApnivaasTheme.light().datePickerTheme.headerBackgroundColor;
+      expect(lightHeader, ApnivaasColors.forest);
+      expect(dark.datePickerTheme.headerBackgroundColor, ApnivaasColors.forest);
+      expect(ApnivaasTheme.light().colorScheme.primaryContainer, scheme.primaryContainer,
+          reason: 'Mist is the tonal fill in light and the filled button in dark — one value');
     });
   });
 
@@ -365,19 +495,30 @@ void main() {
       _againstAll(_lightSurfaces, ApnivaasColors.textPrimary, 4.5, 'textPrimary');
       _againstAll(_lightSurfaces, ApnivaasColors.textSecondary, 4.5, 'textSecondary');
       _againstAll(_lightSurfaces, ApnivaasColors.mutedInk, 4.5, 'mutedInk');
+      _againstAll(_lightSurfaces, ApnivaasColors.mistInk, 4.5, 'mistInk');
     });
 
     test('light brand and semantic ink', () {
       _againstAll(_lightSurfaces, ApnivaasColors.lightPrimary, 4.5, 'lightPrimary');
-      _againstAll(_lightSurfaces, ApnivaasColors.softBlueInk, 4.5, 'softBlueInk');
       _againstAll(_lightSurfaces, ApnivaasColors.successInk, 4.5, 'successInk');
       _againstAll(_lightSurfaces, ApnivaasColors.warningInk, 4.5, 'warningInk');
       _againstAll(_lightSurfaces, ApnivaasColors.errorInk, 4.5, 'errorInk');
       _againstAll(_lightSurfaces, ApnivaasColors.infoInk, 4.5, 'infoInk');
-      // The three domain inks are held to exactly the same bar as the four semantic ones.
+      // The domain inks are the brand ink now, and held to exactly the same bar.
       _againstAll(_lightSurfaces, ApnivaasColors.foodInk, 4.5, 'foodInk');
       _againstAll(_lightSurfaces, ApnivaasColors.roomsInk, 4.5, 'roomsInk');
       _againstAll(_lightSurfaces, ApnivaasColors.peopleInk, 4.5, 'peopleInk');
+    });
+
+    test('the figures quoted in tokens.dart for the light ramp are the measured ones', () {
+      expect(_fixed(ApnivaasColors.ink, ApnivaasColors.card), '14.53');
+      expect(_fixed(ApnivaasColors.ink, ApnivaasColors.lightField), '11.57');
+      expect(_fixed(ApnivaasColors.inkMuted, ApnivaasColors.card), '6.06');
+      expect(_fixed(ApnivaasColors.inkMuted, ApnivaasColors.lightField), '4.83');
+      expect(_fixed(ApnivaasColors.forest, ApnivaasColors.card), '9.36');
+      expect(_fixed(ApnivaasColors.forest, ApnivaasColors.cream), '8.52');
+      expect(_fixed(ApnivaasColors.warningInk, ApnivaasColors.lightField), '4.64',
+          reason: 'the tightest status ink');
     });
 
     test('dark neutral ramp', () {
@@ -387,7 +528,7 @@ void main() {
     });
 
     test('dark brand and semantic ink', () {
-      _againstAll(_darkSurfaces, ApnivaasColors.primary, 4.5, 'primary (gold)');
+      _againstAll(_darkSurfaces, ApnivaasColors.primary, 4.5, 'primary (mint)');
       _againstAll(_darkSurfaces, ApnivaasColors.successDark, 4.5, 'successDark');
       _againstAll(_darkSurfaces, ApnivaasColors.warningDark, 4.5, 'warningDark');
       _againstAll(_darkSurfaces, ApnivaasColors.errorDark, 4.5, 'errorDark');
@@ -397,67 +538,21 @@ void main() {
       _againstAll(_darkSurfaces, ApnivaasColors.peopleDark, 4.5, 'peopleDark');
     });
 
-    test('THE THREE FIGMA VALUES THAT HAD TO MOVE, AND BY HOW LITTLE', () {
-      // Each of these is a hex the designer actually used as TEXT, which does not clear 4.5:1
-      // where the design itself puts it. The fix is in the colour and it is minimal: same hue,
-      // same saturation, lifted in lightness until the tightest case passes. Pinning the
-      // ORIGINAL's failure is what stops somebody "restoring the design value" later.
-      const design = <String, (Color, Color, int)>{
-        // name          design hex                     shipped                delta cap
-        'tertiary ink': (Color(0xFF6F747A), ApnivaasColors.darkMuted, 30),
-        'badge blue': (Color(0xFF5577AD), ApnivaasColors.infoDark, 30),
-        'badge red': (Color(0xFFC96B6B), ApnivaasColors.errorDark, 10),
-      };
-      design.forEach((name, v) {
-        final (original, shipped, cap) = v;
-
-        // The original fails somewhere it is actually drawn. For two of the three that is
-        // plain text on a surface; for the red it is only the chip case, which is why the
-        // precondition is the same contract the shipped value has to meet rather than just
-        // the plain one.
-        double worstOf(Color c) => [
-              ..._darkSurfaces.values.map((bg) => _ratio(c, bg)),
-              ..._darkGrounds.values
-                  .map((bg) => _ratio(c, _over(ApnivaasSemantics.dark.chipFill(c), bg))),
-            ].reduce(math.min);
-        expect(worstOf(original), lessThan(4.5),
-            reason: '$name ${_hex(original)} now passes on its own — the lift can be reverted');
-
-        // ...the shipped value clears it everywhere, including on a chip of itself...
-        _againstAll(_darkSurfaces, shipped, 4.5, name);
-        final worstChip = _darkGrounds.values
-            .map((bg) => _ratio(
-                shipped, _over(ApnivaasSemantics.dark.chipFill(shipped), bg)))
-            .reduce(math.min);
-        _expectAtLeast(worstChip, 4.5, '$name on a chip of itself');
-
-        // ...and it moved the minimum it could. Anything beyond this is redesigning by eye.
-        for (final ch in [
-          ((shipped.r - original.r).abs() * 255, 'red'),
-          ((shipped.g - original.g).abs() * 255, 'green'),
-          ((shipped.b - original.b).abs() * 255, 'blue'),
-        ]) {
-          expect(ch.$1, lessThanOrEqualTo(cap.toDouble()),
-              reason: '$name moved ${ch.$1.round()} points of ${ch.$2} off the design value '
-                  '${_hex(original)} → ${_hex(shipped)}; the cap is $cap');
-        }
-      });
+    test('a placeholder is text, measured against the fill it is actually drawn on', () {
+      // The field fill is the card in light and the raised surface in dark. A placeholder is
+      // not held to the darker fills because no field is drawn on them.
+      _expectAtLeast(_ratio(ApnivaasColors.placeholder, ApnivaasColors.card), 4.5,
+          'light placeholder on the field');
+      _expectAtLeast(_ratio(ApnivaasColors.darkPlaceholder, ApnivaasColors.surfaceContainer), 4.5,
+          'dark placeholder on the field');
     });
 
     test('each ramp is a hierarchy, not three shades of the same grey', () {
       for (final e in {
-        'light': [
-          ApnivaasColors.textPrimary,
-          ApnivaasColors.textSecondary,
-          ApnivaasColors.mutedInk,
-        ],
-        'dark': [
-          ApnivaasColors.onSurface,
-          ApnivaasColors.onSurfaceVariant,
-          ApnivaasColors.darkMuted,
-        ],
+        'light': [ApnivaasColors.textPrimary, ApnivaasColors.textSecondary, ApnivaasColors.mutedInk],
+        'dark': [ApnivaasColors.onSurface, ApnivaasColors.onSurfaceVariant, ApnivaasColors.darkMuted],
       }.entries) {
-        final card = e.key == 'light' ? ApnivaasColors.surface : ApnivaasColors.surfaceContainerLow;
+        final card = e.key == 'light' ? ApnivaasColors.card : ApnivaasColors.surfaceContainerLow;
         final ratios = e.value.map((c) => _ratio(c, card)).toList();
         for (var i = 1; i < ratios.length; i++) {
           expect(ratios[i], lessThan(ratios[i - 1]),
@@ -465,124 +560,26 @@ void main() {
         }
       }
     });
-  });
 
-  // ═══════════════════════════════════════════════════════════════════════════════════════
-  group('graphics and controls are 3:1 — WCAG 1.4.11', () {
-    test('the canonical set clears 3:1 on every surface of BOTH themes', () {
-      // These are the values painted with no BuildContext — chart bars, meter fills, a tone:
-      // plumbed through an enum. Each is the corresponding FIGMA tone taken to the lightness
-      // that maximises its worst case across all eight surfaces.
-      const canonical = <String, Color>{
-        'success': ApnivaasColors.success,
-        'warning': ApnivaasColors.warning,
-        'error': ApnivaasColors.error,
-        'info': ApnivaasColors.info,
-        'textMuted': ApnivaasColors.textMuted,
-        'food': ApnivaasColors.food,
-        'rooms': ApnivaasColors.rooms,
-        'people': ApnivaasColors.people,
-      };
-      canonical.forEach((name, c) {
-        _againstAll(_lightSurfaces, c, 3.0, 'canonical $name');
-        _againstAll(_darkSurfaces, c, 3.0, 'canonical $name');
-      });
-    });
-
-    test('a single flat colour CAN now serve both extremes, which it could not before', () {
-      // The previous palette's windows were disjoint and the old test proved the
-      // impossibility. The new ground is darker (#0B0D0F, not #0B1326) and the new light
-      // surfaces are warmer and less extreme, so the windows overlap and the canonical set is
-      // a real dual-theme colour rather than a compromise. If this ever inverts again, the
-      // canonical set has to split and this test says so before the ratios do.
-      final darkCeiling = _darkSurfaces.values.map(_luminance).reduce(math.max);
-      final lightFloor = _lightSurfaces.values.map(_luminance).reduce(math.min);
-      final needAbove = 3.0 * (darkCeiling + 0.05) - 0.05; // to clear 3:1 on the lightest dark
-      final needBelow = (lightFloor + 0.05) / 3.0 - 0.05; //  to clear 3:1 under the darkest light
-      expect(needAbove, lessThan(needBelow),
-          reason: 'the luminance windows no longer overlap: a colour would need L >= '
-              '${needAbove.toStringAsFixed(4)} and L <= ${needBelow.toStringAsFixed(4)}');
-
-      // And every canonical value actually sits inside that window.
-      for (final c in [
-        ApnivaasColors.success,
-        ApnivaasColors.warning,
-        ApnivaasColors.error,
-        ApnivaasColors.info,
-        ApnivaasColors.textMuted,
-        ApnivaasColors.food,
-        ApnivaasColors.rooms,
-        ApnivaasColors.people,
-      ]) {
-        expect(_luminance(c), inInclusiveRange(needAbove, needBelow), reason: _hex(c));
-      }
-    });
-
-    test('a control border is the control, so it is 3:1 — not the card hairline', () {
-      // The dark field fill IS the design's raised surface, which is the tightest case.
-      _againstAll(_darkSurfaces, ApnivaasColors.darkControlBorder, 3.0, 'darkControlBorder');
-      _againstAll(_lightGrounds, ApnivaasColors.controlBorder, 3.0, 'controlBorder');
-    });
-
-    test('decorative borders are deliberately BELOW 3:1, which is why they are separate tokens',
-        () {
-      // A card edge held to 3:1 looks like a text field. The design draws one hairline colour
-      // and it is quiet on purpose.
-      _darkSurfaces.forEach((where, bg) {
-        expect(_ratio(ApnivaasColors.darkCardBorder, bg), lessThan(2.0),
-            reason: 'the dark card hairline has become a control border on $where');
-      });
-      expect(_ratio(ApnivaasColors.cardBorder, ApnivaasColors.surface), lessThan(2.0));
-      expect(_ratio(ApnivaasColors.hairline, ApnivaasColors.surface),
-          lessThan(_ratio(ApnivaasColors.cardBorder, ApnivaasColors.surface)),
-          reason: 'a divider must be quieter than a card edge — that is the whole reason '
-              'they are two tokens');
-    });
-
-    test('the design\'s tertiary survives as a SHAPE even though it failed as text', () {
-      // #6F747A draws the empty-state glyph's 1.5px outline and a text field's border. 3:1
-      // applies there and it clears it on every surface, which is exactly why it was kept
-      // rather than replaced wholesale.
-      _againstAll(_darkSurfaces, ApnivaasColors.outline, 3.0, 'outline (the design tertiary)');
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════════════════════════════════════
-  group('filled surfaces — legible from the inside', () {
-    test('the design\'s own on-colour pairings', () {
+    test('the filled surfaces carry their own legible inks', () {
       for (final e in <String, (Color, Color)>{
-        'gold': (ApnivaasColors.primary, ApnivaasColors.onPrimary),
-        'cream button': (ApnivaasColors.primaryContainer, ApnivaasColors.onPrimaryContainer),
-        'amber': (ApnivaasColors.secondary, ApnivaasColors.onSecondary),
-        'green': (ApnivaasColors.tertiary, ApnivaasColors.onTertiary),
-        'red': (ApnivaasColors.errorTone, ApnivaasColors.onErrorTone),
-        'secondaryContainer': (ApnivaasColors.secondaryContainer, ApnivaasColors.onSecondaryContainer),
-        'tertiaryContainer': (ApnivaasColors.tertiaryContainer, ApnivaasColors.onTertiaryContainer),
-        'errorContainer': (ApnivaasColors.errorContainer, ApnivaasColors.onErrorContainer),
+        'white on forest': (const Color(0xFFFFFFFF), ApnivaasColors.forest),
+        'white on a pressed button': (const Color(0xFFFFFFFF), ApnivaasColors.forestPressed),
+        'forest on Mist': (ApnivaasColors.forest, ApnivaasColors.mist),
+        'ink on Mist': (ApnivaasColors.ink, ApnivaasColors.mist),
+        'muted on Mist': (ApnivaasColors.inkMuted, ApnivaasColors.mist),
+        'mistInk on Mist': (ApnivaasColors.mistInk, ApnivaasColors.mist),
+        'ink on gold': (ApnivaasColors.ink, ApnivaasColors.gold),
+        'banner title': (ApnivaasColors.bannerTitle, ApnivaasColors.bannerBottom),
+        'banner body': (ApnivaasColors.bannerBody, ApnivaasColors.bannerBottom),
+        'banner title, light stop': (ApnivaasColors.bannerTitle, ApnivaasColors.bannerTop),
+        'banner body, light stop': (ApnivaasColors.bannerBody, ApnivaasColors.bannerTop),
+        'error banner': (ApnivaasColors.errorInk, ApnivaasColors.errorContainerLight),
+        'white on the error red': (const Color(0xFFFFFFFF), ApnivaasColors.errorInk),
+        'hero tile caption': (ApnivaasColors.headerSub, ApnivaasColors.forest),
       }.entries) {
-        final (fill, on) = e.value;
+        final (on, fill) = e.value;
         _expectAtLeast(_ratio(on, fill), 4.5, '${e.key}: ${_hex(on)} on ${_hex(fill)}');
-      }
-    });
-
-    test('the cream button is the highest-contrast control in the app', () {
-      // 17.56:1, on the control that matters most. Anything that made it merely adequate would
-      // be a regression worth arguing about.
-      _expectAtLeast(
-        _ratio(ApnivaasColors.onPrimaryContainer, ApnivaasColors.primaryContainer),
-        15.0,
-        'the cream CTA',
-      );
-    });
-
-    test('the snackbar is the deepest well and its text still reads', () {
-      _expectAtLeast(
-        _ratio(ApnivaasColors.onSurface, ApnivaasColors.midnight),
-        4.5,
-        'snackbar text',
-      );
-      for (final theme in [ApnivaasTheme.dark(), ApnivaasTheme.light()]) {
-        expect(theme.snackBarTheme.backgroundColor, ApnivaasColors.midnight);
       }
     });
 
@@ -591,10 +588,15 @@ void main() {
         final label = scheme.brightness.name;
         for (final e in <String, (Color, Color)>{
           'primary': (scheme.primary, scheme.onPrimary),
+          'primaryContainer': (scheme.primaryContainer, scheme.onPrimaryContainer),
           'secondary': (scheme.secondary, scheme.onSecondary),
+          'secondaryContainer': (scheme.secondaryContainer, scheme.onSecondaryContainer),
           'tertiary': (scheme.tertiary, scheme.onTertiary),
+          'tertiaryContainer': (scheme.tertiaryContainer, scheme.onTertiaryContainer),
           'error': (scheme.error, scheme.onError),
+          'errorContainer': (scheme.errorContainer, scheme.onErrorContainer),
           'surface': (scheme.surface, scheme.onSurface),
+          'inverseSurface': (scheme.inverseSurface, scheme.onInverseSurface),
         }.entries) {
           final (fill, on) = e.value;
           _expectAtLeast(_ratio(on, fill), 4.5, '$label ${e.key}');
@@ -604,19 +606,205 @@ void main() {
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════════════
+  group('graphics and controls are 3:1 — WCAG 1.4.11', () {
+    const canonical = <String, Color>{
+      'success': ApnivaasColors.success,
+      'warning': ApnivaasColors.warning,
+      'error': ApnivaasColors.error,
+      'info': ApnivaasColors.info,
+      'textMuted': ApnivaasColors.textMuted,
+      'brand': ApnivaasColors.brand,
+    };
+
+    test('the canonical set clears 3:1 on every neutral fill of BOTH themes', () {
+      // These are the values painted with no BuildContext — chart bars, meter fills, a `tone:`
+      // plumbed through an enum.
+      canonical.forEach((name, c) {
+        _againstAll(_lightCanonicalGrounds, c, 3.0, 'canonical $name');
+        _againstAll(_darkGrounds, c, 3.0, 'canonical $name');
+      });
+    });
+
+    test('one flat colour can serve both themes, and every canonical value sits in the window',
+        () {
+      // To clear 3:1 over the lightest dark rung a colour needs L above `needAbove`; to clear it
+      // under the darkest light fill, L below `needBelow`. If the windows ever stop overlapping
+      // the canonical set has to split, and this says so before the ratios do.
+      final darkCeiling = _darkGrounds.values.map(_luminance).reduce(math.max);
+      final lightFloor = _lightCanonicalGrounds.values.map(_luminance).reduce(math.min);
+      final needAbove = 3.0 * (darkCeiling + 0.05) - 0.05;
+      final needBelow = (lightFloor + 0.05) / 3.0 - 0.05;
+      expect(needAbove, lessThan(needBelow),
+          reason: 'the luminance windows no longer overlap: a colour would need L >= '
+              '${needAbove.toStringAsFixed(4)} and L <= ${needBelow.toStringAsFixed(4)}');
+      canonical.forEach((name, c) {
+        expect(_luminance(c), inInclusiveRange(needAbove, needBelow), reason: '$name ${_hex(c)}');
+      });
+    });
+
+    test('a control border is the control, so it is 3:1 — not the card hairline', () {
+      _againstAll(_lightControlGrounds, ApnivaasColors.controlBorder, 3.0, 'controlBorder');
+      _againstAll(_darkGrounds, ApnivaasColors.darkControlBorder, 3.0, 'darkControlBorder');
+      _expectAtLeast(_ratio(ApnivaasColors.outline, ApnivaasColors.surfaceBright), 3.0,
+          'dark control border on the brightest rung');
+    });
+
+    test('decorative edges are deliberately BELOW 3:1, which is why they are separate tokens',
+        () {
+      // A card edge held to 3:1 looks like a text field.
+      expect(_ratio(ApnivaasColors.cardBorder, ApnivaasColors.card), lessThan(2.0));
+      expect(_ratio(ApnivaasColors.cardBorder, ApnivaasColors.cream), lessThan(2.0));
+      expect(_ratio(ApnivaasColors.hairline, ApnivaasColors.card),
+          lessThan(_ratio(ApnivaasColors.cardBorder, ApnivaasColors.card)),
+          reason: 'a divider must be quieter than a card edge — that is why they are two tokens');
+      _darkSurfaces.forEach((where, bg) {
+        expect(_ratio(ApnivaasColors.darkCardBorder, bg), lessThan(2.0),
+            reason: 'the dark card hairline has become a control border on $where');
+      });
+    });
+
+    test('the greens are graphics first, and two of them are never text where it fails', () {
+      // Leaf reads as text on the card and NOT on the ground; sage is decoration only.
+      _expectAtLeast(_ratio(ApnivaasColors.leaf, ApnivaasColors.card), 4.5, 'leaf on the card');
+      expect(_ratio(ApnivaasColors.leaf, ApnivaasColors.cream), lessThan(4.5),
+          reason: 'if leaf now passes on the ground, the forest-for-links rule can relax');
+      _expectAtLeast(_ratio(ApnivaasColors.sage, ApnivaasColors.card), 3.0, 'sage as a graphic');
+      expect(_ratio(ApnivaasColors.sage, ApnivaasColors.card), lessThan(4.5),
+          reason: 'sage is decoration, never text');
+    });
+
+    test('gold earns its place only on forest', () {
+      _expectAtLeast(_ratio(ApnivaasColors.gold, ApnivaasColors.forestHigh), 3.0,
+          'the unread dot on the lightest header stop');
+      _expectAtLeast(_ratio(ApnivaasColors.gold, ApnivaasColors.forestTrack), 3.0,
+          'the hero tile progress on its track');
+      expect(_fixed(ApnivaasColors.gold, ApnivaasColors.forestHigh), '3.60');
+      expect(_fixed(ApnivaasColors.gold, ApnivaasColors.forestTrack), '3.13');
+    });
+
+    test('a focus ring and a light progress fill read on what they sit on', () {
+      _expectAtLeast(_ratio(ApnivaasColors.forest, ApnivaasColors.card), 3.0, 'light focus ring');
+      _expectAtLeast(_ratio(ApnivaasColors.primary, ApnivaasColors.surfaceContainerLow), 3.0,
+          'dark focus ring');
+      _expectAtLeast(_ratio(ApnivaasColors.forest, ApnivaasColors.track), 3.0,
+          'forest progress on the light track');
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  // FIVE CANVAS VALUES COULD NOT CARRY THEIR OWN CONTRAST. Each original's failure is pinned
+  // where the canvas actually draws it, next to the replacement that passes. Restoring a canvas
+  // value fails here, with the number it measures.
+  group('the canvas values that failed, and what replaced them', () {
+    final searchFill = _over(ApnivaasColors.headerSearchFill, ApnivaasColors.forestHigh);
+
+    test('the input and chip border #DDD5C8 → controlBorder', () {
+      expect(_ratio(const Color(0xFFDDD5C8), ApnivaasColors.card), lessThan(3.0));
+      _expectAtLeast(_ratio(ApnivaasColors.controlBorder, ApnivaasColors.card), 3.0,
+          'controlBorder on the field fill');
+      expect(_fixed(ApnivaasColors.controlBorder, ApnivaasColors.card), '3.53');
+    });
+
+    test('the radio ring #BFB6A8 → controlBorder', () {
+      expect(_ratio(const Color(0xFFBFB6A8), ApnivaasColors.card), lessThan(3.0));
+    });
+
+    test('the placeholder #7B8A83 → placeholder', () {
+      expect(_ratio(const Color(0xFF7B8A83), ApnivaasColors.card), lessThan(4.5));
+      expect(_fixed(ApnivaasColors.placeholder, ApnivaasColors.card), '4.77');
+    });
+
+    test('the inactive tab label #6B7A73 → inkMuted', () {
+      expect(_ratio(const Color(0xFF6B7A73), ApnivaasColors.card), lessThan(4.5));
+      _expectAtLeast(_ratio(ApnivaasColors.inkMuted, ApnivaasColors.card), 4.5,
+          'the inactive tab label on the bar');
+    });
+
+    test('the header search placeholder #CFE0D4 → headerPlaceholder', () {
+      expect(_hex(searchFill), '#3A7465', reason: 'white at 12% over the lightest header stop');
+      expect(_ratio(const Color(0xFFCFE0D4), searchFill), lessThan(4.5));
+      expect(_fixed(const Color(0xFFCFE0D4), searchFill), '3.94');
+      expect(_fixed(ApnivaasColors.headerPlaceholder, searchFill), '4.65');
+    });
+
+    test('leaf as text on the ground → forest', () {
+      expect(_fixed(ApnivaasColors.leaf, ApnivaasColors.cream), '4.23');
+      expect(_fixed(ApnivaasColors.forest, ApnivaasColors.cream), '8.52');
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════════════
+  group('the forest header — every ink measured on its LIGHTEST stop', () {
+    const worst = ApnivaasColors.forestHigh;
+
+    test('the gradient is the canvas\'s 160deg and lightens top to bottom', () {
+      const g = ApnivaasColors.headerGradient;
+      expect(g.colors, [ApnivaasColors.forestDeep, ApnivaasColors.forest, ApnivaasColors.forestHigh]);
+      expect(g.stops, [0, 0.55, 1]);
+      expect((g.transform! as GradientRotation).radians, closeTo(-math.pi / 9, 1e-9));
+      // Monotone, so the last stop is the worst case for light ink everywhere on the header.
+      final l = g.colors.map(_luminance).toList();
+      expect(l[0], lessThan(l[1]));
+      expect(l[1], lessThan(l[2]));
+    });
+
+    test('title, greeting and meta lines', () {
+      for (final ground in [worst, ApnivaasColors.forest, ApnivaasColors.forestDeep]) {
+        _expectAtLeast(_ratio(ApnivaasColors.headerTitle, ground), 7.0, 'title on ${_hex(ground)}');
+        _expectAtLeast(_ratio(ApnivaasColors.headerGreeting, ground), 4.5,
+            'greeting on ${_hex(ground)}');
+        _expectAtLeast(_ratio(ApnivaasColors.headerSub, ground), 4.5, 'meta on ${_hex(ground)}');
+      }
+      expect(_fixed(ApnivaasColors.headerTitle, worst), '7.28');
+      expect(_fixed(ApnivaasColors.headerGreeting, worst), '5.11');
+      expect(_fixed(ApnivaasColors.headerSub, worst), '5.29');
+    });
+
+    test('the search pill and the round buttons', () {
+      final search = _over(ApnivaasColors.headerSearchFill, worst);
+      _expectAtLeast(_ratio(const Color(0xFFFFFFFF), search), 4.5, 'typed text in the pill');
+      _expectAtLeast(_ratio(ApnivaasColors.headerPlaceholder, search), 4.5, 'pill placeholder');
+      expect(_fixed(const Color(0xFFFFFFFF), search), '5.42');
+      final button = _over(ApnivaasColors.headerButtonFill, worst);
+      _expectAtLeast(_ratio(ApnivaasColors.headerTitle, button), 3.0, 'a header glyph');
+      expect(_fixed(ApnivaasColors.headerTitle, button), '6.01');
+    });
+
+    test('the stars stay out from behind the type, small and faint', () {
+      // Trailing half, or hugging the top or bottom edge — never behind the greeting.
+      for (final s in HeaderStars.dots) {
+        final clear = s.x >= HeaderStars.referenceWidth / 2 || s.y <= 14 || s.y >= 150;
+        expect(clear, isTrue, reason: 'a star at (${s.x}, ${s.y}) sits behind the greeting');
+        expect(s.radius, inInclusiveRange(0.8, 1.7));
+        expect(s.alpha, inInclusiveRange(0.0, 1.0));
+        expect(s.x, inInclusiveRange(0, HeaderStars.referenceWidth));
+        expect(s.y, inInclusiveRange(0, HeaderStars.referenceHeight));
+        if (s.haloRadius != null) {
+          expect(s.haloAlpha!, lessThanOrEqualTo(0.15), reason: 'a halo is a whisper');
+        }
+      }
+      // A halo is the only thing that could lift a ground under type, and the painter draws one
+      // only from haloMinFraction outward — so that fraction must clear the greeting.
+      expect(HeaderStars.haloMinFraction, greaterThanOrEqualTo(0.75));
+      expect(HeaderStars.dots.where((s) => s.haloRadius != null), isNotEmpty);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════════════════
   group('status chips — the tightest case in the app', () {
+    Map<String, Color> inksOf(ApnivaasSemantics tones) => {
+          'success': tones.success,
+          'warning': tones.warning,
+          'error': tones.error,
+          'info': tones.info,
+          'muted': tones.muted,
+          'food': tones.food,
+          'rooms': tones.rooms,
+          'people': tones.people,
+        };
+
     void checkChips(ApnivaasSemantics tones, Map<String, Color> grounds, String label) {
-      final inks = <String, Color>{
-        'success': tones.success,
-        'warning': tones.warning,
-        'error': tones.error,
-        'info': tones.info,
-        'muted': tones.muted,
-        'food': tones.food,
-        'rooms': tones.rooms,
-        'people': tones.people,
-      };
-      inks.forEach((name, ink) {
+      inksOf(tones).forEach((name, ink) {
         grounds.forEach((where, bg) {
           final fill = _over(tones.chipFill(ink), bg);
           _expectAtLeast(_ratio(ink, fill), 4.5, '$label $name chip on $where');
@@ -627,40 +815,50 @@ void main() {
     test('light chips', () => checkChips(ApnivaasSemantics.light, _lightGrounds, 'light'));
     test('dark chips', () => checkChips(ApnivaasSemantics.dark, _darkGrounds, 'dark'));
 
-    test('the fill alpha is the design\'s own 10%, and it is AT ITS CEILING', () {
-      // Figma draws every state badge and the subscription banner at `rgba(<tone>, 0.1)`. That
-      // is also the most the palette can take: a tint of the tone lightens the fill TOWARDS
-      // the text, so the ratio falls as the alpha rises.
-      expect(ApnivaasSemantics.dark.chipFillAlpha, 0.10);
-      expect(ApnivaasSemantics.light.chipFillAlpha, ApnivaasSemantics.dark.chipFillAlpha,
+    test('the fill alpha is 10%, and 0.12 is the last value that still clears AA', () {
+      // A tint of the tone moves the fill TOWARDS the text, so the ratio falls as the alpha
+      // rises. These are the numbers the comment on ApnivaasSemantics quotes.
+      expect(ApnivaasSemantics.light.chipFillAlpha, 0.10);
+      expect(ApnivaasSemantics.dark.chipFillAlpha, ApnivaasSemantics.light.chipFillAlpha,
           reason: 'one number for both themes, so a chip reads at the same weight in either');
 
-      for (final e in {
-        'light': (ApnivaasSemantics.light, _lightGrounds),
-        'dark': (ApnivaasSemantics.dark, _darkGrounds),
-      }.entries) {
-        final (tones, grounds) = e.value;
-        final inks = [
-          tones.success, tones.warning, tones.error, tones.info, tones.muted,
-          tones.food, tones.rooms, tones.people,
-        ];
-        double worstAt(double alpha) => inks
-            .expand((ink) => grounds.values
-                .map((bg) => _ratio(ink, _over(ink.withValues(alpha: alpha), bg))))
-            .reduce(math.min);
-        expect(worstAt(tones.chipFillAlpha), greaterThanOrEqualTo(4.5));
-        // 0.11 is the last value that clears AA at all and 0.12 fails, so the design's own
-        // 0.10 buys exactly one point of headroom. If this ever passes at 0.12 the palette has
-        // been lightened and the comment in tokens.dart is stale.
-        expect(worstAt(0.12), lessThan(4.5),
-            reason: '${e.key} chips have room the comment says they do not; re-derive the '
-                'ceiling rather than leaving the number stale');
-      }
+      double worstAt(double alpha) => [
+            for (final e in {
+              ApnivaasSemantics.light: _lightGrounds,
+              ApnivaasSemantics.dark: _darkGrounds,
+            }.entries)
+              for (final ink in inksOf(e.key).values)
+                for (final bg in e.value.values)
+                  _ratio(ink, _over(ink.withValues(alpha: alpha), bg)),
+          ].reduce(math.min);
+      expect(worstAt(0.10).toStringAsFixed(2), '4.64');
+      expect(worstAt(0.12), greaterThanOrEqualTo(4.5));
+      expect(worstAt(0.13), lessThan(4.5),
+          reason: 'chips have more room than the comment says; re-derive the ceiling rather '
+              'than leaving the number stale');
     });
 
-    test('the chip border is FULL STRENGTH, which is the design\'s own badge', () {
-      // `border border-[#5577ad]`, no alpha. The tones here are muted rather than saturated,
-      // so a 1px edge at full strength is a defined chip and not a warning light.
+    test('a chip never sits on Mist or the neutral chip fill — and here is why', () {
+      // Both are darker than the ground, so a translucent chip lands closer to its own ink.
+      // Recorded as a failure so the rule in ApnivaasSemantics cannot be "simplified" away.
+      final warning = ApnivaasSemantics.light.warning;
+      for (final bg in [ApnivaasColors.mist, ApnivaasColors.lightField]) {
+        final fill = _over(ApnivaasSemantics.light.chipFill(warning), bg);
+        expect(_ratio(warning, fill), lessThan(4.5), reason: 'warning chip on ${_hex(bg)}');
+      }
+      expect(_fixed(warning, _over(ApnivaasSemantics.light.chipFill(warning), ApnivaasColors.mist)),
+          '4.13');
+    });
+
+    test('the neutral chip is opaque, so it reads wherever it lands', () {
+      _expectAtLeast(_ratio(ApnivaasColors.inkMuted, ApnivaasColors.chipNeutral), 4.5,
+          'light neutral chip');
+      _expectAtLeast(
+          _ratio(ApnivaasColors.onSurfaceVariant, ApnivaasColors.surfaceContainerHighest), 4.5,
+          'dark neutral chip');
+    });
+
+    test('the chip border is FULL STRENGTH, so where one is drawn it is a real edge', () {
       expect(ApnivaasSemantics.dark.chipBorderAlpha, 1.0);
       for (final e in {
         'light': (ApnivaasSemantics.light, ApnivaasColors.errorInk, _lightGrounds),
@@ -669,13 +867,12 @@ void main() {
         final (tones, ink, grounds) = e.value;
         expect(tones.chipBorder(ink), ink);
         grounds.forEach((where, bg) {
-          _expectAtLeast(_ratio(tones.chipBorder(ink), bg), 3.0,
-              '${e.key} chip border on $where');
+          _expectAtLeast(_ratio(tones.chipBorder(ink), bg), 3.0, '${e.key} chip border on $where');
         });
       }
     });
 
-    test('resolve() maps canonical to the theme text value, and passes anything else through',
+    test('resolve() maps every canonical to the theme text value, and passes the rest through',
         () {
       expect(ApnivaasSemantics.light.resolve(ApnivaasColors.error), ApnivaasColors.errorInk);
       expect(ApnivaasSemantics.dark.resolve(ApnivaasColors.error), ApnivaasColors.errorDark);
@@ -684,11 +881,22 @@ void main() {
       expect(ApnivaasSemantics.dark.resolve(ApnivaasColors.food), ApnivaasColors.foodDark);
       expect(ApnivaasSemantics.light.resolve(ApnivaasColors.rooms), ApnivaasColors.roomsInk);
       expect(ApnivaasSemantics.dark.resolve(ApnivaasColors.people), ApnivaasColors.peopleDark);
+      // EVERY SPELLING OF THE BRAND RESOLVES — including the dark scheme's mint, which two call
+      // sites pass as a tone and which is 1.9:1 on cream if painted as given.
+      for (final spelling in [
+        ApnivaasColors.brand,
+        ApnivaasColors.lightPrimary,
+        ApnivaasColors.primary,
+      ]) {
+        expect(ApnivaasSemantics.light.resolve(spelling), ApnivaasColors.forest);
+        expect(ApnivaasSemantics.dark.resolve(spelling), ApnivaasColors.primary);
+      }
       // Not a canonical value: untouched.
-      expect(ApnivaasSemantics.light.resolve(ApnivaasColors.indigo), ApnivaasColors.indigo);
+      expect(ApnivaasSemantics.light.resolve(ApnivaasColors.gold), ApnivaasColors.gold);
+      expect(ApnivaasSemantics.dark.resolve(ApnivaasColors.gold), ApnivaasColors.gold);
     });
 
-    testWidgets('the fallback tones are the DARK set — this is a dark-first app',
+    testWidgets('the fallback tones are the DARK set, for a widget pumped without the theme',
         (tester) async {
       late ApnivaasSemantics seen;
       await tester.pumpWidget(MaterialApp(
@@ -702,95 +910,49 @@ void main() {
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════════════
-  // THE DOMAIN TONES — three new hues, derived by the same method and held to the same bar.
-  //
-  // Everything above already covers them: the canonical set is in the luminance window, the
-  // inks are AA plain and on a chip, the tints keep body text legible. What is pinned HERE is
-  // the derivation itself — that each ink is its canonical moved along its own hue by the
-  // minimum that passes, and not a colour somebody liked. "Minimum" is asserted the only way it
-  // can be: one step back towards the canonical, and the contract fails.
-  group('the domain tones — derived, not picked', () {
-    const domains = <String, (Color, Color, Color)>{
-      //          canonical             dark ink                 light ink
-      'food': (ApnivaasColors.food, ApnivaasColors.foodDark, ApnivaasColors.foodInk),
-      'rooms': (ApnivaasColors.rooms, ApnivaasColors.roomsDark, ApnivaasColors.roomsInk),
-      'people': (ApnivaasColors.people, ApnivaasColors.peopleDark, ApnivaasColors.peopleInk),
-    };
-
-    /// The ink's own contract, in one place: AA plain on every surface of its theme AND AA on a
-    /// 10% chip of itself over every ground a chip sits on.
-    bool passes(Color ink, Map<String, Color> surfaces, Map<String, Color> grounds) {
-      final plain = surfaces.values.every((bg) => _ratio(ink, bg) >= 4.5);
-      final chip = grounds.values.every((bg) =>
-          _ratio(ink, _over(ink.withValues(alpha: ApnivaasSemantics.surfaceTintAlpha), bg)) >=
-          4.5);
-      return plain && chip;
-    }
-
-    Color shifted(Color c, double dl) {
-      final hsl = HSLColor.fromColor(c);
-      return hsl.withLightness((hsl.lightness + dl).clamp(0.0, 1.0)).toColor();
-    }
-
-    test('each ink keeps its canonical\'s hue and saturation — moved in lightness only', () {
-      domains.forEach((name, v) {
-        final (canonical, dark, light) = v;
-        final c = HSLColor.fromColor(canonical);
-        for (final e in {'dark': dark, 'light': light}.entries) {
-          final ink = HSLColor.fromColor(e.value);
-          // A few degrees of hue and a few points of saturation are 8-bit rounding, not a
-          // redesign; a hue that has moved 30° is a different colour wearing the name.
-          expect((ink.hue - c.hue).abs(), lessThan(6),
-              reason: '$name ${e.key} ink changed hue: ${c.hue.round()}° → ${ink.hue.round()}°');
-          expect((ink.saturation - c.saturation).abs(), lessThan(0.08),
-              reason: '$name ${e.key} ink changed saturation');
-        }
-        // And in the direction the theme needs: lighter for dark, darker for light.
-        expect(HSLColor.fromColor(dark).lightness, greaterThan(c.lightness), reason: name);
-        expect(HSLColor.fromColor(light).lightness, lessThan(c.lightness), reason: name);
-      });
+  // THE DOMAIN TONES ARE RETIRED AS COLOURS. Rooms, people and food used to be violet, teal and
+  // saffron; the clay icon says what kind of thing a row is now, so they collapsed to the brand,
+  // and the domains that mean something keep the status tone they mean.
+  group('the domain tones — the brand plus three meanings', () {
+    test('each domain names exactly the tone the redesign gives it', () {
+      expect(ApnivaasDomain.money.tone, ApnivaasColors.success);
+      expect(ApnivaasDomain.complaints.tone, ApnivaasColors.warning);
+      expect(ApnivaasDomain.notices.tone, ApnivaasColors.info);
+      for (final d in [
+        ApnivaasDomain.rooms,
+        ApnivaasDomain.people,
+        ApnivaasDomain.food,
+        ApnivaasDomain.security,
+      ]) {
+        expect(d.tone, ApnivaasColors.brand, reason: '${d.name} is the brand');
+      }
+      expect(ApnivaasDomain.values.map((d) => d.tone).toSet(), hasLength(4));
     });
 
-    test('each ink is the MINIMUM lift — one step back towards the canonical, and it fails', () {
-      domains.forEach((name, v) {
-        final (_, dark, light) = v;
-        expect(passes(dark, _darkSurfaces, _darkGrounds), isTrue, reason: '$name dark ink');
-        expect(passes(shifted(dark, -0.01), _darkSurfaces, _darkGrounds), isFalse,
-            reason: '$name dark ink has slack — it was lifted further than it needed to be, '
-                'which is redesigning by eye');
-        expect(passes(light, _lightSurfaces, _lightGrounds), isTrue, reason: '$name light ink');
-        expect(passes(shifted(light, 0.01), _lightSurfaces, _lightGrounds), isFalse,
-            reason: '$name light ink has slack');
-      });
+    test('every domain resolves to a theme ink, in both themes', () {
+      for (final d in ApnivaasDomain.values) {
+        for (final tones in [ApnivaasSemantics.dark, ApnivaasSemantics.light]) {
+          expect(tones.resolve(d.tone), isNot(d.tone),
+              reason: '${d.name} did not resolve, so the paint site cannot make it legible');
+        }
+      }
     });
 
     test('an identity avatar can never wear a STATUS colour', () {
-      // THE REGRESSION THIS PINS WAS REAL AND SHIPPED IN AN EARLIER DRAFT. avatarToneFor hashed
-      // a name into six tones, three of which were success/warning/info — and the same Avatar
-      // widget carries a status tone on several screens (the warden's fee ledger passes the fee
-      // tone, the roster passes active/on-leave, the desk sheets pass amber and blue outright).
-      // On the screens that pass nothing the hash chose, so a resident whose NAME hashed to
-      // amber wore the disc that means "on leave" on the list two taps away.
-      // A plain list, not a const Set: Color overrides == and Dart refuses it in a const set.
+      // THE REGRESSION THIS PINS WAS REAL. The same avatar widget carries a status tone on
+      // several screens, so a name that hashed to amber wore the disc that means "on leave".
+      // With the domain hues retired every identity disc is the brand, which is the strongest
+      // form of the guarantee.
       const statusTones = <Color>[
         ApnivaasColors.success,
         ApnivaasColors.warning,
         ApnivaasColors.error,
         ApnivaasColors.info,
       ];
-      // Enough names that every slot of any small palette is hit many times over.
-      final seen = <Color>{};
-      for (var i = 0; i < 4000; i++) {
-        seen.add(avatarToneFor('Resident Number $i'));
-      }
+      final seen = <Color>{for (var i = 0; i < 4000; i++) avatarToneFor('Resident Number $i')};
       for (final tone in seen) {
         expect(statusTones.contains(tone), isFalse,
-            reason: 'avatarToneFor produced ${_hex(tone)}, which is a STATUS tone — an identity '
-                'disc in that colour is indistinguishable from a state on the same widget');
-      }
-      // …and it is still doing its job: more than one colour, all of them resolvable.
-      expect(seen.length, greaterThan(1), reason: 'every face would be the same colour');
-      for (final tone in seen) {
+            reason: 'avatarToneFor produced ${_hex(tone)}, which is a STATUS tone');
         for (final tones in [ApnivaasSemantics.dark, ApnivaasSemantics.light]) {
           expect(tones.resolve(tone), isNot(tone),
               reason: '${_hex(tone)} has no theme ink, so the initials on it are unmeasured');
@@ -800,57 +962,15 @@ void main() {
 
     test('the same name always gets the same colour, and an empty name is neutral', () {
       expect(avatarToneFor('Aarav Sharma'), avatarToneFor('Aarav Sharma'));
-      // Case and surrounding space are not identity.
       expect(avatarToneFor('  aarav sharma  '), avatarToneFor('Aarav Sharma'));
-      // Nothing to hash: the muted grey, not an arbitrary slot.
       expect(avatarToneFor(null), ApnivaasColors.textMuted);
       expect(avatarToneFor('   '), ApnivaasColors.textMuted);
-    });
-
-    test('every domain names a tone this palette can resolve, and gold passes through', () {
-      for (final d in ApnivaasDomain.values) {
-        for (final tones in [ApnivaasSemantics.dark, ApnivaasSemantics.light]) {
-          final ink = tones.resolve(d.tone);
-          // A domain that resolved to its own canonical would be one the paint site cannot
-          // make legible. THAT USED TO BE EXEMPTED FOR SECURITY, and the exemption was a bug
-          // this test was blessing: security named the gold, resolve() had no branch for it,
-          // and the paint site got #C9A96E at 2.24:1 on a white card — below even the 3:1
-          // graphics bar. Security is the Home/Dashboard domain for three of the five roles,
-          // so it was the most-drawn tone in the app. It resolves like every other domain now.
-          expect(ink, isNot(d.tone), reason: '${d.name} did not resolve to a theme ink');
-        }
-      }
-      // ONE PAIR SHARES A COLOUR, ON PURPOSE. rooms and security are both the brand violet
-      // now, because in a PG product the building IS the platform — the floors-and-beds domain
-      // and the account-and-security domain are the same brand, not a collision. Security used
-      // to hold the gold on its own, which is what made it illegible in the light theme.
-      // Every other pair stays distinct, and this assertion is what keeps a third from
-      // quietly joining them.
-      final tones = ApnivaasDomain.values.map((d) => d.tone).toSet();
-      expect(tones.length, ApnivaasDomain.values.length - 1);
-      expect(ApnivaasDomain.security.tone, ApnivaasDomain.rooms.tone);
     });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════════════
-  // THE REFUND PAIRING — measured, because a refund got a tone without getting a colour.
-  //
-  // A refund is a FACT, NOT A FAULT: nobody did anything wrong when money goes back, so it may
-  // not wear `error` (which means 'unpaid'), nor `warning` (which already means 'due / still
-  // owing' and would make a refunded month look like one that needs chasing), nor `success`
-  // (money leaving the hostel is not a collection). It wears `info` — the blue this palette
-  // already spends on "here is something you should know".
-  //
-  // THAT CHOICE ADDS NO COLOUR AND NO PAIRING, which is the point of it, and the first test
-  // below is what keeps that claim true. The rest measure the three grounds the refund
-  // surfaces actually paint on — and one of them, `colorScheme.surfaceContainer` in the LIGHT
-  // theme, is fromSeed output rather than a design hex, so it is not covered by _lightSurfaces
-  // and would otherwise go unmeasured.
-  //
-  //   RefundNote     (features/student/widgets/rent.dart)   info ink on the well, info border
-  //   the tile line  (features/student/widgets/rent.dart)   info ink on the card
-  //   the ledger row (features/warden/fees/…)               info ink on the row
-  //   _RefundStrip   (features/owner/owner_payments_screen)  12px info ink on a chip of itself
+  // THE REFUND PAIRING — a refund is a FACT, NOT A FAULT, so it wears `info`: not the red that
+  // means unpaid, not the amber that means still owing, not the green of a collection.
   group('the refund tone — a fact, not a fault', () {
     test('it is the info tone, and it is not any of the three rent tones', () {
       for (final e in {
@@ -859,21 +979,14 @@ void main() {
       }.entries) {
         final tones = e.value;
         final refund = tones.resolve(ApnivaasColors.info);
-        expect(refund, tones.info,
-            reason: '${e.key}: the refund ink must be the palette info ink, not a new colour');
-        expect(refund, isNot(tones.error),
-            reason: '${e.key}: a refund painted in the alarm colour accuses the resident of '
-                'arrears for having been given money back');
-        expect(refund, isNot(tones.warning),
-            reason: '${e.key}: warning already means due / still owing');
-        expect(refund, isNot(tones.success),
-            reason: '${e.key}: money leaving the hostel is not a collection');
+        expect(refund, tones.info);
+        expect(refund, isNot(tones.error));
+        expect(refund, isNot(tones.warning));
+        expect(refund, isNot(tones.success));
       }
     });
 
-    test('the info ink reads on the WELL the refund note is drawn in', () {
-      // `t.colorScheme.surfaceContainer` — the same well [PayAtDeskNote] uses, one rung inside
-      // the rent card. On light this is fromSeed output and appears in no other group here.
+    test('the info ink reads on the WELL the refund note is drawn in, and on the card', () {
       for (final e in {
         'light': (ApnivaasTheme.light(), ApnivaasSemantics.light),
         'dark': (ApnivaasTheme.dark(), ApnivaasSemantics.dark),
@@ -881,18 +994,8 @@ void main() {
         final (theme, tones) = e.value;
         final well = theme.colorScheme.surfaceContainer;
         _expectAtLeast(_ratio(tones.info, well), 4.5, '${e.key} refund ink on the well');
-        // WCAG 1.4.11: the 1px edge that makes the well read as its own panel is a graphic.
         _expectAtLeast(
             _ratio(tones.chipBorder(tones.info), well), 3.0, '${e.key} refund well border');
-      }
-    });
-
-    test('the info ink reads on the CARD, where the history row and ledger row print it', () {
-      for (final e in {
-        'light': (ApnivaasTheme.light(), ApnivaasSemantics.light),
-        'dark': (ApnivaasTheme.dark(), ApnivaasSemantics.dark),
-      }.entries) {
-        final (theme, tones) = e.value;
         _expectAtLeast(_ratio(tones.info, theme.colorScheme.surfaceContainerLow), 4.5,
             '${e.key} refund ink on the card');
       }
@@ -900,10 +1003,6 @@ void main() {
 
     test("the owner's strip is 12px on a chip of its own tone — the tightest case there is",
         () {
-      // The strip's fill is a 10% tint of the very ink printed on it, so the ground moves
-      // TOWARDS the text. This is the same contract `status chips` holds every tone to; it is
-      // repeated here against the real theme surfaces because this is the one place the app
-      // sets 12px type on it.
       for (final e in {
         'light': (ApnivaasTheme.light(), ApnivaasSemantics.light),
         'dark': (ApnivaasTheme.dark(), ApnivaasSemantics.dark),
@@ -914,8 +1013,7 @@ void main() {
           'raised': theme.colorScheme.surfaceContainer,
         }.entries) {
           final fill = _over(tones.chipFill(tones.info), ground.value);
-          _expectAtLeast(
-              _ratio(tones.info, fill), 4.5, '${e.key} refund strip on ${ground.key}');
+          _expectAtLeast(_ratio(tones.info, fill), 4.5, '${e.key} refund strip on ${ground.key}');
         }
       }
     });
@@ -925,19 +1023,16 @@ void main() {
   // TINTED SURFACES — a whole card carrying a meaning, instead of a chip in its corner.
   //
   // [ToneSurface] paints `tone @ surfaceTintAlpha` over the fill the surface would otherwise
-  // have had, and that fill is always `GlassWeight.surfaceOf` — card or raised on dark, the
-  // single white on light. Those three are the ONLY grounds a tint is ever composited over, so
-  // they are the only ones measured here.
-  //
-  // `bright #1D2227` is deliberately absent, exactly as it is from the chip grounds: that rung
-  // is the input fill, and a tinted text field is a field that looks like a state.
+  // have had, which is always `GlassWeight.surfaceOf`: card or well in light, card or raised in
+  // dark. Those are the only grounds a tint is composited over, so they are the ones measured.
   group('tinted surfaces — a card that IS its status', () {
     const darkTintBases = <String, Color>{
-      'card #111417': ApnivaasColors.surfaceContainerLow,
-      'raised #171A1E': ApnivaasColors.surfaceContainer,
+      'card #15221D': ApnivaasColors.surfaceContainerLow,
+      'raised #1B2B25': ApnivaasColors.surfaceContainer,
     };
     const lightTintBases = <String, Color>{
-      'card #FFFFFF': ApnivaasColors.surface,
+      'card #FFFDF9': ApnivaasColors.card,
+      'well #EEF4EF': ApnivaasColors.well,
     };
 
     Map<String, Color> inksOf(ApnivaasSemantics tones) => {
@@ -946,58 +1041,38 @@ void main() {
           'error': tones.error,
           'info': tones.info,
           'muted': tones.muted,
-          // A [DomainCard] is a ToneSurface in a domain tone, so the domain inks are tints too.
-          'food': tones.food,
-          'rooms': tones.rooms,
-          'people': tones.people,
+          'brand': tones.brand,
         };
 
-    /// Every (tone, base) tint a ToneSurface can actually paint, in one theme.
     void forEachTint(
       ApnivaasSemantics tones,
       Map<String, Color> bases,
       void Function(String name, Color ink, String where, Color tinted) body,
     ) {
       inksOf(tones).forEach((name, ink) {
-        bases.forEach((where, base) {
-          body(name, ink, where, tones.tintedSurface(ink, base));
-        });
+        bases.forEach((where, base) => body(name, ink, where, tones.tintedSurface(ink, base)));
       });
     }
 
-    void checkBodyText(
-      ApnivaasSemantics tones,
-      Map<String, Color> bases,
-      Map<String, Color> inks,
-      String label,
-    ) {
-      forEachTint(tones, bases, (name, _, where, tinted) {
-        inks.forEach((textName, text) {
-          _expectAtLeast(
-            _ratio(text, tinted),
-            4.5,
-            '$label $textName on a $name-tinted $where',
-          );
+    test('body and secondary text stay AA on every tint, in both themes', () {
+      for (final e in {
+        'light': (ApnivaasSemantics.light, lightTintBases,
+            [ApnivaasColors.textPrimary, ApnivaasColors.textSecondary]),
+        'dark': (ApnivaasSemantics.dark, darkTintBases,
+            [ApnivaasColors.onSurface, ApnivaasColors.onSurfaceVariant]),
+      }.entries) {
+        final (tones, bases, inks) = e.value;
+        forEachTint(tones, bases, (name, _, where, tinted) {
+          for (final text in inks) {
+            _expectAtLeast(_ratio(text, tinted), 4.5,
+                '${e.key} ${_hex(text)} on a $name-tinted $where');
+          }
         });
-      });
-    }
-
-    test('dark: body and secondary text stay AA on every tint', () {
-      checkBodyText(ApnivaasSemantics.dark, darkTintBases, {
-        'onSurface': ApnivaasColors.onSurface,
-        'onSurfaceVariant': ApnivaasColors.onSurfaceVariant,
-      }, 'dark');
-    });
-
-    test('light: body and secondary text stay AA on every tint', () {
-      checkBodyText(ApnivaasSemantics.light, lightTintBases, {
-        'textPrimary': ApnivaasColors.textPrimary,
-        'textSecondary': ApnivaasColors.textSecondary,
-      }, 'light');
+      }
     });
 
     // THE PAIRING THE WHOLE TREATMENT RESTS ON. [StatusWord] draws the status in the tone at
-    // full strength directly on the tint — no chip — and this is that case.
+    // full strength directly on the tint — no chip.
     test('the status WORD is AA in its own tone on its own tint, in both themes', () {
       for (final e in {
         'light': (ApnivaasSemantics.light, lightTintBases),
@@ -1010,17 +1085,11 @@ void main() {
       }
     });
 
-    // ═══ THE RULE, PINNED AS A FAILURE — AND IT IS THE DARK THEME THAT SETS IT ═══
+    // ═══ THE RULE, PINNED AS A FAILURE — IN BOTH THEMES NOW ═══
     //
-    // This is the reason [StatusWord] exists at all, and it is the one thing a future edit is
-    // most likely to undo: putting a StatusPill back on a tinted card looks like an
-    // improvement and is a contrast failure. So the failure itself is asserted.
-    //
-    // THE TWO THEMES GENUINELY DIFFER HERE, which is why they are asserted separately rather
-    // than as one worst-case. A dark tint moves the ground toward its own light text and the
-    // chip stacks into it; a light tint moves white away from its dark text and the chip has
-    // room to spare. The widget still refuses the chip in BOTH, because one widget that grew a
-    // chip on one theme and not the other would be two designs.
+    // Putting a StatusPill back on a tinted card looks like an improvement and is a contrast
+    // failure, so the failure itself is asserted. Under the old palette only the dark theme
+    // set this rule; the forest palette's darker light inks put the light theme under it too.
     double worstChipOnTint(ApnivaasSemantics tones, Map<String, Color> bases) {
       var worst = double.infinity;
       forEachTint(tones, bases, (name, ink, where, tinted) {
@@ -1029,48 +1098,35 @@ void main() {
       return worst;
     }
 
-    test('dark: a chip of the SAME tone on a tinted card FAILS AA — hence StatusWord', () {
-      final worst = worstChipOnTint(ApnivaasSemantics.dark, darkTintBases);
-      expect(
-        worst,
-        lessThan(4.5),
-        reason: 'a chip on a tint of its own tone measured ${worst.toStringAsFixed(2)}:1. If '
-            'this now clears AA the dark tones have changed — re-derive the rule in '
-            'ApnivaasSemantics.surfaceTintAlpha before letting a StatusPill back onto a '
-            'ToneSurface.',
-      );
+    test('a chip of the SAME tone on a tinted card FAILS AA — hence StatusWord', () {
+      for (final e in {
+        'light': (ApnivaasSemantics.light, lightTintBases),
+        'dark': (ApnivaasSemantics.dark, darkTintBases),
+      }.entries) {
+        final (tones, bases) = e.value;
+        final worst = worstChipOnTint(tones, bases);
+        expect(worst, lessThan(4.5),
+            reason: '${e.key}: a chip on a tint of its own tone measured '
+                '${worst.toStringAsFixed(2)}:1. If this now clears AA, re-derive the rule in '
+                'ApnivaasSemantics.surfaceTintAlpha before letting a StatusPill onto a '
+                'ToneSurface.');
+      }
     });
 
-    test("light: the same stack would have been legible — the rule is the dark theme's", () {
-      // Recorded, not relied on. It is the evidence for the sentence in tokens.dart that says
-      // the light theme has room the dark one does not, and it is what stops someone reading
-      // the rule above as "tints are dangerous" when the real finding is narrower.
-      expect(worstChipOnTint(ApnivaasSemantics.light, lightTintBases),
-          greaterThanOrEqualTo(4.5));
-    });
-
-    // ═══ THE TINT WAS ALREADY IN THE FILE ═══
-    //
-    // The best evidence that this recipe is the design's and not an invention: composite each
-    // dark tone over the card at the tint alpha and you land exactly on the container colour
-    // the designer picked by hand, for all three tones that have one. If a tone is ever nudged,
-    // this fails and the container it no longer reproduces has to be re-derived with it —
-    // which is the point. A tinted card is the design's container rung, not a fourth palette.
-    test("the dark tint reproduces the design's own container colours, byte for byte", () {
+    test("the dark tint reproduces the dark container colours, byte for byte", () {
       const card = ApnivaasColors.surfaceContainerLow;
       final tones = ApnivaasSemantics.dark;
-      // Compared as the 8-bit hex that actually reaches a display. `Color` now carries double
-      // components, so `alphaBlend` lands a fraction of one 255th away from the hand-picked
-      // constant and Color equality would fail on a difference no screen can show.
       expect(_hex(tones.tintedSurface(ApnivaasColors.success, card)),
-          _hex(ApnivaasColors.tertiaryContainer),
-          reason: 'success tint must equal tertiaryContainer');
+          _hex(ApnivaasColors.tertiaryContainer));
       expect(_hex(tones.tintedSurface(ApnivaasColors.warning, card)),
-          _hex(ApnivaasColors.secondaryContainer),
-          reason: 'warning tint must equal secondaryContainer');
+          _hex(ApnivaasColors.secondaryContainer));
       expect(_hex(tones.tintedSurface(ApnivaasColors.error, card)),
-          _hex(ApnivaasColors.errorContainer),
-          reason: 'error tint must equal errorContainer');
+          _hex(ApnivaasColors.errorContainer));
+    });
+
+    test('the light error tint IS the light error container', () {
+      expect(_hex(ApnivaasSemantics.light.tintedSurface(ApnivaasColors.error, ApnivaasColors.card)),
+          _hex(ApnivaasColors.errorContainerLight));
     });
 
     test('the tint alpha IS the chip alpha — one weight of colour at two scales', () {
@@ -1087,9 +1143,7 @@ void main() {
       });
     });
 
-    // The rail is a graphic, so 1.4.11's 3:1 is the bar rather than 4.5:1 — and it is never
-    // the only carrier of its meaning, because the row it edges still spells the status out.
-    test('the leading rail clears 3:1 on the surfaces it is drawn against', () {
+    test('the leading rail clears 3:1 against its base and against its own tint', () {
       for (final e in {
         'light': (ApnivaasSemantics.light, lightTintBases),
         'dark': (ApnivaasSemantics.dark, darkTintBases),
@@ -1098,29 +1152,23 @@ void main() {
         inksOf(tones).forEach((name, ink) {
           bases.forEach((where, base) {
             _expectAtLeast(_ratio(ink, base), 3.0, '${e.key} $name rail on $where');
-            // And against the tint it sits beside, which is the edge actually seen.
             _expectAtLeast(_ratio(ink, tones.tintedSurface(ink, base)), 3.0,
                 '${e.key} $name rail against its own tint on $where');
           });
         });
       }
-    });
-
-    test("the rail is the design's own border-l-4", () {
       expect(Strokes.rail, Space.xxs);
     });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════════════
-  group('the panes are FLAT — no blur, and now no shadow either', () {
+  group('the panes are FLAT — no blur, and a resting card casts nothing', () {
     test('no blur survives anywhere in the pane layer', () {
-      // Grepped rather than reasoned about. Release builds already disable BackdropFilter
-      // unconditionally, so a reintroduced one would only ever be seen in debug — which is
-      // exactly how it would get merged. Comment lines are stripped first: the file explains
+      // Grepped rather than reasoned about. Comment lines are stripped first: the file explains
       // at length why the blur is absent, and naming a thing is not using it.
       final code = File('lib/shared/glass/glass.dart')
           .readAsLinesSync()
-          .where((l) => !l.trimLeft().startsWith('//') && !l.trimLeft().startsWith('///'))
+          .where((l) => !l.trimLeft().startsWith('//'))
           .join('\n');
       for (final banned in ['BackdropFilter', 'ImageFilter', 'dart:ui']) {
         expect(code.contains(banned), isFalse,
@@ -1129,63 +1177,77 @@ void main() {
       }
     });
 
-    test('a resting card casts NO shadow — the design separates with a hairline', () {
+    test('a resting card casts NO shadow — fill and hairline separate it', () {
+      // Across all six canvas boards the only shadow under a surface is the chosen persona's.
       expect(Shadows.level1, isEmpty);
-      expect(Shadows.level2, isEmpty,
-          reason: 'not one Figma frame carries a box-shadow; the #292E33 edge is the separator');
-      // And the edge has to be doing the work, because the card itself is invisible without it.
-      expect(_ratio(ApnivaasColors.surfaceContainerLow, ApnivaasColors.ground), lessThan(1.1));
-      _expectAtLeast(
-        _ratio(ApnivaasColors.outlineVariant, ApnivaasColors.ground),
-        1.3,
-        'the hairline against the ground',
-      );
-      // A modal is the one thing left that genuinely floats.
-      expect(Shadows.level3, isNotEmpty);
+      expect(Shadows.level2, isEmpty, reason: 'GlassSurface defaults to this on ~40 call sites');
+      // So the edge has to be doing the work: the card is only a fill step off the ground.
+      _expectBelowRatio(ApnivaasColors.card, ApnivaasColors.cream, 1.2, 'light card on cream');
+      _expectBelowRatio(ApnivaasColors.surfaceContainerLow, ApnivaasColors.ground, 1.2,
+          'dark card on its ground');
+      _expectAtLeast(_ratio(ApnivaasColors.cardBorder, ApnivaasColors.cream), 1.1,
+          'the light hairline against the ground');
+      _expectAtLeast(_ratio(ApnivaasColors.outlineVariant, ApnivaasColors.surfaceContainerLow), 1.3,
+          'the dark hairline against the card');
     });
 
-    test('the weight ladder is the design\'s three surfaces and it never falls', () {
+    test('the shadows that remain are soft, low and forest — never black on cream', () {
+      for (final e in {
+        'lift': Shadows.lift,
+        'bar': Shadows.bar,
+        'level3': Shadows.level3,
+        'dialog': Shadows.dialog,
+        'glow': Shadows.glow,
+      }.entries) {
+        expect(e.value, isNotEmpty, reason: '${e.key} is a real elevation');
+        for (final s in e.value) {
+          final opaque = s.color.withValues(alpha: 1);
+          expect([ApnivaasColors.forest, ApnivaasColors.forestDeep], contains(opaque),
+              reason: '${e.key} is tinted ${_hex(opaque)}, not the brand');
+          // 30% at the most — the FAB's halo, which is 0x4D.
+          expect(s.color.a, lessThanOrEqualTo(0x4D / 255),
+              reason: '${e.key} is heavier than a whisper');
+        }
+      }
+      // A sheet rises from the bottom edge and casts up; a centred dialog casts down.
+      expect(Shadows.level3.every((s) => s.offset.dy < 0), isTrue);
+      expect(Shadows.dialog.every((s) => s.offset.dy > 0), isTrue);
+    });
+
+    test('the weight ladder: lighter as it rises in dark, a whisper below the card in light', () {
       final dark = ApnivaasTheme.dark().colorScheme;
       expect(GlassWeight.thin.surfaceOf(dark), ApnivaasColors.surfaceContainerLow);
       expect(GlassWeight.regular.surfaceOf(dark), ApnivaasColors.surfaceContainer);
       expect(GlassWeight.thick.surfaceOf(dark), ApnivaasColors.surfaceContainerHigh);
-
-      // In the dark, elevation gets LIGHTER as it rises. `thick` sits level with `regular`
-      // because the design ships nothing above its raised surface — a sheet is separated by
-      // the scrim and level3, not by another rung of near-black.
       var previous = _luminance(ApnivaasColors.ground);
       for (final w in GlassWeight.values) {
         final l = _luminance(w.surfaceOf(dark));
-        expect(l, greaterThanOrEqualTo(previous),
-            reason: '${w.name} sits BELOW the rung under it');
+        expect(l, greaterThanOrEqualTo(previous), reason: '${w.name} sits BELOW the rung under it');
         previous = l;
       }
-      expect(_luminance(GlassWeight.regular.surfaceOf(dark)),
-          greaterThan(_luminance(GlassWeight.thin.surfaceOf(dark))),
-          reason: 'a card and a bar must not be the same fill');
 
-      // THE LIGHT THEME HAS A LADDER NOW, AND THIS TEST USED TO PROVE IT DID NOT. It asserted
-      // every weight returned `light.surface`, on the stated reasoning that light "elevates by
-      // shadow instead" — but Shadows.level1 and level2 are both empty lists, so light elevated
-      // by neither and card, bar and sheet were all #FFFFFF. The three-rung hierarchy this enum
-      // describes was invisible on every light-mode phone.
-      //
-      // The direction is inverted from dark, deliberately: a light card is white and the
-      // surfaces BEHIND it step DOWN toward the canvas, where a dark card is near-black and the
-      // surfaces above it step up.
       final light = ApnivaasTheme.light().colorScheme;
-      expect(GlassWeight.thin.surfaceOf(light), light.surface, reason: 'the card is white');
-      expect(GlassWeight.thick.surfaceOf(light), light.surface,
+      expect(GlassWeight.thin.surfaceOf(light), ApnivaasColors.card);
+      expect(GlassWeight.regular.surfaceOf(light), ApnivaasColors.well);
+      expect(GlassWeight.thick.surfaceOf(light), ApnivaasColors.card,
           reason: 'a sheet reads as a card lifted out, not as a tint');
-      expect(_luminance(GlassWeight.regular.surfaceOf(light)),
-          lessThan(_luminance(GlassWeight.thin.surfaceOf(light))),
-          reason: 'the bar and header must be distinguishable from the card they sit against');
-      // ...but only just. A bar that steps too far down reads as a different product.
-      _expectBelowRatio(GlassWeight.regular.surfaceOf(light), light.surface, 1.15,
-          'the light bar is a whisper below the card, not a grey band');
+      expect(_luminance(ApnivaasColors.well), lessThan(_luminance(ApnivaasColors.card)));
+      _expectBelowRatio(ApnivaasColors.well, ApnivaasColors.card, 1.15,
+          'the well is a whisper below the card, not a grey band');
     });
 
-    testWidgets('a dark pane edge is the design\'s own hairline, not a white alpha',
+    test('a skeleton is quiet on purpose — seen, but not something to read', () {
+      for (final e in {
+        'on the card': (ApnivaasColors.skeleton, ApnivaasColors.card),
+        'on the ground': (ApnivaasColors.skeletonOnGround, ApnivaasColors.cream),
+      }.entries) {
+        final (block, ground) = e.value;
+        _expectAtLeast(_ratio(block, ground), 1.1, 'a skeleton block ${e.key}');
+        _expectBelowRatio(block, ground, 1.4, 'a skeleton block ${e.key}');
+      }
+    });
+
+    testWidgets('a dark pane edge is the dark hairline, and the light one is visible',
         (tester) async {
       late Color edge;
       await tester.pumpWidget(MaterialApp(
@@ -1206,151 +1268,292 @@ void main() {
         }),
       ));
       final pane = GlassWeight.thin.surfaceOf(ApnivaasTheme.light().colorScheme);
-      expect(_ratio(_over(lightPaneEdge, pane), pane), greaterThan(1.3),
+      expect(_ratio(_over(lightPaneEdge, pane), pane), greaterThan(1.2),
           reason: 'the light pane edge has gone back to being invisible');
     });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════════════
-  group('the tokens are actually wired into the themes', () {
-    test('hint text is text, so it is AA against the FIELD FILL', () {
+  group('the component themes carry the design', () {
+    final light = ApnivaasTheme.light();
+    final dark = ApnivaasTheme.dark();
+
+    test('the filled button: forest and white in light, Mist and forest in dark', () {
+      // In both it is the single most contrasty object on the screen.
       for (final e in {
-        'dark': (ApnivaasTheme.dark(), ApnivaasColors.surfaceContainerHighest),
-        'light': (ApnivaasTheme.light(), ApnivaasColors.lightField),
+        'light': (light, ApnivaasColors.forest, const Color(0xFFFFFFFF), ApnivaasColors.card),
+        'dark': (dark, ApnivaasColors.mist, ApnivaasColors.forest, ApnivaasColors.surfaceContainerLow),
+      }.entries) {
+        final (theme, bg, fg, card) = e.value;
+        final style = theme.filledButtonTheme.style!;
+        expect(style.backgroundColor!.resolve({}), bg);
+        expect(style.foregroundColor!.resolve({}), fg);
+        _expectAtLeast(_ratio(fg, bg), 7.0, '${e.key} filled button label');
+        _expectAtLeast(_ratio(bg, card), 7.0, '${e.key} filled button against the card');
+      }
+      final style = light.filledButtonTheme.style!;
+      expect(style.backgroundColor!.resolve({WidgetState.pressed}), ApnivaasColors.forestPressed);
+      expect(style.backgroundColor!.resolve({WidgetState.disabled}), ApnivaasColors.track);
+    });
+
+    test('the filled button geometry: 52dp, a 16-18dp corner, Outfit 16-17 at 600', () {
+      final style = light.filledButtonTheme.style!;
+      final min = style.minimumSize!.resolve({})!;
+      expect(min.height, inInclusiveRange(52, 56));
+      final shape = style.shape!.resolve({})! as RoundedRectangleBorder;
+      final radius = (shape.borderRadius as BorderRadius).topLeft.x;
+      expect(radius, inInclusiveRange(16, 18));
+      final text = style.textStyle!.resolve({})!;
+      expect(text.fontFamily, ApnivaasType.display);
+      expect(text.fontWeight, FontWeight.w600);
+      expect(text.fontSize, inInclusiveRange(16, 17));
+      // Focus is a ring, never colour alone.
+      expect(style.side!.resolve({WidgetState.focused})!.width, Strokes.focus);
+    });
+
+    test('outlined and text buttons are the brand, and every button is at least 48dp', () {
+      final outlined = light.outlinedButtonTheme.style!;
+      expect(outlined.minimumSize!.resolve({})!.height, greaterThanOrEqualTo(48));
+      expect(outlined.side!.resolve({})!.color, ApnivaasColors.forest);
+      expect(outlined.foregroundColor!.resolve({}), ApnivaasColors.forest);
+      final text = light.textButtonTheme.style!;
+      expect(text.minimumSize!.resolve({})!.height, greaterThanOrEqualTo(48));
+      expect(text.foregroundColor!.resolve({}), ApnivaasColors.forest);
+      final icon = light.iconButtonTheme.style!;
+      expect(icon.minimumSize!.resolve({})!.shortestSide, greaterThanOrEqualTo(48));
+      expect(light.materialTapTargetSize, MaterialTapTargetSize.padded);
+    });
+
+    test('a text field: the card fill, a 1.5px 3:1 border, a 2px forest focus', () {
+      final input = light.inputDecorationTheme;
+      expect(input.filled, isTrue);
+      expect(input.fillColor, ApnivaasColors.card);
+      final enabled = input.enabledBorder! as OutlineInputBorder;
+      expect(enabled.borderSide.color, ApnivaasColors.controlBorder);
+      expect(enabled.borderSide.width, Strokes.control);
+      expect(enabled.borderRadius, Radii.rControl);
+      final focused = input.focusedBorder! as OutlineInputBorder;
+      expect(focused.borderSide.color, ApnivaasColors.forest);
+      expect(focused.borderSide.width, Strokes.focus);
+      expect((input.errorBorder! as OutlineInputBorder).borderSide.color, ApnivaasColors.errorInk);
+    });
+
+    test('hint text and the input border are measured against the FIELD FILL', () {
+      for (final e in {
+        'light': (light, ApnivaasColors.card),
+        'dark': (dark, ApnivaasColors.surfaceContainerHigh),
       }.entries) {
         final (theme, fill) = e.value;
         expect(theme.inputDecorationTheme.fillColor, fill);
-        final hint = theme.inputDecorationTheme.hintStyle!.color!;
-        _expectAtLeast(_ratio(hint, fill), 4.5, '${e.key} hint on the field');
-      }
-    });
-
-    test('an input border is the control, so it is 3:1 against its own fill', () {
-      for (final e in {
-        'dark': (ApnivaasTheme.dark(), ApnivaasColors.surfaceContainerHighest),
-        'light': (ApnivaasTheme.light(), ApnivaasColors.lightField),
-      }.entries) {
-        final (theme, fill) = e.value;
+        _expectAtLeast(_ratio(theme.inputDecorationTheme.hintStyle!.color!, fill), 4.5,
+            '${e.key} hint on the field');
         final border =
             (theme.inputDecorationTheme.enabledBorder! as OutlineInputBorder).borderSide.color;
         _expectAtLeast(_ratio(border, fill), 3.0, '${e.key} input border');
       }
     });
 
-    test('a drag handle is a control, so it is 3:1 on the sheet it sits on', () {
+    test('a card: the card fill, a 20-24dp corner, a hairline and no elevation', () {
+      final card = light.cardTheme;
+      expect(card.color, ApnivaasColors.card);
+      expect(card.elevation, 0);
+      final shape = card.shape! as RoundedRectangleBorder;
+      expect((shape.borderRadius as BorderRadius).topLeft.x, inInclusiveRange(20, 24));
+      expect(shape.side.color, ApnivaasColors.cardBorder);
+      expect(shape.side.width, Strokes.hairline);
+    });
+
+    test('a chip is a pill, and a chosen chip changes fill AND edge', () {
+      final chip = light.chipTheme;
+      expect(chip.shape, isA<StadiumBorder>());
+      final side = chip.side! as WidgetStateBorderSide;
+      final idle = side.resolve({})!.color;
+      final chosen = side.resolve({WidgetState.selected})!.color;
+      expect(idle, ApnivaasColors.controlBorder);
+      expect(chosen, isNot(idle), reason: 'a selected chip must not be colour alone');
+      expect(chip.color!.resolve({WidgetState.selected}), ApnivaasColors.forest);
+    });
+
+    test('a sheet: a 28dp top, a grip that clears 3:1, the brand barrier', () {
+      for (final theme in [light, dark]) {
+        final sheet = theme.bottomSheetTheme;
+        final shape = sheet.shape! as RoundedRectangleBorder;
+        expect((shape.borderRadius as BorderRadius).topLeft.x, 28);
+        expect(sheet.showDragHandle, isTrue);
+        final surface = GlassWeight.thick.surfaceOf(theme.colorScheme);
+        _expectAtLeast(_ratio(sheet.dragHandleColor!, surface), 3.0,
+            '${theme.brightness.name} drag handle');
+      }
+      expect(light.bottomSheetTheme.modalBarrierColor, ApnivaasColors.scrim);
+    });
+
+    test('a dialog and a date picker share the hero corner and the brand barrier', () {
+      final dialog = light.dialogTheme;
+      expect((dialog.shape! as RoundedRectangleBorder).borderRadius, Radii.rHero);
+      expect(dialog.barrierColor, ApnivaasColors.scrim);
+      expect(light.datePickerTheme.headerForegroundColor, ApnivaasColors.headerTitle);
+    });
+
+    test('the snackbar is ink on cream, inverted in dark, and both inks read', () {
       for (final e in {
-        'dark': (ApnivaasTheme.dark(), GlassWeight.thick.surfaceOf(ApnivaasTheme.dark().colorScheme)),
-        'light':
-            (ApnivaasTheme.light(), GlassWeight.thick.surfaceOf(ApnivaasTheme.light().colorScheme)),
+        'light': (light, ApnivaasColors.ink),
+        'dark': (dark, ApnivaasColors.onSurface),
       }.entries) {
-        final (theme, sheet) = e.value;
-        _expectAtLeast(
-            _ratio(theme.bottomSheetTheme.dragHandleColor!, sheet), 3.0, '${e.key} drag handle');
+        final (theme, bg) = e.value;
+        final snack = theme.snackBarTheme;
+        expect(snack.backgroundColor, bg);
+        expect(snack.behavior, SnackBarBehavior.floating);
+        _expectAtLeast(_ratio(snack.contentTextStyle!.color!, bg), 4.5, '${e.key} snackbar text');
+        _expectAtLeast(_ratio(snack.actionTextColor!, bg), 4.5, '${e.key} snackbar action');
       }
     });
 
-    test('the bottom bar reads: both label states are AA on the bar\'s own fill', () {
-      for (final theme in [ApnivaasTheme.dark(), ApnivaasTheme.light()]) {
+    test('the AppBar is cream and ink, flat, and sets the status bar', () {
+      for (final theme in [light, dark]) {
+        final bar = theme.appBarTheme;
+        expect(bar.backgroundColor, theme.scaffoldBackgroundColor);
+        expect(bar.foregroundColor, theme.colorScheme.onSurface);
+        expect(bar.elevation, 0);
+        expect(bar.scrolledUnderElevation, 0);
+        expect(bar.surfaceTintColor, Colors.transparent);
+        expect(bar.systemOverlayStyle, ApnivaasTheme.systemBars(theme.brightness));
+      }
+    });
+
+    test('the fallback navigation bar reads: both label states AA on the bar, 64-72dp tall', () {
+      for (final theme in [dark, light]) {
         final label = theme.brightness.name;
-        final bar = theme.navigationBarTheme.backgroundColor!;
-        expect(bar, GlassWeight.regular.surfaceOf(theme.colorScheme));
+        final nav = theme.navigationBarTheme;
+        final bar = nav.backgroundColor!;
+        expect(bar, theme.colorScheme.surface, reason: 'the tab bar is the card');
+        expect(nav.height, inInclusiveRange(64, 72));
         for (final states in [<WidgetState>{}, {WidgetState.selected}]) {
-          final style = theme.navigationBarTheme.labelTextStyle!.resolve(states)!;
+          final style = nav.labelTextStyle!.resolve(states)!;
           _expectAtLeast(_ratio(style.color!, bar), 4.5, '$label nav label $states');
         }
-        // The active pill is the design's chip recipe: 10% of the accent.
-        final indicator = theme.navigationBarTheme.indicatorColor!;
         _expectAtLeast(
-          _ratio(theme.colorScheme.primary, _over(indicator, bar)),
+          _ratio(theme.colorScheme.primary, _over(nav.indicatorColor!, bar)),
           4.5,
           '$label active nav label on its own pill',
         );
       }
     });
 
-    test('the FAB is the design\'s gold, and its label reads on it', () {
-      final fab = ApnivaasTheme.dark().floatingActionButtonTheme;
-      expect(fab.backgroundColor, ApnivaasColors.primary);
-      _expectAtLeast(_ratio(fab.foregroundColor!, fab.backgroundColor!), 4.5, 'FAB label');
-      expect(fab.elevation, 0, reason: 'nothing in this design is elevated');
-    });
-
-    test('the meter track is the hairline as a filled channel, and the fill reads on it', () {
-      for (final theme in [ApnivaasTheme.dark(), ApnivaasTheme.light()]) {
-        final track = theme.progressIndicatorTheme.linearTrackColor!;
-        expect(track, theme.colorScheme.outlineVariant);
-        _expectAtLeast(_ratio(theme.progressIndicatorTheme.color!, track), 3.0,
-            '${theme.brightness.name} meter fill on its track');
+    test('the FAB is the filled button\'s colours, and its label reads on it', () {
+      for (final theme in [light, dark]) {
+        final fab = theme.floatingActionButtonTheme;
+        expect(fab.backgroundColor, theme.filledButtonTheme.style!.backgroundColor!.resolve({}));
+        _expectAtLeast(_ratio(fab.foregroundColor!, fab.backgroundColor!), 4.5,
+            '${theme.brightness.name} FAB label');
+        expect(fab.elevation, 0);
       }
     });
 
-    test('ApnivaasSemantics is registered on both themes', () {
-      expect(ApnivaasTheme.dark().extension<ApnivaasSemantics>(), ApnivaasSemantics.dark);
-      expect(ApnivaasTheme.light().extension<ApnivaasSemantics>(), ApnivaasSemantics.light);
+    test('a progress fill reads on its track', () {
+      expect(light.progressIndicatorTheme.linearTrackColor, ApnivaasColors.track);
+      for (final theme in [dark, light]) {
+        final p = theme.progressIndicatorTheme;
+        _expectAtLeast(_ratio(p.color!, p.linearTrackColor!), 3.0,
+            '${theme.brightness.name} progress on its track');
+      }
+    });
+
+    test('a list tile speaks the scale', () {
+      final tile = light.listTileTheme;
+      // Compared by what is drawn: ThemeData merges its text theme over the platform's, so the
+      // slot it hands back is not the identical object the tile theme was given.
+      for (final (tileStyle, slot) in [
+        (tile.titleTextStyle!, light.textTheme.titleMedium!),
+        (tile.subtitleTextStyle!, light.textTheme.bodySmall!),
+      ]) {
+        expect(tileStyle.fontFamily, slot.fontFamily);
+        expect(tileStyle.fontSize, slot.fontSize);
+        expect(tileStyle.fontWeight, slot.fontWeight);
+      }
+      expect(tile.selectedColor, ApnivaasColors.forest);
+    });
+
+    test('page transitions: fade-forwards on Android, the native slide on iOS', () {
+      final builders = light.pageTransitionsTheme.builders;
+      expect(builders[TargetPlatform.android], isA<FadeForwardsPageTransitionsBuilder>());
+      expect(builders[TargetPlatform.iOS], isA<CupertinoPageTransitionsBuilder>());
+    });
+
+    test('both extensions are registered on both themes', () {
+      expect(dark.extension<ApnivaasSemantics>(), ApnivaasSemantics.dark);
+      expect(light.extension<ApnivaasSemantics>(), ApnivaasSemantics.light);
+      expect(light.extension<ApnivaasTextRoles>(), isNotNull);
+      expect(dark.extension<ApnivaasTextRoles>(), isNotNull);
+      expect(light.extension<ApnivaasTextRoles>()!.cta.color, ApnivaasColors.ink);
     });
 
     test('the system bars follow the theme, and their icons are the OPPOSITE of its ground', () {
-      // Nothing set this before, and most screens draw a GlassHeader rather than an AppBar —
-      // the one widget that sets it on its own — so Android's default dark icons sat on the
-      // #0B0D0F ground and the clock was unreadable on the sign-in screen. Pinned here so a
-      // theme edit cannot quietly put it back.
-      final dark = ApnivaasTheme.systemBars(Brightness.dark);
-      expect(dark.statusBarIconBrightness, Brightness.light,
-          reason: 'light icons over the dark ground');
-      expect(dark.systemNavigationBarIconBrightness, Brightness.light);
-
-      final light = ApnivaasTheme.systemBars(Brightness.light);
-      expect(light.statusBarIconBrightness, Brightness.dark,
-          reason: 'dark icons over the ivory ground');
-      expect(light.systemNavigationBarIconBrightness, Brightness.dark);
-
-      for (final s in <SystemUiOverlayStyle>[dark, light]) {
-        // Edge to edge: the app's own ground runs under both bars, so both are transparent and
-        // the three-button bar's grey scrim is off — the bar is already on an opaque surface.
+      final darkBars = ApnivaasTheme.systemBars(Brightness.dark);
+      expect(darkBars.statusBarIconBrightness, Brightness.light);
+      expect(darkBars.systemNavigationBarIconBrightness, Brightness.light);
+      final lightBars = ApnivaasTheme.systemBars(Brightness.light);
+      expect(lightBars.statusBarIconBrightness, Brightness.dark,
+          reason: 'dark icons over the cream ground');
+      expect(lightBars.systemNavigationBarIconBrightness, Brightness.dark);
+      for (final s in <SystemUiOverlayStyle>[darkBars, lightBars]) {
         expect(s.statusBarColor, Colors.transparent);
         expect(s.systemNavigationBarColor, Colors.transparent);
         expect(s.systemNavigationBarContrastEnforced, isFalse);
       }
-    });
-
-    test('the AppBar is stripped rather than half-styled', () {
-      for (final theme in [ApnivaasTheme.dark(), ApnivaasTheme.light()]) {
-        expect(theme.appBarTheme.backgroundColor, Colors.transparent);
-        expect(theme.appBarTheme.elevation, 0);
-        expect(theme.appBarTheme.scrolledUnderElevation, 0);
-      }
+      // Over the forest header the icons are light in either theme.
+      expect(ApnivaasTheme.onForest.statusBarIconBrightness, Brightness.light);
     });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════════════
-  group('typography — Inter only, and the bundle is real', () {
-    test('Plus Jakarta Sans is gone from the pubspec and from disk', () {
-      final pubspec = File('pubspec.yaml').readAsStringSync();
-      expect(pubspec.contains('Plus Jakarta Sans'), isFalse);
-      expect(pubspec.contains('PlusJakartaSans'), isFalse);
-      expect(File('google_fonts/PlusJakartaSans-Variable.ttf').existsSync(), isFalse,
-          reason: 'the unused variable font is still shipping in the APK');
-      // The whole directory is declared as an asset, which is how google_fonts finds the faces.
-      expect(pubspec.contains('- google_fonts/'), isTrue);
+  group('typography — Outfit and Manrope, and the bundle is real', () {
+    final text = ApnivaasType.textTheme(ApnivaasColors.ink, ApnivaasColors.inkMuted);
+
+    test('the pubspec declares exactly the two families, and nothing in the folder ships loose',
+        () {
+      final declared = _declaredFonts();
+      expect(declared.keys.toSet(), {ApnivaasType.display, ApnivaasType.family});
+      expect(declared[ApnivaasType.display], {
+        'google_fonts/Outfit-Medium.ttf': 500,
+        'google_fonts/Outfit-SemiBold.ttf': 600,
+        'google_fonts/Outfit-Bold.ttf': 700,
+      });
+      expect(declared[ApnivaasType.family], {
+        'google_fonts/Manrope-Regular.ttf': 400,
+        'google_fonts/Manrope-Medium.ttf': 500,
+        'google_fonts/Manrope-SemiBold.ttf': 600,
+        'google_fonts/Manrope-Bold.ttf': 700,
+      });
+      // `fonts:` bundles the files it names. Declaring the folder as an asset as well would
+      // ship whatever else sits in it — today, the four Inter files kept for a script.
+      final pubspec = File('pubspec.yaml').readAsLinesSync();
+      expect(pubspec.where((l) => l.trim() == '- google_fonts/'), isEmpty);
+      expect(pubspec.any((l) => l.contains('family: Inter')), isFalse);
     });
 
-    test('FIVE FILES, FIVE WEIGHTS, FIVE DIFFERENT FACES', () {
-      // The trap this exists for: four byte-identical files once shipped as four weights, so
-      // Flutter registered four copies of the same 400 face and every heading rendered
-      // regular while the pubspec looked correct. Filenames prove nothing; the tables do.
-      final seen = <String, Uint8List>{};
-      _interFaces.forEach((name, weight) {
-        final f = File('google_fonts/$name');
-        expect(f.existsSync(), isTrue, reason: '$name is not bundled');
-        final info = _sfnt(f);
-        expect(info.weightClass, weight,
-            reason: '$name declares usWeightClass ${info.weightClass}, not $weight');
-        expect(info.hasFvar, isFalse,
-            reason: '$name is a VARIABLE font; google_fonts resolves static faces by filename '
-                'and a variable file registered this way renders at its default weight');
-        seen[name] = info.glyf;
-      });
+    test('the test runner registers the same seven files the pubspec declares', () {
+      // flutter_test_config.dart loads the faces for every test; if it drifted from the pubspec
+      // every layout test would be measuring a typeface nobody ships.
+      final declared = _declaredFonts().map((k, v) => MapEntry(k, v.keys.toSet()));
+      expect(appFonts.map((k, v) => MapEntry(k, v.toSet())), declared);
+    });
 
+    test('SEVEN FILES, SEVEN WEIGHTS, SEVEN DIFFERENT FACES', () {
+      // Filenames prove nothing; the tables do.
+      final seen = <String, Uint8List>{};
+      _declaredFonts().forEach((family, files) {
+        files.forEach((path, weight) {
+          final f = File(path);
+          expect(f.existsSync(), isTrue, reason: '$path is declared and missing');
+          final face = _sfnt(f);
+          expect(face.weightClass, weight,
+              reason: '$path declares usWeightClass ${face.weightClass}, not $weight');
+          expect(face.hasFvar, isFalse,
+              reason: '$path is a VARIABLE font, which renders at its default weight here');
+          seen[path] = face.glyf;
+        });
+      });
+      expect(seen, hasLength(7));
       final names = seen.keys.toList();
       for (var i = 0; i < names.length; i++) {
         for (var j = i + 1; j < names.length; j++) {
@@ -1359,181 +1562,167 @@ void main() {
           final identical = a.length == b.length &&
               List.generate(a.length, (k) => a[k] == b[k]).every((x) => x);
           expect(identical, isFalse,
-              reason: '${names[i]} and ${names[j]} have identical outlines — they are the same '
-                  'face shipped twice');
+              reason: '${names[i]} and ${names[j]} are the same face shipped twice');
         }
       }
     });
 
-    test('the hero really is ExtraBold, and every slot resolves to a bundled weight', () {
-      final text = ApnivaasType.textTheme(ApnivaasColors.onSurface, ApnivaasColors.onSurfaceVariant);
-      expect(text.displayLarge!.fontWeight, FontWeight.w800,
-          reason: 'the design\'s hero is 32/800 and the file for it is bundled');
-      expect(text.headlineLarge!.fontWeight, FontWeight.w800);
-      expect(text.displayMedium!.fontWeight, FontWeight.w800);
-
-      final bundled = <FontWeight>{
-        FontWeight.w400,
-        FontWeight.w600,
-        FontWeight.w700,
-        FontWeight.w800,
-      };
-      for (final style in _allSlots(text)) {
-        expect(bundled, contains(style.fontWeight),
-            reason: 'a slot asks for ${style.fontWeight} and no such Inter file is bundled — '
-                'with allowRuntimeFetching off it lands on the nearest weight instead');
+    test('Manrope draws the rupee at every weight; Outfit has none, so it falls back', () {
+      _declaredFonts().forEach((family, files) {
+        for (final path in files.keys) {
+          final face = _sfnt(File(path));
+          expect(face.hasRupee, family == ApnivaasType.family,
+              reason: family == ApnivaasType.family
+                  ? '$path has lost U+20B9 — every amount in the app is in rupees'
+                  : '$path has gained U+20B9; the Manrope fallback on Outfit styles can go');
+          expect(face.gsubFeatures, contains('tnum'),
+              reason: '$path has no tabular figures, so a refreshing amount would jitter');
+        }
+      });
+      for (final style in _allSlots(text).where((s) => s.fontFamily == ApnivaasType.display)) {
+        expect(style.fontFamilyFallback, [ApnivaasType.family],
+            reason: 'an Outfit slot without the Manrope fallback draws ₹ as a missing glyph');
       }
     });
 
-    testWidgets('every weight resolves from the BUNDLE with fetching off', (tester) async {
-      // main.dart sets allowRuntimeFetching = false so a missing face cannot become a silent
-      // download on a customer's first launch. This reproduces that setting and renders one
-      // string per slot.
-      //
-      // The failure has to be caught through debugPrint rather than takeException, and that is
-      // the whole reason this test is worth writing: google_fonts loads a face on a future it
-      // then `.ignore()`s, so a missing weight NEVER throws anywhere the framework can see it.
-      // It prints, falls back to the platform font, and the app just quietly looks wrong.
-      final was = GoogleFonts.config.allowRuntimeFetching;
-      GoogleFonts.config.allowRuntimeFetching = false;
-      final messages = <String>[];
-      final realDebugPrint = debugPrint;
-      debugPrint = (String? message, {int? wrapWidth}) {
-        if (message != null) messages.add(message);
-      };
-      addTearDown(() => GoogleFonts.config.allowRuntimeFetching = was);
-
-      final text = ApnivaasType.textTheme(ApnivaasColors.onSurface, ApnivaasColors.onSurfaceVariant);
-      await tester.pumpWidget(MaterialApp(
-        theme: ApnivaasTheme.dark(),
-        home: Scaffold(
-          body: Column(
-            children: [
-              for (final style in _allSlots(text))
-                Text('₹ 8,500', style: style, maxLines: 1),
-            ],
-          ),
-        ),
-      ));
-      // Bounded: a weight that is genuinely missing can leave google_fonts waiting on a
-      // load path that never resolves, and a hanging test is a worse signal than a failing one.
-      await tester.runAsync(
-        () => GoogleFonts.pendingFonts()
-            .timeout(const Duration(seconds: 5), onTimeout: () => const <void>[]),
-      );
-      await tester.pump();
-      // Restored HERE rather than in a tearDown: the framework asserts every foundation debug
-      // variable is back to its default before tearDowns run.
-      debugPrint = realDebugPrint;
-
-      final failures = messages.where((m) => m.contains('unable to load font')).toList();
-      expect(failures, isEmpty,
-          reason: 'a weight in the scale is not in the bundle: $failures');
+    test('the engine resolves each family and weight to a real, distinct face', () {
+      // In the test binding's stand-in font every glyph is one em wide, so 'Try again' at 15px
+      // measures 135. A real face is far narrower — and a bold one wider than a regular one,
+      // which only happens if the weight picked a different file.
+      final stand = _widthOf('Try again', const TextStyle(fontFamily: 'NotAFace', fontSize: 15));
+      for (final family in [ApnivaasType.family, ApnivaasType.display]) {
+        final weights = _bundledWeights[family]!.toList()..sort((a, b) => a.value - b.value);
+        final widths = [
+          for (final w in weights)
+            _widthOf('Try again', TextStyle(fontFamily: family, fontSize: 15, fontWeight: w)),
+        ];
+        for (final w in widths) {
+          expect(w, lessThan(stand * 0.75), reason: '$family did not load: measured $w');
+        }
+        expect(widths.last, greaterThan(widths.first),
+            reason: '$family ${weights.last} drew no wider than ${weights.first}; the weights '
+                'resolve to one face');
+      }
+      // The ₹ in an Outfit style is Manrope's ₹, at the same weight.
+      final outfitRupee = _widthOf('₹', ApnivaasType.outfit(20, 24, FontWeight.w600, Colors.black));
+      final manropeRupee =
+          _widthOf('₹', ApnivaasType.manrope(20, 24, FontWeight.w600, Colors.black));
+      expect(outfitRupee, closeTo(manropeRupee, 0.01));
     });
 
-    test('every slot is Inter and nothing else', () {
-      final text = ApnivaasType.textTheme(ApnivaasColors.onSurface, ApnivaasColors.onSurfaceVariant);
+    test('every slot is one of the two families, at a weight that family ships', () {
       for (final style in _allSlots(text)) {
-        // google_fonts resolves to `Inter_<variant>` with `Inter` as the fallback.
-        expect(style.fontFamily, startsWith('Inter'),
-            reason: 'a second family is back in the scale');
-        expect(style.fontFamilyFallback, contains(ApnivaasType.family));
+        expect(_bundledWeights.keys, contains(style.fontFamily),
+            reason: 'a third family is back in the scale: ${style.fontFamily}');
+        expect(_bundledWeights[style.fontFamily]!, contains(style.fontWeight),
+            reason: '${style.fontFamily} ${style.fontWeight} is not bundled');
+      }
+    });
+
+    test('the theme never touches google_fonts, so nothing can download', () {
+      for (final f in Directory('lib/core/theme').listSync().whereType<File>()) {
+        final code = f
+            .readAsLinesSync()
+            .where((l) => !l.trimLeft().startsWith('//'))
+            .join('\n');
+        expect(code.contains('google_fonts'), isFalse, reason: '${f.path} imports google_fonts');
+        expect(code.contains("'Inter"), isFalse, reason: '${f.path} still names Inter');
       }
     });
 
     test('the scale is the design\'s, step for step', () {
-      final text = ApnivaasType.textTheme(ApnivaasColors.onSurface, ApnivaasColors.onSurfaceVariant);
-      const expected = <String, (double, FontWeight)>{
-        'displayLarge': (32, FontWeight.w800),
-        'headlineLarge': (32, FontWeight.w800),
-        'displayMedium': (24, FontWeight.w800),
-        'displaySmall': (24, FontWeight.w700),
-        'headlineMedium': (20, FontWeight.w700),
-        'titleLarge': (20, FontWeight.w700),
-        'headlineSmall': (16, FontWeight.w700),
-        'titleMedium': (16, FontWeight.w700),
-        'bodyLarge': (15, FontWeight.w400),
-        'labelLarge': (14, FontWeight.w600),
-        'titleSmall': (13, FontWeight.w600),
-        'bodyMedium': (13, FontWeight.w400),
-        'labelMedium': (12, FontWeight.w600),
-        'bodySmall': (11, FontWeight.w400),
-        'labelSmall': (10, FontWeight.w600),
+      const d = ApnivaasType.display;
+      const m = ApnivaasType.family;
+      const expected = <String, (String, double, double, FontWeight)>{
+        'displayLarge': (d, 28, 32, FontWeight.w700),
+        'headlineLarge': (d, 28, 32, FontWeight.w700),
+        'displayMedium': (d, 28, 32, FontWeight.w600),
+        'displaySmall': (d, 22, 28, FontWeight.w600),
+        'headlineMedium': (d, 22, 28, FontWeight.w700),
+        'titleLarge': (d, 20, 26, FontWeight.w600),
+        'headlineSmall': (d, 18, 24, FontWeight.w600),
+        'titleMedium': (m, 14, 20, FontWeight.w700),
+        'titleSmall': (m, 13, 18, FontWeight.w700),
+        'bodyLarge': (m, 15, 22, FontWeight.w400),
+        'bodyMedium': (m, 13, 18, FontWeight.w400),
+        'bodySmall': (m, 12, 16, FontWeight.w400),
+        'labelLarge': (m, 15, 20, FontWeight.w700),
+        'labelMedium': (m, 12, 16, FontWeight.w700),
+        'labelSmall': (m, 11, 14, FontWeight.w700),
       };
-      final actual = <String, TextStyle>{
-        'displayLarge': text.displayLarge!,
-        'headlineLarge': text.headlineLarge!,
-        'displayMedium': text.displayMedium!,
-        'displaySmall': text.displaySmall!,
-        'headlineMedium': text.headlineMedium!,
-        'titleLarge': text.titleLarge!,
-        'headlineSmall': text.headlineSmall!,
-        'titleMedium': text.titleMedium!,
-        'bodyLarge': text.bodyLarge!,
-        'labelLarge': text.labelLarge!,
-        'titleSmall': text.titleSmall!,
-        'bodyMedium': text.bodyMedium!,
-        'labelMedium': text.labelMedium!,
-        'bodySmall': text.bodySmall!,
-        'labelSmall': text.labelSmall!,
-      };
+      final actual = _namedSlots(text);
       expected.forEach((slot, spec) {
-        final (size, weight) = spec;
-        expect(actual[slot]!.fontSize, size, reason: '$slot size');
-        expect(actual[slot]!.fontWeight, weight, reason: '$slot weight');
+        final (family, size, line, weight) = spec;
+        final s = actual[slot]!;
+        expect(s.fontFamily, family, reason: '$slot family');
+        expect(s.fontSize, size, reason: '$slot size');
+        expect(s.fontSize! * s.height!, closeTo(line, 0.001), reason: '$slot line height');
+        expect(s.fontWeight, weight, reason: '$slot weight');
       });
-
-      // Every size in the scale is a size that appears in the Figma file.
-      final inFigma = <double>{32, 24, 20, 16, 15, 14, 13, 12, 11, 10};
       for (final s in actual.values) {
-        expect(inFigma, contains(s.fontSize), reason: '${s.fontSize} is not a size Figma uses');
+        expect(s.fontSize, greaterThanOrEqualTo(11), reason: 'nothing in the scale is under 11');
       }
     });
 
-    test('the caps labels carry the design\'s tracking, and the body does not', () {
-      final text = ApnivaasType.textTheme(ApnivaasColors.onSurface, ApnivaasColors.onSurfaceVariant);
-      // +0.05em: 0.6 at 12px, 0.5 at 10px.
-      expect(text.labelMedium!.letterSpacing, closeTo(12 * 0.05, 0.01));
-      expect(text.labelSmall!.letterSpacing, closeTo(10 * 0.05, 0.01));
-      expect(text.bodyMedium!.letterSpacing, 0);
-      // The hero tightens instead — a 32px figure at default tracking looks loose.
-      expect(text.displayLarge!.letterSpacing, lessThan(0));
+    test('the type roles outside the slots', () {
+      final roles = ApnivaasTextRoles.of(ApnivaasColors.ink);
+      for (final e in <String, (TextStyle, String, double, FontWeight)>{
+        'cta': (roles.cta, ApnivaasType.display, 17, FontWeight.w600),
+        'tileTitle': (roles.tileTitle, ApnivaasType.display, 17, FontWeight.w600),
+        'heroHeadline': (roles.heroHeadline, ApnivaasType.display, 24, FontWeight.w600),
+        'dateNumeral': (roles.dateNumeral, ApnivaasType.display, 19, FontWeight.w600),
+        'fieldValue': (roles.fieldValue, ApnivaasType.family, 15, FontWeight.w500),
+        'formSection': (roles.formSection, ApnivaasType.display, 15, FontWeight.w600),
+        'statValue': (roles.statValue, ApnivaasType.display, 28, FontWeight.w700),
+      }.entries) {
+        final (style, family, size, weight) = e.value;
+        expect(style.fontFamily, family, reason: e.key);
+        expect(style.fontSize, size, reason: e.key);
+        expect(style.fontWeight, weight, reason: e.key);
+      }
+    });
+
+    test('sentence case: only the hero tightens and the smallest label opens up', () {
+      expect(text.displayLarge!.letterSpacing, closeTo(-0.2, 1e-9));
+      expect(text.labelSmall!.letterSpacing, closeTo(0.2, 1e-9));
+      for (final e in _namedSlots(text).entries) {
+        if (e.key == 'displayLarge' || e.key == 'headlineLarge' || e.key == 'labelSmall') continue;
+        expect(e.value.letterSpacing, 0, reason: '${e.key} carries tracking');
+      }
     });
 
     test('every slot that can hold a figure uses tabular figures', () {
-      final text = ApnivaasType.textTheme(ApnivaasColors.onSurface, ApnivaasColors.onSurfaceVariant);
+      final roles = ApnivaasTextRoles.of(ApnivaasColors.ink);
       final numeric = <String, TextStyle>{
         'displayLarge': text.displayLarge!,
         'headlineLarge': text.headlineLarge!,
-        'displayMedium': text.displayMedium!,
         'headlineMedium': text.headlineMedium!,
         'headlineSmall': text.headlineSmall!,
         'titleSmall': text.titleSmall!,
         'labelSmall': text.labelSmall!,
+        'statValue': roles.statValue,
+        'dateNumeral': roles.dateNumeral,
       };
       numeric.forEach((slot, style) {
-        expect(style.fontFeatures, isNotNull, reason: '$slot has no font features at all');
-        expect(style.fontFeatures!.map((f) => f.feature), contains('tnum'),
+        expect(style.fontFeatures?.map((f) => f.feature), contains('tnum'),
             reason: '$slot holds numbers and will jitter as they refresh');
       });
+      expect(ApnivaasType.tabular(text.bodyMedium!).fontFeatures!.map((f) => f.feature),
+          contains('tnum'));
     });
 
-    test('weight() actually swaps the FACE, not just the number', () {
-      // The trap: with static faces the weight is baked into the resolved family name, so a
-      // bare copyWith(fontWeight:) changes the number and keeps the old file.
-      final text = ApnivaasType.textTheme(ApnivaasColors.onSurface, ApnivaasColors.onSurfaceVariant);
-      final base = text.bodyMedium!; // w400
+    test('weight() moves the weight and keeps the family — the engine picks the face', () {
+      final base = text.bodyMedium!;
       final moved = ApnivaasType.weight(base, FontWeight.w700);
       expect(moved.fontWeight, FontWeight.w700);
-      expect(moved.fontFamily, isNot(base.fontFamily),
-          reason: 'the resolved family did not change, so the face did not either');
-      expect(moved.fontSize, base.fontSize, reason: 'weight() must not disturb the size');
+      expect(moved.fontFamily, base.fontFamily);
+      expect(moved.fontSize, base.fontSize);
     });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════════════
   group('rhythm', () {
-    test('spacing carries the design\'s own scale and stays on the 4dp grid', () {
+    test('spacing is a 4dp scale with two named half-steps', () {
       const scale = [
         Space.xxs, Space.xs, Space.sm, Space.md,
         Space.lg, Space.xl, Space.xxl, Space.xxxl, Space.huge,
@@ -1544,58 +1733,71 @@ void main() {
       for (var i = 1; i < scale.length; i++) {
         expect(scale[i], greaterThan(scale[i - 1]));
       }
-      // Figma pads at 16, gaps sections at 20 and blocks at 24, and steps down 12 / 8 / 4.
-      for (final v in [4.0, 8.0, 12.0, 16.0, 20.0, 24.0]) {
-        expect(scale, contains(v), reason: 'the design uses $v and the scale dropped it');
-      }
-      expect(Space.md, 16.0, reason: 'the card and screen padding');
+      expect(Space.hair, 2.0);
+      expect(Space.tight, 6.0);
+      expect(Space.md, 16.0, reason: 'the dashboard gutter');
+      expect(Space.lg, 20.0, reason: 'the auth and form gutter');
     });
 
-    test('the radius vocabulary is exactly the design\'s four steps', () {
-      // 20 screen · 16 card · 12 button/input/icon · 6 badge. Built through a list rather than
-      // a set literal because `surface` and `sheet` deliberately share 20.
-      //
-      // These were 14 / 12 / 8 / 4 until the competitor teardown: every card in all 282 of its
-      // layouts is 20dp, with no exceptions, and a 12dp card next to that reads as austere.
-      // See the note above Radii in tokens.dart for what was taken and what was refused.
-      final named = <double>[
-        Radii.tiny, Radii.control, Radii.card, Radii.surface, Radii.sheet, Radii.pill,
+    test('the corners: cards 20-24, sheets 28, buttons 16-18, chips a pill', () {
+      expect(Radii.card, inInclusiveRange(20, 24));
+      expect(Radii.surface, inInclusiveRange(20, 24));
+      expect(Radii.card, lessThanOrEqualTo(Radii.surface));
+      expect(Radii.sheet, 28);
+      expect(Radii.hero, 28);
+      expect(Radii.button, inInclusiveRange(16, 18));
+      expect(Radii.buttonLarge, inInclusiveRange(16, 18));
+      expect(Radii.pill, greaterThanOrEqualTo(999));
+      // Small to large, so nothing is rounder than the thing it sits in.
+      const ladder = [
+        Radii.check, Radii.tiny, Radii.control, Radii.button, Radii.buttonLarge,
+        Radii.card, Radii.well, Radii.surface, Radii.sheet, Radii.header,
       ];
-      expect(named.toSet(), {6.0, 12.0, 16.0, 20.0, 999.0});
-      expect(Radii.tiny, lessThan(Radii.control));
-      expect(Radii.control, lessThan(Radii.card));
-      expect(Radii.card, lessThan(Radii.surface));
-      expect(Radii.sheet, Radii.surface, reason: 'a sheet takes the screen\'s own corner');
+      for (var i = 1; i < ladder.length; i++) {
+        expect(ladder[i], greaterThanOrEqualTo(ladder[i - 1]), reason: 'step $i');
+      }
+      expect(Radii.rSheetTop.topLeft.x, Radii.sheet);
+      expect(Radii.rSheetTop.bottomLeft.x, 0);
     });
 
-    test('every border is one hairline; only a glyph and a focus ring thicken', () {
+    test('every border is one hairline; a control and a focus ring thicken', () {
       expect(Strokes.hairline, 1.0);
-      expect(Strokes.glyph, 1.5, reason: 'the empty-state square, 4:1579');
-      expect(Strokes.focus, greaterThan(Strokes.hairline));
+      expect(Strokes.control, 1.5);
+      expect(Strokes.glyph, 1.5);
+      expect(Strokes.focus, 2.0);
     });
 
-    test('the design\'s two dims are the design\'s own numbers', () {
-      expect(Dim.readOnly, 0.45, reason: 'the disabled body on 4:1539');
+    test('the dims are the design\'s own numbers', () {
+      expect(Dim.readOnly, 0.45);
       expect(Dim.skeletonPulse, inExclusiveRange(0, 1));
+      expect(Dim.skeletonStill, inExclusiveRange(Dim.skeletonPulse, 1));
     });
 
-    test('motion stays inside the 150–350ms band', () {
-      for (final d in [Motion.fast, Motion.base, Motion.slow]) {
+    test('motion stays inside the 150–350ms band, and the press is quicker than any of it', () {
+      for (final d in [Motion.fast, Motion.base, Motion.slow, Motion.exit]) {
         expect(d.inMilliseconds, inInclusiveRange(150, 350));
       }
+      expect(Motion.press, lessThan(Motion.fast));
       expect(Motion.fast, lessThan(Motion.base));
       expect(Motion.base, lessThan(Motion.slow));
+      expect(Motion.staggerCap * Motion.stagger.inMilliseconds, lessThanOrEqualTo(350),
+          reason: 'a capped stagger still reads as one movement');
     });
 
-    test('icons are the design\'s sizes, which are small', () {
-      const sizes = [IconSize.xs, IconSize.sm, IconSize.md, IconSize.lg];
-      for (var i = 1; i < sizes.length; i++) {
-        expect(sizes[i], greaterThan(sizes[i - 1]));
+    test('glyphs are small and the clay sizes are a single ladder', () {
+      const glyphs = [IconSize.xs, IconSize.sm, IconSize.md, IconSize.lg, IconSize.action];
+      for (var i = 1; i < glyphs.length; i++) {
+        expect(glyphs[i], greaterThan(glyphs[i - 1]));
       }
-      // Figma's header glyph is 16 inside a 32 button; the biggest glyph outside an
-      // illustration is 20.
-      expect(IconSize.md, 16.0);
-      expect(IconSize.lg, 20.0);
+      const clay = [
+        ClaySize.navOff, ClaySize.nav, ClaySize.list, ClaySize.action, ClaySize.tile,
+        ClaySize.banner, ClaySize.hero, ClaySize.promo, ClaySize.persona, ClaySize.heroArt,
+      ];
+      for (var i = 1; i < clay.length; i++) {
+        expect(clay[i], greaterThan(clay[i - 1]), reason: 'clay step $i');
+      }
+      expect(ClaySize.action, inInclusiveRange(48, 56), reason: 'a quick-action icon');
+      expect(ClaySize.promo, 96, reason: 'an empty state');
     });
   });
 
@@ -1612,11 +1814,8 @@ void main() {
           ),
         ),
       );
-      expect(
-        tester.takeException(),
-        isAssertionError,
-        reason: 'the nesting guard is the only thing stopping a screen exhausting the ramp',
-      );
+      expect(tester.takeException(), isAssertionError,
+          reason: 'the nesting guard is the only thing stopping a screen exhausting the ramp');
     });
 
     testWidgets('a stat card is flat by default and elevated only when asked', (tester) async {
@@ -1643,10 +1842,7 @@ void main() {
           theme: ApnivaasTheme.dark(),
           home: const Scaffold(
             body: Center(
-              child: GlassSurface(
-                weight: GlassWeight.thick,
-                child: SizedBox(width: 100, height: 40),
-              ),
+              child: GlassSurface(weight: GlassWeight.thick, child: SizedBox(width: 100, height: 40)),
             ),
           ),
         ),
@@ -1657,7 +1853,7 @@ void main() {
       final d = box.decoration as BoxDecoration;
       expect(d.color, ApnivaasColors.surfaceContainerHigh);
       expect(d.color!.a, 1.0, reason: 'a pane fill with alpha is the old translucent model');
-      expect(d.boxShadow, isEmpty, reason: 'a resting pane no longer casts one');
+      expect(d.boxShadow, isEmpty, reason: 'a resting pane casts nothing');
       expect((d.border! as Border).top.color, ApnivaasColors.outlineVariant);
     });
 
@@ -1676,18 +1872,14 @@ void main() {
       final inkWell = find.byType(InkWell);
       expect(inkWell, findsOneWidget);
       final fill = find.descendant(of: find.byType(GlassCard), matching: find.byType(DecoratedBox));
-      expect(
-        tester.getTopLeft(inkWell).dy,
-        greaterThanOrEqualTo(tester.getTopLeft(fill.first).dy),
-        reason: 'the InkWell is outside the pane fill and its splash will be hidden',
-      );
+      expect(tester.getTopLeft(inkWell).dy, greaterThanOrEqualTo(tester.getTopLeft(fill.first).dy),
+          reason: 'the InkWell is outside the pane fill and its splash will be hidden');
     });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════════════
-  group('the state layer — Figma node 4:1562', () {
-    testWidgets('a state card is the RAISED surface with the design\'s hairline',
-        (tester) async {
+  group('the owner\'s state layer', () {
+    testWidgets('a state card is the RAISED surface with a badge', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: ApnivaasTheme.dark(),
@@ -1703,61 +1895,75 @@ void main() {
       expect(find.byType(StateBadge), findsOneWidget);
     });
 
-    testWidgets('the skeleton bar is the design\'s own #1D2227', (tester) async {
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(body: Center(child: Skeleton(width: 50))),
-      ));
-      final box = tester.widget<Container>(find.byType(Container).first);
-      final d = box.decoration as BoxDecoration;
-      expect(_hex(d.color!), '#1D2227');
+    // THE SKELETON THE SCREENS ACTUALLY DRAW. These four used to hold the owner's old dark
+    // skeleton bar to account — a widget no screen drew any more, which painted the dark fill on
+    // the cream theme. They now hold the clay skeleton (shared/clay/skeleton.dart) to the same
+    // promises: the right block for the ground it sits on, a pulse that stops when nobody can
+    // see it, a still placeholder under reduce motion, and blocks that read against their card.
+    testWidgets('a skeleton block is the warm beige on a card, its own shade on the page, and '
+        'the dark ladder\'s brightest fill in dark', (tester) async {
+      Future<Color> fill(ThemeData theme, {bool onGround = false}) async {
+        // A fresh app each time: a MaterialApp handed a new theme ANIMATES to it, and the first
+        // frame after the swap would still be the old theme's.
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpWidget(MaterialApp(
+          theme: theme,
+          home: Scaffold(body: Center(child: Skeleton(width: 50, onGround: onGround))),
+        ));
+        final box = tester.widget<Container>(
+          find.descendant(of: find.byType(Skeleton), matching: find.byType(Container)).first,
+        );
+        return (box.decoration! as BoxDecoration).color!;
+      }
+
+      expect(_hex(await fill(ApnivaasTheme.light())), _hex(ApnivaasColors.skeleton));
+      expect(_hex(await fill(ApnivaasTheme.light(), onGround: true)),
+          _hex(ApnivaasColors.skeletonOnGround));
+      expect(_hex(await fill(ApnivaasTheme.dark())), _hex(ApnivaasColors.surfaceBright));
+      await tester.pumpWidget(const SizedBox.shrink());
     });
 
-    testWidgets('a skeleton STOPS when it goes off-screen, and the shared ticker stops with it',
+    testWidgets('a skeleton STOPS when it goes off-screen, and nothing ticks after it',
         (tester) async {
-      // The owner asked for skeletons while loading. An IndexedStack lays its other children
-      // out and keeps them alive but never PAINTS them, so a naive pulse keeps burning frames
-      // on a tab nobody can see. The gate is the paint probe, not a flag any shell has to set:
-      // tab 1 holds no skeleton at all, so once it is selected the subscriber count and the
-      // shared ticker must both go to nothing.
+      // An IndexedStack lays its other children out and keeps them alive but never PAINTS them,
+      // so a naive pulse keeps burning frames on a tab nobody can see. The clay pulse reads
+      // [Visibility.of], which the IndexedStack answers false for every child it is not showing.
+      // The switch is made without a tap, so no ink ripple is left animating to muddy the count.
       var selected = 0;
+      late StateSetter select;
       await tester.pumpWidget(MaterialApp(
         theme: ApnivaasTheme.dark(),
         home: Scaffold(
-          body: StatefulBuilder(
-            builder: (context, setState) => Column(
-              children: [
-                TextButton(onPressed: () => setState(() => selected = 1), child: const Text('go')),
-                Expanded(
-                  child: IndexedStack(
-                    index: selected,
-                    children: const [
-                      Center(child: Skeleton(width: 50)),
-                      SizedBox.shrink(),
-                    ],
-                  ),
-                ),
+          body: StatefulBuilder(builder: (context, setState) {
+            select = setState;
+            return IndexedStack(
+              index: selected,
+              children: const [
+                Center(child: Skeleton(width: 50)),
+                SizedBox.shrink(),
               ],
-            ),
-          ),
+            );
+          }),
         ),
       ));
-      await tester.pump(); // the post-frame callback that follows the first paint
-      expect(shimmerClockState().subscribers, 1, reason: 'a visible skeleton animates');
-      expect(shimmerClockState().running, isTrue);
-
-      await tester.tap(find.text('go'));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 60)); // past the grace window
-      expect(shimmerClockState().subscribers, 0,
+      expect(tester.binding.transientCallbackCount, greaterThan(0),
+          reason: 'a visible skeleton animates');
+
+      select(() => selected = 1);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(find.byType(Skeleton, skipOffstage: false), findsOneWidget,
+          reason: 'the hidden tab is kept alive, skeleton and all');
+      expect(tester.binding.transientCallbackCount, 0,
           reason: 'the skeleton is laid out but no longer painted, and kept pulsing');
-      expect(shimmerClockState().running, isFalse,
+      expect(tester.binding.hasScheduledFrame, isFalse,
           reason: 'nothing is animating, so nothing should be scheduling frames');
 
       await tester.pumpWidget(const SizedBox.shrink());
     });
 
-    testWidgets('reduced motion stops the pulse without hiding the placeholder',
-        (tester) async {
+    testWidgets('reduced motion stops the pulse without hiding the placeholder', (tester) async {
       await tester.pumpWidget(const MaterialApp(
         home: MediaQuery(
           data: MediaQueryData(disableAnimations: true),
@@ -1765,38 +1971,58 @@ void main() {
         ),
       ));
       await tester.pump();
-      expect(shimmerClockState().subscribers, 0);
+      expect(tester.binding.transientCallbackCount, 0);
       expect(find.byType(Skeleton), findsOneWidget);
+      final still = tester.widget<Opacity>(
+        find.descendant(of: find.byType(SkeletonPulse), matching: find.byType(Opacity)).first,
+      );
+      expect(still.opacity, Dim.skeletonStill, reason: 'held still at 80%, never faded out');
       await tester.pumpWidget(const SizedBox.shrink());
     });
 
-    testWidgets('a skeleton card puts its bars on the CARD fill, not the raised one',
+    testWidgets('a list skeleton puts its blocks on the CARD fill, and they read against it',
         (tester) async {
-      // #1D2227 on #111417 is the pairing Figma draws (1.15:1). On the raised surface the bars
-      // would be 1.09:1 and effectively invisible, which is why 4:1602 nests a lower rung.
-      await tester.pumpWidget(MaterialApp(
-        theme: ApnivaasTheme.dark(),
-        home: const Scaffold(body: SkeletonCard()),
-      ));
-      final inner = tester.widget<Material>(
-        find.descendant(of: find.byType(FlatSurface), matching: find.byType(Material)).last,
-      );
-      expect(inner.color, ApnivaasColors.surfaceContainerLow);
-      _expectAtLeast(
-        _ratio(ApnivaasColors.surfaceBright, ApnivaasColors.surfaceContainerLow),
-        1.1,
-        'a shimmer bar against the block it sits in',
-      );
+      for (final theme in [ApnivaasTheme.light(), ApnivaasTheme.dark()]) {
+        await tester.pumpWidget(const SizedBox.shrink()); // a fresh app: see the first test
+        await tester.pumpWidget(MaterialApp(
+          theme: theme,
+          home: const Scaffold(body: ListSkeleton()),
+        ));
+        final card = tester.widget<DecoratedBox>(
+          find.descendant(of: find.byType(ListSkeleton), matching: find.byType(DecoratedBox)).first,
+        );
+        final cardFill = (card.decoration as BoxDecoration).color!;
+        expect(cardFill, theme.colorScheme.surface);
+        final block = tester.widget<Container>(
+          find.descendant(of: find.byType(Skeleton), matching: find.byType(Container)).first,
+        );
+        final blockFill = (block.decoration! as BoxDecoration).color!;
+        _expectAtLeast(_ratio(blockFill, cardFill), 1.1,
+            'a skeleton block against the card it sits on (${theme.brightness.name})');
+      }
       await tester.pumpWidget(const SizedBox.shrink());
     });
   });
 }
 
+/// Every slot the scale defines, by name.
+Map<String, TextStyle> _namedSlots(TextTheme t) => {
+      'displayLarge': t.displayLarge!,
+      'displayMedium': t.displayMedium!,
+      'displaySmall': t.displaySmall!,
+      'headlineLarge': t.headlineLarge!,
+      'headlineMedium': t.headlineMedium!,
+      'headlineSmall': t.headlineSmall!,
+      'titleLarge': t.titleLarge!,
+      'titleMedium': t.titleMedium!,
+      'titleSmall': t.titleSmall!,
+      'bodyLarge': t.bodyLarge!,
+      'bodyMedium': t.bodyMedium!,
+      'bodySmall': t.bodySmall!,
+      'labelLarge': t.labelLarge!,
+      'labelMedium': t.labelMedium!,
+      'labelSmall': t.labelSmall!,
+    };
+
 /// Every slot the scale defines, for the checks that apply to all of them.
-List<TextStyle> _allSlots(TextTheme t) => [
-      t.displayLarge!, t.displayMedium!, t.displaySmall!,
-      t.headlineLarge!, t.headlineMedium!, t.headlineSmall!,
-      t.titleLarge!, t.titleMedium!, t.titleSmall!,
-      t.bodyLarge!, t.bodyMedium!, t.bodySmall!,
-      t.labelLarge!, t.labelMedium!, t.labelSmall!,
-    ];
+List<TextStyle> _allSlots(TextTheme t) => _namedSlots(t).values.toList();

@@ -60,8 +60,15 @@ const studentLoginDomain = 'student.hostelpro.local';
 /// would be asking for something that cannot be produced.
 bool isReachableLoginAddress(String? email) {
   final e = (email ?? '').trim().toLowerCase();
-  return e.isNotEmpty && !e.endsWith('@$studentLoginDomain');
+  return e.isNotEmpty &&
+      !e.endsWith('@$studentLoginDomain') &&
+      !e.endsWith('@$syntheticIdentityDomain');
 }
+
+/// The non-routable namespace `mobile-auth` gives a Facebook or Truecaller account that has no
+/// email (`fb-<id>@…`, `tc-<sub>@…`). It can never receive mail, so it is never asked to prove
+/// it and never shown as a contact (docs/self-signup-api.md §1.2).
+const syntheticIdentityDomain = 'identity.apnivaas.invalid';
 
 /// A signed-in user, as resolved from `public.users`.
 ///
@@ -79,6 +86,7 @@ class ApnivaasSession {
     this.email,
     this.phone,
     this.emailVerifiedAt,
+    this.staffApplicant = false,
   });
 
   final String userId;
@@ -107,6 +115,9 @@ class ApnivaasSession {
   /// null for every account that has ever existed, and only the email-verification Edge
   /// Function can write it.
   final DateTime? emailVerifiedAt;
+
+  /// Round 3: a staff sign-up waiting for an owner (role student, no PG, no access).
+  final bool staffApplicant;
 
   bool get isActive => status == 'active';
 
@@ -160,8 +171,9 @@ class ApnivaasSession {
   /// or the synthetic phone-login namespace) can never be proved, and gating on it would be a
   /// permanent lockout. The Play-review demo accounts are stamped verified by a database
   /// trigger (db/migrations/2026-09-13-demo-review-skip-email-verification.sql), so they pass.
+  /// A staff applicant is held like staff: once converted, their address is a staff address.
   bool get mustVerifyEmail =>
-      verificationGatedRoles.contains(role) && needsEmailVerification;
+      (verificationGatedRoles.contains(role) || staffApplicant) && needsEmailVerification;
 
   static ApnivaasSession fromRow(Map<String, dynamic> row) {
     final role = UserRole.tryParse(row['role'] as String?);
@@ -182,6 +194,7 @@ class ApnivaasSession {
       // out. An unparseable stamp degrades to "not verified yet", which asks for a code the
       // person can actually supply, rather than to a locked account.
       emailVerifiedAt: DateTime.tryParse((row['email_verified_at'] as String?) ?? ''),
+      staffApplicant: (row['staff_applicant'] as bool?) ?? false,
     );
   }
 }

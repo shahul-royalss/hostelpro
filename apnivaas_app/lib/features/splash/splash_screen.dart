@@ -21,8 +21,12 @@
 // blinks. (Keeping the launcher icon on the system splash gives "logo, blank, logo builds", the
 // exact stutter the previous opening's comments warned about.)
 //
-// The app's own ground is the cool violet canvas, not the brand beige, so the opening FADES into
-// it before it lets go: a warm screen hard-cutting to a cool one reads as a glitch.
+// The animation is keyed onto transparency (scripts/gen-splash.mjs), so the only colour around
+// the logo is the one painted here, [kSplashGround] (#EBE3D8, the native launch colour). The app's
+// own ground is the cream page ([ApnivaasColors.background], #F6F2EA), a step lighter, so
+// the opening FADES into it before it lets go: the sign-in or home screen that follows then
+// arrives on the ground it is already standing on, rather than as a hard cut from one warm white
+// to another. The spinner below is the brand forest.
 //
 // ── WHEN IT ENDS ──────────────────────────────────────────────────────────────────────────
 //

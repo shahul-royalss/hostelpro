@@ -9,11 +9,16 @@ import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
 import '../../common/refresh.dart';
+import '../../../shared/clay/clay.dart' show ListRowCard;
 import '../../../shared/illustrations.dart';
 import '../actions/register_student_sheet.dart';
+import '../data/warden_providers.dart';
 import '../widgets/paged_list.dart';
 import '../widgets/warden_ui.dart';
 import 'student_sheet.dart';
+import '../../shell/join_requests.dart';
+import '../checkout/warden_checkouts_screen.dart';
+import '../../../shared/person_avatar.dart';
 
 /// Everyone living here.
 ///
@@ -53,6 +58,7 @@ class WardenStudentsScreen extends ConsumerStatefulWidget {
 
 class _WardenStudentsScreenState extends ConsumerState<WardenStudentsScreen> {
   final _controller = TextEditingController();
+  final _searchFocus = FocusNode();
   Timer? _debounce;
 
   /// The term actually sent to Postgres. Lags the text field by [_settle].
@@ -62,10 +68,28 @@ class _WardenStudentsScreenState extends ConsumerState<WardenStudentsScreen> {
   static const _settle = Duration(milliseconds: 350);
 
   @override
+  void initState() {
+    super.initState();
+    // The home header's search pill may have asked before this tab existed — the shell builds a
+    // tab the first time it is warmed or shown — so the request is read once here as well as
+    // listened for in build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && ref.read(wardenSearchRequestProvider)) _focusSearch();
+    });
+  }
+
+  @override
   void dispose() {
     _debounce?.cancel();
     _controller.dispose();
+    _searchFocus.dispose();
     super.dispose();
+  }
+
+  /// Puts the cursor in the search field and clears the request.
+  void _focusSearch() {
+    ref.read(wardenSearchRequestProvider.notifier).consume();
+    _searchFocus.requestFocus();
   }
 
   void _onSearchChanged(String value) {
@@ -82,11 +106,19 @@ class _WardenStudentsScreenState extends ConsumerState<WardenStudentsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // After the frame, not inside the notification: by then the shell has switched to this tab,
+    // and a tab that is not showing cannot take focus.
+    ref.listen<bool>(wardenSearchRequestProvider, (_, asked) {
+      if (!asked) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focusSearch();
+      });
+    });
     final hostelId = ref.watch(currentHostelIdProvider);
     if (hostelId == null) {
       return const WardenScreen(
         title: 'Residents',
-        child: EmptyState(
+        child: WardenEmptyState(
           icon: Icons.people_alt_rounded,
           title: 'No hostel on this account',
           detail: 'A warden is attached to one hostel. Ask the owner to check the assignment.',
@@ -104,7 +136,8 @@ class _WardenStudentsScreenState extends ConsumerState<WardenStudentsScreen> {
     // The design's list header carries a count on the right ("48 students", 4:759). The
     // repository pages, so a count is only TRUE once the last page is in — `hasMore` is the
     // server's own word for that. While more pages exist the right-hand slot is left empty
-    // rather than reporting the twenty rows that happen to be downloaded.
+    // rather than reporting the twenty rows that happen to be downloaded. Nor does it say "0":
+    // the empty state under it already says so in words.
     final page = students.value;
     final total = (page != null && !page.hasMore) ? page.items.length : null;
 
@@ -132,8 +165,11 @@ class _WardenStudentsScreenState extends ConsumerState<WardenStudentsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const JoinRequestsEntry(padding: EdgeInsets.only(bottom: Space.sm)),
+              const CheckoutRequestsEntry(padding: EdgeInsets.only(bottom: Space.sm)),
               TextField(
                 controller: _controller,
+                focusNode: _searchFocus,
                 onChanged: _onSearchChanged,
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
@@ -152,32 +188,28 @@ class _WardenStudentsScreenState extends ConsumerState<WardenStudentsScreen> {
                         ),
                 ),
               ),
-              const SizedBox(height: Space.sm),
-              // `chips` (4:747): gold-filled for the one that is on, raised surface behind a
-              // hairline for the rest. Material's ChoiceChip — a capsule with a check mark
-              // that slides in, in the scheme's secondaryContainer — is in no frame of the
-              // file.
+              const SizedBox(height: Space.xs),
               FilterBar<_Roster>(
                 options: _Roster.values,
                 selected: _roster,
                 labelOf: (option) => option.label,
                 onSelected: (option) => setState(() => _roster = option),
               ),
-              const SizedBox(height: Space.md),
-              // `list-header` (4:757): the caps heading with the count opposite it.
+              // The heading names the list actually on screen, with its count opposite — so the
+              // chips and the heading cannot say different things.
               SectionLabel(
-                label: 'Student directory',
-                trailing: total == null
+                label: _roster == _Roster.all ? 'Living here' : _roster.label,
+                trailing: total == null || total == 0
                     ? null
                     : Text(
-                        '$total ${total == 1 ? 'resident' : 'residents'}',
+                        countOf(total, 'resident'),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
               ),
             ],
           ),
         ),
-        empty: EmptyState(
+        empty: WardenEmptyState(
           // The artwork is for the hostel that has nobody on it YET. A search that matched
           // nothing is a different sentence and keeps the glyph — see EmptyArt.
           illustration: _term.isEmpty ? EmptyArt.residents : null,
@@ -199,8 +231,6 @@ class _StudentRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
-
     // students carries room_id, not a room number. The occupancy list is already loaded for the
     // room grid, so the number is looked up there rather than joined per row — and when it has
     // not loaded, the row says "Placed" instead of inventing one.
@@ -213,49 +243,22 @@ class _StudentRow extends ConsumerWidget {
       placement = (match != null && match.isNotEmpty) ? 'Room ${match.first.roomNumber}' : 'Placed';
     }
 
-    // `student-row` (4:761), exactly: a 32dp avatar, the name at 13/600, ONE quiet 11/400
-    // line of placement under it, and the state badge hard against the right edge. Nothing
-    // else is on the row in the file, and the two things that used to be — a glyphed metadata
-    // pair and a second right-hand column carrying the rent — are what made the list twice as
-    // tall as the design's.
+    // One card per resident: their initials, the name, ONE quiet line of where they sleep and
+    // what they pay, and their state as a chip at the trailing edge. The design badges EVERY
+    // row, including the ordinary one: a list where only the exceptions are marked makes a
+    // reader check each unmarked row to see whether it is fine or whether the badge simply
+    // failed to draw.
     //
-    // THE PHONE NUMBER MOVED, IT DID NOT GO. It is the resident sheet's subtitle, one tap
-    // away, and the search field above this list still matches on it.
-    return TapRow(
+    // THE PHONE NUMBER IS ON THE SHEET, one tap away, and the search field above this list
+    // still matches on it.
+    return ListRowCard(
+      leading: PersonAvatar(name: student.fullName, userId: student.userId),
+      title: student.fullName,
+      subtitle: '$placement · ${money(student.monthlyFee)}',
+      trailing: StatusPill(status: student.status),
       onTap: () => showStudentSheet(context, studentId: student.id),
       semanticLabel: '${student.fullName}, $placement, ${student.phone}, '
           '${student.status.label}',
-      child: Row(
-        children: [
-          Avatar(name: student.fullName, tone: toneFor(context, student.status)),
-          const SizedBox(width: Space.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  student.fullName,
-                  style: t.textTheme.titleSmall?.copyWith(color: t.colorScheme.onSurface),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: Space.xxs / 2),
-                Text(
-                  '$placement · ${money(student.monthlyFee)}',
-                  style: t.textTheme.bodySmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: Space.xs),
-          // The design badges EVERY row, including the ordinary one. A list where only the
-          // exceptions are marked makes a reader check each unmarked row to see whether it is
-          // fine or whether the badge simply failed to draw.
-          StatusPill(status: student.status),
-        ],
-      ),
     );
   }
 }

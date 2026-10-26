@@ -6,9 +6,14 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
+import '../../../shared/clay/clay.dart';
 import '../../../shared/glass/glass.dart';
+import '../../../shared/person_avatar.dart';
+import '../../../data/repositories/people_repository.dart';
+import '../../../data/repositories/signup_repository.dart' show SignupFailure;
 import '../owner_providers.dart';
-import '../widgets/states.dart';
+import '../widgets/owner_header.dart';
+import '../widgets/states.dart' show EmptyNote, ErrorNote, whenAsync;
 import 'add_staff_sheet.dart';
 import 'staff_access_sheet.dart';
 import 'staff_models.dart';
@@ -56,42 +61,15 @@ class OwnerStaffScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
     final hostelId = ref.watch(activeHostelIdProvider);
     final hostelName = _hostelName(ref, hostelId);
 
     return Scaffold(
       body: Column(
         children: [
-          // staff-directory.png's bar: the screen's name set in `primary` at headline weight,
-          // with the property it belongs to underneath. The mockup's hamburger and avatar are
-          // not drawn — this screen is a tab inside the shell's own chrome, not a page with
-          // its own navigation.
-          GlassHeader(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Staff accounts',
-                        style: t.textTheme.titleLarge?.copyWith(color: t.colorScheme.primary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        hostelName ?? 'Your PG',
-                        style: t.textTheme.bodySmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // The screen's name, with the property it belongs to underneath, on the forest
+          // sub-page header every owner screen pushed over the shell uses.
+          OwnerSubpageHeader(title: 'Staff accounts', subtitle: hostelName ?? 'Your PG'),
           Expanded(
             child: hostelId == null
                 ? const _NoHostel()
@@ -122,13 +100,18 @@ class _NoHostel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.all(Space.md),
-      child: EmptyNote(
-        icon: Icons.apartment_rounded,
-        title: 'No PG selected',
-        message: 'Staff accounts belong to a PG. Pick one on the PGs tab first.',
-      ),
+    // The owner screens resolve a PG whenever the account has one, so the only way here is an
+    // owner with no PG at all — and the sentence says that, rather than pointing at a picker.
+    return ListView(
+      padding: OwnerRhythm.pagePadding,
+      children: const [
+        EmptyState(
+          icon: ClayIcons.team,
+          title: 'No PG on your account yet',
+          body: 'Staff accounts belong to a PG. You can add a manager or a warden once one is '
+              'registered against your account.',
+        ),
+      ],
     );
   }
 }
@@ -141,7 +124,6 @@ class _StaffBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
     final staff = ref.watch(ownerStaffProvider(hostelId));
     // Names for the other PGs on each card, and the choices in PG access. Already watched by
     // the header, so this costs nothing.
@@ -159,16 +141,12 @@ class _StaffBody extends ConsumerWidget {
       child: whenAsync(
         staff,
         loading: () => ListView(
-          padding: const EdgeInsets.all(Space.md),
-          children: const [
-            SkeletonCard(lines: 3),
-            SizedBox(height: Space.md),
-            SkeletonCard(lines: 3),
-          ],
+          padding: OwnerRhythm.pagePadding,
+          children: const [ListSkeleton(rows: 3, semanticLabel: 'Loading staff')],
         ),
         error: (error) => ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(Space.md),
+          padding: OwnerRhythm.pagePadding,
           children: [
             ErrorNote(
               error: error,
@@ -178,16 +156,15 @@ class _StaffBody extends ConsumerWidget {
         ),
         data: (members) => ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(Space.md),
+          padding: OwnerRhythm.pagePadding,
           children: [
-            Text(
-              'Up to $maxStaffPerRole managers and $maxStaffPerRole wardens per PG. Each gets '
-              'their own login, and each sees only their own part of it.',
-              style: t.textTheme.bodyMedium,
+            InfoBanner(
+              title: 'Staff & access',
+              message: 'Up to $maxStaffPerRole managers and $maxStaffPerRole wardens per PG. '
+                  'Each gets their own login, and each sees only their own part of it.',
+              icon: ClayIcons.roleManager,
             ),
-            const SizedBox(height: Space.lg),
-            // 4:536's own section label for this block.
-            const SectionLabel(label: 'Staff & access'),
+            const SizedBox(height: OwnerRhythm.sectionGap),
             for (final role in StaffRole.values) ...[
               _RoleSection(
                 role: role,
@@ -374,9 +351,45 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
     }
   }
 
+  /// DELETE, for good (docs/self-signup-api.md §6). The dialog says it is permanent and what
+  /// survives; the owner must tick that they understand before the button arms. The function
+  /// re-checks that this is the caller's own manager or warden.
+  Future<void> _delete(StaffMember member) async {
+    if (_busy) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => _DeleteStaffDialog(member: member),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(peopleApiProvider).deleteStaffAccount(member.id);
+      ref.invalidate(ownerStaffProvider);
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Account deleted.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(
+        content: Text(switch (error) {
+          SignupFailure(:final message) => message,
+          _ => AppFailure.from(error).message,
+        }),
+        behavior: SnackBarBehavior.floating,
+        duration: Motion.readMessage,
+      ));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final muted = t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant);
     final role = widget.role;
     // Active first, by name within that: the order the repository puts the server's rows in.
     // Everyone who has ever held the post is here: reactivating somebody who worked a season
@@ -389,26 +402,27 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
     // checkbox that cannot be unticked, which is furniture.
     final canEditAccess = widget.owned.length >= 2;
 
-    return GlassCard(
+    return FlatSurface(
+      borderRadius: Radii.rSurface,
       padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              ClayIcon(
+                role == StaffRole.manager ? ClayIcons.roleManager : ClayIcons.roleWarden,
+                size: ClaySize.list,
+              ),
+              const SizedBox(width: Space.sm),
               Expanded(
-                // GOLD, which is 4:536's own treatment of a post: on the mockup's staff rows
-                // the role is the one thing set in the accent. Measured 8.26:1 on the card.
-                child: Text(
-                  role.label.toUpperCase(),
-                  style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary),
-                ),
+                child: SectionHeader(title: '${role.label}s', size: SectionHeaderSize.card),
               ),
               // "2 of 5" — the answer to the question this screen is opened with, before any
               // scrolling and before any refusal.
               StatusChip(
                 label: '${active.length} of $maxStaffPerRole',
-                tone: full ? ApnivaasColors.textMuted : ApnivaasColors.success,
+                tone: full ? StatusTone.neutral : StatusTone.success,
               ),
             ],
           ),
@@ -441,7 +455,7 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
                               _busy ? null : () => _setStatus(everyone[i], StaffStatus.inactive),
                           icon: const Icon(Icons.person_off_outlined, size: IconSize.md),
                           label: const Text('Deactivate'),
-                          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
                         )
                       // Disabled rather than hidden when the post is full: the reason is the
                       // count above it, and a button that vanishes reads as a lost feature.
@@ -451,20 +465,28 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
                               : () => _setStatus(everyone[i], StaffStatus.active),
                           icon: const Icon(Icons.person_outline_rounded, size: IconSize.md),
                           label: const Text('Reactivate'),
-                          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
                         ),
                   if (canEditAccess)
                     OutlinedButton.icon(
                       onPressed: _busy ? null : () => _editAccess(everyone[i]),
                       icon: const Icon(Icons.apartment_rounded, size: IconSize.md),
                       label: const Text('PG access'),
-                      style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                      style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
                     ),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : () => _delete(everyone[i]),
+                    icon: Icon(Icons.delete_forever_outlined,
+                        size: IconSize.md, color: _busy ? null : context.tones.error),
+                    label: Text('Delete account',
+                        style: TextStyle(color: _busy ? null : context.tones.error)),
+                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+                  ),
                 ],
               ),
             ],
           const SizedBox(height: Space.sm),
-          Text(role.blurb, style: t.textTheme.bodySmall),
+          Text(role.blurb, style: muted),
           const SizedBox(height: Space.md),
           // Add is DISABLED, not hidden, at the limit: hiding it would read as a missing
           // feature, and the sentence under it explains the rule. Disabling here is a drawing
@@ -474,14 +496,13 @@ class _RoleSectionState extends ConsumerState<_RoleSection> {
             onPressed: full || _busy ? null : _add,
             icon: const Icon(Icons.person_add_alt_rounded, size: IconSize.md),
             label: Text('Add ${role.label.toLowerCase()}'),
-            style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
           ),
           const SizedBox(height: Space.xs),
           Text(
             full
                 ? '$maxStaffPerRole is the limit. Deactivate one to free a place.'
                 : 'You can add ${maxStaffPerRole - active.length} more.',
-            style: t.textTheme.bodySmall,
+            style: muted,
           ),
         ],
       ),
@@ -506,9 +527,9 @@ class _StaffDetails extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final muted = context.tones.muted;
+    final muted = t.colorScheme.onSurfaceVariant;
     final active = member.isActive;
-    final tone = active ? ApnivaasColors.success : ApnivaasColors.textMuted;
+    final tone = active ? StatusTone.success : StatusTone.neutral;
 
     // WHERE THEY ARE WORKING, AND WHAT ELSE THEY HOLD, only when there is anything to say. A
     // warden with this one PG is working here by definition, and a line saying so on every
@@ -534,7 +555,7 @@ class _StaffDetails extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            InitialsAvatar(name: member.fullName, muted: !active),
+            PersonAvatar(name: member.fullName, userId: member.id),
             const SizedBox(width: Space.sm),
             Expanded(
               child: Column(
@@ -557,14 +578,14 @@ class _StaffDetails extends StatelessWidget {
             StatusChip(label: member.status.label, tone: tone, dot: true),
           ],
         ),
-        // The mockup's `ASSIGNED PROPERTY` block. Filled with the login and the phone rather
-        // than the property, because this screen already names the PG in its header and
-        // repeating it on both cards would be furniture. The shape is the design's: a step up
-        // the container ramp, a square icon badge, a `label-caps` eyebrow over the value.
+        // The login and the phone rather than the property, because this screen already names
+        // the PG in its header and repeating it on both cards would be furniture. A well inside
+        // the card: a glyph, a label over the value.
         if (hasContact || showPgs) ...[
           const SizedBox(height: Space.sm),
           FlatSurface(
             weight: GlassWeight.regular,
+            border: false,
             borderRadius: Radii.rControl,
             padding: const EdgeInsets.all(Space.sm),
             child: Column(
@@ -633,23 +654,22 @@ class _DetailLine extends StatelessWidget {
     final t = Theme.of(context);
     return Row(
       children: [
-        // AN ICON HOLDER, NOT WAYFINDING — and the neutral is the considered choice. This
-        // block already says "staff" twice: the avatar two rows up is people-teal and the
-        // heading above it names the post. A teal plate on every detail row would state the
-        // same domain a third time inside one card, and a phone glyph on a row labelled PHONE
-        // is not telling anyone where they are. So the tone stays canonical [textMuted],
-        // resolved at the paint site to `context.tones.muted`, and the people colour stays on
-        // the avatar and the heading where it does work. See [ApnivaasDomain].
-        ToneBadge(icon: icon, tone: ApnivaasColors.textMuted),
+        // A plain glyph in the muted ink, not a wayfinding colour: this block already says
+        // "staff" twice — the avatar and the heading above it — and a phone glyph on a row
+        // labelled Phone is not telling anyone where they are.
+        Icon(icon, size: IconSize.lg, color: t.colorScheme.onSurfaceVariant),
         const SizedBox(width: Space.sm),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label.toUpperCase(), style: t.textTheme.labelSmall),
+              Text(
+                label,
+                style: t.textTheme.labelMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
+              ),
               Text(
                 text,
-                style: t.textTheme.bodyMedium,
+                style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurface),
                 maxLines: maxLines,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -675,34 +695,73 @@ class _DeactivationNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final tones = context.tones;
-    return Container(
-      padding: const EdgeInsets.all(Space.sm),
-      decoration: BoxDecoration(
-        color: tones.chipFill(ApnivaasColors.info),
-        borderRadius: Radii.rControl,
-        border: Border.all(color: tones.chipBorder(ApnivaasColors.info), width: Strokes.hairline),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline_rounded, size: IconSize.sm, color: tones.info),
-          const SizedBox(width: Space.xs),
-          Expanded(
-            child: Text(
-              severalPgs
-                  ? 'Deactivating keeps the record and the history. It takes away their access '
-                      'to every PG they hold and frees a place in each. To take away one PG '
-                      'only, use PG access.'
-                  : 'Deactivating keeps the record and the history — the expenses a manager '
-                      'entered and the residents a warden registered all stay. It only takes '
-                      'away their access, and it frees a place so you can add somebody else.',
-              style: t.textTheme.bodySmall,
+    return InfoNote(
+      icon: Icons.info_outline_rounded,
+      message: severalPgs
+          ? 'Deactivating keeps the record and the history. It takes away their access '
+              'to every PG they hold and frees a place in each. To take away one PG '
+              'only, use PG access.'
+          : 'Deactivating keeps the record and the history — the expenses a manager '
+              'entered and the residents a warden registered all stay. It only takes '
+              'away their access, and it frees a place so you can add somebody else.',
+    );
+  }
+}
+
+
+/// The permanent-action confirmation. "Delete" stays disabled until the owner ticks that they
+/// understand it cannot be undone.
+class _DeleteStaffDialog extends StatefulWidget {
+  const _DeleteStaffDialog({required this.member});
+  final StaffMember member;
+
+  @override
+  State<_DeleteStaffDialog> createState() => _DeleteStaffDialogState();
+}
+
+class _DeleteStaffDialogState extends State<_DeleteStaffDialog> {
+  bool _understood = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.member;
+    final error = context.tones.error;
+    return AlertDialog(
+      title: Text("Delete ${m.fullName}'s account?"),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This is permanent and cannot be undone. Their login is removed and they are '
+              'signed out everywhere; their photo and documents are erased. The records they '
+              'created stay, under "Deleted staff member". '
+              'Their email and phone become free, so they could later sign up again as an owner '
+              'or tenant. To stop them working for a while instead, use Deactivate.',
             ),
-          ),
-        ],
+            const SizedBox(height: Space.sm),
+            CheckboxListTile(
+              value: _understood,
+              onChanged: (v) => setState(() => _understood = v ?? false),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('I understand this cannot be undone'),
+            ),
+          ],
+        ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _understood ? () => Navigator.of(context).pop(true) : null,
+          style: FilledButton.styleFrom(backgroundColor: error),
+          child: const Text('Delete permanently'),
+        ),
+      ],
     );
   }
 }

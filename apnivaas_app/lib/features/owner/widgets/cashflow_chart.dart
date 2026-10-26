@@ -72,13 +72,14 @@ class CashflowChart extends StatelessWidget {
     }
 
     final ceiling = niceCeiling(peak);
+    final axis = t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // The two legend dots have moved OUT of the plot and up beside the section label, which
-        // is where 4:437 puts them. What stays is the scale — the peak is the only number on
-        // this chart, and a plot whose tallest point is unlabelled cannot be read at all.
+        // The key is drawn by the section, above the plot rather than inside it. What stays here
+        // is the scale — the peak is the only number on this chart, and a plot whose tallest
+        // point is unlabelled cannot be read at all.
         SizedBox(
           height: plotHeight,
           child: LineChart(
@@ -114,22 +115,22 @@ class CashflowChart extends StatelessWidget {
           ),
         ),
         const SizedBox(height: Space.xs),
-        // The design's axis row — `W1 … W4` along the foot of the plot. Real dates rather than
-        // week ordinals: the series is 30 calendar days from `rpc_daily_finance`, and "W3" is a
-        // bucket nothing in this app actually computes.
+        // The axis row along the foot of the plot. Real dates rather than week ordinals: the
+        // series is 30 calendar days from `rpc_daily_finance`, and "W3" is a bucket nothing in
+        // this app actually computes.
         Row(
           children: [
-            Text(dayLabel(days.first.day), style: t.textTheme.bodySmall),
+            Text(dayLabel(days.first.day), style: axis),
             Expanded(
               child: Text(
                 'Busiest day ${moneyShort(peak)}',
-                style: t.textTheme.bodySmall,
+                style: axis,
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            Text(dayLabel(days.last.day), style: t.textTheme.bodySmall),
+            Text(dayLabel(days.last.day), style: axis),
           ],
         ),
       ],
@@ -153,14 +154,14 @@ class CashflowChart extends StatelessWidget {
   }
 }
 
-/// Money in — the design's own gold line (4:437). The brand accent carries the series an owner
-/// came to look at; expenses are the counterweight, not a second headline.
+/// Money in — the forest line, the brand carrying the series an owner came to look at; expenses
+/// are the counterweight, not a second headline.
 Color _incomeTone(ColorScheme scheme) => scheme.primary;
 
-/// Money out. `#6F747A` on the frame, which is [ColorScheme.outline] — 3.70:1 on the chart
-/// well, past the 3:1 a graphical object owes its background. It is NOT the amber this app
+/// Money out, in [ColorScheme.outline] — the control border, which is rated past the 3:1 a
+/// graphical object owes the card it is drawn on (3.53:1 in light). It is NOT the amber this app
 /// uses for warnings: an expense is not a problem, and spending the warning colour on every
-/// ledger entry would leave nothing to say with it on the card two sections up.
+/// ledger entry would leave nothing to say with it on the tiles above.
 Color _expenseTone(ColorScheme scheme) => scheme.outline;
 
 /// THE DASH IS THE POINT, not a texture. The two series are told apart by pattern first and
@@ -168,14 +169,13 @@ Color _expenseTone(ColorScheme scheme) => scheme.outline;
 /// colour — and on the greyscale a cheap panel effectively renders in.
 const _expenseDash = <int>[4, 4];
 
-/// The chart's key, drawn beside the section label rather than inside the plot — 4:437 puts
-/// `● Income  ● Expenses` on the heading row.
+/// The chart's key, drawn over the plot by the section that holds it.
 ///
-/// THE LABELS ARE NOT PAINTED IN THEIR SERIES COLOUR, which is the one thing here the mockup
-/// does and this does not. Gold text would be fine (8.70:1 on the ground); the expense grey is
-/// 4.13:1, a fail at 10px. Colouring one and not the other would be worse than colouring
-/// neither, so the DOT carries the hue — and the expense dot carries the dash as well, so the
-/// key shows the mark it is naming — and both labels stay in the legible secondary ink.
+/// THE LABELS ARE NOT PAINTED IN THEIR SERIES COLOUR. Forest text would be fine; the expense
+/// line's control-border ink is rated for graphics, not for 11px words. Colouring one and not the
+/// other would be worse than colouring neither, so the MARK carries the hue — and the expense
+/// mark carries the dash as well, so the key shows the line it is naming — and both labels stay
+/// in the legible secondary ink.
 class CashflowLegend extends StatelessWidget {
   const CashflowLegend({super.key});
 
@@ -223,7 +223,7 @@ class _LegendMark extends StatelessWidget {
               : ColoredBox(color: color),
         ),
         const SizedBox(width: Space.xxs),
-        Text(label, style: t.textTheme.labelSmall),
+        Text(label, style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
       ],
     );
   }

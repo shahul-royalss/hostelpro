@@ -6,9 +6,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/auth/app_lock.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/theme/tokens.dart';
-import '../../shared/glass/glass.dart';
+import '../../core/theme/typography.dart';
+import '../../shared/clay/app_header.dart';
+import '../../shared/clay/banners.dart';
+import '../../shared/clay/clay_icons.dart';
+import '../../shared/clay/list_row.dart';
+import '../../shared/clay/skeleton.dart';
+import '../../shared/clay/status_chip.dart';
+import '../../shared/glass/glass.dart' show FlatSurface;
+import '../common/form_parts.dart';
 import '../legal/legal_documents.dart';
 import '../legal/legal_screen.dart';
 import 'mfa_service.dart';
@@ -21,14 +30,13 @@ import 'mfa_service.dart';
 // create wizard is (`Navigator.of(context).push(CreateWizardScreen.route())`), so it sits above
 // whichever shell the user is in and go_router's redirect still owns every real destination.
 //
-// ── THERE IS NO FIGMA FRAME FOR THIS SCREEN ──────────────────────────────────────────────
+// ── THERE IS NO BOARD FOR THIS SCREEN ────────────────────────────────────────────────────
 //
-// The file's nineteen `screen-*` frames are listed in design-figma/DESIGN-SYSTEM.md and none of
-// them is a security or 2FA screen. Nothing here is copied from a mockup of something else and
-// relabelled. What it does use is the system those frames define, through the shared widgets:
-// the state card and badge (`screen-empty-error-skeleton`, 4:1562 — StateCard / StateBadge /
-// StateBody), the raised surface for a well you could put a cursor in (4:77), the cream filled
-// button as the one primary action (4:83), and the header with a bottom hairline (4:448).
+// The design canvas draws no security or 2FA screen. Nothing here is copied from a mockup of
+// something else and relabelled. It is a sub-page in the new look, built from the clay kit: the
+// forest header with the account's name under the title, one state card (the clay shield, the
+// title and a status word) for off, on, setting up and failed, the gold banner for the one
+// arrival that is refused the way out, and the forest filled button as the one primary action.
 //
 // ── WHAT IS DELIBERATELY NOT HERE ────────────────────────────────────────────────────────
 //
@@ -321,7 +329,6 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
     final state = ref.watch(mfaStateProvider);
     // WATCHED, not read on demand. `_begin` needs the role to name the factor the way the web
     // action names it, and a `ref.read` in a callback returns null unless something has already
@@ -336,6 +343,52 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
     // The only state in this app where leaving is legitimately refused: the router put this
     // account here because it owes a second factor, and it still owes one.
     final held = widget.required && !satisfied;
+
+    // The notice the page hangs from, if any. Held OUT of the scroll view, under the header:
+    // on a required arrival it is the ANSWER TO "why can I not go back", and it has to stand
+    // there for the whole visit rather than scroll away with the first card.
+    final Widget? notice;
+    if (held) {
+      notice = ActionBanner(
+        title: 'Required',
+        icon: ClayIcons.security,
+        message: session == null
+            ? 'Apnivaas requires two-factor authentication on this account, so this is the only '
+                'screen it can open. Set it up below, or sign out.'
+            : 'Apnivaas requires two-factor authentication on ${session.role.label} accounts, so '
+                'this is the only screen it can open. Set it up below, or sign out.',
+      );
+    } else if (widget.required) {
+      notice = InfoBanner(
+        title: 'Done',
+        icon: ClayIcons.success,
+        message: _note ?? 'Two-factor authentication is on for this account.',
+        // The one thing this arrival now needs: the router will not move on its own, because
+        // nothing republished the phase when the factor was verified.
+        action: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            BusyFilledButton(
+              label: 'Continue to Apnivaas',
+              busy: _busy,
+              onPressed: _leaveRequired,
+            ),
+            // Beside the button that produced it. A Continue that spins and returns you to the
+            // screen you were on, saying nothing, is the shape of bug this whole change exists
+            // to remove — it must not come back as its own failure mode.
+            if (_leaveError != null) ...[
+              const SizedBox(height: Space.xs),
+              FormNote(_leaveError!),
+            ],
+          ],
+        ),
+      );
+    } else if (_note != null) {
+      notice = InfoBanner(title: 'Saved', icon: ClayIcons.success, message: _note!);
+    } else {
+      notice = null;
+    }
 
     return PopScope(
       // FALSE FOR EVERY REQUIRED ARRIVAL, including the one that may now leave. `false` does not
@@ -354,104 +407,46 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
       },
       child: Scaffold(
         body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            GlassHeader(
-              child: Row(
-                children: [
-                  // Drawn only where it does something. A chevron on the required arrival is a
-                  // picture of a control — it was the whole of the bug report — because this
-                  // route is `isFirst` and `maybePop` bubbles rather than pops.
-                  if (!widget.required) ...[
-                    IconButton(
-                      tooltip: 'Back',
+            AppHeader(
+              // Drawn only where it does something. A chevron on the required arrival is a
+              // picture of a control — it was the whole of the bug report — because this route
+              // is `isFirst` and `maybePop` bubbles rather than pops.
+              leading: widget.required
+                  ? null
+                  : HeaderIconButton(
+                      icon: Icons.arrow_back_rounded,
+                      label: 'Back',
                       onPressed: _busy ? null : () => Navigator.of(context).maybePop(),
-                      icon: const Icon(Icons.arrow_back_rounded),
                     ),
-                    const SizedBox(width: Space.xxs),
-                  ],
-                  Expanded(child: Text('Security', style: t.textTheme.titleLarge)),
-                  // The way out for the arrival that is being refused the other one. Someone
-                  // who cannot enrol right now — no authenticator app, a borrowed handset —
-                  // must still be able to put the phone down as somebody else.
-                  //
-                  // There is deliberately no twin of this for the satisfied case: that arrival's
-                  // exit is the banner's own CTA, which sits outside the scroll view and is on
-                  // screen at all times. Two controls that do one thing is how a person ends up
-                  // wondering whether they do the same thing.
-                  if (held)
-                    TextButton(
-                      onPressed: _busy ? null : _signOut,
-                      child: const Text('Sign out'),
-                    ),
-                ],
-              ),
+              title: 'Security',
+              // Whose account this is. Staff phones get handed around, and 2FA is the one setting
+              // where changing it on the wrong account is discovered much later. Both values
+              // come from the `public.users` row the session was built from.
+              subtitle: session == null ? null : '${session.fullName} · ${session.role.label}',
+              actions: [
+                // The way out for the arrival that is being refused the other one. Someone who
+                // cannot enrol right now — no authenticator app, a borrowed handset — must still
+                // be able to put the phone down as somebody else.
+                //
+                // There is deliberately no twin of this for the satisfied case: that arrival's
+                // exit is the banner's own CTA, which sits outside the scroll view and is on
+                // screen at all times. Two controls that do one thing is how a person ends up
+                // wondering whether they do the same thing.
+                if (held) _HeaderSignOut(onPressed: _busy ? null : _signOut),
+              ],
             ),
-            // Hoisted OUT of the scroll view and run full width, the shape
-            // `screen-subscription-expired` (4:1520) gives a banner: a strip the page hangs
-            // from rather than another card in the stack. warden_home_screen.dart does the same
-            // with its subscription notice, and for the same reason — this one is about the
-            // whole screen, not about one card on it.
-            //
-            // On a required arrival it is also the ANSWER TO "why can I not go back", standing
-            // there for the whole visit rather than only in reply to a gesture.
-            if (held)
-              NoticeBanner(
-                eyebrow: 'Required',
-                icon: Icons.lock_outline_rounded,
-                tone: ApnivaasColors.warning,
-                message: session == null
-                    ? 'Apnivaas requires two-factor authentication on this account, so this is '
-                        'the only screen it can open. Set it up below, or sign out.'
-                    : 'Apnivaas requires two-factor authentication on ${session.role.label} '
-                        'accounts, so this is the only screen it can open. Set it up below, '
-                        'or sign out.',
-              )
-            else if (widget.required)
-              NoticeBanner(
-                eyebrow: 'Done',
-                message: _note ?? 'Two-factor authentication is on for this account.',
-                tone: ApnivaasColors.success,
-                icon: Icons.check_circle_outline_rounded,
-                // The full-width CTA the banner was built with (4:1535), used here for the one
-                // thing this arrival now needs: the router will not move on its own, because
-                // nothing republished the phase when the factor was verified.
-                action: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    FilledButton(
-                      onPressed: _busy ? null : _leaveRequired,
-                      child: _busy ? const _ButtonSpinner() : const Text('Continue to Apnivaas'),
-                    ),
-                    // Beside the button that produced it. A Continue that spins and returns you
-                    // to the screen you were on, saying nothing, is the shape of bug this whole
-                    // change exists to remove — it must not come back as its own failure mode.
-                    if (_leaveError != null) ...[
-                      const SizedBox(height: Space.xs),
-                      _ErrorLine(message: _leaveError!),
-                    ],
-                  ],
-                ),
-              )
-            else if (_note != null)
-              NoticeBanner(
-                eyebrow: 'Saved',
-                message: _note!,
-                tone: ApnivaasColors.success,
-                icon: Icons.check_circle_outline_rounded,
+            if (notice != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, 0),
+                child: notice,
               ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.xxxl),
+                padding: EdgeInsets.fromLTRB(Space.md, Space.md, Space.md,
+                    Space.xxxl + MediaQuery.paddingOf(context).bottom),
                 children: [
-                  // Whose account this is. Staff phones get handed around, and 2FA is the one
-                  // setting where changing it on the wrong account is discovered much later.
-                  // Both values come from the `public.users` row the session was built from.
-                  if (session != null) ...[
-                    Text('${session.fullName} · ${session.role.label}',
-                        style: t.textTheme.bodySmall),
-                    const SizedBox(height: Space.md),
-                  ],
                   // FOUR STATES, KEPT APART. Checking, on/off, a failure worth retrying, and a
                   // refusal that retrying cannot help. The mockups only ever draw the last of
                   // those as a happy path, so this switch is the app's own contract.
@@ -469,15 +464,7 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
                     )
                   else
                     state.when(
-                      loading: () => const StateCard(
-                        badge: 'Checking',
-                        child: StateBody(
-                          icon: Icons.shield_outlined,
-                          title: 'Checking your security settings',
-                          message:
-                              'Asking Apnivaas whether an authenticator app is already set up.',
-                        ),
-                      ),
+                      loading: () => const _CardSkeleton(),
                       error: (e, _) => _Failed(
                         failure: e is MfaFailure
                             ? e
@@ -514,17 +501,20 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
                             )
                           : _OffCard(busy: _busy, error: _error, onStart: _begin),
                     ),
-                  const SizedBox(height: Space.lg),
+                  const SizedBox(height: Space.md),
                   const _Footnote(),
+                  if (!widget.required) ...[
+                    const SizedBox(height: Space.lg),
+                    const _AppLockCard(),
+                  ],
                   const SizedBox(height: Space.lg),
                   // THE DOCUMENTS, READABLE AT ANY TIME — not only at the gate that asked.
                   //
                   // This screen is where it lives because it is the one account screen ALL FIVE
-                  // roles can already reach: every role's header carries the shield (see the
-                  // note in features/super_admin/sa_overview_screen.dart), whereas "More" and
-                  // "Profile" exist for two roles between them. A policy a person can read only
-                  // in the second before agreeing to it is a policy nobody has read, and Play's
-                  // own guidance assumes the documents stay reachable after install.
+                  // roles can already reach, whereas "More" and "Profile" exist for two roles
+                  // between them. A policy a person can read only in the second before agreeing
+                  // to it is a policy nobody has read, and Play's own guidance assumes the
+                  // documents stay reachable after install.
                   const _LegalLink(),
                 ],
               ),
@@ -539,6 +529,181 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
 /// Six, everywhere. TOTP is six digits and every field here agrees about that.
 const _codeLength = 6;
 
+/// Sign out, in white, on the forest header. A [TextButton] and not an icon: the words are
+/// what makes it unmistakable as the one door out of a screen that refuses the back gesture.
+///
+/// Its label stops growing at 1.3x text, as the tab bar's do: beside the screen's title in one
+/// header row, a label that doubled would take the title's room and break "Security" in two.
+class _HeaderSignOut extends StatelessWidget {
+  const _HeaderSignOut({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.3,
+        child: TextButton(
+          onPressed: onPressed,
+          style: TextButton.styleFrom(
+            foregroundColor: ApnivaasColors.headerTitle,
+            disabledForegroundColor: ForestInk.disabled,
+            overlayColor: ApnivaasColors.headerTitle,
+          ),
+          child: const Text('Sign out'),
+        ),
+      );
+}
+
+/// The card every state of this screen is drawn in: the clay shield, the title, a status word,
+/// then whatever the state needs.
+///
+/// One anatomy for off, on, setting up and failed, so switching between them changes the words
+/// and the status rather than the shape of the screen.
+class _StateCard extends StatelessWidget {
+  const _StateCard({
+    required this.title,
+    required this.child,
+    this.status,
+    this.tone = StatusTone.neutral,
+    this.icon = ClayIcons.security,
+  });
+
+  final String title;
+
+  /// A word — "Off", "On", "Setting up". The chip sits on the card, never on a tint of its own
+  /// tone (see [ApnivaasSemantics.surfaceTintAlpha]).
+  final String? status;
+  final StatusTone tone;
+  final String icon;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final words = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: t.textTheme.titleMedium),
+        if (status != null) ...[
+          const SizedBox(height: Space.xxs),
+          StatusChip(label: status!, tone: tone, dot: true),
+        ],
+      ],
+    );
+    return FlatSurface(
+      borderRadius: Radii.rSurface,
+      padding: const EdgeInsets.all(Space.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Beside the well, as AuthHeading does — until that would break a word. At 2.0x on a
+          // 320dp phone the column beside the well is 188dp and "authentication" needs about
+          // 195, so it came out as "authenticati / on". There the well goes above the title.
+          LayoutBuilder(builder: (context, box) {
+            final beside = box.maxWidth - ClayWell.compactSize - Space.sm;
+            if (_breaksAWord(context, t.textTheme.titleMedium, beside)) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [ClayWell(icon, compact: true), const SizedBox(height: Space.sm), words],
+              );
+            }
+            return Row(
+              children: [
+                ClayWell(icon, compact: true),
+                const SizedBox(width: Space.sm),
+                Expanded(child: words),
+              ],
+            );
+          }),
+          const SizedBox(height: Space.md),
+          child,
+        ],
+      ),
+    );
+  }
+
+  /// Whether any one word of [title], at the reader's text size, is wider than [width].
+  /// Measured rather than guessed, because the titles differ by state.
+  bool _breaksAWord(BuildContext context, TextStyle? style, double width) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final direction = Directionality.of(context);
+    for (final word in title.split(' ')) {
+      final painter = TextPainter(
+        text: TextSpan(text: word, style: style),
+        textDirection: direction,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      final tooWide = painter.width > width;
+      painter.dispose();
+      if (tooWide) return true;
+    }
+    return false;
+  }
+}
+
+/// Round 3: the biometric app lock switch (core/auth/app_lock.dart).
+class _AppLockCard extends ConsumerStatefulWidget {
+  const _AppLockCard();
+
+  @override
+  ConsumerState<_AppLockCard> createState() => _AppLockCardState();
+}
+
+class _AppLockCardState extends ConsumerState<_AppLockCard> {
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _set(bool on) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final problem = await ref.read(appLockProvider.notifier).setEnabled(on);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _error = problem;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final session = ref.watch(sessionProvider);
+    final lock = ref.watch(appLockProvider);
+    if (session == null) return const SizedBox.shrink();
+    final on = lock.enabledFor(session);
+    // No status chip: the switch says it, and "On"/"Off" belong to the 2FA card above.
+    return _StateCard(
+      title: 'App lock',
+      icon: ClayIcons.kyc,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Ask for your fingerprint, face or phone PIN when Apnivaas opens, and when you come '
+            'back to it after a minute away. It stays on this phone; nothing biometric is sent '
+            'anywhere.',
+            style: t.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: Space.sm),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Lock Apnivaas on this phone'),
+            value: on,
+            onChanged: _busy || !lock.prefsLoaded ? null : _set,
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: Space.xs),
+            FormNote(_error!),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// 2FA is off: what it is, and the one button that changes it.
 class _OffCard extends StatelessWidget {
   const _OffCard({required this.busy, required this.error, required this.onStart});
@@ -550,14 +715,13 @@ class _OffCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return StateCard(
-      badge: 'Off',
-      tone: ApnivaasColors.warning,
+    return _StateCard(
+      title: 'Two-factor authentication',
+      status: 'Off',
+      tone: StatusTone.warning,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Two-factor authentication', style: t.textTheme.titleMedium),
-          const SizedBox(height: Space.xxs),
           Text(
             'Right now your password is the only thing between someone and this account. '
             'Add an authenticator app and Apnivaas will also ask for a 6-digit code each time '
@@ -565,16 +729,15 @@ class _OffCard extends StatelessWidget {
             style: t.textTheme.bodyMedium,
           ),
           const SizedBox(height: Space.md),
-          FilledButton.icon(
-            onPressed: busy ? null : onStart,
-            icon: busy
-                ? const _ButtonSpinner()
-                : const Icon(Icons.smartphone_rounded, size: IconSize.md),
-            label: const Text('Set up two-factor authentication'),
+          BusyFilledButton(
+            label: 'Set up two-factor authentication',
+            icon: Icons.smartphone_rounded,
+            busy: busy,
+            onPressed: onStart,
           ),
           if (error != null) ...[
             const SizedBox(height: Space.sm),
-            _ErrorLine(message: error!),
+            FormNote(error!),
           ],
         ],
       ),
@@ -611,14 +774,13 @@ class _OnCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return StateCard(
-      badge: 'On',
-      tone: ApnivaasColors.success,
+    return _StateCard(
+      title: 'Two-factor authentication',
+      status: 'On',
+      tone: StatusTone.success,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Two-factor authentication', style: t.textTheme.titleMedium),
-          const SizedBox(height: Space.xxs),
           Text(
             'Signing in asks for a 6-digit code from your authenticator app.',
             style: t.textTheme.bodyMedium,
@@ -660,11 +822,11 @@ class _OnCard extends StatelessWidget {
                 ),
                 const SizedBox(width: Space.xs),
                 Expanded(
-                  child: FilledButton(
-                    onPressed: (busy || controller.text.trim().length != _codeLength)
-                        ? null
-                        : onDisable,
-                    child: busy ? const _ButtonSpinner() : const Text('Turn off'),
+                  child: BusyFilledButton(
+                    label: 'Turn off',
+                    busy: busy,
+                    onPressed:
+                        controller.text.trim().length != _codeLength ? null : onDisable,
                   ),
                 ),
               ],
@@ -672,7 +834,7 @@ class _OnCard extends StatelessWidget {
           ],
           if (error != null) ...[
             const SizedBox(height: Space.sm),
-            _ErrorLine(message: error!),
+            FormNote(error!),
           ],
         ],
       ),
@@ -711,20 +873,27 @@ class _EnrolPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final ready = savedKey && controller.text.trim().length == _codeLength && !busy;
+    // Both gates, not either: a code alone would let someone finish setup without ever having
+    // stored the key, and the key alone proves nothing works.
+    final ready = savedKey && controller.text.trim().length == _codeLength;
 
-    return StateCard(
-      badge: 'Setting up',
+    return _StateCard(
+      title: 'Two-factor authentication',
+      status: 'Setting up',
+      tone: StatusTone.info,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('1. Add Apnivaas to your authenticator app', style: t.textTheme.titleMedium),
+          const _Step(number: 1, title: 'Add Apnivaas to your authenticator app'),
           const SizedBox(height: Space.xxs),
-          Text(
-            'Google Authenticator, Authy, 1Password — any app that makes 6-digit codes.',
-            style: t.textTheme.bodySmall,
+          Padding(
+            padding: const EdgeInsetsDirectional.only(start: _Step.indent),
+            child: Text(
+              'Google Authenticator, Authy, 1Password — any app that makes 6-digit codes.',
+              style: t.textTheme.bodySmall,
+            ),
           ),
-          const SizedBox(height: Space.sm),
+          const SizedBox(height: Space.md),
           if (enrollment.qrSvg != null) ...[
             Center(child: _QrPlate(svg: enrollment.qrSvg!)),
             const SizedBox(height: Space.sm),
@@ -741,22 +910,13 @@ class _EnrolPanel extends StatelessWidget {
           const SizedBox(height: Space.sm),
           const _SavedKeyWarning(),
           const SizedBox(height: Space.xs),
-          Material(
-            // A ListTile paints its fill and its ink onto the nearest Material, and the nearest
-            // thing above this is a decorated box. Flutter asserts on that arrangement — the
-            // same trap StaffCredentialsDialog documents.
-            type: MaterialType.transparency,
-            child: CheckboxListTile(
-              value: savedKey,
-              onChanged: busy ? null : (v) => onSavedKeyChanged(v ?? false),
-              controlAffinity: ListTileControlAffinity.leading,
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              title: Text('I have saved this key', style: t.textTheme.bodyMedium),
-            ),
+          CheckRow(
+            value: savedKey,
+            onChanged: busy ? null : onSavedKeyChanged,
+            label: 'I have saved this key',
           ),
           const SizedBox(height: Space.sm),
-          Text('2. Enter the code it shows', style: t.textTheme.titleMedium),
+          const _Step(number: 2, title: 'Enter the code it shows'),
           const SizedBox(height: Space.xs),
           _CodeField(
             controller: controller,
@@ -766,14 +926,13 @@ class _EnrolPanel extends StatelessWidget {
           ),
           if (error != null) ...[
             const SizedBox(height: Space.sm),
-            _ErrorLine(message: error!),
+            FormNote(error!),
           ],
           const SizedBox(height: Space.md),
-          FilledButton(
-            // Both gates, not either: a code alone would let someone finish setup without ever
-            // having stored the key, and the key alone proves nothing works.
+          BusyFilledButton(
+            label: 'Turn on two-factor',
+            busy: busy,
             onPressed: ready ? onConfirm : null,
-            child: busy ? const _ButtonSpinner() : const Text('Turn on two-factor'),
           ),
           const SizedBox(height: Space.xxs),
           TextButton(
@@ -786,12 +945,56 @@ class _EnrolPanel extends StatelessWidget {
   }
 }
 
+/// A numbered step: its number in a small Mist disc, then what to do.
+class _Step extends StatelessWidget {
+  const _Step({required this.number, required this.title});
+
+  final int number;
+  final String title;
+
+  static const _disc = Space.xl;
+
+  /// Where the step's supporting line starts, so it sits under the title and not the number.
+  static const indent = _disc + Space.sm;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final dark = t.brightness == Brightness.dark;
+    return MergeSemantics(
+      child: Row(
+        children: [
+          SizedBox.square(
+            dimension: _disc,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: dark ? ApnivaasColors.darkMist : ApnivaasColors.mist,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: MediaQuery.withNoTextScaling(
+                  child: Text(
+                    '$number',
+                    style: t.textTheme.titleSmall?.copyWith(color: t.colorScheme.primary),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: Space.sm),
+          Expanded(child: Text(title, style: t.textTheme.titleMedium)),
+        ],
+      ),
+    );
+  }
+}
+
 /// The QR, on a light plate.
 ///
-/// The plate is [ApnivaasColors.primaryContainer] — the design's cream — and NOT the themed
-/// surface, in either theme. A QR is a scanning target before it is a piece of interface: the
-/// modules GoTrue draws are dark, and on this app's #0b0d0f ground they would be invisible to
-/// the eye and to a camera alike. The web app makes the same call with `bg-white p-3`.
+/// The plate is the light card colour in BOTH themes, with a hairline — not the themed surface.
+/// A QR is a scanning target before it is a piece of interface: the modules GoTrue draws are
+/// dark, and on the dark theme's near-black card they would be invisible to the eye and to a
+/// camera alike. The web app makes the same call with `bg-white p-3`.
 class _QrPlate extends StatelessWidget {
   const _QrPlate({required this.svg});
 
@@ -801,9 +1004,10 @@ class _QrPlate extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(Space.sm),
-      decoration: const BoxDecoration(
-        color: ApnivaasColors.primaryContainer,
-        borderRadius: Radii.rControl,
+      decoration: BoxDecoration(
+        color: ApnivaasColors.card,
+        borderRadius: Radii.rCard,
+        border: Border.all(color: ApnivaasColors.cardBorder, width: Strokes.hairline),
       ),
       child: SizedBox.square(
         dimension: Space.huge * 4,
@@ -832,6 +1036,7 @@ class _SecretRow extends StatelessWidget {
     final t = Theme.of(context);
     return FlatSurface(
       weight: GlassWeight.regular,
+      border: false,
       borderRadius: Radii.rControl,
       padding: const EdgeInsets.fromLTRB(Space.sm, Space.xs, Space.xxs, Space.xs),
       child: Row(
@@ -840,7 +1045,8 @@ class _SecretRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('SETUP KEY', style: t.textTheme.labelSmall),
+                Text('Setup key', style: t.textTheme.labelMedium?.copyWith(
+                    color: t.colorScheme.onSurfaceVariant)),
                 const SizedBox(height: Space.xxs / 2),
                 SelectableText(
                   secret,
@@ -860,32 +1066,34 @@ class _SecretRow extends StatelessWidget {
   }
 }
 
-/// Why the key matters, in the tinted caution this app already uses for one-time values.
+/// Why the key matters, on a warning-tinted ground with a glyph — never colour alone.
+///
+/// The ground is the warning tone laid opaquely over the card at the chip's 10%, with no chip on
+/// it and the words in the body ink, so the caution is carried by the glyph and the sentence.
 class _SavedKeyWarning extends StatelessWidget {
   const _SavedKeyWarning();
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final tone = context.tones.warning;
+    final tones = context.tones;
     return Container(
       padding: const EdgeInsets.all(Space.sm),
       decoration: BoxDecoration(
-        color: context.tones.chipFill(tone),
-        borderRadius: Radii.rControl,
-        border: Border.all(color: context.tones.chipBorder(tone), width: Strokes.hairline),
+        color: tones.tintedSurface(ApnivaasColors.warning, GlassWeight.thin.surfaceOf(t.colorScheme)),
+        borderRadius: Radii.rButton,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.warning_amber_rounded, size: IconSize.sm, color: tone),
+          Icon(Icons.warning_amber_rounded, size: IconSize.md, color: tones.warning),
           const SizedBox(width: Space.xs),
           Expanded(
             child: Text(
               'This key is shown once. Apnivaas cannot show it again — starting setup over '
               'issues a different one. If you lose both the key and the phone, ask your '
               'administrator, because nobody can read it back to you.',
-              style: t.textTheme.bodySmall,
+              style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurface),
             ),
           ),
         ],
@@ -913,23 +1121,79 @@ class _Failed extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StateCard(
-      badge: failure.retryable ? 'Problem' : 'Refused',
-      tone: ApnivaasColors.error,
-      child: StateBody(
-        title: 'Could not read your security settings',
-        message: failure.message,
-        action: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (failure.retryable)
-              FilledButton(onPressed: onRetry, child: const Text('Try again')),
-            if (onSignOut != null) ...[
-              const SizedBox(height: Space.xs),
-              TextButton(onPressed: onSignOut, child: const Text('Sign out')),
-            ],
+    final t = Theme.of(context);
+    return _StateCard(
+      title: 'Could not read your security settings',
+      status: failure.retryable ? 'Problem' : 'Refused',
+      tone: StatusTone.error,
+      icon: ClayIcons.complaint,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(failure.message, style: t.textTheme.bodyMedium),
+          const SizedBox(height: Space.md),
+          if (failure.retryable)
+            FilledButton(onPressed: onRetry, child: const Text('Try again')),
+          if (onSignOut != null) ...[
+            const SizedBox(height: Space.xs),
+            TextButton(onPressed: onSignOut, child: const Text('Sign out')),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The checking state: the state card's own shape, breathing, while the server is asked whether
+/// an authenticator app is already set up.
+class _CardSkeleton extends StatelessWidget {
+  const _CardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return SkeletonPulse(
+      semanticLabel: 'Checking your security settings',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: t.colorScheme.surface,
+          borderRadius: Radii.rSurface,
+          border: Border.all(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.all(Space.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Skeleton(
+                    width: ClayWell.compactSize,
+                    height: ClayWell.compactSize,
+                    radius: Radii.rWell,
+                  ),
+                  SizedBox(width: Space.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Skeleton(widthFactor: 0.7),
+                        SizedBox(height: Space.xs),
+                        Skeleton(width: Space.huge, height: Space.lg),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: Space.md),
+              Skeleton(widthFactor: 0.95),
+              SizedBox(height: Space.xs),
+              Skeleton(widthFactor: 0.8),
+              SizedBox(height: Space.md),
+              Skeleton(height: Space.huge, radius: Radii.rButton),
+            ],
+          ),
         ),
       ),
     );
@@ -965,7 +1229,8 @@ class _CodeField extends StatelessWidget {
       autocorrect: false,
       enableSuggestions: false,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      style: t.textTheme.titleMedium?.copyWith(letterSpacing: 4),
+      style: ApnivaasType.tabular(t.textTheme.titleMedium ?? const TextStyle())
+          .copyWith(letterSpacing: 4),
       decoration: InputDecoration(
         labelText: label,
         counterText: '',
@@ -1019,41 +1284,8 @@ class _CopyButtonState extends State<_CopyButton> {
   Widget build(BuildContext context) => IconButton(
         onPressed: _copy,
         tooltip: _copied ? 'Copied' : 'Copy setup key',
+        color: Theme.of(context).colorScheme.primary,
         icon: Icon(_copied ? Icons.check_rounded : Icons.copy_rounded, size: IconSize.md),
-      );
-}
-
-class _ErrorLine extends StatelessWidget {
-  const _ErrorLine({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return Semantics(
-      liveRegion: true,
-      child: Text(
-        message,
-        style: t.textTheme.bodySmall?.copyWith(color: context.tones.error),
-      ),
-    );
-  }
-}
-
-class _ButtonSpinner extends StatelessWidget {
-  const _ButtonSpinner();
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-        width: IconSize.md,
-        height: IconSize.md,
-        // onPrimaryContainer, not onPrimary: theme.dart flips the filled button to the design's
-        // CREAM fill (`primaryContainer`, 4:83), so the ink on top of it is that pair's.
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          color: Theme.of(context).colorScheme.onPrimaryContainer,
-        ),
       );
 }
 
@@ -1063,11 +1295,10 @@ class _Footnote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return Text(
-      'Codes are made by your authenticator app, not sent by SMS, so they keep working with no '
-      'signal. Apnivaas holds no copy of your key and cannot recover it for you.',
-      style: t.textTheme.bodySmall,
+    return const InfoNote(
+      icon: Icons.info_outline_rounded,
+      message: 'Codes are made by your authenticator app, not sent by SMS, so they keep working '
+          'with no signal. Apnivaas holds no copy of your key and cannot recover it for you.',
     );
   }
 }
@@ -1082,39 +1313,11 @@ class _LegalLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return FlatSurface(
-      padding: EdgeInsets.zero,
-      child: InkWell(
-        onTap: () => openLegal(context),
-        borderRadius: Radii.rCard,
-        child: Padding(
-          padding: const EdgeInsets.all(Space.md),
-          child: Row(
-            children: [
-              Icon(Icons.policy_outlined,
-                  size: IconSize.md, color: t.colorScheme.onSurfaceVariant),
-              const SizedBox(width: Space.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Terms & Privacy', style: t.textTheme.titleSmall),
-                    const SizedBox(height: Space.xxs),
-                    Text(
-                      'What Apnivaas keeps about you, who can see it, and how long it is held. '
-                      'Version $kLegalVersion.',
-                      style: t.textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded,
-                  size: IconSize.md, color: t.colorScheme.onSurfaceVariant),
-            ],
-          ),
-        ),
-      ),
+    return ListRowCard(
+      icon: ClayIcons.agreement,
+      title: 'Terms & Privacy',
+      subtitle: 'What Apnivaas keeps about you, and why · version $kLegalVersion',
+      onTap: () => openLegal(context),
     );
   }
 }

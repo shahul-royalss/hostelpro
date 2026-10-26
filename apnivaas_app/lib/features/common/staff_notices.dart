@@ -36,7 +36,12 @@ import '../../core/auth/session.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/clay/clay_icons.dart';
+import '../../shared/clay/empty_state.dart';
+import '../../shared/clay/status_chip.dart';
 import '../../shared/glass/glass.dart';
+import '../../shared/illustrations.dart';
+import 'form_parts.dart';
 
 /// When a notice was posted, in the shortest form that is still exact.
 ///
@@ -84,40 +89,31 @@ class StaffNoticeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final tones = context.tones;
-    // The "For you" chip's own colour, and the only thing left that needs one. It is always the
-    // info tone now: the chip is drawn ONLY when the notice is addressed to this role alone, so
-    // the branch the old grey served no longer exists.
-    final tone = tones.info;
 
-    return GlassCard(
+    // The owner's notice card, without the owner's take-down control: a notice looks the same
+    // on every noticeboard because it IS the same notice.
+    return FlatSurface(
+      borderRadius: Radii.rSurface,
+      padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── THE SAME BLUE MEGAPHONE A NOTICE WEARS EVERYWHERE ELSE ────────────────
+              // ── THE MEGAPHONE A NOTICE WEARS EVERYWHERE ELSE ──────────────────────────────
               //
               // This was a hand-built chip whose colour was the AUDIENCE: blue when the notice
-              // was addressed to this role alone, grey otherwise. Two things were wrong with
-              // that once the domain layer existed. The student's NoticeTile and the owner's
-              // card head every notice with the blue notices plate, so on a staff home the
-              // "All notices" link was blue while the notices above it were usually grey — and
-              // blue meant "a notice" on one screen and "for you" on the other, which is a
-              // classification wearing an identity's colour.
-              //
-              // The audience distinction did not go anywhere: it is spelled out in the audience
-              // chip below, in words, which is where a classification belongs.
-              const DomainIcon(
-                domain: ApnivaasDomain.notices,
-                icon: Icons.campaign_rounded,
-                size: DomainIconSize.sm,
-              ),
+              // was addressed to this role alone, grey otherwise — a classification wearing an
+              // identity's colour. The clay megaphone is what says "a notice" on every screen
+              // now, the owner's and the resident's included, and the audience distinction is
+              // spelled out in the "For you" chip below, in words, which is where a
+              // classification belongs.
+              const ClayIcon(ClayIcons.announcement, size: ClaySize.list),
               const SizedBox(width: Space.sm),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.only(top: Space.xxs),
+                  padding: const EdgeInsets.only(top: Space.sm),
                   child: Text(
                     notice.title,
                     style: t.textTheme.titleMedium,
@@ -141,26 +137,14 @@ class StaffNoticeCard extends StatelessWidget {
             runSpacing: Space.xs,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text(noticePostedLabel(notice.createdAt), style: t.textTheme.labelSmall),
+              // Info, the "here is something you should know" tone, and only ever drawn when
+              // the notice is addressed to this role alone.
               if (_addressedToThisRoleAlone)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: Space.xs,
-                    vertical: Space.xxs / 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: tones.chipFill(tone),
-                    borderRadius: Radii.rTiny,
-                    border: Border.all(
-                      color: tones.chipBorder(tone),
-                      width: Strokes.hairline,
-                    ),
-                  ),
-                  child: Text(
-                    'For you',
-                    style: t.textTheme.labelSmall?.copyWith(color: tone),
-                  ),
-                ),
+                const StatusChip(label: 'For you', tone: StatusTone.info, dot: true),
+              Text(
+                noticePostedLabel(notice.createdAt),
+                style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+              ),
             ],
           ),
         ],
@@ -195,16 +179,27 @@ class StaffNoticeList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
-
     if (page.isEmpty) {
+      final message =
+          emptyMessage ?? 'Anything the owner posts to this hostel appears here.';
+      // The full noticeboard gets the first-run art; the home screen's peek gets the compact
+      // card, so an empty peek does not take over a dashboard.
       return Padding(
         padding: EdgeInsets.all(scrollable ? Space.md : 0),
-        child: Text(
-          emptyMessage ??
-              'No notices yet. Anything the owner posts to this hostel appears here.',
-          style: t.textTheme.bodySmall,
-        ),
+        child: scrollable
+            ? EmptyState(
+                icon: ClayIcons.announcement,
+                title: 'No notices yet',
+                body: message,
+              )
+            : StateCard(
+                child: StateBody(
+                  illustration: EmptyArt.notices,
+                  icon: Icons.campaign_rounded,
+                  title: 'No notices yet',
+                  message: message,
+                ),
+              ),
       );
     }
 
@@ -274,7 +269,7 @@ class _LoadMoreState extends ConsumerState<_LoadMore> {
               ? const SizedBox(
                   height: IconSize.md,
                   width: IconSize.md,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(strokeWidth: Strokes.focus),
                 )
               : const Text('Show older notices'),
         ),
@@ -282,14 +277,7 @@ class _LoadMoreState extends ConsumerState<_LoadMore> {
         // that visibly did nothing — the exact shape of bug the house rule forbids.
         if (_message != null) ...[
           const SizedBox(height: Space.xs),
-          Text(
-            _message!,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: Theme.of(context).colorScheme.error),
-            textAlign: TextAlign.center,
-          ),
+          FormNote(_message!),
         ],
       ],
     );

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/clay/clay.dart' show ListRowCard, ListSkeleton;
 import '../../../shared/glass/glass.dart';
 import '../actions/sheet_scaffold.dart';
 import '../data/warden_providers.dart';
@@ -59,7 +60,7 @@ class _ComplaintSheet extends ConsumerWidget {
         if (row == null) {
           return const SheetBody(
             title: 'Complaint',
-            child: EmptyState(
+            child: WardenEmptyState(
               icon: Icons.report_off_outlined,
               title: 'That complaint is not visible',
               detail: 'It may belong to another hostel.',
@@ -133,18 +134,13 @@ class _LoadedState extends ConsumerState<_Loaded> {
           _Facts(complaint: complaint),
           if (complaint.description != null) ...[
             const SizedBox(height: Space.sm),
-            // ticket-detail-view.png sets the reported wording in a well INSIDE the card — a
-            // deeper surface with its own hairline — so it reads as somebody's words rather
-            // than as the app's. surface-container-lowest is the design's own deepest well.
+            // The reported wording sits in a well of its own, the same well as the facts above
+            // it, so it reads as somebody's words rather than as the app's.
             Container(
-              padding: const EdgeInsets.all(Space.sm),
+              padding: const EdgeInsets.all(Space.md),
               decoration: BoxDecoration(
-                color: t.colorScheme.surfaceContainerLowest,
-                borderRadius: Radii.rControl,
-                border: Border.all(
-                  color: t.colorScheme.outlineVariant,
-                  width: Strokes.hairline,
-                ),
+                color: t.colorScheme.surfaceContainer,
+                borderRadius: Radii.rCard,
               ),
               child: Text(complaint.description!, style: t.textTheme.bodyLarge),
             ),
@@ -179,8 +175,8 @@ class _LoadedState extends ConsumerState<_Loaded> {
   }
 }
 
-/// The facts card at the top of ticket-detail-view.png: `label-caps` eyebrows over their
-/// values, two to a row.
+/// The facts card at the top of ticket-detail-view.png: small labels over their values, two to
+/// a row, in a well.
 ///
 /// THE MOCKUP'S THIRD FACT IS NOT BUILT. It heads this card with a TICKET ID (`#MNT-8842`) and
 /// a PRIORITY (`⚠ High`). public.complaints has neither: its key is a uuid with no human-facing
@@ -261,7 +257,7 @@ class _Fact extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CapsLabel(label),
+        EyebrowLabel(label),
         const SizedBox(height: Space.xxs / 2),
         Text(
           value,
@@ -275,7 +271,7 @@ class _Fact extends StatelessWidget {
 /// open → in progress → resolved, with where this one has got to.
 ///
 /// THE SHAPE IS assign-bed-select-bed.png's stepper: a filled disc with a tick behind, a ringed
-/// disc for where you are, a hollow one ahead, `label-caps` underneath, and a connector that is
+/// disc for where you are, a hollow one ahead, the state's name underneath, and a connector that is
 /// solid up to the current step and a hairline after it. It used to be three identical circles
 /// joined by three identical bars, which said "three steps" without saying which one you were
 /// standing on.
@@ -322,7 +318,7 @@ class _Workflow extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: i <= reached
                       ? context.tones.chipFill(toneFor(context, _order[i]))
-                      : Colors.transparent,
+                      : t.colorScheme.surface,
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: i <= reached
@@ -340,11 +336,11 @@ class _Workflow extends StatelessWidget {
                         tone: i == reached
                             ? toneFor(context, _order[i])
                             : t.colorScheme.outlineVariant,
-                        size: Space.xs - 2,
+                        size: Space.tight,
                       ),
               ),
               const SizedBox(height: Space.xxs),
-              CapsLabel(
+              EyebrowLabel(
                 _order[i].label,
                 tone: i <= reached ? toneFor(context, _order[i]) : null,
               ),
@@ -392,7 +388,7 @@ class _Buttons extends StatelessWidget {
         ),
       // No green repaint. A FilledButton is ALREADY "the main action here"; painting it
       // #188D43 added no meaning and put its own white label at 4.26:1, under the 4.5:1 a
-      // 15px button label needs. The theme's indigo measures 5.98:1.
+      // 15px button label needs. The theme's forest puts it at 9.51:1.
       ComplaintStatus.inProgress => FilledButton.icon(
           onPressed: onResolve,
           icon: const Icon(Icons.check_rounded, size: IconSize.md),
@@ -419,29 +415,21 @@ class _RaisedBy extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
-    final student = ref.watch(studentProvider(studentId)).value;
+    final read = ref.watch(studentProvider(studentId));
+    final student = read.value;
     if (student == null) {
-      return Text('Loading the resident…', style: t.textTheme.bodySmall);
+      // The row's own shape while it is on its way; a plain sentence once the read has
+      // answered with nothing — a failure, or a row this account cannot see — rather than a
+      // skeleton that pulses for ever.
+      return read.isLoading
+          ? const ListSkeleton(rows: 1, semanticLabel: 'Loading the resident')
+          : Text("The resident's record is not available.", style: t.textTheme.bodySmall);
     }
-    return TapRow(
+    return ListRowCard(
+      avatarName: student.fullName,
+      title: student.fullName,
+      subtitle: student.phone,
       onTap: () => showStudentSheet(context, studentId: student.id),
-      child: Row(
-        children: [
-          Avatar(name: student.fullName),
-          const SizedBox(width: Space.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(student.fullName, style: t.textTheme.titleMedium,
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                MetaLine([(Icons.phone_outlined, student.phone)]),
-              ],
-            ),
-          ),
-          const Icon(Icons.chevron_right_rounded, size: IconSize.lg),
-        ],
-      ),
     );
   }
 }

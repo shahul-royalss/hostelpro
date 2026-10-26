@@ -22,8 +22,10 @@ import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/auth_endpoint.dart';
 import 'package:mobile/core/auth/google_id_token.dart';
 import 'package:mobile/core/auth/session.dart';
+import 'package:mobile/core/auth/social_sign_in.dart';
 import 'package:mobile/core/theme/theme.dart';
 import 'package:mobile/features/auth/login_screen.dart';
+import 'package:mobile/features/auth/social_buttons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'fake_session.dart';
@@ -73,6 +75,10 @@ class _FakeGoogle implements GoogleIdTokenSource {
   @override
   Future<void> forget() async => forgets++;
 }
+
+/// The round Google button (round 3), found by its screen-reader label.
+final _googleButton = find.byWidgetPredicate(
+    (w) => w is SocialCircleButton && w.label == 'Continue with Google');
 
 void main() {
   // ═════════════════════════════════════════════════════════════════════════════════════════
@@ -272,6 +278,42 @@ void main() {
       expect(google.forgets, 0, reason: 'a successful account is remembered for next time');
     });
 
+    test('SIGN-UP: a persona rides along only when given, and success is reported as signed in',
+        () async {
+      final google = _FakeGoogle();
+      final w = world(google);
+      await w.container.read(authControllerProvider.future);
+
+      final attempt = await w.container
+          .read(authControllerProvider.notifier)
+          .continueWithGoogle(persona: SignupPersona.tenant);
+
+      expect(attempt.message, isNull);
+      expect(attempt.signedIn, isTrue);
+      expect(w.calls.single['persona'], 'tenant');
+    });
+
+    test('NO ACCOUNT carries its machine code, so the screen branches without reading words',
+        () async {
+      final google = _FakeGoogle();
+      final w = world(
+        google,
+        refusal: const FunctionsHttpException(status: 403, details: {
+          'ok': false,
+          'error': 'No account yet — create one',
+          'code': 'no_account',
+        }),
+      );
+      await w.container.read(authControllerProvider.future);
+
+      final attempt = await w.container.read(authControllerProvider.notifier).continueWithGoogle();
+
+      expect(attempt.noAccount, isTrue);
+      expect(attempt.signedIn, isFalse);
+      expect(attempt.message, 'No account yet — create one');
+      expect(w.calls.single.containsKey('persona'), isFalse);
+    });
+
     test('a closed account sheet says nothing and asks the server nothing', () async {
       final google = _FakeGoogle(onRequest: const GoogleTokenCancelled());
       final w = world(google);
@@ -384,7 +426,7 @@ void main() {
       final google = _FakeGoogle(available: false);
       await pump(tester, google);
 
-      expect(find.text('Continue with Google'), findsNothing);
+      expect(_googleButton, findsNothing);
       expect(google.quietRequests, 0);
     });
 
@@ -393,7 +435,7 @@ void main() {
       final google = _FakeGoogle();
       await pump(tester, google);
 
-      expect(find.text('Continue with Google'), findsOneWidget);
+      expect(_googleButton, findsOneWidget);
       expect(google.quietRequests, 1, reason: 'the "automated" sign-in for a returning user');
       expect(google.requests, 0, reason: 'the account sheet opens only when asked');
       expect(tester.takeException(), isNull);
@@ -404,8 +446,8 @@ void main() {
       final google = _FakeGoogle(onRequest: const GoogleTokenFailed(GoogleSignInWords.notOnThisPhone));
       await pump(tester, google);
 
-      await tester.ensureVisible(find.text('Continue with Google'));
-      await tester.tap(find.text('Continue with Google'));
+      await tester.ensureVisible(_googleButton);
+      await tester.tap(_googleButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -417,15 +459,15 @@ void main() {
       final google = _FakeGoogle(onRequest: const GoogleTokenCancelled());
       await pump(tester, google);
 
-      await tester.ensureVisible(find.text('Continue with Google'));
-      await tester.tap(find.text('Continue with Google'));
+      await tester.ensureVisible(_googleButton);
+      await tester.tap(_googleButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(google.requests, 1);
       expect(find.text(GoogleSignInWords.tryAgain), findsNothing);
       expect(find.text(GoogleSignInWords.notSetUp), findsNothing);
-      expect(find.text('Continue with Google'), findsOneWidget);
+      expect(_googleButton, findsOneWidget);
     });
   });
 }

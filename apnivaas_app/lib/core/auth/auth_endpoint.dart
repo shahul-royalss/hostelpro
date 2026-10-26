@@ -47,6 +47,9 @@ const mobileAuthFunction = 'mobile-auth';
 const _actionSignIn = 'signin';
 const _actionMfa = 'mfa';
 const _actionGoogle = 'google';
+const _actionFacebook = 'facebook';
+const _actionTruecaller = 'truecaller';
+const _actionSignupPassword = 'signup_password';
 
 /// What the server decided. Four outcomes, because they want four different sentences.
 ///
@@ -74,9 +77,16 @@ final class AuthGranted extends AuthVerdict {
 /// enforces that (it returns one sentence for both); this class just never invents a
 /// distinction the server refused to make.
 final class AuthRejected extends AuthVerdict {
-  const AuthRejected(this.message);
+  const AuthRejected(this.message, {this.code, this.fieldErrors = const {}});
+
+  /// The server's machine code (`no_account`, `staff_refused`, `phone_in_use`, …), when it sent
+  /// one. Branch on this, never on [message].
+  final String? code;
 
   final String message;
+
+  /// Sign-up validation: the server's sentence per field (`fullName`, `email`, …).
+  final Map<String, String> fieldErrors;
 }
 
 /// The limiter tripped. NOT a verdict on the credential — it was never checked.
@@ -101,7 +111,10 @@ final class AuthThrottled extends AuthVerdict {
 
 /// We could not get an answer. Never render this as a credential problem.
 final class AuthUnavailable extends AuthVerdict {
-  const AuthUnavailable(this.message);
+  const AuthUnavailable(this.message, {this.code});
+
+  /// The server's machine code — `not_configured` for a provider whose secrets are missing.
+  final String? code;
 
   final String message;
 }
@@ -181,11 +194,68 @@ class MobileAuthEndpoint {
   Future<AuthVerdict> signInWithGoogle({
     required String idToken,
     required String nonce,
+    String? persona,
   }) =>
       _call(
-        {'action': _actionGoogle, 'idToken': idToken, 'nonce': nonce},
+        {
+          'action': _actionGoogle,
+          'idToken': idToken,
+          'nonce': nonce,
+          // ONLY from Create your account. Absent means "sign in only", which keeps the
+          // sign-in body byte-for-byte what it was (docs/self-signup-api.md §1).
+          'persona': ?persona,
+        },
         unavailable: googleUnavailable,
         rejected: googleRejected,
+      );
+
+  /// Facebook (docs/self-signup-api.md §1.2). Hidden in the UI until the app ID exists.
+  Future<AuthVerdict> signInWithFacebook({required String accessToken, String? persona}) => _call(
+        {'action': _actionFacebook, 'accessToken': accessToken, 'persona': ?persona},
+        unavailable: facebookUnavailable,
+        rejected: facebookRejected,
+      );
+
+  /// Truecaller (docs/self-signup-api.md §1.3): an authorization code and its PKCE verifier.
+  Future<AuthVerdict> signInWithTruecaller({
+    required String code,
+    required String codeVerifier,
+    String? persona,
+  }) =>
+      _call(
+        {
+          'action': _actionTruecaller,
+          'code': code,
+          'codeVerifier': codeVerifier,
+          'persona': ?persona,
+        },
+        unavailable: truecallerUnavailable,
+        rejected: truecallerRejected,
+      );
+
+  /// Manual sign-up (docs/round3-api.md §1.1). Same success body as [signIn].
+  Future<AuthVerdict> signUpWithPassword({
+    required String persona,
+    required String fullName,
+    required String phone,
+    required String email,
+    required String password,
+    String? city,
+    String? pincode,
+  }) =>
+      _call(
+        {
+          'action': _actionSignupPassword,
+          'persona': persona,
+          'fullName': fullName,
+          'phone': phone,
+          'email': email,
+          'password': password,
+          'city': ?city,
+          'pincode': ?pincode,
+        },
+        unavailable: signUpUnavailable,
+        rejected: signUpRejected,
       );
 
   Future<AuthVerdict> _call(
@@ -237,6 +307,7 @@ class MobileAuthEndpoint {
     String rejected = genericRejection,
   }) {
     final serverMessage = _messageFrom(details);
+    final code = _codeFrom(details);
 
     if (status == 429) {
       final wait = _retryAfterFrom(details);
@@ -252,22 +323,43 @@ class MobileAuthEndpoint {
     // fails this way, and telling those users their password is wrong would send every one of
     // them to reset a password that was never the problem.
     if (status == 0 || status == 404 || status == 408 || status >= 500) {
-      return AuthUnavailable(serverMessage ?? unavailable);
+      return AuthUnavailable(serverMessage ?? unavailable, code: code);
     }
 
     if (status == 401) {
       // Not our envelope: the platform gateway refusing the bearer token before our code ran.
-      return AuthRejected(serverMessage ?? sessionEnded);
+      return AuthRejected(serverMessage ?? sessionEnded, code: code);
     }
 
     // 400 and 403 — the function answered, and its message is already written for a person and
     // already refuses to distinguish "no such account" from "wrong password".
-    return AuthRejected(serverMessage ?? rejected);
+    return AuthRejected(serverMessage ?? rejected, code: code, fieldErrors: _fieldsFrom(details));
   }
 
   /// Pulls `error` out of the `{ ok: false, error: "..." }` envelope every Apnivaas function
   /// returns. Length-capped: this string goes straight onto a screen, and a bounded quote of
   /// our own server is fine while an unbounded one is a layout bug waiting for a bad day.
+  /// The machine code beside the sentence, when there is one. Short and word-shaped only: it is
+  /// compared against constants, never shown.
+  static String? _codeFrom(Object? details) {
+    if (details is! Map) return null;
+    final code = details['code'];
+    if (code is! String || !RegExp(r'^[a-z_]{1,40}$').hasMatch(code)) return null;
+    return code;
+  }
+
+  /// `fieldErrors` from a sign-up refusal: short strings under known keys only.
+  static Map<String, String> _fieldsFrom(Object? details) {
+    final raw = details is Map ? details['fieldErrors'] : null;
+    if (raw is! Map) return const {};
+    const keys = {'fullName', 'email', 'phone', 'password', 'city', 'pincode'};
+    return {
+      for (final e in raw.entries)
+        if (keys.contains(e.key) && e.value is String && (e.value as String).length <= 240)
+          e.key as String: e.value as String,
+    };
+  }
+
   static String? _messageFrom(Object? details) {
     if (details is! Map) return null;
     final error = details['error'];
@@ -310,6 +402,20 @@ class MobileAuthEndpoint {
       'your password.';
 
   static const googleRejected = "Google sign-in didn't go through. Please try again.";
+
+  static const facebookUnavailable =
+      'Facebook sign-in is temporarily unavailable. Please try again in a minute.';
+  static const facebookRejected = "Facebook sign-in didn't go through. Please try again.";
+  static const truecallerUnavailable =
+      'Truecaller sign-in is temporarily unavailable. Please try again in a minute.';
+  static const truecallerRejected = "Truecaller sign-in didn't go through. Please try again.";
+
+  /// Machine codes from docs/self-signup-api.md §0.2.
+  static const signUpUnavailable =
+      'Sign-up is temporarily unavailable. Please try again in a minute.';
+  static const signUpRejected = "We couldn't create your account. Please check your details.";
+  static const codeNoAccount = 'no_account';
+  static const codeNotConfigured = 'not_configured';
 
   static const unreachable =
       'Cannot reach Apnivaas. Check your connection and try again.';

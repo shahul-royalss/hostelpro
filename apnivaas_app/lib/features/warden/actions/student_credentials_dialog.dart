@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/theme/tokens.dart';
+import '../../../shared/clay/clay_icons.dart' show ClayIcon, ClayIcons;
 import '../../../shared/glass/glass.dart';
 import '../data/warden_repository.dart';
 import '../widgets/warden_ui.dart';
@@ -58,7 +59,10 @@ class StudentCredentialsDialog extends StatefulWidget {
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
-      barrierColor: ApnivaasColors.midnight.withValues(alpha: 0.48),
+      // The forest scrim every sheet in the app dims the page with.
+      barrierColor: Theme.of(context).brightness == Brightness.dark
+          ? ApnivaasColors.darkScrim
+          : ApnivaasColors.scrim,
       builder: (_) => StudentCredentialsDialog(credentials: credentials, bedLabel: bedLabel),
     );
   }
@@ -90,8 +94,8 @@ class _StudentCredentialsDialogState extends State<StudentCredentialsDialog> {
         insetPadding: const EdgeInsets.all(Space.md),
         child: GlassSurface(
           weight: GlassWeight.thick,
-          borderRadius: Radii.rCard,
-          shadows: Shadows.level3,
+          borderRadius: Radii.rHero,
+          shadows: Shadows.dialog,
           padding: const EdgeInsets.all(Space.lg),
           child: SingleChildScrollView(
             child: Column(
@@ -100,9 +104,21 @@ class _StudentCredentialsDialogState extends State<StudentCredentialsDialog> {
               children: [
                 Row(
                   children: [
-                    // Sign-in is the security domain, which is the brand's own gold — the
-                    // same plate the Home tab and the header's shield wear.
-                    const DomainIcon(domain: ApnivaasDomain.security, icon: Icons.key_rounded),
+                    // The clay tick on a Mist disc: the registration went through, which is
+                    // the news this dialog opens with. The owner's staff-credentials dialog
+                    // opens on the same art.
+                    Container(
+                      width: ClaySize.tile,
+                      height: ClaySize.tile,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: t.brightness == Brightness.dark
+                            ? ApnivaasColors.darkMist
+                            : ApnivaasColors.mist,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const ClayIcon(ClayIcons.success, size: ClaySize.list),
+                    ),
                     const SizedBox(width: Space.sm),
                     Expanded(
                       child: Column(
@@ -182,7 +198,6 @@ class _StudentCredentialsDialogState extends State<StudentCredentialsDialog> {
                     Expanded(
                       child: FilledButton(
                         onPressed: _confirmed ? () => Navigator.of(context).pop() : null,
-                        style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
                         child: const Text('Done'),
                       ),
                     ),
@@ -218,7 +233,11 @@ class _CredentialRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    // In the well rather than on the card: the two things to copy sit IN the dialog, inset,
+    // which is what marks them as the payload rather than as more explanation.
     return FlatSurface(
+      weight: GlassWeight.regular,
+      border: false,
       padding: const EdgeInsets.fromLTRB(Space.sm, Space.xs, Space.xxs, Space.xs),
       child: Row(
         children: [
@@ -226,8 +245,8 @@ class _CredentialRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label.toUpperCase(), style: t.textTheme.labelSmall),
-                const SizedBox(height: 2),
+                EyebrowLabel(label),
+                const SizedBox(height: Space.hair),
                 SelectableText(
                   value,
                   style: monospace
@@ -297,7 +316,7 @@ class _CopyButtonState extends State<CopyButton> {
     if (!mounted) return;
     setState(() => _copied = true);
     // Long enough to be read, short enough that a second copy is obviously a second copy.
-    await Future<void>.delayed(const Duration(milliseconds: 1600));
+    await Future<void>.delayed(Motion.confirmed);
     if (mounted) setState(() => _copied = false);
   }
 
@@ -309,7 +328,6 @@ class _CopyButtonState extends State<CopyButton> {
         onPressed: _copy,
         icon: Icon(icon, size: IconSize.sm),
         label: Text(_copied ? 'Copied' : 'Copy ${widget.label}'),
-        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
       );
     }
     return IconButton(

@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
+import '../../../core/theme/typography.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
-import '../../../shared/glass/glass.dart';
+import '../../../shared/clay/clay.dart';
 import '../../payments/payments.dart';
 import 'common.dart';
 import 'format.dart';
+import '../pay_upi.dart';
 
 /// The rent cards — the one thing a resident opens this app to check.
 ///
@@ -18,6 +20,42 @@ import 'format.dart';
 /// (`balance`, which clamps an overpayment to zero because an overpayment is not a debt). The
 /// UI never adds two amounts together, so what is drawn here cannot drift from what the
 /// warden's collections screen shows for the same person.
+
+/// The card every rent surface in this file sits on: the card fill at the surface radius with a
+/// hairline. Not an [OutlineCard] — that is the history row's widget, and the one a tapped month
+/// is found by — and never tappable: the rent card's actions are its buttons.
+class _RentShell extends StatelessWidget {
+  const _RentShell({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cardSurfaceOf(context),
+        borderRadius: Radii.rSurface,
+        border: Border.all(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
+      ),
+      child: Padding(padding: const EdgeInsets.all(Space.md), child: child),
+    );
+  }
+}
+
+/// A money figure that shrinks before it truncates. "₹1,20,0…" would be a different number;
+/// a smaller "₹1,20,000" is the same one.
+class _Figure extends StatelessWidget {
+  const _Figure(this.value, {required this.style});
+  final String value;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) => FittedBox(
+    fit: BoxFit.scaleDown,
+    alignment: AlignmentDirectional.centerStart,
+    child: Text(value, style: style, maxLines: 1, softWrap: false),
+  );
+}
 
 /// This month's rent, stated plainly and without a number that is not in the database.
 ///
@@ -66,32 +104,39 @@ class RentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final rent = row;
+    // "Rent · August" — the month's name, in the case the rest of the card is written in. The
+    // year is established by the screen; a figure's eyebrow does not need to say it again.
+    final eyebrow = 'Rent · ${_titleCase(monthEyebrow(periodMonth))}';
+    final eyebrowStyle = t.textTheme.titleSmall?.copyWith(color: t.colorScheme.onSurfaceVariant);
 
     if (rent == null) {
-      return GlassCard(
-        child: Column(
+      return _RentShell(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CardHeader(
-              label: 'Rent · ${monthEyebrow(periodMonth)}',
-              // The money wallet, in the money colour: there is no row and so no status to
-              // state, and the corner says only what KIND of card this is. See [ApnivaasDomain].
-              trailing: const DomainIcon(
-                domain: ApnivaasDomain.money,
-                icon: Icons.account_balance_wallet_rounded,
-                size: DomainIconSize.sm,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(eyebrow, style: eyebrowStyle),
+                  const SizedBox(height: Space.xs),
+                  // titleLarge, not the figure's slot. There is no figure here, and a sentence
+                  // set at the size of one shouts louder than the card ever does when it has
+                  // something to say.
+                  Text('No rent record yet', style: t.textTheme.titleLarge),
+                  const SizedBox(height: Space.xxs),
+                  Text(
+                    'Your warden has not set up this month for you. Ask at the office if you '
+                    'think that is wrong.',
+                    style: t.textTheme.bodyMedium,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: Space.sm),
-            // titleLarge, not the hero slot. There is no figure here, and a sentence set at 32px
-            // shouts louder than the rent card ever does when it has something to say.
-            Text('No rent record yet', style: t.textTheme.titleLarge),
-            const SizedBox(height: Space.xxs),
-            Text(
-              'Your warden has not set up this month for you. Ask at the office if you think '
-              'that is wrong.',
-              style: t.textTheme.bodyMedium,
-            ),
+            const SizedBox(width: Space.sm),
+            // The wallet says what KIND of card this is; there is no row, and so no state for
+            // the art to carry.
+            const ClayIcon(ClayIcons.money, size: ClaySize.tile),
           ],
         ),
       );
@@ -99,166 +144,145 @@ class RentCard extends StatelessWidget {
 
     final tone = feeTone(rent.status);
     // [feeTone] is context-free, so what it returns is CANONICAL — legible as a shape in both
-    // themes and as nothing else. The hero figure below is `display-lg`, 48px TYPE, so it is
-    // painted with the resolved value; [StatusPill] and [IconTile] are handed the canonical one
-    // and resolve it for themselves.
+    // themes and as nothing else. The figure below is 28px TYPE, so it is painted with the
+    // resolved value; [StatusPill] and [Meter] are handed the canonical one and resolve it for
+    // themselves.
     final accent = context.tones.resolve(tone);
     final owes = rent.balance > 0;
 
-    // ═══ THE CARD'S GROUND CARRIES THE FEE STATE ═══
+    // ═══ THE FIGURE, THE WORD AND THE ART ═══
     //
-    // This is the one figure a resident opens the app for, so this is the one card in the
-    // resident shell that states its status with its whole surface instead of with a badge in
-    // the corner. Paid is green, part-paid amber, unpaid red — the same three meanings
-    // [feeTone] already assigned, at card scale.
+    // This is the one figure a resident opens the app for, so it is the largest thing on the
+    // card and the only one painted in the state's ink. The state is also said in a WORD, on
+    // the chip beneath it — the half a red-green deficiency depends on — and the clay art in
+    // the corner changes with it: the alarm clock while something is owed, the ticked receipt
+    // once nothing is.
     //
-    // THE PILL BECAME A WORD, and that is a measurement rather than a preference. A chip's
-    // fill is a tint of its tone; over a ground that is already a tint of the same tone it
-    // lands twice as far toward its own label and measures 3.98:1 in the dark theme, which no
-    // alpha rescues. So the ground does the chip's job and the word sits on it at full
-    // strength — 4.56:1 dark, 5.83:1 light. See [ApnivaasSemantics.surfaceTintAlpha] and
-    // [StatusWord]. The WORD itself never went anywhere, because that is the half a red-green
-    // deficiency depends on.
-    return ToneSurface(
-      tone: tone,
-      // Null: the status word is not a header here, it sits on the hero figure's own baseline
-      // where the mockup puts it. [ToneSurface] allows that for exactly this case.
-      statusLabel: null,
-      semanticLabel: _spoken(rent),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // A BARE GLYPH IN THE FEE TONE, not a tinted box. An [IconTile]'s fill is a 10% tint
-          // of the tone it is given, and this card's GROUND is already a 10% tint of that same
-          // tone — the plate landed twice as far toward its own glyph and effectively vanished,
-          // announcing nothing. It is the pairing ApnivaasSemantics.surfaceTintAlpha rules out
-          // for a chip, one layer up, and the same stack the hero RoomBedCard and the manager's
-          // menu card both had to unwind. The ground carries the state; the mark only has to be
-          // legible on it, and the ink at full strength is (4.56:1 dark, 5.83:1 light).
-          CardHeader(
-            label: 'Rent · ${monthEyebrow(periodMonth)}',
-            trailing: Icon(
-              Icons.account_balance_wallet_rounded,
-              size: IconSize.md,
-              color: accent,
-            ),
-          ),
-          const SizedBox(height: Space.sm),
-          // The hero figure is what is OUTSTANDING when anything is outstanding, and what was
-          // paid when nothing is. A resident checking this screen is answering one question,
-          // and it is not "what is my rent".
-          //
-          // The status pill moved down here onto the figure's baseline, which is where the
-          // mockup puts it — `flex items-baseline gap-2`, the hero and its qualifier read as
-          // one phrase instead of as a heading and a badge at opposite ends of a row.
-          //
-          // A Wrap and not a Row. A 48px figure beside a pill whose width is set by the longest
-          // status word ("PARTLY PAID") is the one pairing on this card that cannot be
-          // guaranteed to fit: measured at 320dp it holds to 1.3x and breaks at 1.6x. A Row
-          // overflows there; this drops the pill onto its own line and the card simply gets
-          // taller, which is what a resident who has turned their text up is asking for.
-          Wrap(
-            spacing: Space.xs,
-            runSpacing: Space.xs,
-            crossAxisAlignment: WrapCrossAlignment.end,
-            children: [
-              Text(
-                rupees(owes ? rent.balance : rent.amountPaid),
-                style: t.textTheme.headlineLarge?.copyWith(color: owes ? accent : null),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Padding(
-                // Lifts the word off the descender line onto the figure's own baseline.
-                padding: const EdgeInsets.only(bottom: Space.sm),
-                child: StatusWord(
-                  label: rent.status.label,
-                  tone: tone,
-                  icon: switch (rent.status) {
-                    FeeStatus.paid => Icons.check_circle_rounded,
-                    FeeStatus.partial => Icons.timelapse_rounded,
-                    FeeStatus.unpaid => Icons.error_outline_rounded,
-                  },
+    // The card itself stays the card. It used to take the fee state on its whole ground, which
+    // put a red wash behind every unpaid month and forced the chip off its own tint (a chip on
+    // a ground of its own tone measures 3.98:1 in dark). A flat card with one coloured figure
+    // says the same thing at a quarter of the volume.
+    return Semantics(
+      label: _spoken(rent),
+      container: true,
+      child: _RentShell(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(eyebrow, style: eyebrowStyle),
+                      const SizedBox(height: Space.xs),
+                      // The hero figure is what is OUTSTANDING when anything is outstanding,
+                      // and what was paid when nothing is. A resident checking this card is
+                      // answering one question, and it is not "what is my rent".
+                      _Figure(
+                        rupees(owes ? rent.balance : rent.amountPaid),
+                        style: context.textRoles.statValue.copyWith(
+                          color: owes ? accent : t.colorScheme.onSurface,
+                        ),
+                      ),
+                      Text(owes ? 'still to pay' : 'paid in full', style: t.textTheme.bodyMedium),
+                      const SizedBox(height: Space.sm),
+                      StatusPill(
+                        label: rent.status.label,
+                        tone: tone,
+                        icon: switch (rent.status) {
+                          FeeStatus.paid => Icons.check_circle_rounded,
+                          FeeStatus.partial => Icons.timelapse_rounded,
+                          FeeStatus.unpaid => Icons.error_outline_rounded,
+                        },
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+                const SizedBox(width: Space.sm),
+                ClayIcon(owes ? ClayIcons.rentReminder : ClayIcons.receipt, size: ClaySize.banner),
+              ],
+            ),
+            if (rent.amountDue > 0) ...[
+              const SizedBox(height: Space.md),
+              // No semantic label: the card already speaks as one sentence (see [_spoken]), and
+              // a bar that repeated it would say the rent twice. A percentage would be a figure
+              // the ledger never stated, so none is given.
+              Meter(fraction: _collected(rent), tone: tone),
             ],
-          ),
-          const SizedBox(height: Space.xxs),
-          Text(owes ? 'still to pay' : 'paid in full', style: t.textTheme.bodyMedium),
-          if (rent.amountDue > 0) ...[
-            const SizedBox(height: Space.sm),
-            // No semantic label: [GlassCard] already speaks this whole card as one sentence
-            // (see [_spoken]), and a bar that repeated it would say the rent twice. A
-            // determinate LinearProgressIndicator announces nothing of its own unless it is
-            // given a `semanticsValue`, which would be a percentage the ledger never stated.
-            Meter(fraction: _collected(rent), tone: tone),
-          ],
-          const SizedBox(height: Space.sm),
-          Divider(color: t.colorScheme.outlineVariant),
-          const SizedBox(height: Space.xs),
-          _Line(label: 'Rent for the month', value: rupees(rent.amountDue)),
-          _Line(label: 'Received so far', value: rupees(rent.amountPaid)),
-          // BOTH NUMBERS, NEVER THEIR SUM. A partial refund is only legible with two figures
-          // on screen — what is credited to the month, and what came back — and this app is not
-          // allowed to add them together (see the no-arithmetic rule at the top of this file).
-          // The gross a resident originally handed over is not a column, so it is not printed.
-          //
-          // ONE LINE PER REFUND, for the same reason: two refunds are two facts, and their
-          // total is a figure the database never computed. Only settled ones are money that has
-          // moved — a pending refund has its own sentence below and no money line, because
-          // there is no money to line up yet.
-          for (final r in refunds.where((r) => r.isSettled))
-            _Line(label: 'Refunded to you', value: rupees(r.amount)),
-          if (rent.paidOn != null)
-            _Line(
-              label: 'Last payment',
-              value: '${dayLabel(rent.paidOn!)}'
-                  '${rent.mode == null ? '' : ' · ${rent.mode!.label}'}',
-            ),
-          // The receipt for THIS month, and only for this month. A card headed "September"
-          // that could open August's document would be worse than one that opens nothing.
-          if (payment != null && payment!.periodMonth == periodMonth)
-            _ReceiptAction(
-              payment: payment!,
-              payerName: payerName,
-              refunds: refunds,
-            ),
-          // ═══ THE REASON THE FIGURE ABOVE MOVED ═══
-          //
-          // This is the whole point of the feature. A resident who paid in full and later sees
-          // "PARTLY PAID" with no explanation has been told, by an app they trust with their
-          // rent, that their money went missing. The two money lines above state the fact; this
-          // states the CAUSE, and it is placed before the pay-at-desk note so the explanation
-          // is read before the instruction.
-          if (refunds.isNotEmpty) ...[
             const SizedBox(height: Space.md),
-            RefundNote(refunds: refunds, outstanding: owes ? rent.balance : null),
+            Divider(height: Strokes.hairline, color: t.colorScheme.outlineVariant),
+            const SizedBox(height: Space.xs),
+            _Line(label: 'Rent for the month', value: rupees(rent.amountDue)),
+            _Line(label: 'Received so far', value: rupees(rent.amountPaid)),
+            // BOTH NUMBERS, NEVER THEIR SUM. A partial refund is only legible with two figures
+            // on screen — what is credited to the month, and what came back — and this app is
+            // not allowed to add them together (see the no-arithmetic rule at the top of this
+            // file). The gross a resident originally handed over is not a column, so it is not
+            // printed.
+            //
+            // ONE LINE PER REFUND, for the same reason: two refunds are two facts, and their
+            // total is a figure the database never computed. Only settled ones are money that
+            // has moved — a pending refund has its own sentence below and no money line,
+            // because there is no money to line up yet.
+            for (final r in refunds.where((r) => r.isSettled))
+              _Line(label: 'Refunded to you', value: rupees(r.amount)),
+            if (rent.paidOn != null)
+              _Line(
+                label: 'Last payment',
+                value:
+                    '${dayLabel(rent.paidOn!)}'
+                    '${rent.mode == null ? '' : ' · ${rent.mode!.label}'}',
+              ),
+            // The receipt for THIS month, and only for this month. A card headed "August" that
+            // could open July's document would be worse than one that opens nothing.
+            if (payment != null && payment!.periodMonth == periodMonth)
+              _ReceiptAction(payment: payment!, payerName: payerName, refunds: refunds),
+            // ═══ THE REASON THE FIGURE ABOVE MOVED ═══
+            //
+            // This is the whole point of the feature. A resident who paid in full and later
+            // sees "PARTLY PAID" with no explanation has been told, by an app they trust with
+            // their rent, that their money went missing. The two money lines above state the
+            // fact; this states the CAUSE, and it is placed before the pay-at-desk note so the
+            // explanation is read before the instruction.
+            if (refunds.isNotEmpty) ...[
+              const SizedBox(height: Space.md),
+              RefundNote(refunds: refunds, outstanding: owes ? rent.balance : null),
+            ],
+            if (owes) ...[
+              const SizedBox(height: Space.md),
+              // ═══ THE PAY BUTTON, AND WHY IT IS ON THIS CARD ═══
+              //
+              // This card is drawn on the resident's HOME as well as on their Fees tab, so
+              // paying is one tap from opening the app — which is the reason the app gets
+              // opened at all. The checkout is Razorpay's own native sheet, taking UPI, cards,
+              // netbanking and wallets (features/payments/pay_rent.dart).
+              //
+              // It is the screen's one filled forest button, and it means "the action" — paying
+              // rent IS the action on this card.
+              //
+              // ONLY WHEN SOMETHING IS OWED: the whole block sits inside `if (owes)`. A settled
+              // month shows no button, because an app that offers to take money it is not owed
+              // is one a resident stops trusting.
+              PayRentButton(amount: rent.balance),
+              const SizedBox(height: Space.sm),
+              PayWithUpiButton(amount: rent.balance, periodMonth: periodMonth),
+              const SizedBox(height: Space.sm),
+              PayAtDeskNote(amount: rent.balance),
+            ],
           ],
-          if (owes) ...[
-            const SizedBox(height: Space.md),
-            // ═══ THE CREAM "PAY" BUTTON, AND WHY IT IS ON THIS CARD ═══
-            //
-            // This card is drawn on the resident's HOME as well as on their Fees tab, so paying
-            // is one tap from opening the app — which is the reason the app gets opened at all.
-            // The comment that used to sit here said there was no checkout in this build. There
-            // is one now (features/payments/pay_rent.dart): Razorpay's own native sheet, taking
-            // UPI, cards, netbanking and wallets.
-            //
-            // The cream fill does not move somewhere else on this screen. It is the app's only
-            // one and it means "the action" — and paying rent IS the action on this card, so it
-            // is spent here, on the button, and not on the paragraph below it.
-            //
-            // ONLY WHEN SOMETHING IS OWED: the whole block sits inside `if (owes)`. A settled
-            // month shows no button, because an app that offers to take money it is not owed is
-            // one a resident stops trusting.
-            PayRentButton(amount: rent.balance),
-            const SizedBox(height: Space.sm),
-            PayAtDeskNote(amount: rent.balance),
-          ],
-        ],
+        ),
       ),
     );
   }
+
+  /// 'AUGUST' → 'August'. [monthEyebrow] is the shared formatter and shouts; this card does
+  /// not.
+  static String _titleCase(String word) => word.isEmpty
+      ? word
+      : '${word.substring(0, 1).toUpperCase()}${word.substring(1).toLowerCase()}';
 
   /// How much of this month's rent is in, as a WIDTH.
   ///
@@ -281,9 +305,11 @@ class RentCard extends StatelessWidget {
   String _spoken(FeeLedgerRow rent) {
     final month = monthLabel(periodMonth);
     final refunded = refunds
-        .map((r) => r.isSettled
-            ? ' ${rupees(r.amount)} was refunded to you.'
-            : ' A refund of ${rupees(r.amount)} is on its way to you.')
+        .map(
+          (r) => r.isSettled
+              ? ' ${rupees(r.amount)} was refunded to you.'
+              : ' A refund of ${rupees(r.amount)} is on its way to you.',
+        )
         .join();
     if (rent.balance > 0) {
       return 'Rent for $month: ${rupees(rent.balance)} still to pay '
@@ -330,6 +356,10 @@ Receipt? residentReceipt(
 /// a payment was recorded against the wrong resident). That is a real state, and the honest
 /// drawing of it is the absence of a button rather than a button that explains itself after
 /// being pressed.
+///
+/// A pill rather than a full-width button: the receipt is a document to look at, and on a card
+/// that may also carry the pay button below it, two full-width buttons would argue about which
+/// one is the action.
 class _ReceiptAction extends ConsumerWidget {
   const _ReceiptAction({required this.payment, this.payerName, this.refunds = const []});
 
@@ -339,18 +369,20 @@ class _ReceiptAction extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final receipt =
-        residentReceipt(ref, payment, payerName: payerName, refunds: refunds);
+    final receipt = residentReceipt(ref, payment, payerName: payerName, refunds: refunds);
     if (receipt == null) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(top: Space.sm),
-      child: OutlinedButton.icon(
-        onPressed: () => showReceipt(context, receipt),
-        icon: const Icon(Icons.receipt_long_rounded, size: IconSize.md),
+      child: Align(
+        alignment: AlignmentDirectional.centerStart,
         // Not "Download" and not "Pay": this opens the document, and the sharing and saving
         // live on the receipt screen where the paper the resident is sending is on screen.
-        label: const Text('View receipt'),
+        child: PillButton(
+          label: 'View receipt',
+          icon: Icons.receipt_long_rounded,
+          onPressed: () => showReceipt(context, receipt),
+        ),
       ),
     );
   }
@@ -395,53 +427,56 @@ class PayAtDeskNote extends ConsumerWidget {
     final warden = contacts?.wardenName?.trim();
     final phone = contacts?.wardenPhone?.trim();
 
-    return Container(
-      padding: const EdgeInsets.all(Space.md),
-      decoration: BoxDecoration(
-        // A well INSIDE the rent card, not a second card on top of it: the surface ramp is
-        // three flat colours and stacking panes exhausts it (see shared/glass/glass.dart).
-        color: t.colorScheme.surfaceContainer,
-        borderRadius: Radii.rControl,
-        border: Border.all(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const IconTile(
-                icon: Icons.storefront_rounded,
-                // Muted, deliberately. The fee tone belongs to the figure above; a coloured
-                // glyph here would read as a second status.
-                tone: ApnivaasColors.textMuted,
-              ),
-              const SizedBox(width: Space.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Or pay cash at the desk', style: t.textTheme.titleSmall),
-                    const SizedBox(height: Space.xxs),
-                    Text(
-                      'Hand ${rupees(amount)} to '
-                      '${warden == null || warden.isEmpty ? 'your warden' : warden} '
-                      'at the office.',
-                      style: t.textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: Space.xs),
-          Text(
-            phone == null || phone.isEmpty
-                ? 'It appears here as soon as your warden records it.'
-                : 'It appears here as soon as your warden records it. Desk: $phone',
-            style: t.textTheme.bodySmall,
-          ),
-        ],
+    return _Well(
+      // The warden at the desk — a person, because this route is a person.
+      art: ClayIcons.roleWarden,
+      children: [
+        Text('Or pay cash at the desk', style: t.textTheme.titleSmall),
+        const SizedBox(height: Space.xxs),
+        Text(
+          'Hand ${rupees(amount)} to '
+          '${warden == null || warden.isEmpty ? 'your warden' : warden} '
+          'at the office.',
+          style: t.textTheme.bodyMedium,
+        ),
+        const SizedBox(height: Space.xs),
+        Text(
+          phone == null || phone.isEmpty
+              ? 'It appears here as soon as your warden records it.'
+              : 'It appears here as soon as your warden records it. Desk: $phone',
+          style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+}
+
+/// A well INSIDE the rent card, not a second card on top of it: the neutral fill one step off
+/// the card, a 46dp clay figure, and the words beside it. Shared by the desk note and the refund
+/// note so the two asides on one card are visibly the same kind of thing.
+class _Well extends StatelessWidget {
+  const _Well({required this.art, required this.children});
+
+  final String art;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(color: t.colorScheme.surfaceContainer, borderRadius: Radii.rButton),
+      child: Padding(
+        padding: const EdgeInsets.all(Space.sm),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClayIcon(art, size: ClaySize.list),
+            const SizedBox(width: Space.sm),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -461,15 +496,15 @@ class PayAtDeskNote extends ConsumerWidget {
 /// nothing for the resident to fix — so the three tones this app already spends on rent are all
 /// the wrong answer:
 ///
-///   error   (#C05353) is 'unpaid'. Drawing a refund in it says the resident is in arrears
+///   error   (#C8443B) is 'unpaid'. Drawing a refund in it says the resident is in arrears
 ///           because money was returned to them, which is the accusation this whole feature
 ///           exists to prevent.
-///   warning (#976F23) is 'due / still owing / expiring' — tokens.dart's own list. A refunded
+///   warning (#986A10) is 'due / still owing / expiring' — tokens.dart's own list. A refunded
 ///           month would then look exactly like a month that needs chasing.
-///   success (#42825F) is 'paid'. Money leaving the hostel is not a collection.
+///   success (#3C8A5C) is 'paid'. Money leaving the hostel is not a collection.
 ///
-/// So: [ApnivaasColors.info], the app's factual tone — the blue already used for the empty-state
-/// badge, i.e. "here is something you should know". It is a canonical token with measured
+/// So: [ApnivaasColors.info], the app's factual tone — the blue the kit maps to refund, new and
+/// info, i.e. "here is something you should know". It is a canonical token with measured
 /// ratios in both themes, so no new colour and no new pairing enters the palette here.
 /// `test/theme_contrast_test.dart` measures the pairing this widget actually paints.
 ///
@@ -501,52 +536,24 @@ class RefundNote extends StatelessWidget {
     final owed = outstanding;
     final settled = refunds.where((r) => r.isSettled).toList(growable: false);
 
-    return Container(
-      padding: const EdgeInsets.all(Space.md),
-      decoration: BoxDecoration(
-        // A well INSIDE the rent card, exactly like [PayAtDeskNote] — the surface ramp is three
-        // flat colours and stacking a second card on top of the first exhausts it.
-        color: t.colorScheme.surfaceContainer,
-        borderRadius: Radii.rControl,
-        border: Border.all(
-          color: context.tones.chipBorder(ApnivaasColors.info),
-          width: Strokes.hairline,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Toned, unlike the storefront glyph on [PayAtDeskNote]. That note carries no status
-          // of its own; this one IS the status, and it is the only thing on the card wearing
-          // this colour.
-          const IconTile(
-            icon: Icons.assignment_return_rounded,
-            tone: ApnivaasColors.info,
-          ),
-          const SizedBox(width: Space.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // One headline per refund. Two refunds in a month is rare and their sum is a
-                // figure no column holds, so they are stated rather than added.
-                for (final r in refunds) ...[
-                  Text(
-                    _headline(r),
-                    style: t.textTheme.titleSmall
-                        ?.copyWith(color: context.tones.resolve(ApnivaasColors.info)),
-                  ),
-                  const SizedBox(height: Space.xxs),
-                ],
-                Text(
-                  _explanation(settled.isNotEmpty, owed),
-                  style: t.textTheme.bodyMedium,
-                ),
-              ],
+    return _Well(
+      // Money going back the way it came. The headline below carries the info ink; the art
+      // only says what kind of aside this is.
+      art: ClayIcons.bankTransfer,
+      children: [
+        // One headline per refund. Two refunds in a month is rare and their sum is a figure no
+        // column holds, so they are stated rather than added.
+        for (final r in refunds) ...[
+          Text(
+            _headline(r),
+            style: t.textTheme.titleSmall?.copyWith(
+              color: context.tones.resolve(ApnivaasColors.info),
             ),
           ),
+          const SizedBox(height: Space.xxs),
         ],
-      ),
+        Text(_explanation(settled.isNotEmpty, owed), style: t.textTheme.bodyMedium),
+      ],
     );
   }
 
@@ -558,9 +565,7 @@ class RefundNote extends StatelessWidget {
     final amount = rupees(r.amount);
     final on = r.on;
     if (!r.isSettled) {
-      return on == null
-          ? '$amount refund on its way'
-          : '$amount refund requested ${dayLabel(on)}';
+      return on == null ? '$amount refund on its way' : '$amount refund requested ${dayLabel(on)}';
     }
     return on == null ? '$amount refunded' : '$amount refunded on ${dayLabel(on)}';
   }
@@ -584,28 +589,42 @@ class RefundNote extends StatelessWidget {
 }
 
 class _Line extends StatelessWidget {
-  const _Line({required this.label, required this.value});
+  const _Line({required this.label, required this.value, this.tone});
   final String label;
   final String value;
+
+  /// A CANONICAL tone for the figure — the pending amount on a history row. Resolved here.
+  final Color? tone;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final accent = tone == null ? null : context.tones.resolve(tone!);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Space.xxs),
+      padding: const EdgeInsets.symmetric(vertical: Space.xxs + Space.hair),
       // BOTH HALVES FLEX, which is what stops this row from breaking. The value used to be a
       // plain Text, so the Row measured it unbounded: at 320dp and 1.3x, "16 Aug 2026 · UPI"
       // asked for 309 of the card's 256 points, the label was left with none, and it wrapped to
       // one character per line — a 286-point-tall row where a 24-point one belonged. The same
-      // 6:5 split [DetailRow] already uses, so a labelled value behaves the same way everywhere
-      // in this app.
+      // split [DetailRow] uses, so a labelled value behaves the same way everywhere in this app.
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(flex: 6, child: Text(label, style: t.textTheme.bodyMedium)),
+          Expanded(
+            flex: 6,
+            child: Text(
+              label,
+              style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
+            ),
+          ),
           const SizedBox(width: Space.sm),
           Expanded(
             flex: 5,
-            child: Text(value, style: t.textTheme.titleSmall, textAlign: TextAlign.end),
+            child: Text(
+              value,
+              style: t.textTheme.titleSmall?.copyWith(color: accent),
+              textAlign: TextAlign.end,
+            ),
           ),
         ],
       ),
@@ -628,12 +647,7 @@ class _Line extends StatelessWidget {
 /// and the row then carries no affordance and no ink response, rather than a tap that opens
 /// nothing.
 class FeePaymentTile extends ConsumerWidget {
-  const FeePaymentTile({
-    super.key,
-    required this.payment,
-    this.payerName,
-    this.refunds = const [],
-  });
+  const FeePaymentTile({super.key, required this.payment, this.payerName, this.refunds = const []});
 
   final FeePayment payment;
 
@@ -648,87 +662,155 @@ class FeePaymentTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
     final tone = feeTone(payment.status);
-    final receipt =
-        residentReceipt(ref, payment, payerName: payerName, refunds: refunds);
+    final receipt = residentReceipt(ref, payment, payerName: payerName, refunds: refunds);
+    final chip = StatusPill(label: payment.status.label, tone: tone);
+    final words = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(monthLabel(payment.periodMonth), style: t.textTheme.titleMedium),
+        const SizedBox(height: Space.hair),
+        Text(
+          payment.paidOn == null
+              // A row with no paid_on exists only where a month was opened without a payment.
+              // Say that, rather than printing a date that is not there.
+              ? 'No payment date recorded'
+              : 'Received ${dayLabel(payment.paidOn!)}'
+                    '${payment.mode == null ? '' : ' · ${payment.mode!.label}'}',
+          style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+        ),
+      ],
+    );
+
     return OutlineCard(
       onTap: receipt == null ? null : () => showReceipt(context, receipt),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: LayoutBuilder(
+        builder: (context, box) {
+          // The chip beside the month while both fit; under it once large text or a narrow
+          // phone would leave the month a sliver — the rule [ListRow] follows for its trailing
+          // control.
+          final stacked = box.maxWidth < 300 || MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Text(monthLabel(payment.periodMonth), style: t.textTheme.titleMedium),
-              ),
-              StatusPill(label: payment.status.label, tone: tone),
-            ],
-          ),
-          const SizedBox(height: Space.xs),
-          Row(
-            children: [
-              Expanded(child: _Cell(label: 'Due', value: rupees(payment.amountDue))),
-              Expanded(child: _Cell(label: 'Paid', value: rupees(payment.amountPaid))),
-              Expanded(
-                child: _Cell(
-                  label: 'Pending',
-                  value: rupees(payment.balance),
-                  tone: payment.balance > 0 ? tone : null,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: Space.xs),
-          Text(
-            payment.paidOn == null
-                // A row with no paid_on exists only where a month was opened without a
-                // payment. Say that, rather than printing a date that is not there.
-                ? 'No payment date recorded'
-                : 'Received ${dayLabel(payment.paidOn!)}'
-                    '${payment.mode == null ? '' : ' · ${payment.mode!.label}'}',
-            style: t.textTheme.bodySmall,
-          ),
-          // The three cells above are Due / Paid / Pending and a fourth would not survive 320dp
-          // at 1.3x text, so each refund gets a line of its own rather than a column. It is the
-          // only coloured thing on this row, which is what makes it findable when a resident is
-          // scrolling two years of months looking for the one that changed.
-          for (final r in refunds) ...[
-            const SizedBox(height: Space.xxs),
-            Row(
-              children: [
-                Icon(Icons.assignment_return_rounded,
-                    size: IconSize.sm, color: context.tones.info),
-                const SizedBox(width: Space.xxs),
-                Expanded(
-                  child: Text(
-                    _refundLine(r),
-                    style: t.textTheme.bodySmall?.copyWith(color: context.tones.info),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // The ticked receipt for a settled month, the alarm clock for one with money
+                  // still owed — the same pair the rent card above wears.
+                  ClayIcon(
+                    payment.status == FeeStatus.paid ? ClayIcons.receipt : ClayIcons.rentReminder,
+                    size: ClaySize.list,
                   ),
+                  const SizedBox(width: Space.sm),
+                  Expanded(
+                    child: stacked
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              words,
+                              const SizedBox(height: Space.xs),
+                              chip,
+                            ],
+                          )
+                        : words,
+                  ),
+                  if (!stacked) ...[const SizedBox(width: Space.xs), chip],
+                ],
+              ),
+              const SizedBox(height: Space.sm),
+              // Every column a person needs to check a month against their bank, on a well so
+              // the three figures read as one fact — side by side while they fit, and one line
+              // each once large text would run "₹6,000₹3,000" together.
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: t.colorScheme.surfaceContainer,
+                  borderRadius: Radii.rControl,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Space.sm, vertical: Space.xs),
+                  child: stacked
+                      ? Column(
+                          children: [
+                            _Line(label: 'Due', value: rupees(payment.amountDue)),
+                            _Line(label: 'Paid', value: rupees(payment.amountPaid)),
+                            _Line(
+                              label: 'Pending',
+                              value: rupees(payment.balance),
+                              tone: payment.balance > 0 ? tone : null,
+                            ),
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            Expanded(
+                              child: _Cell(label: 'Due', value: rupees(payment.amountDue)),
+                            ),
+                            const SizedBox(width: Space.xs),
+                            Expanded(
+                              child: _Cell(label: 'Paid', value: rupees(payment.amountPaid)),
+                            ),
+                            const SizedBox(width: Space.xs),
+                            Expanded(
+                              child: _Cell(
+                                label: 'Pending',
+                                value: rupees(payment.balance),
+                                tone: payment.balance > 0 ? tone : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+              // A fourth cell would not survive 320dp at 1.3x text, so each refund gets a line
+              // of its own rather than a column. It is the only info-coloured thing on this row,
+              // which is what makes it findable when a resident is scrolling two years of months
+              // looking for the one that changed.
+              for (final r in refunds) ...[
+                const SizedBox(height: Space.xs),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.assignment_return_rounded,
+                      size: IconSize.sm,
+                      color: context.tones.info,
+                    ),
+                    const SizedBox(width: Space.xxs),
+                    Expanded(
+                      child: Text(
+                        _refundLine(r),
+                        style: t.textTheme.bodySmall?.copyWith(color: context.tones.info),
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ],
-          if (payment.notes != null && payment.notes!.trim().isNotEmpty) ...[
-            const SizedBox(height: Space.xxs),
-            Text(payment.notes!.trim(), style: t.textTheme.bodySmall),
-          ],
-          // Said out loud rather than left to be discovered by tapping. A whole card that
-          // happens to be tappable looks exactly like one that is not.
-          if (receipt != null) ...[
-            const SizedBox(height: Space.xs),
-            Row(
-              children: [
-                Icon(Icons.receipt_long_outlined,
-                    size: IconSize.sm, color: context.tones.muted),
-                const SizedBox(width: Space.xxs),
-                Expanded(
-                  child: Text('View receipt', style: t.textTheme.labelLarge),
-                ),
-                Icon(Icons.chevron_right_rounded,
-                    size: IconSize.md, color: context.tones.muted),
+              if (payment.notes != null && payment.notes!.trim().isNotEmpty) ...[
+                const SizedBox(height: Space.xs),
+                Text(payment.notes!.trim(), style: t.textTheme.bodySmall),
               ],
-            ),
-          ],
-        ],
+              // Said out loud rather than left to be discovered by tapping. A whole card that
+              // happens to be tappable looks exactly like one that is not.
+              if (receipt != null) ...[
+                const SizedBox(height: Space.sm),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'View receipt',
+                        style: t.textTheme.labelLarge?.copyWith(color: t.colorScheme.primary),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: IconSize.lg,
+                      color: t.colorScheme.primary,
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -756,20 +838,20 @@ class _Cell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    // Canonical in, resolved at the paint site: this is 14px type, and the canonical reds and
+    // Canonical in, resolved at the paint site: this is 13px type, and the canonical reds and
     // ambers are only rated as graphics.
     final accent = tone == null ? null : context.tones.resolve(tone!);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label.toUpperCase(), style: t.textTheme.labelSmall),
-        const SizedBox(height: Space.xxs),
         Text(
-          value,
-          style: t.textTheme.titleSmall?.copyWith(color: accent),
+          label,
+          style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
+        const SizedBox(height: Space.hair),
+        _Figure(value, style: t.textTheme.titleSmall?.copyWith(color: accent)),
       ],
     );
   }
@@ -792,10 +874,8 @@ class RoomBedCard extends StatelessWidget {
   final String? roomNumber;
   final int? bedNumber;
 
-  /// Draws the assigned card as the screen's SUBJECT — the rooms [DomainCard], violet on its
-  /// ground — for Profile, where "Your room" is the section and this card is the whole of it.
-  /// Home leaves it false: there the room sits under the rent card as the design's raised
-  /// fact-beneath-the-figure, and the rent card already owns that screen's one tinted surface.
+  /// Draws the assigned card as the screen's SUBJECT — the Mist tile — for Profile, where "Your
+  /// room" is the section and this card is the whole of it. False draws it on the plain card.
   /// An unassigned room ignores it: "Not assigned yet" is an absence, and an absence is not
   /// dressed in a colour.
   final bool hero;
@@ -821,82 +901,70 @@ class RoomBedCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    if (roomNumber == null) {
-      return RaisedCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final dark = t.brightness == Brightness.dark;
+    final assigned = roomNumber != null;
+    final mist = hero && assigned;
+    final ground = mist
+        ? (dark ? ApnivaasColors.darkMist : ApnivaasColors.mist)
+        : cardSurfaceOf(context);
+    // On Mist the secondary ink is the Mist's own; the muted card ink is tuned for the card.
+    final quiet = mist
+        ? (dark ? ApnivaasColors.onSurfaceVariant : ApnivaasColors.mistInk)
+        : t.colorScheme.onSurfaceVariant;
+
+    // ONE Text FOR ROOM AND BED, and it stays one. A mockup split them across two lines with a
+    // bed TYPE on the second ("Bed B · Standard Ac") — `public.beds` has `bed_number int` and no
+    // type column at all, so the second line would have had to be invented.
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const CardHeader(
-              label: 'Your room',
-              // Still the rooms bed, still violet: the words say nothing is assigned; the icon
-              // says what this card is about, which does not change when it is empty.
-              trailing: DomainIcon(
-                domain: ApnivaasDomain.rooms,
-                icon: Icons.bed_rounded,
-                size: DomainIconSize.sm,
+            const ClayIcon(ClayIcons.beds, size: ClaySize.tile),
+            const SizedBox(width: Space.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Your room', style: t.textTheme.bodySmall?.copyWith(color: quiet)),
+                  const SizedBox(height: Space.hair),
+                  if (assigned)
+                    Text(
+                      bedNumber == null ? 'Room $roomNumber' : 'Room $roomNumber · Bed $bedNumber',
+                      style: t.textTheme.headlineSmall?.copyWith(
+                        color: mist
+                            ? (dark ? ApnivaasColors.onSurface : ApnivaasColors.forest)
+                            : null,
+                      ),
+                    )
+                  else ...[
+                    Text('Not assigned yet', style: t.textTheme.titleMedium),
+                    const SizedBox(height: Space.hair),
+                    Text(
+                      'Your warden will place you in a room and bed.',
+                      style: t.textTheme.bodySmall?.copyWith(color: quiet),
+                    ),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: Space.xs),
-            Text('Not assigned yet', style: t.textTheme.titleMedium),
-            const SizedBox(height: Space.xxs),
-            Text('Your warden will place you in a room and bed.',
-                style: t.textTheme.bodySmall),
           ],
         ),
-      );
-    }
-
-    // The mockups' room card: eyebrow and a bed tile on the top line, the room itself as the
-    // card's figure, and who else is in it underneath.
-    //
-    // ONE Text FOR ROOM AND BED, and it stays one. The mockup splits them across two lines with
-    // a bed TYPE on the second ("Bed B · Standard Ac") — `public.beds` has `bed_number int` and
-    // no type column at all, so the second line would have had to be invented.
-    //
-    // A RAISED CARD, ONE RUNG ABOVE THE RENT CARD ABOVE IT. tokens.dart lists what the design
-    // puts on `surface raised` #171A1E and "the room card" is on that list by name, while "the
-    // rent card" is on the #111417 list. The pair used to be the same fill, which flattened the
-    // screen's only piece of hierarchy that is not typographic.
-
-    // The rooms domain's bed, in the rooms violet — the same mark that heads "Your room" on
-    // Profile. Identity in the corner; the figure below stays cream.
-    //
-    // ON THE HERO CARD THE PLATE COMES OFF AND THE BED STAYS. A [DomainIcon] is a 10% wash of
-    // its tone behind the glyph, and the hero card's ground is a 10% wash of that same violet:
-    // a tint on a tint is the pairing [ApnivaasSemantics.surfaceTintAlpha] forbids, and the plate
-    // all but vanishes into the card it is sitting on. So the mark drops to a bare glyph in the
-    // ground's own ink — the same swap [DayMenuCard.hero] makes when it trades its pill for a
-    // [StatusWord]. Drawn at [IconSize.md], the size the glyph inside [IconTile] is already
-    // painted at in this exact corner on the rent card above it.
-    final Widget mark = hero
-        ? Icon(
-            Icons.bed_rounded,
-            size: IconSize.md,
-            color: context.tones.resolve(ApnivaasDomain.rooms.tone),
-          )
-        : const DomainIcon(
-            domain: ApnivaasDomain.rooms,
-            icon: Icons.bed_rounded,
-            size: DomainIconSize.sm,
-          );
-
-    final body = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        CardHeader(label: 'Your room', trailing: mark),
-        const SizedBox(height: Space.xs),
-        Text(
-          bedNumber == null ? 'Room $roomNumber' : 'Room $roomNumber · Bed $bedNumber',
-          style: t.textTheme.headlineSmall,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        ?_sharing(context),
+        if (assigned) ?_sharing(context, ring: ground, quiet: quiet),
       ],
     );
 
-    if (hero) return DomainCard(domain: ApnivaasDomain.rooms, child: body);
-    return RaisedCard(child: body);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: ground,
+        borderRadius: Radii.rSurface,
+        border: mist
+            ? null
+            : Border.all(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
+      ),
+      child: Padding(padding: const EdgeInsets.all(Space.md), child: body),
+    );
   }
 
   /// The sharing line, in whichever state the roommate read is actually in.
@@ -910,7 +978,7 @@ class RoomBedCard extends StatelessWidget {
   /// bury it: A KNOWN FAILURE OUTRANKS A STALE COUNT. If a refresh failed, the number this
   /// device is holding is no longer something the card can vouch for, and stating it anyway is
   /// the quiet kind of wrong — it looks exactly like a fact.
-  Widget? _sharing(BuildContext context) {
+  Widget? _sharing(BuildContext context, {required Color ring, required Color quiet}) {
     final mates = roommates;
     if (mates == null) return null;
     final t = Theme.of(context);
@@ -921,7 +989,7 @@ class RoomBedCard extends StatelessWidget {
         errorGuidance(mates.error!).canRetry
             ? 'Could not check who else is in this room. Pull down to try again.'
             : 'Who else is in this room is not available to you.',
-        style: t.textTheme.bodySmall?.copyWith(color: context.tones.muted),
+        style: t.textTheme.bodySmall?.copyWith(color: quiet),
       );
     } else if (mates.hasValue) {
       final people = mates.requireValue;
@@ -929,35 +997,29 @@ class RoomBedCard extends StatelessWidget {
         people.isEmpty
             ? 'You have the room to yourself'
             : 'Sharing with ${countLabel(people.length, 'other resident')}',
-        style: t.textTheme.bodySmall,
+        style: t.textTheme.bodySmall?.copyWith(color: quiet),
       );
-      // The mockups' overlapping discs. The initials are the roommates' own, from the read this
-      // sentence is already counting — `st_my_roommates()` returns name, phone and bed and
-      // that is the entire set a resident may see, so a disc is the most of a person that can
-      // honestly appear here. No cluster for an empty room: there is nobody to draw.
+      // The overlapping discs. The initials are the roommates' own, from the read this sentence
+      // is already counting — `st_my_roommates()` returns name, phone and bed and that is the
+      // entire set a resident may see, so a disc is the most of a person that can honestly
+      // appear here. No cluster for an empty room: there is nobody to draw.
       line = people.isEmpty
           ? sentence
           : Row(
               children: [
-                AvatarCluster(
-                  names: [for (final mate in people) mate.fullName],
-                  // The cut-out ring is whatever this card's ground actually is — the raised
-                  // fill, or the rooms tint when the card is the hero. A ring in the wrong fill
-                  // is a grey halo rather than a gap.
-                  ring: hero
-                      ? context.tones
-                          .tintedSurface(ApnivaasDomain.rooms.tone, cardSurfaceOf(context))
-                      : raisedSurfaceOf(context),
-                ),
+                AvatarCluster(names: [for (final mate in people) mate.fullName], ring: ring),
                 const SizedBox(width: Space.xs),
                 Expanded(child: sentence),
               ],
             );
     } else {
-      line = const Skeleton(widthFactor: 0.6);
+      line = const StillSkeleton(widthFactor: 0.6);
     }
 
-    return Padding(padding: const EdgeInsets.only(top: Space.sm), child: line);
+    return Padding(
+      padding: const EdgeInsets.only(top: Space.sm),
+      child: line,
+    );
   }
 }
 

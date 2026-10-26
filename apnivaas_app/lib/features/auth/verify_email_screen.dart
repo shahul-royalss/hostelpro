@@ -9,9 +9,14 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/auth/session.dart';
 import '../../core/config/env.dart';
 import '../../core/theme/tokens.dart';
-import '../../shared/glass/glass.dart';
+import '../../shared/clay/banners.dart';
+import '../../shared/clay/clay_icons.dart';
+import '../../shared/clay/pill_button.dart';
+import '../../shared/glass/glass.dart' show FlatSurface;
+import '../common/form_parts.dart';
 // For [kGrievanceEmail]: the support mailbox the legal documents name, in exactly one place.
 import '../legal/legal_documents.dart';
+import 'auth_scaffold.dart';
 import 'email_verification_service.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -134,13 +139,13 @@ import 'email_verification_service.dart';
 // It claims nothing about the link. It says what an administrator can check, next to a "Send it
 // again" and an "I have opened the link" that both still work.
 //
-// ── NO FIGMA FRAME FOR THIS SCREEN ───────────────────────────────────────────────────────
+// ── NO BOARD FOR THIS SCREEN ─────────────────────────────────────────────────────────────
 //
-// design-figma/DESIGN-SYSTEM.md lists nineteen `screen-*` frames and none of them is an email
-// verification screen. Nothing here is a mockup of something else relabelled; it is built from
-// the system those frames define — the raised well (4:77), the cream filled button as the one
-// primary action (4:83), the notice banner (4:1535) and the state card. No BackdropFilter, per
-// the release-build decision.
+// The design canvas draws no email verification screen. Nothing here is a mockup of something
+// else relabelled; it is the sign-in family's page ([AuthScaffold]) — the brand bar, a heading
+// with its clay icon, the card that says what happened, and the forest filled button as the one
+// primary action. The banner residents see on their home is the clay kit's Mist [InfoBanner].
+// No BackdropFilter, per the release-build decision.
 
 /// Proving control of the address on the account.
 class VerifyEmailScreen extends ConsumerStatefulWidget {
@@ -478,54 +483,71 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
       // A gate the back gesture walks through is not a gate. When blocking, the visible way
       // out is Sign out — a real action rather than a dead end.
       canPop: !widget.blocking,
-      child: Scaffold(
-      appBar: AppBar(
-        title: const Text('Verify your email'),
-        automaticallyImplyLeading: !widget.blocking,
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(Space.xl),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: _verified ? _done(t) : _form(t, address),
-            ),
-          ),
+      // The sign-in screen's own page. As the gate this is one of the steps a new account walks
+      // before it reaches a home, so it wears the steps' brand bar; as the resident's detour the
+      // same bar carries a back arrow, because there is somewhere to go back to.
+      child: AuthScaffold(
+        topBar: AuthTopBar(
+          leading: widget.blocking
+              ? null
+              : IconButton(
+                  tooltip: 'Back',
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                ),
         ),
-      ),
+        children: [
+          const SizedBox(height: Space.md),
+          const AuthHeading(
+            icon: ClayIcons.bell,
+            title: 'Verify your email',
+            message: 'One tap on a link proves this address is yours.',
+          ),
+          const SizedBox(height: Space.lg),
+          if (_verified) _done(t) else ..._form(t, address),
+        ],
       ),
     );
   }
 
   Widget _done(ThemeData t) {
     final staff = ApnivaasSession.verificationGatedRoles.contains(ref.read(sessionProvider)?.role);
-    return GlassCard(
-      padding: const EdgeInsets.all(Space.xl),
-      child: StateBody(
-        icon: Icons.mark_email_read_rounded,
-        title: 'Email verified',
-        // "Create and manage accounts" is a staff sentence — it is the one thing the proof
-        // unlocks on the server — so a resident is thanked without being told about powers
-        // they do not have.
-        message: 'Thanks — ${_sentTo ?? 'your address'} is confirmed.'
+    return FlatSurface(
+      borderRadius: Radii.rSurface,
+      padding: const EdgeInsets.all(Space.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Center(child: ClayWell(ClayIcons.success)),
+          const SizedBox(height: Space.md),
+          Text('Email verified', style: t.textTheme.titleLarge, textAlign: TextAlign.center),
+          const SizedBox(height: Space.xxs),
+          Text(
+            // "Create and manage accounts" is a staff sentence — it is the one thing the proof
+            // unlocks on the server — so a resident is thanked without being told about powers
+            // they do not have.
+            'Thanks — ${_sentTo ?? 'your address'} is confirmed.'
             '${staff ? ' You can create and manage accounts as normal.' : ''}',
-        tone: context.tones.success,
-        action: FilledButton(
-          // Pops when this was PUSHED from the home-screen banner. As the router's gate there is
-          // nothing to pop to: the redirect releases the account the moment a re-read lands a
-          // verified session — which has normally happened before this panel is even read. If
-          // that re-read was dropped, this asks for it again, so the button is never inert.
-          onPressed: () {
-            final navigator = Navigator.of(context);
-            if (navigator.canPop()) {
-              navigator.pop(true);
-            } else {
-              ref.read(authControllerProvider.notifier).reload();
-            }
-          },
-          child: const Text('Done'),
-        ),
+            style: t.textTheme.bodyMedium,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: Space.lg),
+          FilledButton(
+            // Pops when this was PUSHED from the home-screen banner. As the router's gate there is
+            // nothing to pop to: the redirect releases the account the moment a re-read lands a
+            // verified session — which has normally happened before this panel is even read. If
+            // that re-read was dropped, this asks for it again, so the button is never inert.
+            onPressed: () {
+              final navigator = Navigator.of(context);
+              if (navigator.canPop()) {
+                navigator.pop(true);
+              } else {
+                ref.read(authControllerProvider.notifier).reload();
+              }
+            },
+            child: const Text('Done'),
+          ),
+        ],
       ),
     );
   }
@@ -553,178 +575,155 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen>
     return 'The confirmation link goes to $address';
   }
 
-  Widget _form(ThemeData t, String address) {
+  List<Widget> _form(ThemeData t, String address) {
     final cooldown = _cooldown;
     final error = _error;
+    final muted = t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant);
 
-    return GlassCard(
-      padding: const EdgeInsets.all(Space.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Icon(Icons.mark_email_unread_rounded,
-              size: IconSize.xl, color: t.colorScheme.primary),
-          const SizedBox(height: Space.md),
-          Text('Check your email',
-              style: t.textTheme.titleLarge, textAlign: TextAlign.center),
-          const SizedBox(height: Space.xxs),
-          // WHAT HAS ACTUALLY HAPPENED, and nothing more. "Sent" is said only once a send has
-          // succeeded — or a recent one from this phone is known, with its age — so the person
-          // never goes looking for a mail that was never sent.
-          Text(
-            _whatHappened(address),
-            style: t.textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: Space.sm),
-          // THE ONE THING THIS SCREEN CANNOT SEE: the link is opened somewhere else — a mail
-          // app, a browser, sometimes another device — and nothing tells this screen when. So
-          // the instruction has to include the return trip, which is the step people skip.
-          //
-          // SINCE THE DEEP LINK IT HAS TWO CASES, AND IT MAY NOT TELL ONLY THE HAPPY ONE. On
-          // this phone the link opens the app and signs the person in, and that is the whole
-          // proof. On a laptop — or any device without the app — the browser cannot open a
-          // custom scheme and lands on a web page instead, and no browser could ever complete
-          // the exchange anyway because it holds no PKCE verifier. That case is named here
-          // rather than discovered, and it is named as SURVIVABLE, because it is: the proof was
-          // minted by GoTrue before any redirect, so the button below finishes it.
-          //
-          // What it still refuses to do is predict how the landing page will LOOK. The version
-          // that promised the page "may show an error" was written for a project whose Site URL
-          // was localhost; predicting a failure that has been fixed teaches the next person to
-          // ignore a page that is, on an expired link, telling them the truth.
-          Text(
-            'Open that email and tap the link. On this phone it opens Apnivaas and signs you in '
-            '— that sign-in is the proof, and there is nothing more to do. Opened on a laptop or '
-            'another device it lands on a web page instead: come back to Apnivaas and tap the '
-            'button below, which finishes it just as well.',
-            style: t.textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
-
-          if (error != null) ...[
-            const SizedBox(height: Space.md),
-            Semantics(
-              liveRegion: true,
-              // context.tones.error, not ApnivaasColors.error: that one is the canonical GRAPHIC
-              // red and measures below AA for small text on this card. tokens.dart says so
-              // outright.
-              child: Text(
-                error,
-                style: t.textTheme.bodyMedium?.copyWith(color: context.tones.error),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            if (_operatorFault) ...[
-              const SizedBox(height: Space.xs),
-              Text(
-                'This is a setting on the Apnivaas project, not something you can fix from here. '
-                'Nothing you do in the app will work until an administrator changes it.',
-                style: t.textTheme.bodySmall,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ] else if (_notYet) ...[
-            const SizedBox(height: Space.md),
-            Semantics(
-              liveRegion: true,
-              child: Text(
-                'Not confirmed yet. Open the newest email from Apnivaas and tap the link — check '
-                'your spam folder if it is not in the inbox. Only the newest link works, so if '
-                'you tapped an older one, send a new email and use that.',
-                style: t.textTheme.bodyMedium?.copyWith(color: context.tones.warning),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            // THE SECOND ONE IN A ROW, AND ONLY THE SECOND. See the header: one "no proof" is
-            // ordinary — mail is slow, people tap before reading. Two consecutive ones, after
-            // the person has twice said they opened it, is the shape of a link that is not
-            // getting back to the app, and the commonest cause is a dashboard field that was
-            // measured missing on this project (the redirect is substituted for the Site URL,
-            // silently, so nothing else in the system can report it).
-            //
-            // It claims NOTHING about the link — the sentence above still stands, and both
-            // escapes below stay live. It names a setting and the exact value, under the same
-            // "not something you can fix from here" framing every operator fault on this screen
-            // uses, so a resident reads it as somebody else's job rather than their homework.
-            if (_notYetCount >= 2) ...[
-              const SizedBox(height: Space.sm),
-              Text(
-                'If this keeps happening it is usually one setting on the Apnivaas project, not '
-                'something you can fix from here. ${Env.emailRedirectSetupHint}',
-                style: t.textTheme.bodySmall,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ] else ...[
-            const SizedBox(height: Space.md),
+    return [
+      // WHAT HAS HAPPENED, AND WHAT TO DO, in one card: the two sentences the person has to read
+      // before any button makes sense. Everything under it is what they can do about it.
+      FlatSurface(
+        borderRadius: Radii.rSurface,
+        padding: const EdgeInsets.all(Space.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             Text(
-              'The email can take a minute to arrive. Only the newest link works.',
-              style: t.textTheme.bodySmall,
-              textAlign: TextAlign.center,
+              'Check your email',
+              style: t.textTheme.headlineSmall?.copyWith(fontFeatures: const []),
+            ),
+            const SizedBox(height: Space.xxs),
+            // WHAT HAS ACTUALLY HAPPENED, and nothing more. "Sent" is said only once a send has
+            // succeeded — or a recent one from this phone is known, with its age — so the person
+            // never goes looking for a mail that was never sent.
+            Text(
+              _whatHappened(address),
+              style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurface),
+            ),
+            const SizedBox(height: Space.sm),
+            // THE ONE THING THIS SCREEN CANNOT SEE: the link is opened somewhere else — a mail
+            // app, a browser, sometimes another device — and nothing tells this screen when. So
+            // the instruction has to include the return trip, which is the step people skip.
+            //
+            // SINCE THE DEEP LINK IT HAS TWO CASES, AND IT MAY NOT TELL ONLY THE HAPPY ONE. On
+            // this phone the link opens the app and signs the person in, and that is the whole
+            // proof. On a laptop — or any device without the app — the browser cannot open a
+            // custom scheme and lands on a web page instead, and no browser could ever complete
+            // the exchange anyway because it holds no PKCE verifier. That case is named here
+            // rather than discovered, and it is named as SURVIVABLE, because it is: the proof was
+            // minted by GoTrue before any redirect, so the button below finishes it.
+            //
+            // What it still refuses to do is predict how the landing page will LOOK. The version
+            // that promised the page "may show an error" was written for a project whose Site URL
+            // was localhost; predicting a failure that has been fixed teaches the next person to
+            // ignore a page that is, on an expired link, telling them the truth.
+            Text(
+              'Open that email and tap the link. On this phone it opens Apnivaas and signs you in '
+              '— that sign-in is the proof, and there is nothing more to do. Opened on a laptop or '
+              'another device it lands on a web page instead: come back to Apnivaas and tap the '
+              'button below, which finishes it just as well.',
+              style: t.textTheme.bodyMedium,
             ),
           ],
+        ),
+      ),
+      const SizedBox(height: Space.md),
 
-          const SizedBox(height: Space.lg),
-          FilledButton(
-            onPressed: _checking ? null : _check,
-            child: _checking
-                ? SizedBox(
-                    width: IconSize.md,
-                    height: IconSize.md,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: t.colorScheme.onPrimary),
-                  )
-                : const Text('I have opened the link'),
-          ),
-
-          TextButton(
-            onPressed: _canResend ? _send : null,
-            child: _sending
-                ? const Text('Sending…')
-                : Text(cooldown == Duration.zero
-                    ? 'Send it again'
-                    : 'Send again in ${cooldown.inSeconds}s'),
-          ),
-
-          // THE WAY OUT, AND IT CHANGES MEANING WITH THE CONTEXT.
-          //
-          // From the home-screen banner this is a real "later": a resident's app is fully usable
-          // unverified and nobody should be nagged into a dead end. As the router's GATE there is
-          // nothing behind this screen, and "later" would either do nothing (a broken button) or
-          // have to let them past, which is the one thing the gate exists to prevent. Signing
-          // out is the honest alternative: a real action that always works, with the account
-          // waiting when the mail arrives.
-          if (!widget.blocking)
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('I will do this later'),
-            )
-          else
-            TextButton(
-              onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
-              child: const Text('Sign out'),
-            ),
-
-          // WHO FIXES A WRONG ADDRESS. The one failure nobody on this screen can repair: the
-          // link is going to a typo, and only someone with edit rights over this account can
-          // change it — the PG owner for staff and residents, Apnivaas support for an owner.
-          // Said here, in both modes, because a gate whose only exit is Sign out must at least
-          // say where the door to the fix is. The mailbox is the one the legal documents name.
+      if (error != null) ...[
+        FormNote(error),
+        if (_operatorFault) ...[
           const SizedBox(height: Space.xs),
           Text(
-            'Wrong address? Ask your PG owner to correct it. '
-            'Owners: contact Apnivaas support at $kGrievanceEmail.',
-            style: t.textTheme.bodySmall,
-            textAlign: TextAlign.center,
+            'This is a setting on the Apnivaas project, not something you can fix from here. '
+            'Nothing you do in the app will work until an administrator changes it.',
+            style: muted,
           ),
         ],
+      ] else if (_notYet) ...[
+        FormNote(
+          'Not confirmed yet. Open the newest email from Apnivaas and tap the link — check '
+          'your spam folder if it is not in the inbox. Only the newest link works, so if '
+          'you tapped an older one, send a new email and use that.',
+          tone: FormNoteTone.warning,
+        ),
+        // THE SECOND ONE IN A ROW, AND ONLY THE SECOND. See the header: one "no proof" is
+        // ordinary — mail is slow, people tap before reading. Two consecutive ones, after
+        // the person has twice said they opened it, is the shape of a link that is not
+        // getting back to the app, and the commonest cause is a dashboard field that was
+        // measured missing on this project (the redirect is substituted for the Site URL,
+        // silently, so nothing else in the system can report it).
+        //
+        // It claims NOTHING about the link — the sentence above still stands, and both
+        // escapes below stay live. It names a setting and the exact value, under the same
+        // "not something you can fix from here" framing every operator fault on this screen
+        // uses, so a resident reads it as somebody else's job rather than their homework.
+        if (_notYetCount >= 2) ...[
+          const SizedBox(height: Space.sm),
+          Text(
+            'If this keeps happening it is usually one setting on the Apnivaas project, not '
+            'something you can fix from here. ${Env.emailRedirectSetupHint}',
+            style: muted,
+          ),
+        ],
+      ] else
+        Text(
+          'The email can take a minute to arrive. Only the newest link works.',
+          style: muted,
+        ),
+
+      const SizedBox(height: Space.lg),
+      BusyFilledButton(
+        label: 'I have opened the link',
+        busy: _checking,
+        onPressed: _check,
       ),
-    );
+      const SizedBox(height: Space.xxs),
+      TextButton(
+        onPressed: _canResend ? _send : null,
+        child: _sending
+            ? const Text('Sending…')
+            : Text(cooldown == Duration.zero
+                ? 'Send it again'
+                : 'Send again in ${cooldown.inSeconds}s'),
+      ),
+
+      // THE WAY OUT, AND IT CHANGES MEANING WITH THE CONTEXT.
+      //
+      // From the home-screen banner this is a real "later": a resident's app is fully usable
+      // unverified and nobody should be nagged into a dead end. As the router's GATE there is
+      // nothing behind this screen, and "later" would either do nothing (a broken button) or
+      // have to let them past, which is the one thing the gate exists to prevent. Signing
+      // out is the honest alternative: a real action that always works, with the account
+      // waiting when the mail arrives.
+      if (!widget.blocking)
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('I will do this later'),
+        )
+      else
+        TextButton(
+          onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
+          child: const Text('Sign out'),
+        ),
+
+      // WHO FIXES A WRONG ADDRESS. The one failure nobody on this screen can repair: the
+      // link is going to a typo, and only someone with edit rights over this account can
+      // change it — the PG owner for staff and residents, Apnivaas support for an owner.
+      // Said here, in both modes, because a gate whose only exit is Sign out must at least
+      // say where the door to the fix is. The mailbox is the one the legal documents name.
+      const SizedBox(height: Space.xs),
+      Text(
+        'Wrong address? Ask your PG owner to correct it. '
+        'Owners: contact Apnivaas support at $kGrievanceEmail.',
+        style: muted,
+        textAlign: TextAlign.center,
+      ),
+    ];
   }
 }
 
-/// Open the verification screen from anywhere. Returns true when the address was proved.
+// Open the verification screen from anywhere. Returns true when the address was proved.
 Future<bool> openEmailVerification(BuildContext context) async {
   final result = await Navigator.of(context).push(VerifyEmailScreen.route());
   return result ?? false;
@@ -792,23 +791,24 @@ class _VerifyEmailBannerState extends ConsumerState<VerifyEmailBanner>
       return const SizedBox.shrink();
     }
 
+    // THE CALM BANNER, NOT THE GOLD ONE. For a resident this is a requirement and not a trap —
+    // the account works either way — so it is the Mist explanation a screen carries rather than
+    // the gold task banner, which is for work that is due and which a home screen may already
+    // be using for something that is.
     return Padding(
       padding: const EdgeInsets.only(bottom: Space.md),
-      child: NoticeBanner(
-        eyebrow: 'Verify your email',
-        icon: Icons.mark_email_unread_rounded,
-        tone: context.tones.warning,
+      child: InfoBanner(
+        title: 'Verify your email',
+        icon: ClayIcons.bell,
         // Not "to create or manage accounts": since 1.2.0 the people who read this are
         // residents, and that is a staff power. What is true for everyone is that the address
         // is confirmed as theirs.
         message: 'Open the link Apnivaas emails to ${session.email} to confirm it is yours. '
             'Everything else keeps working.',
-        action: SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            onPressed: () => openEmailVerification(context),
-            child: const Text('Verify now'),
-          ),
+        action: PillButton(
+          label: 'Verify now',
+          filled: true,
+          onPressed: () => openEmailVerification(context),
         ),
       ),
     );

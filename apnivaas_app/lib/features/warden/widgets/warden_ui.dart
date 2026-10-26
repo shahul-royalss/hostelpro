@@ -8,8 +8,9 @@ import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../shared/brow.dart';
 import '../../../shared/brow_header.dart';
+import '../../../shared/clay/clay.dart';
 import '../../../shared/glass/glass.dart';
-import '../../shell/staff_profile_sheet.dart';
+import '../../../shared/illustrations.dart';
 import '../../../shared/sign_in_again.dart';
 import '../../../shared/motion/settle.dart';
 
@@ -67,14 +68,24 @@ String monthLabel(String periodMonth) {
   return DateFormat('MMMM yyyy').format(DateTime(year, month));
 }
 
-/// One or two letters for an avatar. Never more — three initials in a circle is unreadable at
-/// the size a list row allows.
-String initials(String fullName) {
-  final words = fullName.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-  if (words.isEmpty) return '?';
-  if (words.length == 1) return words.first.characters.first.toUpperCase();
-  return (words.first.characters.first + words.last.characters.first).toUpperCase();
+/// The month of a 'YYYY-MM' alone — "October" — for a figure that already sits under the
+/// year's heading. An unrecognised string comes back untouched, like [monthLabel].
+String monthName(String periodMonth) {
+  final parts = periodMonth.split('-');
+  final month = parts.length == 2 ? int.tryParse(parts[1]) : null;
+  if (month == null || month < 1 || month > 12) return periodMonth;
+  return DateFormat('MMMM').format(DateTime(2000, month));
 }
+
+/// A count with its noun agreeing — "1 resident", "6 residents". [plural] for the nouns that
+/// do not take an s.
+String countOf(int n, String singular, {String? plural}) =>
+    '$n ${n == 1 ? singular : (plural ?? '${singular}s')}';
+
+/// One or two letters for an avatar — the clay [InitialsDisc]'s own rule, so the initials a
+/// sheet prints and the ones every disc in the app draws cannot disagree. Never more than two:
+/// three initials in a circle is unreadable at the size a list row allows.
+String initials(String fullName) => InitialsDisc.initialsFor(fullName);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEMANTIC COLOUR
@@ -113,6 +124,28 @@ Color toneFor(BuildContext context, WireValue status) {
   });
 }
 
+/// The same meanings as [toneFor], named the way the clay [StatusChip] takes them.
+///
+/// Two functions rather than one because they answer for two different objects: [toneFor] gives
+/// a colour to paint a glyph or a figure in, this gives the chip its tone and lets the chip
+/// resolve its own ink and tint. They must never disagree, which is why they sit side by side.
+StatusTone statusToneOf(WireValue status) => switch (status) {
+      FeeStatus.paid ||
+      ComplaintStatus.resolved ||
+      StudentStatus.active ||
+      BedStatus.free ||
+      SubscriptionState.active =>
+        StatusTone.success,
+      FeeStatus.partial ||
+      ComplaintStatus.inProgress ||
+      StudentStatus.onLeave ||
+      SubscriptionState.expiring =>
+        StatusTone.warning,
+      FeeStatus.unpaid || ComplaintStatus.open || SubscriptionState.expired => StatusTone.error,
+      StudentStatus.vacated => StatusTone.neutral,
+      _ => StatusTone.brand,
+    };
+
 /// A small round dot in a semantic tone.
 ///
 /// The design's own status marker — `flex h-2 w-2 rounded-full bg-error` in the Stitch HTML,
@@ -140,153 +173,75 @@ class ToneDot extends StatelessWidget {
       );
 }
 
-/// A tinted circle with an icon in it — the design's `bg-TONE/10 p-2 rounded-full text-TONE`,
-/// which is [ApnivaasSemantics.chipFill] at the exact tint the palette measured.
-///
-/// It is the mockups' most repeated ornament: the leading badge on a stat tile, the glyph
-/// beside each row of PERSONAL DETAILS, the circle behind a Quick Action, the disc behind an
-/// assigned technician. [square] switches to [Radii.rControl] for the places the design uses a
-/// rounded square instead — the checklist rows on move-out-inspection.png.
-class IconBadge extends StatelessWidget {
-  const IconBadge({
-    super.key,
-    required this.icon,
-    this.tone,
-    this.size = Space.xxxl,
-    this.iconSize = IconSize.lg,
-    this.square = false,
-  });
-
-  final IconData icon;
-
-  /// Canonical or resolved — resolved here either way, so a caller can keep naming the meaning.
-  final Color? tone;
-  final double size;
-  final double iconSize;
-  final bool square;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = context.tones.resolve(tone ?? Theme.of(context).colorScheme.primary);
-    return Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: context.tones.chipFill(accent),
-        shape: square ? BoxShape.rectangle : BoxShape.circle,
-        borderRadius: square ? Radii.rControl : null,
-      ),
-      child: Icon(icon, size: iconSize, color: accent),
-    );
-  }
-}
-
-/// The design's badge geometry — `px-[6px] py-[2px] rounded-[4px]`, which is what every
-/// status badge in the file is drawn at (4:767 PAID, 4:775 OVERDUE, 4:783 PARTIAL, 4:715
-/// MAINTENANCE, 4:802 on the resident sheet).
-const _badgeInset = EdgeInsets.symmetric(
-  horizontal: Space.xxs + Space.xxs / 2,
-  vertical: Space.xxs / 2,
-);
-
 /// A status, said once, the same way everywhere.
 ///
 /// Takes the enum rather than a string so the wording comes from [WireValue.label] — the same
-/// text the web app shows for the same row — and the colour from [toneFor]. The `.text` variant
-/// is for the handful of states that are not a database enum ("No bed", "3 free").
+/// text the web app shows for the same row — and the tone from [statusToneOf]. The `.text`
+/// variant is for the handful of states that are not a database enum ("No bed", "3 free").
 ///
-/// THE SHAPE IS FIGMA'S STATUS BADGE, NOT A PILL. `screen-warden-students-list` (4:723) puts
-/// one on every row and they are all the same object: a 4px-cornered rectangle, 6/2 padding,
-/// the tone at 10% behind a full-strength 1px border of the tone, and the label uppercase in
-/// the tone. No dot, and no capsule. The dot went because the label is already the redundant
-/// cue a colour-blind reader needs — "OVERDUE" says overdue — and a dot in front of it was
-/// stealing four points of the six the badge has to spare at 320dp.
-///
-/// [labelSmall] is the design's chip step (10/600 at +0.05em). The file draws these at 9px;
-/// 9 is below the size a semibold uppercase label survives real text-scaling at, and the two
-/// are indistinguishable at 1.0x. `.text` leaves its label's case alone, because what gets
-/// passed there is a count or a phrase rather than a state, and "2 OF 3 OCCUPIED" is shouting.
+/// IT IS THE CLAY [StatusChip] NOW: a pill with a 10% tint of its tone and the word in that
+/// tone's text ink, Manrope 12/16 bold, in sentence case. The old shape — a 4px-cornered box
+/// with a full-strength border and the word in capitals — shouted on a list where every row
+/// carries one; a chip says the same thing at a speaking volume, and the word is still the cue
+/// a colour-blind reader needs ("Overdue" says overdue without the red).
 class StatusPill extends StatelessWidget {
   // A named parameter cannot be private, so the enum cannot arrive as an initializing formal
   // for `_status`; it has to be copied across in the initialiser list.
   const StatusPill({super.key, required WireValue status, this.dot = false})
       : _status = status, // ignore: prefer_initializing_formals
         label = null,
-        tone = null,
-        _upper = true;
+        tone = null;
 
   const StatusPill.text({
     super.key,
     required this.label,
     required this.tone,
     this.dot = false,
-  })  : _status = null,
-        _upper = false;
+  }) : _status = null;
 
   final WireValue? _status;
   final String? label;
+
+  /// Canonical or theme-resolved — either is matched back to its [StatusTone] here, so a caller
+  /// keeps naming the meaning. The scheme's primary reads as the brand; anything else unknown is
+  /// drawn neutral rather than guessed at.
   final Color? tone;
 
-  /// Opt back into the leading dot for the one case that still earns it: a badge whose label
-  /// is a COUNT rather than a state name ("3 free"), where the words carry no colour meaning
-  /// of their own.
+  /// Opt back into the leading dot for the one case that still earns it: a chip whose label is
+  /// a COUNT rather than a state name ("3 free"), where the words carry no colour meaning of
+  /// their own.
   final bool dot;
 
-  final bool _upper;
+  static StatusTone _toneOfColor(BuildContext context, Color? colour) {
+    if (colour == null) return StatusTone.neutral;
+    if (colour == Theme.of(context).colorScheme.primary) return StatusTone.brand;
+    final tones = context.tones;
+    for (final tone in StatusTone.values) {
+      if (colour == tone.canonical || colour == tones.resolve(tone.canonical)) return tone;
+    }
+    return StatusTone.neutral;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final tones = context.tones;
     final status = _status;
-    // A `tone:` handed in from a screen is still canonical, so resolve it here too rather than
-    // trusting the caller. resolve() passes an already-resolved colour through unchanged.
-    final accent = tones.resolve(tone ?? toneFor(context, status!));
-    final raw = label ?? status!.label;
-    return Container(
-      padding: _badgeInset,
-      decoration: BoxDecoration(
-        // chipFill, not a plausible-looking 0.12. The tint lightens the pane toward the text
-        // sitting on it, so 0.12 measured 3.29:1 at worst — the alphas live in one place
-        // precisely so a chip cannot be drawn at a number nobody measured.
-        color: tones.chipFill(accent),
-        borderRadius: Radii.rTiny,
-        border: Border.all(color: tones.chipBorder(accent), width: Strokes.hairline),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (dot) ...[
-            ToneDot(tone: accent, size: Space.xxs + Space.xxs / 2),
-            const SizedBox(width: Space.xxs),
-          ],
-          Flexible(
-            child: Text(
-              _upper ? raw.toUpperCase() : raw,
-              style: t.textTheme.labelSmall?.copyWith(color: accent),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
+    return StatusChip(
+      label: label ?? status!.label,
+      tone: status != null ? statusToneOf(status) : _toneOfColor(context, tone),
+      dot: dot,
     );
   }
 }
 
-/// The design's filter bar — `filter-bar` (4:660) on the dashboard and `chips` (4:747) on the
-/// students list are the same object twice.
+/// A row of filter chips: one is on, the rest are a tap away.
 ///
-/// A row of `rounded-[100px]` chips, `px-[12px] py-[6px]`, label at 12/600. The SELECTED one is
-/// filled with the gold and its label is the ground colour; the rest are the raised surface
-/// behind the hairline with a secondary label. That is the app's one full-strength gold fill
-/// outside the FAB, and it is what tells you which list you are looking at from across a
-/// corridor.
+/// The SELECTED chip is filled forest with its label in white — the one solid fill on a list
+/// screen, which is what tells you which list you are looking at from across a corridor. The
+/// rest sit on the card fill behind the card hairline with a quiet label, so they read as
+/// choices rather than as a second row of buttons.
 ///
-/// It replaces Material's [ChoiceChip], which this feature used on three screens: the stock
-/// chip is a 32dp capsule with a check mark that slides in, in the scheme's `secondaryContainer`
-/// — none of which is in the file.
+/// It replaces Material's [ChoiceChip]: the stock chip is a 32dp capsule with a check mark that
+/// slides in, in the scheme's `secondaryContainer`, which is nobody's idea of this app.
 class FilterBar<T> extends StatelessWidget {
   const FilterBar({
     super.key,
@@ -324,6 +279,9 @@ class FilterBar<T> extends StatelessWidget {
 
 /// One chip of a [FilterBar]. Public because two screens filter on something that is not a
 /// single enum (a nullable status, a month) and build their own row.
+///
+/// 36dp to the eye and 48 to the finger: the button pads its own hit area out to the floor
+/// ([MaterialTapTargetSize.padded]) without drawing a fat capsule to get there.
 class FilterPill extends StatelessWidget {
   const FilterPill({
     super.key,
@@ -336,47 +294,39 @@ class FilterPill extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
+  /// The chip's painted height. The target around it is the 48dp floor.
+  static const height = 36.0;
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final scheme = t.colorScheme;
     return Semantics(
       button: true,
       selected: selected,
       label: label,
-      child: Material(
-        color: selected ? t.colorScheme.primary : t.colorScheme.surfaceContainer,
-        borderRadius: Radii.rPill,
-        child: InkWell(
-          borderRadius: Radii.rPill,
-          onTap: onTap,
-          child: Container(
-            // The design's chip is 30dp tall. 44 is the smallest target a warden holding a
-            // phone one-handed hits reliably, and it is what the rest of this app's controls
-            // already stand on.
-            constraints: const BoxConstraints(minHeight: 44),
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: Space.sm, vertical: Space.xs),
-            decoration: BoxDecoration(
-              borderRadius: Radii.rPill,
-              border: Border.all(
-                color: selected ? t.colorScheme.primary : t.colorScheme.outlineVariant,
-                width: Strokes.hairline,
-              ),
-            ),
-            child: Text(
-              label,
-              // labelMedium IS the design's 12/600, but the scale gives it the +0.05em
-              // tracking a CAPS label needs. A chip label is sentence case ("On Leave"), and
-              // caps tracking on sentence case reads as a spacing bug.
-              style: t.textTheme.labelMedium?.copyWith(
-                color: selected ? t.colorScheme.onPrimary : t.colorScheme.onSurfaceVariant,
-                letterSpacing: 0,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: TextButton(
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          backgroundColor: selected ? scheme.primary : scheme.surface,
+          foregroundColor: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
+          minimumSize: const Size(0, height),
+          padding: const EdgeInsets.symmetric(horizontal: Space.md - Space.xxs),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          visualDensity: VisualDensity.standard,
+          shape: StadiumBorder(
+            side: BorderSide(
+              color: selected ? scheme.primary : scheme.outlineVariant,
+              width: Strokes.hairline,
             ),
           ),
+          // The row-title step in sentence case, the same type the clay PillButton sets; the
+          // tabular figures it carries for numbers have no business in a word.
+          textStyle: t.textTheme.titleSmall?.copyWith(fontFeatures: const []),
         ),
+        child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
     );
   }
@@ -386,21 +336,22 @@ class FilterPill extends StatelessWidget {
 // LAYOUT
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// A warden screen: the design's header bar, then content.
+/// A warden screen: the forest header, then content.
 ///
-/// THE HEADER IS NODE 4:651 / 4:734, AND THE TWO ARE IDENTICAL. 56dp high with a bottom
-/// hairline and nothing else — a small brand dot, the page name at 16/700 cream, and the
-/// screen's controls as square icon buttons on the right. It is a bar content scrolls beneath,
-/// not an AppBar; see GlassHeader, which owns the status-bar inset so no screen re-derives it.
+/// The header is the brow every role's screens open with — the forest gradient with its few
+/// soft stars and the rounded bottom edge — drawn by [GlassHeader.onBrow], which also owns the
+/// status-bar inset so no screen re-derives it. It is a bar the content scrolls beneath, not an
+/// AppBar. On it: the small gold brand dot, the page name, an optional second line, and the
+/// screen's own controls at the trailing edge.
 ///
-/// WHAT WENT: the 20/700 title and the coloured `eyebrow` above it. Neither is in the file.
-/// Figma's header carries one line of type, and the caps eyebrows it does draw are SECTION
-/// headings down in the body ("QUICK ACTIONS", "RECENT COMPLAINTS") — that is [SectionLabel].
-/// A screen that wants to say "Rent" now says it where the design says it.
+/// [subtitle] is for real second facts — the month a ledger is showing, the term a list is
+/// filtered by — because the alternative is a header that cannot say which month you are
+/// looking at.
 ///
-/// [subtitle] survives as the design's 11/400 meta line because the app has real second facts
-/// for it — the hostel's name, the month a ledger is showing — and the alternative is a header
-/// that cannot say which month you are looking at.
+/// The home tab does not use this: it opens with the clay [AppHeader] (greeting, avatar and the
+/// search pill), the shape every role's home shares. A tab keeps its title here, because a
+/// masthead on "Rooms" or "Complaints" would take away the one thing telling you which of five
+/// tabs you are standing in.
 class WardenScreen extends StatelessWidget {
   const WardenScreen({
     super.key,
@@ -408,7 +359,6 @@ class WardenScreen extends StatelessWidget {
     required this.child,
     this.subtitle,
     this.actions = const [],
-    this.masthead = false,
   });
 
   final String title;
@@ -416,78 +366,36 @@ class WardenScreen extends StatelessWidget {
   final List<Widget> actions;
   final Widget child;
 
-  /// The dashboard treatment: the signature centred, the account avatar at the leading edge,
-  /// and nothing trailing.
-  ///
-  /// Only the warden's HOME sets it. Every other warden screen keeps its title, because a
-  /// masthead on "Rooms" or "Complaints" would take away the one thing telling you which of
-  /// five tabs you are standing in — the logo is an identity, not a label.
-  final bool masthead;
-
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // The shell's top bar IS the brow — the brand block with the curved bottom edge that
-        // every role's home now opens with. See GlassHeader.onBrow for why the header draws it
-        // rather than a band sitting behind the whole shell.
         GlassHeader(
           onBrow: true,
-          child: masthead
-              ? _masthead(context)
-              // Strings into BrowTitleBlock, never Text with the theme's titleMedium/bodySmall:
-              // those carry the theme's ink and beat the brow's white. See BrowText.
-              : BrowTitleBlock(
-                  // `avatar-indicator` (4:654, 4:737): an 8px brand disc in front of the page
-                  // name, on every warden frame in the file. Gold on the brow; see ToneDot.
-                  leading: const ToneDot(tone: ApnivaasColors.primary),
-                  title: title,
-                  subtitle: subtitle,
-                  actions: actions,
-                ),
+          // Strings into BrowTitleBlock, never Text with the theme's titleMedium/bodySmall:
+          // those carry the theme's ink and beat the brow's white. See BrowText.
+          child: BrowTitleBlock(
+            // The brand disc in front of the page name. Gold on the brow; see ToneDot.
+            leading: const ToneDot(tone: ApnivaasColors.primary),
+            title: title,
+            subtitle: subtitle,
+            actions: actions,
+          ),
         ),
         Expanded(child: child),
       ],
     );
   }
-
-  /// Avatar, greeting and signature, centred on the SCREEN rather than on the space left over
-  /// beside the avatar — BrowTitleBlock.masthead balances the avatar with an empty twin.
-  Widget _masthead(BuildContext context) {
-    final name = title.replaceFirst('Hello, ', '').trim();
-    return BrowTitleBlock.masthead(
-      name: name,
-      leading: Tooltip(
-        message: 'Your account',
-        child: InkWell(
-          onTap: () => showStaffProfile(context),
-          customBorder: const CircleBorder(),
-          child: Padding(
-            // 8 + 44 + 8 is a 60dp target on the control that opens profile, two-factor and
-            // sign out. `customBorder: CircleBorder()` clips the hit region to a circle, so the
-            // corners are dead and the real target is smaller than its box — which is why it is
-            // generous. The disc grew from 32 on 2026-09-12; see AvatarSize.header.
-            padding: const EdgeInsets.all(Space.xs),
-            child: AccountAvatar(name: name.isEmpty ? 'Apnivaas' : name, size: AvatarSize.header),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
-/// The heading over a section of the page — `quick-actions-section` (4:691) and
-/// `complaints-section` (4:708), which are the same object: 11px semibold, UPPERCASE, in the
-/// quiet ink, with nothing else on the line.
+/// The heading over a section of a page or a sheet: Outfit at the form step, in the theme's
+/// ink, sentence case, with an optional trailing fact ("2 free", "8 residents").
 ///
-/// IT USED TO BE A 20/700 GOLD TITLE WITH A RULE RUNNING OFF TO THE RIGHT. That came from the
-/// superseded Stitch screens, and it is the single biggest reason the warden pages read louder
-/// than the file does: Figma's sections are announced in a whisper and the CONTENT is what is
-/// bold. The gold is spent on one thing per screen — the active filter chip — and a page with
-/// four gold headings on it has nowhere left to put emphasis.
-///
-/// [trailing] survives for the floor summaries on the room grid, which the design's own list
-/// headers do the same thing with ("STUDENT DIRECTORY … 48 students", 4:757).
+/// It is the clay [SectionHeader] — a semantics header, so a screen reader can jump between
+/// sections — at the size a heading INSIDE a screen takes. The page's own title is the header
+/// above it and the home's section titles are a step larger; three sizes, each saying how much
+/// of the page it governs. It used to be an 11px caps whisper, which on a cream page read as a
+/// caption that had lost its picture.
 class SectionLabel extends StatelessWidget {
   const SectionLabel({super.key, required this.label, this.trailing});
   final String label;
@@ -495,42 +403,32 @@ class SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(0, Space.lg, 0, Space.sm),
-      child: Row(
-        children: [
-          Flexible(
-            child: Text(
-              label.toUpperCase(),
-              style: t.textTheme.labelMedium?.copyWith(color: context.tones.muted),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const Spacer(),
-          ?trailing,
-        ],
-      ),
+      child: SectionHeader(title: label, size: SectionHeaderSize.form, trailing: trailing),
     );
   }
 }
 
-/// `label-caps`: the small uppercase heading the design puts INSIDE a card.
+/// The small heading the design puts INSIDE a card, over the thing it names — "Paid by", "This
+/// month", "Current assignment", or the word over a figure.
 ///
-/// "TOTAL BEDS", "CURRENT ASSIGNMENT", "PERSONAL DETAILS", "ASSIGNMENT SUMMARY", "SELECTED
-/// BED". [labelSmall] is that token exactly; a TextStyle cannot change case, so this does.
-class CapsLabel extends StatelessWidget {
-  const CapsLabel(this.label, {super.key, this.tone, this.dot = false});
+/// SENTENCE CASE, as it is everywhere in the clay system. This was `label-caps` — an 11px
+/// upper-cased eyebrow — which the canvas retired: capitals at that size read as a caption that
+/// has lost its picture, and they are slower to read than the words they shout. It is
+/// [TextTheme.labelMedium] (Manrope 12/16 bold) in the theme's secondary ink, so it ranks under
+/// the row title it sits above without disappearing into the body text beside it.
+class EyebrowLabel extends StatelessWidget {
+  const EyebrowLabel(this.label, {super.key, this.tone, this.dot = false});
 
   final String label;
 
   /// Canonical or resolved. Null takes the theme's secondary text colour, which is what the
-  /// design's own muted eyebrows use.
+  /// design's own muted labels use.
   final Color? tone;
 
-  /// The design marks a summary figure's label with its state's dot — `● OCCUPIED`, `● FREE`,
-  /// `● MAINTENANCE` across the top of rooms-beds-directory.png.
+  /// Marks a summary figure's label with its state's dot — "● Occupied", "● Free" — so the
+  /// label is also the legend for whatever is painted in that colour nearby.
   final bool dot;
 
   @override
@@ -541,13 +439,15 @@ class CapsLabel extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (dot && accent != null) ...[
-          ToneDot(tone: accent, size: Space.xxs + Space.xxs / 2),
-          const SizedBox(width: Space.xxs + Space.xxs / 2),
+          ToneDot(tone: accent, size: Space.tight),
+          const SizedBox(width: Space.tight),
         ],
         Flexible(
           child: Text(
-            label.toUpperCase(),
-            style: t.textTheme.labelSmall?.copyWith(color: accent),
+            label,
+            style: t.textTheme.labelMedium?.copyWith(
+              color: accent ?? t.colorScheme.onSurfaceVariant,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -557,99 +457,14 @@ class CapsLabel extends StatelessWidget {
   }
 }
 
-/// One figure on the dashboard, in the shape `stats-grid` draws it (4:671, 4:676, 4:681,
-/// 4:685).
+/// A round icon control: 44 to the eye, 48 to the finger, with its name as a tooltip and as
+/// what a screen reader says.
 ///
-/// `bg-[#111417] border border-[#292e33] p-[12px] gap-[4px]`, and inside it exactly three
-/// things stacked: a 10px UPPERCASE eyebrow in the quiet ink, the figure at 16/700 in the
-/// tone, and one 10px supporting line. Nothing else — no icon, no disc, no chrome.
-///
-/// WHAT WENT AND WHY. The tile used to lead with a 32dp tinted [IconBadge] and set the figure
-/// at 20/700 beside it, which is a shape the Figma file draws nowhere: four haloed glyphs
-/// across the top of a page are four things competing with the numbers they label. Dropping
-/// them takes the tile from ~118dp to ~74dp, which is how the file fits FOUR of these plus
-/// four quick actions plus a complaint above the fold.
-///
-/// The eyebrow is UPPERCASE, and that is the file's own `uppercase` class on 4:672 — not the
-/// sentence case the superseded Stitch screens used.
-class StatTile extends StatelessWidget {
-  const StatTile({
-    super.key,
-    required this.label,
-    required this.value,
-    this.caption,
-    this.tone,
-    this.onTap,
-  });
-
-  final String label;
-  final String value;
-  final String? caption;
-
-  /// Canonical in, resolved at paint. Null leaves the figure cream — the design tones only the
-  /// figures that carry a meaning ("₹89,200" red, "6 Pending" amber) and leaves "3 Approved"
-  /// in the body colour.
-  final Color? tone;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final accent = tone == null ? null : context.tones.resolve(tone!);
-    return Semantics(
-      button: onTap != null,
-      label: '$label: $value${caption == null ? '' : '. $caption'}',
-      child: Material(
-        color: t.colorScheme.surface,
-        borderRadius: Radii.rCard,
-        child: InkWell(
-          borderRadius: Radii.rCard,
-          onTap: onTap,
-          child: Container(
-            // A MINIMUM, not a height: at 1.4x text scale a two-line caption needs the room,
-            // and a fixed box clipped it. It is also the 48dp tap floor for a tile that opens
-            // the list it counted.
-            constraints: const BoxConstraints(minHeight: 72),
-            padding: const EdgeInsets.all(Space.sm),
-            decoration: BoxDecoration(
-              borderRadius: Radii.rCard,
-              border: Border.all(color: t.colorScheme.outlineVariant),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CapsLabel(label),
-                const SizedBox(height: Space.xxs),
-                Text(
-                  value,
-                  // headlineSmall is 16/700 tabular — the design's KPI figure exactly, and
-                  // tabular so a refreshing column of counts does not shuffle sideways.
-                  style: t.textTheme.headlineSmall?.copyWith(color: accent),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (caption != null) ...[
-                  const SizedBox(height: Space.xxs),
-                  Text(caption!, style: t.textTheme.bodySmall,
-                      maxLines: 2, overflow: TextOverflow.ellipsis),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The header's square icon button — `bell-icon-container` (4:656, 4:739).
-///
-/// `bg-[#171a1e] rounded-[8px] size-[32px]` with a 16px glyph in it. The painted box is the
-/// design's 32; the TARGET around it is 48, because 32dp is under both Material's and Apple's
-/// floor and the person hitting it is standing in a corridor. [badge] is the design's own
-/// 8px alert dot at the top right (4:659) — shown only when there is something to alert about,
-/// because a dot that is always on is decoration.
+/// ON THE FOREST HEADER it is the clay [HeaderIconButton] — white glyph on white at 8% inside a
+/// faint ring — so a warden tab's controls are the same object as the home header's. ON THE
+/// PAGE (the month stepper over the ledger) the same circle is drawn on the card fill behind the
+/// card hairline with the glyph in the theme's ink. [badge] is the gold unread dot, shown only
+/// when there is something to alert about, because a dot that is always on is decoration.
 class HeaderAction extends StatelessWidget {
   const HeaderAction({
     super.key,
@@ -666,62 +481,63 @@ class HeaderAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints.tightFor(width: Space.huge, height: Space.huge),
-      icon: SizedBox(
-        width: Space.xxl,
-        height: Space.xxl,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: DecoratedBox(
+    if (BrowScope.of(context)) {
+      return HeaderIconButton(
+        icon: icon,
+        label: tooltip,
+        onPressed: onPressed,
+        hasUnread: badge,
+      );
+    }
+    final scheme = Theme.of(context).colorScheme;
+    final enabled = onPressed != null;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: tooltip,
+      excludeSemantics: true,
+      onTap: onPressed,
+      child: Tooltip(
+        message: tooltip,
+        excludeFromSemantics: true,
+        child: InkResponse(
+          onTap: onPressed,
+          radius: Space.huge / 2,
+          child: SizedBox.square(
+            dimension: Space.huge,
+            child: Center(
+              child: Container(
+                width: HeaderIconButton.size,
+                height: HeaderIconButton.size,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: t.colorScheme.surfaceContainer,
-                  borderRadius: Radii.rControl,
+                  shape: BoxShape.circle,
+                  color: scheme.surface,
+                  border: Border.all(color: scheme.outlineVariant, width: Strokes.hairline),
                 ),
                 child: Icon(
                   icon,
-                  size: IconSize.md,
-                  // IconButton greys a disabled icon through IconTheme, which cannot reach
-                  // past the DecoratedBox this one is wrapped in. Said here instead.
-                  color: onPressed == null
-                      ? t.colorScheme.onSurfaceVariant
-                      : t.colorScheme.onSurface,
+                  size: IconSize.lg,
+                  color: enabled
+                      ? scheme.onSurface
+                      : scheme.onSurfaceVariant.withValues(alpha: Dim.readOnly),
                 ),
               ),
             ),
-            if (badge)
-              Positioned(
-                top: Space.xxs + Space.xxs / 2,
-                right: Space.xxs + Space.xxs / 2,
-                child: Container(
-                  width: Space.xs,
-                  height: Space.xs,
-                  decoration: BoxDecoration(
-                    color: context.tones.error,
-                    borderRadius: Radii.rTiny,
-                  ),
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// The design's aside: a filled well with a tinted glyph and a sentence in it.
+/// An aside: a glyph and a sentence on a quiet fill.
 ///
-/// assign-bed-review.png sets its billing notice exactly this way — `surface-container-highest`,
-/// `rounded-lg`, a violet info glyph, body copy. Three screens in this feature had each drawn
-/// their own version at their own alpha; this is the one the design specifies.
-///
-/// [tone] tints the whole well for an aside that carries a WARNING rather than a note — the
-/// subscription banner, a refusal the server explained — using the measured chip recipe.
+/// NEUTRAL BY DEFAULT — the clay [InfoNote]'s fill and radius, the glyph and the words in the
+/// strong secondary ink — for the notes that explain rather than warn ("No app login is linked
+/// to this resident"). [tone] tints the whole aside for one that carries a WARNING instead — a
+/// refusal the server explained, a write that cannot be undone — at the measured chip tint, with
+/// the glyph and the [title] in that tone's text ink.
 class InfoCallout extends StatelessWidget {
   const InfoCallout({
     super.key,
@@ -735,27 +551,27 @@ class InfoCallout extends StatelessWidget {
   final Widget child;
   final String? title;
 
-  /// Null draws the design's neutral well.
+  /// Null draws the neutral note.
   final Color? tone;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final tones = context.tones;
-    final accent = tone == null ? t.colorScheme.primary : tones.resolve(tone!);
+    final accent = tone == null ? t.colorScheme.onSurfaceVariant : tones.resolve(tone!);
     return Container(
       padding: const EdgeInsets.all(Space.sm),
       decoration: BoxDecoration(
         color: tone == null ? t.colorScheme.surfaceContainerHighest : tones.chipFill(accent),
-        borderRadius: Radii.rControl,
-        border: tone == null
-            ? null
-            : Border.all(color: tones.chipBorder(accent), width: Strokes.hairline),
+        borderRadius: Radii.rButton,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: IconSize.md, color: accent),
+          Padding(
+            padding: const EdgeInsets.only(top: Space.hair),
+            child: Icon(icon, size: IconSize.md, color: accent),
+          ),
           const SizedBox(width: Space.xs),
           Expanded(
             child: title == null
@@ -764,6 +580,7 @@ class InfoCallout extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(title!, style: t.textTheme.titleSmall?.copyWith(color: accent)),
+                      const SizedBox(height: Space.hair),
                       child,
                     ],
                   ),
@@ -774,12 +591,11 @@ class InfoCallout extends StatelessWidget {
   }
 }
 
-/// The mockups' haloed glyph: a tinted disc inside a ring of the same tone.
+/// The glyph at the head of a confirmation: a tinted disc with the glyph in its tone.
 ///
-/// assign-bed-success.png and move-out-success.png both open with it, and it is the one piece
-/// of ornament the design allows itself on an otherwise empty screen. Reused for the empty and
-/// the failed states so that "nothing here", "this broke" and "that worked" are one size of
-/// event drawn three colours apart, rather than three different shapes.
+/// The check-out and assign confirmations open with it. It is the one ornament a question
+/// sheet allows itself, drawn at the size a compact empty state's art takes so that "are you
+/// sure", "nothing here" and "that worked" are one size of event.
 class StateHalo extends StatelessWidget {
   const StateHalo({super.key, required this.icon, this.tone});
 
@@ -790,14 +606,10 @@ class StateHalo extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = context.tones.resolve(tone ?? Theme.of(context).colorScheme.primary);
     return Container(
-      width: Space.huge + Space.xl, // 72
-      height: Space.huge + Space.xl,
+      width: ClaySize.banner,
+      height: ClaySize.banner,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: context.tones.chipFill(accent),
-        shape: BoxShape.circle,
-        border: Border.all(color: context.tones.chipBorder(accent), width: Strokes.hairline),
-      ),
+      decoration: BoxDecoration(color: context.tones.chipFill(accent), shape: BoxShape.circle),
       child: Icon(icon, size: IconSize.xl, color: accent),
     );
   }
@@ -805,54 +617,111 @@ class StateHalo extends StatelessWidget {
 
 /// Nothing to show — said in words that tell the warden whether that is good news.
 ///
-/// THE ANATOMY IS NODE 4:1562, `screen-empty-error-skeleton`, which is the frame the owner
-/// asked for and the one place the design specifies what an empty section looks like: a raised
-/// card, a caps tag in the state's tone at the top left, then a centred glyph inside a 54px
-/// square outlined at 1.5px, a 14/600 title and an 11/400 support line. [StateCard] and
-/// [StateBody] in the glass layer are that frame; this is the warden's wording on top of it.
+/// The kit's [EmptyState] with a choice made for it: given a picture it IS that widget, and
+/// without one it draws the same anatomy around a glyph. Its own name, so a warden screen can
+/// import the whole clay kit without hiding anything.
 ///
-/// It replaces a 72dp tinted halo disc, which was the Stitch success screen's ornament and
-/// appears nowhere in the Figma file.
-class EmptyState extends StatelessWidget {
-  const EmptyState({
+/// THE CLAY EMPTY STATE'S ANATOMY: a Mist disc with the picture on it, a title, one helpful
+/// sentence. What goes on the disc says which KIND of empty this is:
+///
+///  * a first-run state draws clay art — its [illustration]'s ([EmptyArt.clayFor]), or an
+///    [art] path for the states that have no EmptyArt name — "nothing here YET";
+///  * an empty that is GOOD news ([tone] success — every complaint resolved, every leave
+///    decided) draws the clay success art;
+///  * anything else — a search or a filter that matched nothing — keeps its Material [icon]
+///    in forest on the disc, because artwork means "nothing here yet", which is not what "no
+///    match for that" means.
+///
+/// The words are real Text either way, so they stay translatable and selectable.
+class WardenEmptyState extends StatelessWidget {
+  const WardenEmptyState({
     super.key,
     required this.icon,
     required this.title,
     this.detail,
     this.tone,
     this.illustration,
+    this.art,
+    this.compact = false,
   });
   final IconData icon;
   final String title;
   final String? detail;
 
-  /// An [EmptyArt] path drawn at 160dp INSTEAD of the outlined glyph square.
+  /// A clay path drawn instead of the glyph, for a first-run state with no [EmptyArt] name of
+  /// its own (a building with no rooms set up yet).
+  final String? art;
+
+  /// An [EmptyArt] state whose clay art is drawn INSTEAD of the glyph.
   ///
-  /// Only the states a brand-new account lands on get one — see the note on
-  /// [StateBody.illustration]. A list emptied by a SEARCH or a FILTER keeps its glyph: the
-  /// artwork means "nothing here yet", which is not what "no match for that" means. [icon]
-  /// stays required either way, because it is what the artwork falls back to.
+  /// Only the states a brand-new account lands on get one. [icon] stays required either way,
+  /// because it is what every other kind of empty draws.
   final String? illustration;
 
   /// Null is the neutral "nothing here". Pass [ApnivaasColors.success] where an empty list is the
   /// good outcome — every complaint resolved, every leave decided.
   final Color? tone;
 
+  /// The in-card size — for a sheet, or a section of a page that has other things in it.
+  final bool compact;
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Space.md),
-      child: StateCard(
-        // The design's badge names the STATE, not the content. Green where nothing left to do
-        // is the win, neutral where the list is simply empty.
-        badge: tone == null ? 'Nothing here' : 'All clear',
-        tone: tone,
-        child: StateBody(
-          icon: icon,
-          illustration: illustration,
-          title: title,
-          message: detail,
-          tone: tone,
+    final goodNews = tone != null && context.tones.resolve(tone!) == context.tones.success;
+    final picture = art ??
+        (illustration != null
+            ? EmptyArt.clayFor(illustration!)
+            : goodNews
+                ? ClayIcons.success
+                : null);
+    if (picture != null) {
+      return EmptyState(icon: picture, title: title, body: detail, compact: compact);
+    }
+
+    final t = Theme.of(context);
+    final dark = t.brightness == Brightness.dark;
+    final disc = compact ? ClaySize.promo : ArtSize.emptyDisc;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: EmptyState.maxWidth),
+        child: Padding(
+          padding: EdgeInsets.all(compact ? Space.md : Space.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: disc,
+                  height: disc,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: dark ? ApnivaasColors.darkMist : ApnivaasColors.mist,
+                    shape: BoxShape.circle,
+                  ),
+                  child: ExcludeSemantics(
+                    child: Icon(
+                      icon,
+                      size: compact ? IconSize.xl : Space.huge,
+                      color: t.colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: compact ? Space.sm : Space.md),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: compact
+                    ? t.textTheme.titleMedium
+                    : t.textTheme.headlineSmall?.copyWith(fontFeatures: const []),
+              ),
+              if (detail != null) ...[
+                const SizedBox(height: Space.tight),
+                Text(detail!, textAlign: TextAlign.center, style: t.textTheme.bodyMedium),
+              ],
+            ],
+          ),
         ),
       ),
     );
@@ -882,9 +751,10 @@ String failureBadge(AppFailure failure) => switch (failure) {
 /// subscription lapsed"; the retry button appears only where retrying could actually work,
 /// because a button that cannot help is worse than no button.
 ///
-/// The error card is the same 4:1562 anatomy as [EmptyState] with the red badge (4:1590) and
-/// the CREAM filled retry (4:1596). The design gives its error state no glyph at all — the
-/// sentence is the message — and that is followed here.
+/// It stays a card with a caps badge on it, unlike [WardenEmptyState]: the badge names the KIND of
+/// failure in two words before anyone reads the sentence (see [failureBadge]), and a failure is
+/// an event on the page rather than the page having nothing to say. No glyph — the sentence is
+/// the message.
 class FailureState extends StatelessWidget {
   const FailureState({super.key, required this.error, this.onRetry});
   final Object error;
@@ -913,13 +783,11 @@ class FailureState extends StatelessWidget {
   }
 }
 
-/// The mockups' confirmation panel: a haloed tick, a headline, a sentence, a summary of what
-/// was written, and the ways on from here.
+/// A confirmation: a picture on a Mist disc, a headline, a sentence, a summary of what was
+/// written, and the ways on from here.
 ///
-/// assign-bed-success.png and move-out-success.png are the same layout twice, so this is one
-/// widget. The summary is label/value rows under a `label-caps` heading — the design's own
-/// "ASSIGNMENT SUMMARY" — and every value passed to it comes from what the SERVER returned,
-/// never from what a form was holding.
+/// The summary is label/value rows under a small caps heading, and every value passed to it
+/// comes from what the SERVER returned, never from what a form was holding.
 class SuccessPanel extends StatelessWidget {
   const SuccessPanel({
     super.key,
@@ -928,6 +796,7 @@ class SuccessPanel extends StatelessWidget {
     this.summaryTitle,
     this.summary = const <(String, String)>[],
     this.tone,
+    this.art,
     this.actions = const <Widget>[],
   });
 
@@ -935,21 +804,42 @@ class SuccessPanel extends StatelessWidget {
   final String message;
   final String? summaryTitle;
 
-  /// Label / value pairs, drawn the design's way round: the quiet label left, the emphasised
-  /// value right.
+  /// Label / value pairs, drawn the quiet label left, the emphasised value right.
   final List<(String, String)> summary;
+
+  /// The tone of the tick drawn when there is no [art].
   final Color? tone;
+
+  /// A clay path for the disc — the receipt for a payment, say. Null draws a tick in [tone].
+  final String? art;
   final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final accent = tone ?? ApnivaasColors.success;
+    final dark = t.brightness == Brightness.dark;
+    final picture = art;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Center(child: StateHalo(icon: Icons.check_circle_outline_rounded, tone: accent)),
+        Center(
+          child: picture == null
+              ? StateHalo(
+                  icon: Icons.check_circle_outline_rounded,
+                  tone: tone ?? ApnivaasColors.success,
+                )
+              : Container(
+                  width: ClaySize.promo,
+                  height: ClaySize.promo,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: dark ? ApnivaasColors.darkMist : ApnivaasColors.mist,
+                    shape: BoxShape.circle,
+                  ),
+                  child: ClayIcon(picture, size: ClaySize.banner),
+                ),
+        ),
         const SizedBox(height: Space.md),
         Text(title, style: t.textTheme.titleLarge, textAlign: TextAlign.center),
         const SizedBox(height: Space.xxs),
@@ -963,7 +853,7 @@ class SuccessPanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (summaryTitle != null) ...[
-                  CapsLabel(summaryTitle!),
+                  EyebrowLabel(summaryTitle!),
                   const SizedBox(height: Space.xs),
                   Divider(color: t.colorScheme.outlineVariant, height: Strokes.hairline),
                   const SizedBox(height: Space.xs),
@@ -1004,73 +894,39 @@ class SuccessPanel extends StatelessWidget {
 
 /// A card-shaped placeholder for a section that has not arrived.
 ///
-/// The warden kit had no skeleton at all: the summary cards passed `SizedBox(height: 76)` as
-/// their loading state, which is a blank gap that looks exactly like a section that failed
-/// silently. This keeps the card's shape on screen so the page does not jump when the figures
-/// land, and — unlike a spinner — it says WHERE the missing thing will be.
-class SkeletonBlock extends StatefulWidget {
+/// It keeps the card's shape on screen so the page does not jump when the figures land, and —
+/// unlike a spinner — it says WHERE the missing thing will be. The bars are the clay
+/// [Skeleton]'s, under one [SkeletonPulse] for the card: one live region saying "Loading", one
+/// slow breath, still for anyone who asked the system for less motion.
+class SkeletonBlock extends StatelessWidget {
   const SkeletonBlock({super.key, this.lines = 2});
 
   final int lines;
 
   @override
-  State<SkeletonBlock> createState() => _SkeletonBlockState();
-}
-
-class _SkeletonBlockState extends State<SkeletonBlock> with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse =
-      AnimationController(vsync: this, duration: Motion.slow)..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  Widget _bar(BuildContext context, double factor, double height) => FractionallySizedBox(
-        alignment: Alignment.centerLeft,
-        widthFactor: factor,
-        child: Container(
-          height: height,
-          decoration: BoxDecoration(
-            // `#1D2227` — the brightest fill in the file, and what the skeleton layout's own
-            // bars are painted (4:1604, 4:1605, 4:1609, 4:1610). The hairline colour was too
-            // close to the card to read as a placeholder at all.
-            color: Theme.of(context).colorScheme.surfaceBright,
-            borderRadius: Radii.rTiny,
-          ),
-        ),
-      );
-
-  @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final body = Container(
-      padding: const EdgeInsets.all(Space.md),
-      decoration: BoxDecoration(
-        borderRadius: Radii.rCard,
-        border: Border.all(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _bar(context, 0.35, Space.sm - Space.xxs / 2),
-          const SizedBox(height: Space.sm),
-          for (var i = 0; i < widget.lines; i++) ...[
-            _bar(context, i.isEven ? 1 : 0.6, Space.md - Space.xxs / 2),
-            if (i != widget.lines - 1) const SizedBox(height: Space.xs),
+    return SkeletonPulse(
+      child: Container(
+        padding: const EdgeInsets.all(Space.md),
+        decoration: BoxDecoration(
+          color: t.colorScheme.surface,
+          borderRadius: Radii.rCard,
+          border: Border.all(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Skeleton(widthFactor: 0.35, height: Space.sm),
+            const SizedBox(height: Space.sm),
+            for (var i = 0; i < lines; i++) ...[
+              Skeleton(widthFactor: i.isEven ? 1 : 0.6, height: Space.md - Space.xxs / 2),
+              if (i != lines - 1) const SizedBox(height: Space.xs),
+            ],
           ],
-        ],
+        ),
       ),
-    );
-    // Somebody who asked the OS for less motion still gets the placeholder; it just stops
-    // breathing.
-    if (MediaQuery.disableAnimationsOf(context)) return body;
-    return FadeTransition(
-      opacity: Tween<double>(begin: 0.45, end: 1)
-          .animate(CurvedAnimation(parent: _pulse, curve: Motion.move)),
-      child: body,
     );
   }
 }
@@ -1111,12 +967,15 @@ class AsyncSection<T> extends StatelessWidget {
   }
 }
 
+/// What a section looks like before it has anything to say, when its caller has no shape of its
+/// own to offer: three rows' worth of the clay list skeleton. Rows rather than a spinner,
+/// because nearly everything a warden waits for is a list.
 class _Spinner extends StatelessWidget {
   const _Spinner();
   @override
   Widget build(BuildContext context) => const Padding(
-        padding: EdgeInsets.symmetric(vertical: Space.xxl),
-        child: Center(child: CircularProgressIndicator(strokeWidth: InlineSpinner.stroke)),
+        padding: EdgeInsets.symmetric(vertical: Space.md),
+        child: ListSkeleton(rows: 3),
       );
 }
 
@@ -1140,7 +999,7 @@ class InlineSpinner extends StatelessWidget {
 
   /// Pass `colorScheme.onPrimary` when the spinner sits INSIDE a filled button. The progress
   /// theme paints `scheme.primary`, which is that button's own fill — so the default spinner
-  /// is indigo on indigo and invisible for the whole of the write it is reporting.
+  /// is forest on forest and invisible for the whole of the write it is reporting.
   final Color? onFill;
 
   @override
@@ -1159,95 +1018,20 @@ class InlineSpinner extends StatelessWidget {
 // CONTROLS
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// One of the four things a warden does most — `action-card` (4:693, 4:696, 4:700, 4:703).
+/// A row sized for a thumb: 64dp minimum, the whole width tappable, in its own card.
 ///
-/// A ROW, not a tile: `bg-[#171a1e] border border-[#292e33] rounded-[8px] p-[12px] gap-[10px]`
-/// with a bare 14px glyph and a 12/600 label beside it. Four of them in a 2×2 grid come to
-/// about 100dp of page in total, which is what leaves room for the section under them.
-///
-/// IT WAS AN 88dp TILE with a 48dp tinted disc above a centred label. That shape is from the
-/// superseded Stitch dashboard; the Figma file draws no icon discs at all. The glyph keeps its
-/// [tone] because the file tints these individually — its four are gold, blue, green and
-/// amber — but it is a glyph on the surface now, not a badge.
-///
-/// The raised fill is the design's and it is what distinguishes an action from a statistic:
-/// stat cards are `#111417`, actions are `#171A1E`. Height floors at 48dp — the design's card
-/// comes out around 42, and the person tapping it is standing up holding a phone in one hand.
-class QuickAction extends StatelessWidget {
-  const QuickAction({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.tone,
-    this.enabled = true,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final Color? tone;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final accent = enabled
-        ? context.tones.resolve(tone ?? t.colorScheme.primary)
-        : t.colorScheme.onSurfaceVariant;
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: label,
-      child: Material(
-        color: t.colorScheme.surfaceContainer,
-        borderRadius: Radii.rControl,
-        child: InkWell(
-          borderRadius: Radii.rControl,
-          onTap: enabled ? onTap : null,
-          child: Container(
-            // A MINIMUM, not a height: a two-line label at 1.4x text scale needs the room, and
-            // 48 is the tap floor the design's own 42 does not reach.
-            constraints: const BoxConstraints(minHeight: 48),
-            padding: const EdgeInsets.all(Space.sm),
-            decoration: BoxDecoration(
-              borderRadius: Radii.rControl,
-              border: Border.all(color: t.colorScheme.outlineVariant),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, size: IconSize.sm, color: accent),
-                const SizedBox(width: Space.xs + Space.xxs / 2),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: t.textTheme.titleSmall?.copyWith(
-                      color: enabled ? t.colorScheme.onSurface : t.colorScheme.onSurfaceVariant,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A list row sized for a thumb: 64dp minimum, the whole width tappable.
-///
-/// `student-row` (4:761) is the shape: the card fill behind a hairline at `rounded-[8px]` with
-/// 12dp of padding. The corner moved 12 → 8 with the restyle — 12 is what the file gives a
-/// CARD, and a row in a list of twenty is a small card.
+/// The clay card — the card fill, the card radius, one hairline, flat at rest — for the rows a
+/// sheet builds by hand (a bed, a visitor, a leave request). Whole-screen lists use the clay
+/// [ListRowCard] instead, which brings its own art slot and chevron.
 class TapRow extends StatelessWidget {
   const TapRow({
     super.key,
     required this.child,
     this.onTap,
-    this.padding = const EdgeInsets.all(Space.sm),
+    this.padding = const EdgeInsets.symmetric(
+      horizontal: Space.sm + Space.hair,
+      vertical: Space.sm,
+    ),
     this.semanticLabel,
     this.tone,
   });
@@ -1257,10 +1041,8 @@ class TapRow extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final String? semanticLabel;
 
-  /// Draws the row's edge in a semantic tone instead of the neutral hairline — the way the
-  /// mockups mark a row that is selectable or that needs attention (the violet-edged student
-  /// row on assign-bed-select-student.png, the coral-edged damaged item on
-  /// move-out-inspection.png). Canonical or resolved.
+  /// Draws the row's edge in a semantic tone instead of the neutral hairline — the way a row
+  /// says it is selectable or that it needs attention. Canonical or resolved.
   final Color? tone;
 
   @override
@@ -1271,18 +1053,16 @@ class TapRow extends StatelessWidget {
         : context.tones.chipBorder(context.tones.resolve(tone!));
     final row = Material(
       color: t.colorScheme.surface,
-      borderRadius: Radii.rControl,
+      shape: RoundedRectangleBorder(
+        borderRadius: Radii.rCard,
+        side: BorderSide(color: edge, width: Strokes.hairline),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: Radii.rControl,
         onTap: onTap,
-        child: Container(
+        child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 64),
-          padding: padding,
-          decoration: BoxDecoration(
-            borderRadius: Radii.rControl,
-            border: Border.all(color: edge),
-          ),
-          child: child,
+          child: Padding(padding: padding, child: child),
         ),
       ),
     );
@@ -1292,46 +1072,19 @@ class TapRow extends StatelessWidget {
   }
 }
 
-/// Initials in a circle. No photo: students.photo_url is a private storage KEY, not a URL, and
-/// showing a broken image is worse than showing none.
+/// Initials on a Mist disc, in forest. No photo: students.photo_url is a private storage KEY,
+/// not a URL, and showing a broken image is worse than showing none.
 ///
-/// The ring is the design's — resident-profile.png rings every avatar in its own tone — and it
-/// is also what stops a 10% tint disappearing into a card that is itself only 1.08:1 against
-/// the ground.
+/// The clay [InitialsDisc], so a resident's face is the same object on every screen and sheet
+/// in the app. It carries no status colour: the state is said by the chip beside the name, and
+/// a disc tinted red for "unpaid" was a second, louder copy of the same fact.
 class Avatar extends StatelessWidget {
-  const Avatar({super.key, required this.name, this.tone, this.size = Space.xxl});
+  const Avatar({super.key, required this.name, this.size = Space.xxxl});
   final String name;
-
-  /// A STATUS tone — the resident's own state on the roster and the ledger — canonical or
-  /// resolved, resolved here either way so the caller keeps naming the meaning.
-  ///
-  /// NULL COLOURS THE DISC BY NAME ([avatarToneFor]), the way a contacts list gives every face
-  /// its own hue: the same person is the same colour on every sheet, and a list of strangers
-  /// becomes a list of people you can tell apart. It used to fall back to the brand gold,
-  /// which made every avatar with nothing to say read as the account holder. Pass a tone only
-  /// where the colour MEANS something — the rule in [ApnivaasDomain].
-  final Color? tone;
   final double size;
 
   @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final accent = context.tones.resolve(tone ?? avatarToneFor(name));
-    return Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: context.tones.chipFill(accent),
-        shape: BoxShape.circle,
-        border: Border.all(color: context.tones.chipBorder(accent), width: Strokes.hairline),
-      ),
-      child: Text(
-        initials(name),
-        style: t.textTheme.titleSmall?.copyWith(color: accent),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => InitialsDisc(name: name, size: size);
 }
 
 /// The mockups' metadata line: small muted glyphs, each with the value it labels.
@@ -1377,17 +1130,12 @@ class MetaLine extends StatelessWidget {
   }
 }
 
-/// A labelled value — `sheet-details` (4:805, 4:808, 4:811) on the students-list sheet.
+/// A labelled value on a resident's sheet.
 ///
-/// The design's row is two columns on one line: the field name left in the secondary ink at
-/// 400, the answer right in cream at 600, both at the same size. Weight and colour separate
-/// them, not size or position.
-///
-/// IT USED TO BE A STACK with a 32dp tinted glyph disc in front — the Stitch resident profile's
-/// PERSONAL DETAILS shape. The Figma sheet has neither the disc nor the caps eyebrow, and at
-/// six rows the stacked version was twice as tall for the same three facts. The label wraps
-/// rather than truncating and the value is given the wider half, which is what keeps a phone
-/// number and an address readable at 1.4x text scale.
+/// Two columns on one line: the field name left in the secondary ink, the answer right in the
+/// theme's ink at the row-title weight. Weight and colour separate them, not size or position.
+/// The label wraps rather than truncating and the value is given the wider half, which is what
+/// keeps a phone number and an address readable at large text.
 class DetailRow extends StatelessWidget {
   const DetailRow({super.key, required this.label, required this.value, this.tone});
   final String label;
@@ -1428,11 +1176,11 @@ class DetailRow extends StatelessWidget {
   }
 }
 
-/// The title bar of a bottom sheet — `sheet-header` (4:796).
+/// The title of a bottom sheet: the clay [SheetTitle]'s type, with room for a face and a state.
 ///
-/// An avatar, the name at 15/700 with an 11/400 second line under it, and the state badge
-/// pushed to the right-hand edge. [leading] is the design's avatar; sheets that are about a
-/// room or a queue rather than a person leave it off and look exactly as they did.
+/// Outfit at the title step with the second line under it in the muted ink, an optional
+/// [leading] (a resident's initials) and the state chip pushed to the trailing edge. Sheets that
+/// are about a room or a queue rather than a person leave [leading] off.
 class SheetHeader extends StatelessWidget {
   const SheetHeader({
     super.key,
@@ -1450,8 +1198,7 @@ class SheetHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    // No drag handle here. showGlassSheet draws one, on the pane, for every sheet in the app;
-    // this used to draw a second one directly beneath it.
+    // No drag handle here. showGlassSheet draws one, on the pane, for every sheet in the app.
     return Row(
       children: [
         if (leading != null) ...[
@@ -1462,19 +1209,24 @@ class SheetHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 4:800 is `Inter:Bold text-[15px]`. [titleMedium] is the scale's 16/700 — the
-              // nearest step that is a real token, and one the scale already calls "row and
-              // card title". A 15/700 would mean re-resolving the face through google_fonts
-              // at a paint site, which is a network call inside the widget tests.
-              Text(
-                title,
-                style: t.textTheme.titleMedium,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              Semantics(
+                header: true,
+                child: Text(
+                  title,
+                  style: t.textTheme.titleLarge,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              if (subtitle != null)
-                Text(subtitle!, style: t.textTheme.bodySmall,
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
+              if (subtitle != null) ...[
+                const SizedBox(height: Space.hair),
+                Text(
+                  subtitle!,
+                  style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ],
           ),
         ),
@@ -1531,15 +1283,21 @@ Future<bool> runAction(
 /// exactly the difference nobody can name and everybody notices.
 void showFailureSnack(BuildContext context, Object error) {
   final failure = AppFailure.from(error);
-  // The snackbar keeps its themed midnight background (white on it is 18.72:1) and says "this
-  // failed" with an icon instead. Repainting the whole bar #DC3F3F put the message at 4.35:1
-  // against its own white text — the one message in the app that most needs reading. The accent
-  // is the DARK theme's error ink because the bar is dark in both themes.
+  // The snackbar keeps its themed background and says "this failed" with an icon instead.
+  // Repainting the whole bar #DC3F3F put the message at 4.35:1 against its own white text — the
+  // one message in the app that most needs reading.
+  //
+  // The bar is the theme's INVERSE surface — ink in the light theme, cream in the dark one —
+  // so the glyph's red is picked against the bar, not against the page: the dark theme's error
+  // ink on the light theme's ink bar (6.17:1), the light theme's on the dark theme's cream bar
+  // (5.70:1).
+  final onInkBar = Theme.of(context).brightness == Brightness.light;
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
     content: Row(
       children: [
-        const Icon(Icons.error_outline_rounded,
-            size: IconSize.md, color: ApnivaasColors.errorDark), // 7.35:1 on midnight
+        Icon(Icons.error_outline_rounded,
+            size: IconSize.md,
+            color: onInkBar ? ApnivaasColors.errorDark : ApnivaasColors.errorInk),
         const SizedBox(width: Space.sm),
         Expanded(child: Text(failure.message)),
       ],

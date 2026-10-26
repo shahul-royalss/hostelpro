@@ -7,7 +7,7 @@ import '../../../core/auth/session.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
-import '../../../shared/glass/glass.dart';
+import '../../../shared/clay/clay.dart' show AppHeader, HeaderBackButton, ListSkeleton;
 import '../../common/refresh.dart';
 import '../../common/staff_notices.dart';
 import '../widgets/warden_ui.dart';
@@ -24,22 +24,26 @@ import '../widgets/warden_ui.dart';
 /// where its label says. A sixth destination is a change to the warden's navigation, which is
 /// not this feature's to make; the home screen's Notices section is the way in.
 ///
-/// THE HEADER IS THE PUSHED-SCREEN ONE (a leading back button in a [GlassHeader]), not
-/// [WardenScreen]. WardenScreen's `actions` slot is on the RIGHT, which is where a screen's
-/// verbs go — putting Back there would be the one control on the page that does not do
-/// something to the page. OwnerPgDetailScreen sets the same shape for the same reason.
+/// THE HEADER IS THE PUSHED-SCREEN ONE: the clay forest [AppHeader] with a back button at its
+/// leading edge, not [WardenScreen]. WardenScreen's `actions` slot is on the RIGHT, which is
+/// where a screen's verbs go — putting Back there would be the one control on the page that
+/// does not do something to the page. OwnerPgDetailScreen sets the same shape for the same
+/// reason.
 class WardenNoticesScreen extends ConsumerWidget {
-  const WardenNoticesScreen({super.key, required this.hostelId});
+  const WardenNoticesScreen({super.key, required this.hostelId, this.viewerRole = UserRole.warden});
 
-  static Route<void> route(String hostelId) => MaterialPageRoute<void>(
-        builder: (_) => WardenNoticesScreen(hostelId: hostelId),
+  /// Also the manager's noticeboard (their header bell): the rows are the same, only the
+  /// audience filter differs — see features/common/staff_notices.dart.
+  static Route<void> route(String hostelId, {UserRole viewerRole = UserRole.warden}) =>
+      MaterialPageRoute<void>(
+        builder: (_) => WardenNoticesScreen(hostelId: hostelId, viewerRole: viewerRole),
       );
 
   final String hostelId;
+  final UserRole viewerRole;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
     final provider = noticesProvider(hostelId);
     final notices = ref.watch(provider);
     final hostel = ref.watch(hostelProvider(hostelId));
@@ -47,38 +51,12 @@ class WardenNoticesScreen extends ConsumerWidget {
     return Scaffold(
       body: Column(
         children: [
-          GlassHeader(
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: 'Back',
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                ),
-                const SizedBox(width: Space.xxs),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Notices',
-                        style: t.textTheme.titleMedium,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (hostel.value?.name != null)
-                        Text(
-                          hostel.value!.name,
-                          style: t.textTheme.bodySmall,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          AppHeader(
+            title: 'Notices',
+            // Which PG's board this is, once the hostel row is in; nothing rather than a
+            // placeholder until then.
+            subtitle: hostel.value?.name,
+            leading: const HeaderBackButton(),
           ),
           Expanded(
             child: RefreshIndicator(
@@ -97,9 +75,10 @@ class WardenNoticesScreen extends ConsumerWidget {
                 builder: (page) => StaffNoticeList(
                   hostelId: hostelId,
                   page: page,
-                  viewerRole: UserRole.warden,
+                  viewerRole: viewerRole,
                   emptyMessage: 'No notices yet. Anything the owner posts to this hostel — to '
-                      'everyone, or to the warden — appears here.',
+                      'everyone, or to the ${viewerRole == UserRole.manager ? 'manager' : 'warden'} '
+                      '— appears here.',
                 ),
               ),
             ),
@@ -110,8 +89,8 @@ class WardenNoticesScreen extends ConsumerWidget {
   }
 }
 
-/// Three notice-shaped blocks. A skeleton keeps the layout the reader already knows instead of
-/// replacing it with a spinner in a void.
+/// The board's shape before it lands: rows in one card, under one pulse — a skeleton keeps the
+/// layout the reader already knows instead of replacing it with a spinner in a void.
 class _NoticesSkeleton extends StatelessWidget {
   const _NoticesSkeleton();
 
@@ -119,13 +98,7 @@ class _NoticesSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(Space.md),
-      children: const [
-        SkeletonBlock(lines: 3),
-        SizedBox(height: Space.sm),
-        SkeletonBlock(lines: 3),
-        SizedBox(height: Space.sm),
-        SkeletonBlock(lines: 3),
-      ],
+      children: const [ListSkeleton(rows: 4, semanticLabel: 'Loading notices')],
     );
   }
 }

@@ -4,19 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
-import '../../shared/smiley.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/clay/clay.dart';
 import '../../shared/glass/glass.dart';
+import '../../shared/illustrations.dart';
 import 'owner_format.dart';
 import 'owner_providers.dart';
 import 'owner_students_screen.dart';
-import 'widgets/states.dart';
+import 'widgets/owner_header.dart';
+import 'widgets/states.dart' show ErrorNote, whenAsync;
 
 /// WHAT THE RESIDENTS ARE COMPLAINING ABOUT, AND WHO SAID IT.
 ///
-/// Reached from the Complaints card on the dashboard, which until now was a number with nothing
-/// behind it — the count said "2 open" and tapping it did nothing.
+/// Reached from the Complaints tile and the quick action on Home, the bell's activity list, and
+/// More — which until this screen existed was a number with nothing behind it.
 ///
 /// ── READ-ONLY, LIKE THE REST OF THE OWNER'S SIDE ──────────────────────────────────────────
 ///
@@ -41,16 +43,23 @@ class OwnerComplaintsScreen extends ConsumerWidget {
     final hostelId = ref.watch(activeHostelIdProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Complaints')),
-      body: hostelId == null
-          ? const _Page(
-              child: EmptyNote(
-                icon: Icons.apartment_rounded,
-                title: 'No PG on your account yet',
-                message: 'Complaints appear here once a PG is registered against your account.',
-              ),
-            )
-          : _Body(hostelId: hostelId),
+      body: Column(
+        children: [
+          OwnerSubpageHeader(title: 'Complaints', subtitle: watchActiveHostelName(ref)),
+          Expanded(
+            child: hostelId == null
+                ? const _Page(
+                    child: EmptyState(
+                      icon: ClayIcons.rooms,
+                      title: 'No PG on your account yet',
+                      body: 'Complaints appear here once a PG is registered against your '
+                          'account.',
+                    ),
+                  )
+                : _Body(hostelId: hostelId),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -75,7 +84,9 @@ class _Body extends ConsumerWidget {
       },
       child: whenAsync(
         complaints,
-        loading: () => const _Page(child: _ComplaintsSkeleton()),
+        loading: () => const _Page(
+          child: ListSkeleton(rows: 4, semanticLabel: 'Loading complaints'),
+        ),
         error: (error) => _Page(
           child: ErrorNote(
             error: error,
@@ -83,22 +94,21 @@ class _Body extends ConsumerWidget {
           ),
         ),
         data: (page) => page.items.isEmpty
-            ? const _Page(
+            ? _Page(
                 // Unfiltered: this list has no search and no status filter, so empty here
                 // always means "nobody has raised one", never "no match" — so it is safe to
-                // say exactly that.
-                child: SmileyEmpty(title: 'No complaints yet'),
+                // say exactly that, with the first-run art.
+                child: EmptyState(
+                  icon: EmptyArt.clayFor(EmptyArt.complaints),
+                  title: 'No complaints yet',
+                  body: 'When a resident raises one it lands here, with who raised it and '
+                      'every step taken since.',
+                ),
               )
-            : ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding:
-                    const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.huge),
-                children: [
-                  for (final c in page.items) ...[
-                    _ComplaintRow(complaint: c),
-                    const SizedBox(height: Space.xs),
-                  ],
-                ],
+            : _Page(
+                child: ListGroup(
+                  children: [for (final c in page.items) _ComplaintRow(complaint: c)],
+                ),
               ),
       ),
     );
@@ -112,19 +122,18 @@ class _Page extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.huge),
+        padding: OwnerRhythm.pagePadding,
         children: [child],
       );
 }
 
-(String, Color) _statusFace(BuildContext context, ComplaintStatus status) {
-  final tones = context.tones;
-  return switch (status) {
-    ComplaintStatus.open => ('Open', tones.warning),
-    ComplaintStatus.inProgress => ('In progress', tones.info),
-    ComplaintStatus.resolved => ('Resolved', tones.success),
-  };
-}
+/// A complaint's status as a word and the tone it is drawn in, the same three the warden's
+/// queue uses.
+(String, StatusTone) _statusFace(ComplaintStatus status) => switch (status) {
+      ComplaintStatus.open => ('Open', StatusTone.warning),
+      ComplaintStatus.inProgress => ('In progress', StatusTone.info),
+      ComplaintStatus.resolved => ('Resolved', StatusTone.success),
+    };
 
 class _ComplaintRow extends ConsumerWidget {
   const _ComplaintRow({required this.complaint});
@@ -132,44 +141,20 @@ class _ComplaintRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
     final c = complaint;
-    final (label, tone) = _statusFace(context, c.status);
+    final (label, tone) = _statusFace(c.status);
     // The author's name, when it has arrived. Never blocks the row: a complaint whose student
     // row is still loading still shows its title, its category and its age.
     final who = ref.watch(studentProvider(c.studentId)).value?.fullName;
 
-    return FlatSurface(
-      padding: const EdgeInsets.all(Space.md),
+    return ListRow(
+      avatarName: who ?? 'Resident',
+      title: c.title,
+      subtitle: '${c.category.label} · ${who ?? 'Resident'} · ${relativeTime(c.createdAt)}',
+      trailing: StatusChip(label: label, tone: tone, dot: true),
       onTap: () => showGlassSheet<void>(
         context: context,
         builder: (_) => _ComplaintDetail(complaint: c),
-      ),
-      semanticLabel: '${c.title}, $label',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(c.title,
-                    style: t.textTheme.titleMedium,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis),
-              ),
-              const SizedBox(width: Space.xs),
-              StatusChip(label: label, tone: tone, dot: true),
-            ],
-          ),
-          const SizedBox(height: Space.xxs),
-          Text(
-            '${c.category.label} · ${who ?? 'Resident'} · ${relativeTime(c.createdAt)}',
-            style: t.textTheme.bodySmall,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
       ),
     );
   }
@@ -184,8 +169,9 @@ class _ComplaintDetail extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
+    final muted = t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant);
     final c = complaint;
-    final (label, tone) = _statusFace(context, c.status);
+    final (label, tone) = _statusFace(c.status);
     final student = ref.watch(studentProvider(c.studentId)).value;
     final photo = ref.watch(complaintPhotoProvider(c.id));
     final timeline = ref.watch(complaintTimelineProvider(c.id));
@@ -197,14 +183,18 @@ class _ComplaintDetail extends ConsumerWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: Text(c.title, style: t.textTheme.titleLarge, maxLines: 3)),
+            Expanded(
+              child: Semantics(
+                header: true,
+                child: Text(c.title, style: t.textTheme.titleLarge, maxLines: 3),
+              ),
+            ),
             const SizedBox(width: Space.xs),
             StatusChip(label: label, tone: tone, dot: true),
           ],
         ),
         const SizedBox(height: Space.xxs),
-        Text('${c.category.label} · raised ${relativeTime(c.createdAt)}',
-            style: t.textTheme.bodySmall),
+        Text('${c.category.label} · raised ${relativeTime(c.createdAt)}', style: muted),
 
         if ((c.description ?? '').trim().isNotEmpty) ...[
           const SizedBox(height: Space.md),
@@ -225,68 +215,66 @@ class _ComplaintDetail extends ConsumerWidget {
                   // A photo that will not load must not look like a photo that does not exist.
                   errorBuilder: (_, _, _) => Padding(
                     padding: const EdgeInsets.all(Space.md),
-                    child: Text('The attached photo could not be loaded.',
-                        style: t.textTheme.bodySmall),
+                    child: Text('The attached photo could not be loaded.', style: muted),
                   ),
-                  loadingBuilder: (_, child, progress) =>
-                      progress == null ? child : const SkeletonCard(lines: 1, height: 160),
+                  loadingBuilder: (_, child, progress) => progress == null
+                      ? child
+                      : const Skeleton(height: 160, radius: Radii.rCard),
                 ),
               ),
             ],
-          AsyncLoading() => const [SizedBox(height: Space.md), SkeletonCard(lines: 1, height: 160)],
+          AsyncLoading() => const [
+              SizedBox(height: Space.md),
+              Skeleton(height: 160, radius: Radii.rCard),
+            ],
           _ => const <Widget>[],
         },
 
         const SizedBox(height: Space.lg),
-        SectionLabel(label: 'Raised by'),
+        const SectionHeader(title: 'Raised by', size: SectionHeaderSize.form),
         const SizedBox(height: Space.xs),
         if (student == null)
-          const SkeletonCard(lines: 1, height: 64)
+          const ListSkeleton(rows: 1, semanticLabel: 'Loading who raised it')
         else
-          FlatSurface(
-            padding: const EdgeInsets.all(Space.md),
+          ListRowCard(
+            avatarName: student.fullName,
+            title: student.fullName,
+            subtitle: student.phone,
             onTap: () {
               Navigator.of(context).pop();
               showStudentDetail(context, student);
             },
-            child: Row(
-              children: [
-                InitialsAvatar(name: student.fullName),
-                const SizedBox(width: Space.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(student.fullName, style: t.textTheme.titleMedium),
-                      const SizedBox(height: Space.xxs),
-                      Text(student.phone, style: t.textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right_rounded, color: t.colorScheme.outline),
-              ],
-            ),
           ),
 
         const SizedBox(height: Space.lg),
-        SectionLabel(label: 'History'),
+        const SectionHeader(title: 'History', size: SectionHeaderSize.form),
         const SizedBox(height: Space.xs),
         whenAsync(
           timeline,
-          loading: () => const SkeletonCard(lines: 2),
+          loading: () => const SkeletonPulse(
+            semanticLabel: 'Loading history',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Skeleton(widthFactor: 0.6),
+                SizedBox(height: Space.sm),
+                Skeleton(widthFactor: 0.45),
+              ],
+            ),
+          ),
           error: (error) => ErrorNote(
             error: error,
             compact: true,
             onRetry: () => ref.invalidate(complaintTimelineProvider(c.id)),
           ),
           data: (events) => events.isEmpty
-              ? Text('No updates yet.', style: t.textTheme.bodySmall)
+              ? Text('No updates yet.', style: muted)
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (final e in events) ...[
                       _TimelineRow(event: e),
-                      const SizedBox(height: Space.xs),
+                      const SizedBox(height: Space.sm),
                     ],
                   ],
                 ),
@@ -295,7 +283,7 @@ class _ComplaintDetail extends ConsumerWidget {
         if (c.status == ComplaintStatus.resolved &&
             (c.resolutionNote ?? '').trim().isNotEmpty) ...[
           const SizedBox(height: Space.md),
-          SectionLabel(label: 'Resolution'),
+          const SectionHeader(title: 'Resolution', size: SectionHeaderSize.form),
           const SizedBox(height: Space.xs),
           Text(c.resolutionNote!.trim(), style: t.textTheme.bodyMedium),
         ],
@@ -311,25 +299,35 @@ class _TimelineRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final (label, tone) = _statusFace(context, event.status);
+    final (label, tone) = _statusFace(event.status);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // The dot is a graphic, so it takes the canonical tone; the words beside it say the
+        // same thing in the theme's ink.
         Padding(
-          padding: const EdgeInsets.only(top: 3),
-          child: Icon(Icons.circle, size: 8, color: tone),
+          padding: const EdgeInsets.only(top: Space.tight),
+          child: ExcludeSemantics(
+            child: Container(
+              width: Space.xs,
+              height: Space.xs,
+              decoration: BoxDecoration(color: tone.canonical, shape: BoxShape.circle),
+            ),
+          ),
         ),
         const SizedBox(width: Space.sm),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('$label · ${relativeTime(event.createdAt)}',
-                  style: t.textTheme.bodyMedium),
+              Text('$label · ${relativeTime(event.createdAt)}', style: t.textTheme.bodyMedium),
               if ((event.note ?? '').trim().isNotEmpty) ...[
                 const SizedBox(height: Space.xxs),
-                Text(event.note!.trim(), style: t.textTheme.bodySmall),
+                Text(
+                  event.note!.trim(),
+                  style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                ),
               ],
             ],
           ),
@@ -337,20 +335,4 @@ class _TimelineRow extends StatelessWidget {
       ],
     );
   }
-}
-
-class _ComplaintsSkeleton extends StatelessWidget {
-  const _ComplaintsSkeleton();
-
-  @override
-  Widget build(BuildContext context) => const Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SkeletonCard(lines: 2, height: 84),
-          SizedBox(height: Space.xs),
-          SkeletonCard(lines: 2, height: 84),
-          SizedBox(height: Space.xs),
-          SkeletonCard(lines: 2, height: 84),
-        ],
-      );
 }

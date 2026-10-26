@@ -43,6 +43,7 @@ import 'package:mobile/features/onboarding/onboarding_screen.dart';
 import 'package:mobile/features/owner/owner_insights.dart';
 import 'package:mobile/features/owner/owner_providers.dart';
 import 'package:mobile/features/shell/role_shell.dart';
+import 'package:mobile/shared/clay/nav_bar.dart';
 import 'package:mobile/shared/motion/tab_swap.dart';
 
 typedef Device = ({String name, Size size, double dpr});
@@ -178,6 +179,9 @@ void main() {
     // So this asserts the mechanism instead of the symptom: `height` is honoured LITERALLY by
     // NavigationBar, so a bar pinned at 64 is a bar whose label has nowhere to go. Only the
     // warden shell scaled it; the other three were 64 flat or Material's default.
+    //
+    // The shells are moving to [ClayNavBar], which sizes itself from its label, so the bar is
+    // found as either. The rule is the same for both: taller at 1.4x, and no taller than 88.
     for (final role in UserRole.values) {
       testWidgets('${role.name} — the bar is taller at 1.4x than at 1.0x', (tester) async {
         final heights = <double, double>{};
@@ -189,7 +193,8 @@ void main() {
             _wrap(RoleShell(role: role), ApnivaasTheme.light(), scale, role),
           );
           await tester.pump(const Duration(milliseconds: 400));
-          final bar = find.byType(NavigationBar);
+          final material = find.byType(NavigationBar);
+          final bar = material.evaluate().isNotEmpty ? material : find.byType(ClayNavBar);
           if (bar.evaluate().isEmpty) return; // a role with no tabs has no bar to check
           heights[scale] = tester.getSize(bar.first).height;
         }

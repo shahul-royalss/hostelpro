@@ -10,6 +10,7 @@ import 'package:mobile/data/models/models.dart';
 import 'package:mobile/data/providers.dart';
 import 'package:mobile/features/shell/role_shell.dart';
 import 'package:mobile/features/student/widgets/common.dart';
+import 'package:mobile/shared/clay/nav_bar.dart';
 
 import 'student_test.dart' show partialRow;
 
@@ -203,18 +204,18 @@ Future<void> _letWarmupRun(WidgetTester tester) async {
 void _expectNoPlaceholders(String tab) {
   expect(find.byType(SkeletonCard), findsNothing,
       reason: '$tab showed a skeleton on arrival — its data was not warm');
-  expect(find.byType(Skeleton), findsNothing,
+  expect(find.byType(StillSkeleton), findsNothing,
       reason: '$tab showed a skeleton line on arrival — its data was not warm');
   expect(find.byType(CircularProgressIndicator), findsNothing,
       reason: '$tab showed a spinner on arrival — its data was not warm');
 }
 
-/// Taps a destination on the shell's NavigationBar and pumps EXACTLY ONE frame — the frame the
+/// Taps a destination on the shell's bottom bar and pumps EXACTLY ONE frame — the frame the
 /// resident sees on arrival. No time passes, so nothing that was not already fetched could
 /// possibly be drawn as data.
 Future<void> _tapTab(WidgetTester tester, String label) async {
   await tester.tap(
-    find.descendant(of: find.byType(NavigationBar), matching: find.text(label)),
+    find.descendant(of: find.byType(ClayNavBar), matching: find.text(label)),
   );
   await tester.pump();
 }
@@ -234,7 +235,7 @@ void main() {
     await _letWarmupRun(tester);
 
     // Home settled from its own reads.
-    expect(find.text('Room 101 · Bed 3'), findsOneWidget);
+    expect(find.text('Room 101'), findsOneWidget);
     _expectNoPlaceholders('Home');
 
     // The home tab's own requests went out first and won the network: the resident row is the

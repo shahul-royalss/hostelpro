@@ -7,12 +7,14 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/clay/clay.dart';
 import '../../../shared/glass/glass.dart';
 import '../owner_providers.dart';
 import '../staff/owner_staff_screen.dart';
 import '../staff/staff_models.dart';
 import '../staff/staff_providers.dart';
-import '../widgets/states.dart';
+import '../widgets/owner_header.dart';
+import '../widgets/states.dart' show EmptyNote, ErrorNote, whenAsync;
 
 /// THE OWNER PUTS A JOB ON A MANAGER.
 ///
@@ -46,58 +48,35 @@ class OwnerTasksScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
     final hostelId = ref.watch(activeHostelIdProvider);
 
     return Scaffold(
       body: Column(
         children: [
-          GlassHeader(
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: 'Back',
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.arrow_back_rounded),
+          OwnerSubpageHeader(
+            title: 'Tasks',
+            subtitle: 'Jobs you have put on your manager',
+            actions: [
+              if (hostelId != null)
+                HeaderIconButton(
+                  icon: Icons.add_rounded,
+                  label: 'Assign a task',
+                  onPressed: () => showAssignTaskSheet(context, hostelId: hostelId),
                 ),
-                const SizedBox(width: Space.xxs),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Tasks',
-                        style: t.textTheme.titleLarge?.copyWith(color: t.colorScheme.primary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        'Jobs you have put on your manager',
-                        style: t.textTheme.bodySmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                if (hostelId != null)
-                  IconButton(
-                    tooltip: 'Assign a task',
-                    icon: const Icon(Icons.add_rounded, size: IconSize.lg),
-                    onPressed: () => showAssignTaskSheet(context, hostelId: hostelId),
-                  ),
-              ],
-            ),
+            ],
           ),
           Expanded(
             child: hostelId == null
-                ? const Padding(
-                    padding: EdgeInsets.all(Space.md),
-                    child: EmptyNote(
-                      icon: Icons.apartment_rounded,
-                      title: 'No PG selected',
-                      message: 'Tasks belong to a PG. Pick one on the PGs tab first.',
-                    ),
+                ? ListView(
+                    padding: OwnerRhythm.pagePadding,
+                    children: const [
+                      EmptyState(
+                        icon: ClayIcons.rooms,
+                        title: 'No PG on your account yet',
+                        body: 'Tasks belong to a PG. You can assign them once one is '
+                            'registered against your account.',
+                      ),
+                    ],
                   )
                 : _TaskList(hostelId: hostelId),
           ),
@@ -132,31 +111,28 @@ class _TaskList extends ConsumerWidget {
       child: whenAsync(
         page,
         loading: () => ListView(
-          padding: const EdgeInsets.all(Space.md),
-          children: const [
-            SkeletonCard(lines: 2),
-            SizedBox(height: Space.md),
-            SkeletonCard(lines: 2),
-          ],
+          padding: OwnerRhythm.pagePadding,
+          children: const [ListSkeleton(rows: 3, leading: false, semanticLabel: 'Loading tasks')],
         ),
         error: (error) => ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(Space.md),
+          padding: OwnerRhythm.pagePadding,
           children: [
             ErrorNote(error: error, onRetry: () => ref.invalidate(tasksProvider(query))),
           ],
         ),
         data: (result) => ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(Space.md),
+          padding: OwnerRhythm.pagePadding,
           children: [
             if (result.isEmpty)
-              const EmptyNote(
-                icon: Icons.checklist_rounded,
+              EmptyState(
+                icon: ClayIcons.tasks,
                 title: 'Nothing assigned yet',
-                message: 'A task carries a due date and a status, so you can see whether it '
-                    'happened. Tap + to assign the first one.',
-                tone: ApnivaasColors.info,
+                body: 'A task carries a due date and a status, so you can see whether it '
+                    'happened.',
+                actionLabel: 'Assign the first one',
+                onAction: () => showAssignTaskSheet(context, hostelId: hostelId),
               )
             else
               for (final task in result.items) ...[
@@ -203,15 +179,17 @@ class _TaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final muted = t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant);
     final done = task.status == TaskStatus.done;
     final tone = done
-        ? ApnivaasColors.success
+        ? StatusTone.success
         : task.isOverdue
-            ? ApnivaasColors.error
-            : ApnivaasColors.warning;
+            ? StatusTone.error
+            : StatusTone.warning;
 
     final description = task.description?.trim();
-    return GlassCard(
+    return FlatSurface(
+      borderRadius: Radii.rSurface,
       padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -228,7 +206,7 @@ class _TaskCard extends StatelessWidget {
           ),
           if (description != null && description.isNotEmpty) ...[
             const SizedBox(height: Space.xxs),
-            Text(description, style: t.textTheme.bodySmall),
+            Text(description, style: muted),
           ],
           const SizedBox(height: Space.sm),
           Text(
@@ -239,7 +217,7 @@ class _TaskCard extends StatelessWidget {
                     ? 'was due ${_due.format(task.dueDate!)}'
                     : 'due ${_due.format(task.dueDate!)}',
             ].join(' · '),
-            style: t.textTheme.bodySmall?.copyWith(color: context.tones.muted),
+            style: muted,
           ),
         ],
       ),
@@ -352,7 +330,7 @@ class _AssignTaskSheetState extends ConsumerState<_AssignTaskSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Assign a task', style: t.textTheme.titleLarge),
+          const SheetTitle(title: 'Assign a task'),
           const SizedBox(height: Space.md),
           const EmptyNote(
             icon: Icons.manage_accounts_rounded,
@@ -383,11 +361,9 @@ class _AssignTaskSheetState extends ConsumerState<_AssignTaskSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Assign a task', style: t.textTheme.titleLarge),
-          const SizedBox(height: Space.xxs),
-          Text(
-            'It arrives on their Tasks tab as a notification, with the due date on it.',
-            style: t.textTheme.bodySmall,
+          const SheetTitle(
+            title: 'Assign a task',
+            subtitle: 'It arrives on their Tasks tab as a notification, with the due date on it.',
           ),
           const SizedBox(height: Space.md),
           TextFormField(

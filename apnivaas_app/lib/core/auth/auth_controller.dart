@@ -13,6 +13,7 @@ import '../boot/startup.dart';
 import 'auth_endpoint.dart';
 import '../config/env.dart';
 import 'google_id_token.dart';
+import 'social_sign_in.dart';
 import 'session.dart';
 import 'session_standing.dart';
 
@@ -120,7 +121,10 @@ class AuthNeedsMfaEnrolment extends AuthPhase {
 /// where it would not be on the server. Too narrow and a privileged user is sent to their role
 /// home and then refused every row by row-level security — visibly broken, never quietly
 /// permitted. Too wide and somebody is asked to enrol who did not have to.
-const mfaRequiredRoles = <UserRole>{UserRole.superAdmin, UserRole.owner};
+///
+/// ROUND 3: owners are no longer forced to enrol (docs/round3-spec.md R3). An owner WITH a
+/// factor is still asked for its code (`codeOwed`), so optional 2FA keeps working.
+const mfaRequiredRoles = <UserRole>{UserRole.superAdmin};
 
 /// What a session still owes before this app may treat it as signed in.
 enum MfaGate {
@@ -169,6 +173,23 @@ MfaGate mfaGate({
 class AuthSignedIn extends AuthPhase {
   const AuthSignedIn(this.session);
   final ApnivaasSession session;
+}
+
+/// What a provider sign-in or sign-up came to: null [message] means success (or nothing to say),
+/// and [code] is the server's machine code when it sent one (`no_account`, `not_configured`, …).
+@immutable
+class SocialAttempt {
+  const SocialAttempt(this.message, {this.code, this.signedIn = false, this.fieldErrors = const {}});
+  final String? message;
+  final String? code;
+
+  /// Manual sign-up only: the server's sentence per form field.
+  final Map<String, String> fieldErrors;
+
+  /// True only when the server granted a session and it was installed.
+  final bool signedIn;
+
+  bool get noAccount => code == MobileAuthEndpoint.codeNoAccount;
 }
 
 class AuthController extends AsyncNotifier<AuthPhase> {
@@ -363,12 +384,20 @@ class AuthController extends AsyncNotifier<AuthPhase> {
     // impersonating the one owner who holds a factor: at aal1, users 1 — hostels 0, students 0,
     // rooms 0. Were that ever to change, this would return null and sign a legitimate owner out
     // with "your account is not set up", so it is a fact worth re-checking rather than assuming.
-    final row = await _db
-        .from('users')
-        .select('id, role, full_name, email, phone, hostel_id, status, '
-            'must_change_password, email_verified_at')
-        .eq('id', user.id)
-        .maybeSingle();
+    const columns = 'id, role, full_name, email, phone, hostel_id, status, '
+        'must_change_password, email_verified_at';
+    Map<String, dynamic>? row;
+    try {
+      row = await _db
+          .from('users')
+          .select('$columns, staff_applicant')
+          .eq('id', user.id)
+          .maybeSingle();
+    } on PostgrestException catch (e) {
+      // 42703: round 3's column is not on this database yet. Sign-in must not depend on it.
+      if (e.code != '42703') rethrow;
+      row = await _db.from('users').select(columns).eq('id', user.id).maybeSingle();
+    }
 
     if (row == null) {
       // Authenticated but no profile: the account is half-created. Refusing beats guessing.
@@ -688,9 +717,20 @@ class AuthController extends AsyncNotifier<AuthPhase> {
   /// The token goes to mobile-auth, never to GoTrue directly — see google_id_token.dart. A
   /// refusal makes this phone forget the Google account, so the next visit to the sign-in screen
   /// does not quietly try the same refused account again.
-  Future<String?> signInWithGoogle({bool quietly = false}) async {
+  Future<String?> signInWithGoogle({bool quietly = false}) async =>
+      (await continueWithGoogle(quietly: quietly)).message;
+
+  /// [signInWithGoogle] with the server's machine code kept, and an optional [persona].
+  ///
+  /// A [persona] is sent ONLY from Create your account: it turns "no account" into sign-up on
+  /// the server (docs/self-signup-api.md §1.1). Without one this is sign-in, byte for byte.
+  /// [SocialAttempt.code] lets the sign-in screen send a `no_account` refusal to "Who are you?"
+  /// without reading the sentence.
+  Future<SocialAttempt> continueWithGoogle({bool quietly = false, SignupPersona? persona}) async {
     final google = ref.read(googleIdTokenSourceProvider);
-    if (!google.isAvailable) return quietly ? null : GoogleSignInWords.notSetUp;
+    if (!google.isAvailable) {
+      return SocialAttempt(quietly ? null : GoogleSignInWords.notSetUp);
+    }
 
     final outcome = quietly ? await google.requestQuietly() : await google.request();
     final GoogleTokenIssued token;
@@ -698,29 +738,125 @@ class AuthController extends AsyncNotifier<AuthPhase> {
       case GoogleTokenIssued():
         token = outcome;
       case GoogleTokenCancelled():
-        return null;
+        return const SocialAttempt(null);
       case GoogleTokenFailed(:final message):
-        return quietly ? null : message;
+        return SocialAttempt(quietly ? null : message);
     }
 
     // The same fresh start a password sign-in makes, for the same reason: see [signIn].
     unawaited(_dropStaleSession());
 
     try {
-      final verdict = await ref
-          .read(mobileAuthEndpointProvider)
-          .signInWithGoogle(idToken: token.idToken, nonce: token.rawNonce);
+      final verdict = await ref.read(mobileAuthEndpointProvider).signInWithGoogle(
+            idToken: token.idToken,
+            nonce: token.rawNonce,
+            persona: persona?.wire,
+          );
       if (verdict is AuthRejected) unawaited(google.forget());
-      return await _accept(verdict);
+      final message = await _accept(verdict);
+      return SocialAttempt(message,
+          code: _codeOf(verdict), signedIn: message == null && verdict is AuthGranted);
     } on AuthException catch (e) {
       debugPrint('signInWithGoogle failed: ${e.runtimeType} status=${e.statusCode} '
           'code=${e.code} ${e.message}');
-      return _authFailure(e);
+      return SocialAttempt(_authFailure(e));
     } catch (e) {
       debugPrint('signInWithGoogle failed (transport): ${e.runtimeType} $e');
-      return _unreachable(e);
+      return SocialAttempt(_unreachable(e));
     }
   }
+
+  /// Manual sign-up (docs/round3-api.md §1.1). On success the session is installed and the
+  /// usual gates run (consent, then email verification for owners and staff).
+  Future<SocialAttempt> signUpWithPassword({
+    required SignupPersona persona,
+    required String fullName,
+    required String phone,
+    required String email,
+    required String password,
+    String? city,
+    String? pincode,
+  }) async {
+    unawaited(_dropStaleSession());
+    try {
+      final verdict = await ref.read(mobileAuthEndpointProvider).signUpWithPassword(
+            persona: persona.wire,
+            fullName: fullName.trim(),
+            phone: phone.trim(),
+            email: email.trim(),
+            password: password,
+            city: (city == null || city.trim().isEmpty) ? null : city.trim(),
+            pincode: (pincode == null || pincode.trim().isEmpty) ? null : pincode.trim(),
+          );
+      final message = await _accept(verdict);
+      return SocialAttempt(
+        message,
+        code: _codeOf(verdict),
+        signedIn: message == null && verdict is AuthGranted,
+        fieldErrors: verdict is AuthRejected ? verdict.fieldErrors : const {},
+      );
+    } on AuthException catch (e) {
+      debugPrint('signUp failed: ${e.runtimeType} status=${e.statusCode} ${e.message}');
+      return SocialAttempt(_authFailure(e));
+    } catch (e) {
+      debugPrint('signUp failed (transport): ${e.runtimeType} $e');
+      return SocialAttempt(_unreachable(e));
+    }
+  }
+
+  /// "Continue with Facebook". The button is hidden until the app ID exists, and this build has
+  /// no Facebook SDK, so today the source answers "not set up" before anything is sent.
+  Future<SocialAttempt> continueWithFacebook({SignupPersona? persona}) => _continueWithSocial(
+        ref.read(facebookCredentialSourceProvider),
+        (c) => ref
+            .read(mobileAuthEndpointProvider)
+            .signInWithFacebook(accessToken: c.token, persona: persona?.wire),
+      );
+
+  /// "Continue with Truecaller": an authorization code and its PKCE verifier.
+  Future<SocialAttempt> continueWithTruecaller({SignupPersona? persona}) => _continueWithSocial(
+        ref.read(truecallerCredentialSourceProvider),
+        (c) => ref.read(mobileAuthEndpointProvider).signInWithTruecaller(
+              code: c.token,
+              codeVerifier: c.codeVerifier ?? '',
+              persona: persona?.wire,
+            ),
+      );
+
+  Future<SocialAttempt> _continueWithSocial(
+    SocialCredentialSource source,
+    Future<AuthVerdict> Function(SocialCredentialIssued credential) send,
+  ) async {
+    final outcome = await source.request();
+    final SocialCredentialIssued credential;
+    switch (outcome) {
+      case SocialCredentialIssued():
+        credential = outcome;
+      case SocialCredentialCancelled():
+        return const SocialAttempt(null);
+      case SocialCredentialFailed(:final message):
+        return SocialAttempt(message);
+    }
+    unawaited(_dropStaleSession());
+    try {
+      final verdict = await send(credential);
+      final message = await _accept(verdict);
+      return SocialAttempt(message,
+          code: _codeOf(verdict), signedIn: message == null && verdict is AuthGranted);
+    } on AuthException catch (e) {
+      debugPrint('social sign-in failed: ${e.runtimeType} status=${e.statusCode} ${e.message}');
+      return SocialAttempt(_authFailure(e));
+    } catch (e) {
+      debugPrint('social sign-in failed (transport): ${e.runtimeType} $e');
+      return SocialAttempt(_unreachable(e));
+    }
+  }
+
+  static String? _codeOf(AuthVerdict verdict) => switch (verdict) {
+        AuthRejected(:final code) => code,
+        AuthUnavailable(:final code) => code,
+        _ => null,
+      };
 
   /// Clear whatever session this handset is still holding, locally and now.
   ///
@@ -977,6 +1113,7 @@ class AuthController extends AsyncNotifier<AuthPhase> {
             email: s.email,
             phone: s.phone,
             emailVerifiedAt: s.emailVerifiedAt,
+            staffApplicant: s.staffApplicant,
           )));
         }
       }

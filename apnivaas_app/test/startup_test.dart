@@ -32,6 +32,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/boot/splash_gate.dart';
 import 'package:mobile/core/boot/startup.dart';
+import 'package:mobile/core/theme/tokens.dart';
 import 'package:mobile/features/splash/splash_screen.dart';
 import 'package:mobile/main.dart';
 
@@ -109,11 +110,11 @@ void main() {
       await tester.pumpWidget(const StartupFailure(error: 'boom'));
       await tester.pump();
 
-      // The window behind this screen is #0B0D0F and the app is dark-only. This used to paint
-      // #F6F8FC over it — the same flash android/app/src/main/res was changed to remove, kept
-      // alive on the one screen nobody rehearses.
+      // Every screen of the way in sits on the cream page, and the splash fades into it. This
+      // used to paint #F6F8FC, then (in the dark era) #0B0D0F — each a third colour flashing
+      // between two the person had just seen, on the one screen nobody rehearses.
       final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
-      expect(scaffold.backgroundColor, const Color(0xFF0B0D0F));
+      expect(scaffold.backgroundColor, ApnivaasColors.background);
     });
 
     testWidgets('with no retry wired it is still legible, never blank', (tester) async {

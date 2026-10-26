@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/clay/clay.dart' show ListSkeleton, PillButton;
 import '../../../shared/glass/glass.dart';
 import '../actions/sheet_scaffold.dart';
 import '../data/warden_models.dart';
@@ -60,7 +61,7 @@ class _LeavesSheet extends ConsumerWidget {
         onRetry: () => ref.invalidate(pendingLeavesProvider(hostelId)),
         builder: (list) {
           if (list.isEmpty) {
-            return const EmptyState(
+            return const WardenEmptyState(
               icon: Icons.event_available_outlined,
               title: 'Nothing to decide',
               detail: 'Every leave request has been answered.',
@@ -120,7 +121,7 @@ class _LeaveRowState extends ConsumerState<_LeaveRow> {
     final name = leave.studentName ?? 'Resident';
 
     // warden-dashboard.png's "Pending Leaves" row: the avatar, the name, the dates as a glyphed
-    // line under it, and the decision as a coral cross beside a mint tick.
+    // line under it, and the decision as a red-outlined cross beside the filled forest tick.
     //
     // The two buttons keep their WORDS. The mockup's are bare icons, and a tap that notifies a
     // resident and cannot be taken back is not a tap to leave unlabelled — a warden deciding
@@ -134,7 +135,7 @@ class _LeaveRowState extends ConsumerState<_LeaveRow> {
         children: [
           Row(
             children: [
-              Avatar(name: name, tone: ApnivaasColors.warning),
+              Avatar(name: name),
               const SizedBox(width: Space.sm),
               Expanded(
                 child: Column(
@@ -156,7 +157,7 @@ class _LeaveRowState extends ConsumerState<_LeaveRow> {
                   ],
                 ),
               ),
-              CapsLabel(age(leave.createdAt)),
+              EyebrowLabel(age(leave.createdAt)),
             ],
           ),
           if (leave.reason != null) ...[
@@ -233,17 +234,18 @@ class _VisitorsSheet extends ConsumerWidget {
       subtitle: visitors.value == null
           ? null
           : '${visitors.requireValue.length} not signed out',
-      trailing: TextButton.icon(
+      trailing: PillButton(
+        label: 'Sign in',
+        icon: Icons.person_add_alt_1_rounded,
+        semanticLabel: 'Sign in a visitor',
         onPressed: () => showCheckInVisitorSheet(context, hostelId: hostelId),
-        icon: const Icon(Icons.person_add_alt_1_rounded, size: IconSize.sm),
-        label: const Text('Sign in'),
       ),
       child: AsyncSection<List<VisitorLog>>(
         value: visitors,
         onRetry: () => ref.invalidate(visitorsOnSiteProvider(hostelId)),
         builder: (list) {
           if (list.isEmpty) {
-            return const EmptyState(
+            return const WardenEmptyState(
               icon: Icons.door_front_door_outlined,
               title: 'Nobody signed in',
               detail: 'When a visitor arrives, use Sign in above to log who they are here for.',
@@ -300,7 +302,7 @@ class _VisitorRowState extends ConsumerState<_VisitorRow> {
     return TapRow(
       child: Row(
         children: [
-          Avatar(name: visitor.visitorName, tone: ApnivaasColors.info),
+          Avatar(name: visitor.visitorName),
           const SizedBox(width: Space.sm),
           Expanded(
             child: Column(
@@ -327,13 +329,13 @@ class _VisitorRowState extends ConsumerState<_VisitorRow> {
           if (_busy)
             const InlineSpinner()
           else
-            // Width 96 so it hugs its label instead of inheriting the theme's full-bleed
-            // minimum; the height goes back to 48, which is the tap target a warden signing
-            // somebody out one-handed in a doorway actually needs.
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(minimumSize: const Size(96, 48)),
+            // The clay pill hugs its label instead of inheriting the theme's full-bleed
+            // minimum, and still answers a 48dp tap — the target a warden signing somebody
+            // out one-handed in a doorway actually needs.
+            PillButton(
+              label: 'Sign out',
+              semanticLabel: 'Sign out ${visitor.visitorName}',
               onPressed: _checkOut,
-              child: const Text('Sign out'),
             ),
         ],
       ),
@@ -453,10 +455,7 @@ class _CheckInVisitorSheetState extends ConsumerState<_CheckInVisitorSheet> {
           ),
           const SizedBox(height: Space.sm),
           residents.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(Space.md),
-              child: Center(child: InlineSpinner()),
-            ),
+            loading: () => const ListSkeleton(rows: 2, semanticLabel: 'Loading residents'),
             error: (e, _) => Text(
               AppFailure.from(e).message,
               style: t.textTheme.bodySmall?.copyWith(color: context.tones.error),
@@ -551,34 +550,43 @@ class _ResidentRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final tone = selected ? context.tones.resolve(ApnivaasColors.brand) : null;
+    // The chosen resident is tinted as well as ticked, so the choice reads from across the
+    // sheet and not only from the glyph at the far edge.
     return Padding(
       padding: const EdgeInsets.only(bottom: Space.xxs),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: Radii.rControl,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: Space.xs, vertical: Space.xs),
-          child: Row(
-            children: [
-              Avatar(name: student.fullName, tone: ApnivaasColors.people),
-              const SizedBox(width: Space.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(student.fullName,
-                        style: t.textTheme.titleMedium?.copyWith(color: tone),
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                    Text(student.phone, style: t.textTheme.bodySmall),
-                  ],
-                ),
+      child: Semantics(
+        selected: selected,
+        child: Material(
+          color: tone == null ? Colors.transparent : context.tones.chipFill(tone),
+          borderRadius: Radii.rControl,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Space.xs, vertical: Space.xs),
+              child: Row(
+                children: [
+                  Avatar(name: student.fullName),
+                  const SizedBox(width: Space.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(student.fullName,
+                            style: t.textTheme.titleMedium?.copyWith(color: tone),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(student.phone, style: t.textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                    size: IconSize.lg,
+                    color: tone ?? t.colorScheme.outline,
+                  ),
+                ],
               ),
-              Icon(
-                selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                size: IconSize.lg,
-                color: tone ?? t.colorScheme.outline,
-              ),
-            ],
+            ),
           ),
         ),
       ),

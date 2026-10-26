@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/perf/tab_warmer.dart';
-import '../../core/theme/tokens.dart';
 import '../../data/providers.dart';
-import '../../shared/glass/glass.dart';
+import '../../data/people_providers.dart';
+import '../../data/repositories/stay_repository.dart';
+import '../../shared/clay/clay.dart';
 import 'complaints/warden_complaints_screen.dart';
 import 'data/warden_providers.dart';
 import 'fees/warden_fees_screen.dart';
@@ -64,16 +65,17 @@ class _WardenShellState extends ConsumerState<WardenShell> {
   /// mounting it warms only widgets, not the network.
   static const _warmOrder = [1, 3, 4, 2];
 
-  /// Which area of the product each tab IS — the colour its indicator takes when selected.
-  /// Home is the platform's own gold; the other four are the domains they open, in the same
-  /// order as the destinations below and as features/shell/role_shell.dart.
-  static ApnivaasDomain _domainOfTab(int index) => switch (index) {
-    1 => ApnivaasDomain.people,
-    2 => ApnivaasDomain.rooms,
-    3 => ApnivaasDomain.money,
-    4 => ApnivaasDomain.complaints,
-    _ => ApnivaasDomain.security,
-  };
+  /// The clay art for each tab, in the same order as the destinations and as
+  /// features/shell/role_shell.dart. Home, Students and Rooms are the nav set's own renders
+  /// (each has a drawn "off" twin, see [ClayIcons.navPairs]); Payments takes the money render
+  /// and Complaints the complaint icon, which [ClayNavBar] greys when it is not selected.
+  static const _art = [
+    ClayIcons.navHome,
+    ClayIcons.navPeople,
+    ClayIcons.navProperty,
+    ClayIcons.navMoney,
+    ClayIcons.complaint,
+  ];
 
   @override
   void initState() {
@@ -94,7 +96,6 @@ class _WardenShellState extends ConsumerState<WardenShell> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
     // CLAMPED, like the owner's, the student's and the super admin's sections already are.
     // [wardenTabProvider] is a plain `Notifier<int>` whose `go()` takes any int, and every
     // caller today passes a literal in range — but an IndexedStack handed an index past its
@@ -108,17 +109,6 @@ class _WardenShellState extends ConsumerState<WardenShell> {
     // that shows it. (Before the warmer reaches a tab this is today's cold load — the warmer
     // exists to make that window a few hundred milliseconds wide instead of forever.)
     _mounted.add(index);
-
-    // THE PILL TAKES THE SELECTED TAB'S DOMAIN COLOUR — teal on Students, violet on Rooms,
-    // green on Payments, amber on Complaints, the brand gold on Home — so the bar says where
-    // you are in the same colour the screen's own icons and shortcuts do. Only the SELECTED
-    // state moves: the fill is the measured chip recipe and the ink is the theme-resolved
-    // domain colour, the exact pairing every DomainIcon draws, and the unselected icons and
-    // labels stay whatever the theme's navigationBarTheme already makes them. Nothing here
-    // reaches into theme.dart; it is that theme with one colour swapped per tab.
-    final tones = context.tones;
-    final ink = tones.resolve(_domainOfTab(index).tone);
-    final navTheme = t.navigationBarTheme;
 
     // Already fetched by the home screen for the same key, so the badges cost nothing extra.
     // Null while it loads, and null is drawn as no badge rather than as a zero.
@@ -134,6 +124,14 @@ class _WardenShellState extends ConsumerState<WardenShell> {
                 ),
               )
               .value;
+
+    // Join requests waiting on this warden, on the Students tab where they are answered.
+    // Plus check-out requests (round 3), answered from the same tab.
+    final joinCount = ref.watch(pendingJoinCountProvider).value;
+    final checkouts = ref.watch(pendingCheckoutCountProvider);
+    final joins = joinCount == null && checkouts == null
+        ? null
+        : (joinCount ?? 0) + (checkouts ?? 0);
 
     return Scaffold(
       // The bar animated its own indicator and the page it commands did not, which reads as
@@ -153,94 +151,45 @@ class _WardenShellState extends ConsumerState<WardenShell> {
           ],
         ),
       ),
-      // THE FIGMA FILE DRAWS NO TAB BAR. Every `screen-warden-*` frame ends in an iOS home
-      // indicator (4:721, 4:819) and nothing else, so there is no bar in the file to copy and
-      // this shape is the app's own: `surface-container` — the design's raised fill, which is
-      // what its own bars and icon buttons paint — with a rounded top and one `#292E33`
-      // hairline along it, which is the only edge treatment the file uses anywhere.
-      //
-      // The colours, the indicator and the label size come from the theme's navigationBarTheme;
-      // all this adds is the shape, which a NavigationBar cannot express on its own. The
-      // hairline is GlassSurface.edgeColor so it moves with the rest of the app's pane edges.
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(
-          color: GlassWeight.regular.surfaceOf(t.colorScheme),
-          borderRadius: Radii.rSheetTop,
-          border: Border(
-            top: BorderSide(color: GlassSurface.edgeColor(context), width: Strokes.hairline),
+      // The clay bar every role shares: the selected tab's art on a Mist pill with its label in
+      // forest, the rest grey. It sizes itself from its label — 72dp at 1.0x, a little taller
+      // with large text — and each tab is one button to a screen reader, "Payments, tab 4 of 5,
+      // 6 unpaid". See shared/clay/nav_bar.dart.
+      bottomNavigationBar: ClayNavBar(
+        selectedIndex: index,
+        onDestinationSelected: (i) => ref.read(wardenTabProvider.notifier).go(i),
+        destinations: [
+          ClayNavDestination(icon: _art[0], label: 'Home'),
+          ClayNavDestination(
+            icon: _art[1],
+            label: 'Students',
+            badgeCount: _shown(joins),
+            badgeLabel: _said(joins, 'requests'),
           ),
-        ),
-        child: ClipRRect(
-          borderRadius: Radii.rSheetTop,
-          child: NavigationBarTheme(
-            data: navTheme.copyWith(
-              indicatorColor: tones.chipFill(ink),
-              iconTheme: WidgetStateProperty.resolveWith((states) {
-                final base = navTheme.iconTheme?.resolve(states);
-                if (!states.contains(WidgetState.selected)) return base;
-                return (base ?? const IconThemeData()).copyWith(color: ink);
-              }),
-              labelTextStyle: WidgetStateProperty.resolveWith((states) {
-                final base = navTheme.labelTextStyle?.resolve(states);
-                if (!states.contains(WidgetState.selected)) return base;
-                return (base ?? const TextStyle()).copyWith(color: ink);
-              }),
-            ),
-            child: NavigationBar(
-              selectedIndex: index,
-              onDestinationSelected: (i) => ref.read(wardenTabProvider.notifier).go(i),
-              // 64dp keeps every destination above the 48dp minimum with room for the label —
-              // at 1.0x. NavigationBar honours this height literally, so at 1.4x the label was
-              // clipped against the icon; scaling it and capping the growth keeps the bar off
-              // the content.
-              height: MediaQuery.textScalerOf(context).scale(64).clamp(64.0, 88.0),
-              // Transparent: the shape above paints the fill, and a second opaque colour
-              // inside the clip would square the corners off again.
-              backgroundColor: Colors.transparent,
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              destinations: [
-                const NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Home'),
-                const NavigationDestination(
-                  icon: Icon(Icons.people_alt_rounded),
-                  label: 'Students',
-                ),
-                const NavigationDestination(icon: Icon(Icons.meeting_room_rounded), label: 'Rooms'),
-                NavigationDestination(
-                  icon: _Badged(
-                    count: stats?.studentsUnpaid,
-                    child: const Icon(Icons.payments_rounded),
-                  ),
-                  label: 'Payments',
-                ),
-                NavigationDestination(
-                  icon: _Badged(
-                    count: stats?.openComplaints,
-                    child: const Icon(Icons.report_problem_rounded),
-                  ),
-                  label: 'Complaints',
-                ),
-              ],
-            ),
+          ClayNavDestination(icon: _art[2], label: 'Rooms'),
+          ClayNavDestination(
+            icon: _art[3],
+            label: 'Payments',
+            badgeCount: _shown(stats?.studentsUnpaid),
+            badgeLabel: _said(stats?.studentsUnpaid, 'unpaid'),
           ),
-        ),
+          ClayNavDestination(
+            icon: _art[4],
+            label: 'Complaints',
+            badgeCount: _shown(stats?.openComplaints),
+            badgeLabel: _said(stats?.openComplaints, 'open'),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// A count on a tab icon, shown only when there is something to count.
+/// A count for a tab, or nothing when there is nothing to count.
 ///
 /// A badge reading "0" is visual noise that trains people to ignore badges; the absence of one
 /// is the message. Null (still loading, or no hostel) is likewise nothing rather than a zero.
-class _Badged extends StatelessWidget {
-  const _Badged({required this.count, required this.child});
-  final int? count;
-  final Widget child;
+int? _shown(int? count) => count == null || count <= 0 ? null : count;
 
-  @override
-  Widget build(BuildContext context) {
-    final value = count;
-    if (value == null || value <= 0) return child;
-    return Badge.count(count: value, child: child);
-  }
-}
+/// What a screen reader hears after the tab's name — "6 unpaid" — whenever a badge is drawn.
+String? _said(int? count, String noun) => _shown(count) == null ? null : '$count $noun';

@@ -35,7 +35,13 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/clay/clay_icons.dart';
+import '../../shared/clay/list_row.dart';
+import '../../shared/clay/sheet.dart';
+import '../../shared/clay/skeleton.dart';
+import '../../shared/clay/status_chip.dart';
 import '../../shared/glass/glass.dart';
+import 'form_parts.dart';
 
 /// Moves the signed-in warden or manager to [hostelId], then republishes the session with it.
 ///
@@ -104,9 +110,10 @@ Future<void> openStaffHostelSwitcher(BuildContext context) async {
 
 /// The PG this home screen belongs to, and the way to another one when there is one.
 ///
-/// Drawn in the owner dashboard's shape (`_HostelSwitcher` in owner_dashboard_screen.dart): a
-/// brand dot, the PG in `title` weight, and a hairline under it that makes it read as the
-/// scope of everything below rather than as the first row of the page.
+/// A card at the head of the home: the building from the Property tab, "Working in" over the
+/// PG's name, and Switch PG at the trailing edge for somebody with two or more. A card rather
+/// than a heading because it is the SCOPE of everything below it — every figure on the screen
+/// is this PG's — and a card reads as the frame those figures sit in, not as their first row.
 ///
 /// THE NAME COMES FROM WHICHEVER READ HAS IT. The access list names every PG the person may
 /// work in; the hostel row (which both home screens already watch, so this costs nothing) names
@@ -151,72 +158,81 @@ class StaffHostelBar extends ConsumerWidget {
       }
     });
 
-    final label = Row(
-      children: [
-        // The owner header's brand dot. Decorative, so it is hidden from the semantics tree.
-        ExcludeSemantics(
-          child: Container(
-            width: Space.xs,
-            height: Space.xs,
-            decoration: BoxDecoration(color: t.colorScheme.primary, shape: BoxShape.circle),
+    final scale = MediaQuery.textScalerOf(context).scale(1);
+    final muted = t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant);
+
+    final label = Semantics(
+      label: name == null ? 'Loading your PG' : 'Current PG: $name',
+      container: true,
+      excludeSemantics: true,
+      child: Row(
+        children: [
+          // The building, from the Property tab: this card is the scope of everything below.
+          const ClayIcon(ClayIcons.navProperty, size: ClaySize.nav),
+          const SizedBox(width: Space.sm),
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Working in', style: muted, maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: Space.hair),
+                name == null
+                    // A quiet block while both reads are in flight: the name's own footprint,
+                    // so the page does not jump when it lands, and no invented "Your PG" in its
+                    // place.
+                    ? const Skeleton(width: 160, height: IconSize.md)
+                    : Text(
+                        name,
+                        style: t.textTheme.titleMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(width: Space.xs),
-        Flexible(
-          child: name == null
-              // A plain bar while both reads are in flight: the same footprint as the name, so
-              // the page does not jump when it lands, and no invented "Your PG" in its place.
-              ? Container(
-                  width: 160,
-                  height: IconSize.md,
-                  decoration: BoxDecoration(
-                    color: t.colorScheme.outlineVariant,
-                    borderRadius: Radii.rTiny,
-                  ),
-                )
-              : Text(
-                  name,
-                  style: t.textTheme.titleMedium,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-        ),
-      ],
+        ],
+      ),
     );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Semantics(
-                label: name == null ? 'Loading your PG' : 'Current PG: $name',
-                container: true,
-                excludeSemantics: true,
-                child: label,
-              ),
-            ),
-            if (several) ...[
-              const SizedBox(width: Space.xs),
-              // A named button rather than a chevron on the name: "Switch PG" says what it does
-              // to somebody who has never seen it, and it is a 44dp target on its own.
-              TextButton.icon(
-                onPressed: () => openStaffHostelSwitcher(context),
-                icon: const Icon(Icons.swap_horiz_rounded, size: IconSize.lg),
-                label: const Text('Switch PG'),
-                style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
-              ),
-            ],
-          ],
-        ),
-        SizedBox(height: several ? Space.xxs : Space.sm),
-        Divider(
-          color: t.colorScheme.outlineVariant,
-          height: Strokes.hairline,
-          thickness: Strokes.hairline,
-        ),
-      ],
+    // A named button rather than a chevron on the name: "Switch PG" says what it does to
+    // somebody who has never seen it, and it is a full 48dp target on its own.
+    final switcher = TextButton.icon(
+      onPressed: () => openStaffHostelSwitcher(context),
+      icon: const Icon(Icons.swap_horiz_rounded, size: IconSize.lg),
+      label: const Text('Switch PG'),
+    );
+
+    // From 1.6x text the control moves under the name instead of squeezing it to an ellipsis —
+    // the same rule a list row follows. Up to the root's 1.4x ceiling they share one row, the
+    // name giving way and the control not.
+    final Widget body;
+    if (!several) {
+      body = label;
+    } else if (scale >= 1.6) {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [label, switcher],
+      );
+    } else {
+      body = Row(
+        children: [
+          Expanded(child: label),
+          const SizedBox(width: Space.xs),
+          switcher,
+        ],
+      );
+    }
+
+    return FlatSurface(
+      padding: EdgeInsets.fromLTRB(
+          Space.sm, Space.xs, several ? Space.xxs : Space.sm, Space.xs),
+      child: ConstrainedBox(
+        // The 48dp the control needs, kept when it is absent, so a warden who gains a second
+        // PG does not see the card grow.
+        constraints: const BoxConstraints(minHeight: Space.huge),
+        child: Align(alignment: AlignmentDirectional.centerStart, child: body),
+      ),
     );
   }
 }
@@ -287,8 +303,6 @@ class _StaffHostelSheetState extends ConsumerState<StaffHostelSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final tones = context.tones;
     final hostels = ref.watch(myStaffHostelsProvider);
     final current = ref.watch(currentHostelIdProvider);
     final busy = _switching != null;
@@ -308,7 +322,7 @@ class _StaffHostelSheetState extends ConsumerState<StaffHostelSheet> {
         if (!didPop || result != null || _error == null) return;
         ref.read(authControllerProvider.notifier).syncActiveHostel();
       },
-      // A transparent Material between the glass pane and the rows. ListTile paints its ink on
+      // A transparent Material between the glass pane and the rows. The rows paint their ink on
       // the nearest Material, and the pane is a DecoratedBox with a fill: without this layer the
       // ripple would be drawn underneath the pane, where nobody can see it.
       child: Material(
@@ -320,56 +334,44 @@ class _StaffHostelSheetState extends ConsumerState<StaffHostelSheet> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Switch PG', style: t.textTheme.titleLarge),
-                const SizedBox(height: Space.xxs),
                 // The one surprising fact, said before the choice rather than after it:
                 // users.hostel_id is shared by every device this account is signed in on.
-                Text(
-                  'Choose the PG you are working in. Your other devices will switch too.',
-                  style: t.textTheme.bodySmall,
+                const SheetTitle(
+                  title: 'Switch PG',
+                  subtitle: 'Choose the PG you are working in. Your other devices will switch too.',
                 ),
-                const SizedBox(height: Space.sm),
+                const SizedBox(height: Space.md),
                 ...switch (hostels) {
                   AsyncValue(:final value?) => [
-                    for (final h in value)
-                      _HostelChoice(
-                        hostel: h,
-                        current: h.hostelId == current,
-                        switching: _switching == h.hostelId,
-                        enabled: !busy,
-                        onTap: () => _choose(h, value, current),
-                      ),
+                    ListGroup(
+                      children: [
+                        for (final h in value)
+                          _HostelChoice(
+                            hostel: h,
+                            current: h.hostelId == current,
+                            switching: _switching == h.hostelId,
+                            enabled: !busy,
+                            onTap: () => _choose(h, value, current),
+                          ),
+                      ],
+                    ),
                   ],
                   AsyncValue(:final error?) => [
-                    Text(
-                      AppFailure.from(error).message,
-                      style: t.textTheme.bodyMedium?.copyWith(color: tones.error),
-                    ),
+                    FormNote(AppFailure.from(error).message),
                     const SizedBox(height: Space.xs),
                     Align(
-                      alignment: Alignment.centerLeft,
+                      alignment: AlignmentDirectional.centerStart,
                       child: TextButton(
                         onPressed: () => ref.invalidate(myStaffHostelsProvider),
                         child: const Text('Try again'),
                       ),
                     ),
                   ],
-                  _ => [
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: Space.lg),
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                  ],
+                  _ => [const ListSkeleton(rows: 2, semanticLabel: 'Loading your PGs')],
                 },
                 if (_error != null) ...[
                   const SizedBox(height: Space.sm),
-                  Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      _error!,
-                      style: t.textTheme.bodyMedium?.copyWith(color: tones.error),
-                    ),
-                  ),
+                  FormNote(_error!),
                 ],
               ],
             ),
@@ -412,6 +414,10 @@ class _HostelChoice extends StatelessWidget {
         : (hostel.address?.trim().isNotEmpty ?? false)
         ? hostel.address!.trim()
         : null;
+    // From 1.6x text the "Current" word moves under the name, as a list row's trailing control
+    // does, rather than squeezing the name into a column a few letters wide.
+    final stack = MediaQuery.textScalerOf(context).scale(1) >= 1.6;
+    const currentChip = StatusChip(label: 'Current', tone: StatusTone.brand);
 
     return Semantics(
       button: true,
@@ -419,32 +425,62 @@ class _HostelChoice extends StatelessWidget {
       enabled: enabled,
       label: current ? '${hostel.name}, current PG' : hostel.name,
       excludeSemantics: true,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        enabled: enabled,
-        minTileHeight: 56,
-        leading: Icon(
-          current ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
-          color: current ? t.colorScheme.primary : t.colorScheme.outline,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: ListRow.minHeight),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: Space.sm),
+            child: Row(
+              children: [
+                // The radio's own anatomy: a 2px ring, filled with a brand dot when chosen.
+                // The ring is the control edge (3.53:1) unchosen and the brand chosen, so the
+                // state is a change of shape and not of colour alone — and the word "Current"
+                // says it again at the trailing edge.
+                Icon(
+                  current
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: IconSize.lg,
+                  color: current ? t.colorScheme.primary : t.colorScheme.outline,
+                ),
+                const SizedBox(width: Space.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(hostel.name, style: t.textTheme.titleMedium),
+                      if (detail != null) ...[
+                        const SizedBox(height: Space.hair),
+                        Text(
+                          detail,
+                          style: t.textTheme.bodySmall
+                              ?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      if (current && stack && !switching) ...[
+                        const SizedBox(height: Space.xxs),
+                        currentChip,
+                      ],
+                    ],
+                  ),
+                ),
+                if (switching) ...[
+                  const SizedBox(width: Space.sm),
+                  SizedBox.square(
+                    dimension: IconSize.lg,
+                    child: CircularProgressIndicator(strokeWidth: Strokes.focus),
+                  ),
+                ] else if (current && !stack) ...[
+                  const SizedBox(width: Space.sm),
+                  currentChip,
+                ],
+              ],
+            ),
+          ),
         ),
-        title: Text(hostel.name, style: t.textTheme.titleMedium),
-        subtitle: detail == null
-            ? null
-            : Text(
-                detail,
-                style: t.textTheme.bodySmall,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-        trailing: switching
-            ? SizedBox.square(
-                dimension: IconSize.lg,
-                child: CircularProgressIndicator(strokeWidth: Strokes.glyph),
-              )
-            : current
-            ? Text('Current', style: t.textTheme.labelMedium)
-            : null,
-        onTap: onTap,
       ),
     );
   }

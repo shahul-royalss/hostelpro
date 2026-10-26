@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/clay/clay.dart';
 import '../../../shared/glass/glass.dart';
 import '../data/manager_providers.dart';
 import '../widgets/manager_ui.dart';
@@ -221,6 +222,12 @@ class _RecordMoneySheetState extends ConsumerState<_RecordMoneySheet> {
               ? 'Paid once for a month — rent, salaries, a bill'
               : 'Spent today or on a particular day')
           : 'Mess income, deposits — not rent, which the warden collects',
+      // The same art the home screen's quick actions wear for these three, so the sheet is
+      // recognisably the thing that was tapped.
+      trailing: ClayIcon(
+        _isOut ? (_isMonthly ? ClayIcons.invoice : ClayIcons.expense) : ClayIcons.money,
+        size: ClaySize.list,
+      ),
       child: Form(
         key: _form,
         child: Column(
@@ -310,8 +317,7 @@ class _RecordMoneySheetState extends ConsumerState<_RecordMoneySheet> {
             FilledButton(
               onPressed: _busy ? null : _submit,
               child: _busy
-                  ? const SizedBox(
-                      width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const BusyMark()
                   : Text(_isOut
                       ? (_isMonthly ? 'Save monthly expense' : 'Save expense')
                       : 'Save entry'),

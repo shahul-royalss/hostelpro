@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_controller.dart';
 import '../../core/theme/tokens.dart';
-import '../../shared/glass/glass.dart';
+import '../../shared/clay/clay_icons.dart';
+import '../common/form_parts.dart';
+import 'auth_scaffold.dart';
 import 'code_field.dart';
 
 /// Second factor.
@@ -85,85 +87,51 @@ class _MfaScreenState extends ConsumerState<MfaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
     final busy = _busy;
     final error = _error;
     final code = _controller.text;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(Space.xl),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: GlassCard(
-                padding: const EdgeInsets.all(Space.xl),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text('Two-factor authentication',
-                        style: t.textTheme.titleLarge, textAlign: TextAlign.center),
-                    const SizedBox(height: Space.xxs),
-                    Text('Enter the 6-digit code from your authenticator app.',
-                        style: t.textTheme.bodyMedium, textAlign: TextAlign.center),
-                    const SizedBox(height: Space.xl),
-                    CodeField(
-                      controller: _controller,
-                      focusNode: _focus,
-                      enabled: !busy,
-                      hasError: error != null,
-                      length: _len,
-                      onChanged: (_) => setState(() {}),
-                      onCompleted: _verify,
-                    ),
-                    if (error != null) ...[
-                      const SizedBox(height: Space.sm),
-                      Semantics(
-                        liveRegion: true,
-                        // The theme-resolved TEXT red, not ApnivaasColors.error. That one is the
-                        // canonical GRAPHIC red — it measures 4.05:1 on this card, which is
-                        // below AA for type, and tokens.dart says outright not to set small
-                        // text in it. The sign-in and create-password screens carried the same
-                        // mistake; all three now go through context.tones. Size is the design's
-                        // running text rather than its 11px metadata step, because the longest
-                        // sentence here is "Codes change every 30 seconds — try the current
-                        // one."
-                        child: Text(
-                          error,
-                          style: t.textTheme.bodyMedium
-                              ?.copyWith(color: context.tones.error),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: Space.lg),
-                    FilledButton(
-                      onPressed:
-                          (busy || code.length < _len) ? null : () => _verify(code),
-                      child: busy
-                          ? SizedBox(
-                              width: IconSize.md,
-                              height: IconSize.md,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Theme.of(context).colorScheme.onPrimary),
-                            )
-                          : const Text('Verify and continue'),
-                    ),
-                    TextButton(
-                      onPressed: busy
-                          ? null
-                          : () => ref.read(authControllerProvider.notifier).signOut(),
-                      child: const Text('Use a different account'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+    // The sign-in screen's own page: this is the second half of signing in, so it keeps the
+    // brand bar and the ground the first half had, and the code sits on the page rather than in
+    // a card floating in the middle of an empty one.
+    return AuthScaffold(
+      children: [
+        const SizedBox(height: Space.md),
+        const AuthHeading(
+          icon: ClayIcons.security,
+          title: 'Two-factor authentication',
+          message: 'Enter the 6-digit code from your authenticator app.',
         ),
-      ),
+        const SizedBox(height: Space.xl),
+        CodeField(
+          controller: _controller,
+          focusNode: _focus,
+          enabled: !busy,
+          hasError: error != null,
+          length: _len,
+          onChanged: (_) => setState(() {}),
+          onCompleted: _verify,
+        ),
+        if (error != null) ...[
+          const SizedBox(height: Space.sm),
+          // The theme-resolved TEXT red with a glyph, never the canonical GRAPHIC red — that
+          // one measures 4.05:1 on a card, below AA for type. Running-text size rather than the
+          // metadata step, because the longest sentence here is "Codes change every 30 seconds —
+          // try the current one."
+          FormNote(error),
+        ],
+        const SizedBox(height: Space.lg),
+        BusyFilledButton(
+          label: 'Verify and continue',
+          busy: busy,
+          onPressed: code.length < _len ? null : () => _verify(code),
+        ),
+        const SizedBox(height: Space.xxs),
+        TextButton(
+          onPressed: busy ? null : () => ref.read(authControllerProvider.notifier).signOut(),
+          child: const Text('Use a different account'),
+        ),
+      ],
     );
   }
 }

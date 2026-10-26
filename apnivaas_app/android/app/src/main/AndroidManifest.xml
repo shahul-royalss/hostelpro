@@ -49,6 +49,11 @@
              the merged manifest instead of a hope. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- PRECISE location (round 3): the owner's PG pin (stored) and the tenant's "PGs near you"
+         (used once, not stored). One fix in the foreground, asked for in words first; no
+         background location. COARSE stays declared because Android 12+ lets the person choose. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <!-- NFC STAYS OPTIONAL WHATEVER A LIBRARY SAYS. NFC comes from Razorpay (standard-core asks for
          the NFC permission for tap-to-pay cards) and is optional today only because Razorpay's own
@@ -61,14 +66,10 @@
         android:required="false"
         tools:replace="android:required" />
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
-    <!-- NO BIOMETRICS, WHATEVER A LIBRARY SAYS (2026-10-17). google_sign_in 7 brings in
-         androidx.credentials, which brings in androidx.biometric 1.1.0, whose manifest declares
-         USE_BIOMETRIC and USE_FINGERPRINT for Credential Manager's optional biometric prompt
-         (BiometricPromptData). Apnivaas never passes one: the Google account sheet is drawn by
-         Google Play services in its own process, with its own permissions. Left in, the two would
-         make the privacy policy's "ten permissions and no others" and "no biometrics" untrue.
-         Removed here the same way AD_ID is, so it is a fact about the merged manifest. -->
-    <uses-permission android:name="android.permission.USE_BIOMETRIC" tools:node="remove" />
+    <!-- BIOMETRIC APP LOCK (round 3): local_auth's BiometricPrompt. On-device only; nothing
+         biometric leaves the phone. The legacy USE_FINGERPRINT that androidx.biometric also
+         declares stays removed; BiometricPrompt uses USE_BIOMETRIC. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" tools:node="remove" />
     <!-- ── THE SESSION MUST NOT LEAVE THE PHONE ────────────────────────────────────────────
          Android Auto Backup is ON BY DEFAULT. With it on,
@@ -194,6 +195,13 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- geolocator_android merges a location foreground service for position streams. The app
+             only ever asks for one coarse fix ("PGs near you"), so the service is never started, and
+             removing it keeps a location-type foreground service, and the Play declaration it
+             invites, out of the release manifest. -->
+        <service
+            android:name="com.baseflow.geolocator.GeolocatorLocationService"
+            tools:node="remove" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

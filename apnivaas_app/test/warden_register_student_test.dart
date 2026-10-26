@@ -459,17 +459,17 @@ void main() {
       // and it is shown once. A hard-coded "Phone (login)" over an email address would send
       // the resident to the sign-in screen with the string that does not work.
       await _pumpDialog(tester, loginId: '9876500042');
-      // _CredentialRow upper-cases the label it draws.
-      expect(find.text('PHONE (LOGIN)'), findsOneWidget);
-      expect(find.text('EMAIL (LOGIN)'), findsNothing);
+      // _CredentialRow draws the label as it is given, in sentence case.
+      expect(find.text('Phone (login)'), findsOneWidget);
+      expect(find.text('Email (login)'), findsNothing);
       expect(find.textContaining('sign in with their phone number'), findsOneWidget);
     });
 
     testWidgets('an email login is labelled as an email, not as a phone number',
         (tester) async {
       await _pumpDialog(tester, loginId: 'aarav@example.com');
-      expect(find.text('EMAIL (LOGIN)'), findsOneWidget);
-      expect(find.text('PHONE (LOGIN)'), findsNothing);
+      expect(find.text('Email (login)'), findsOneWidget);
+      expect(find.text('Phone (login)'), findsNothing);
       expect(find.text('aarav@example.com'), findsOneWidget);
       expect(find.textContaining('sign in with this email address'), findsOneWidget);
     });

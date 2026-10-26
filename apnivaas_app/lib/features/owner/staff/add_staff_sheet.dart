@@ -6,9 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
+import '../../../shared/clay/clay.dart';
 import '../../../shared/glass/glass.dart';
 import '../owner_providers.dart';
-import '../widgets/states.dart';
+import '../widgets/states.dart' show ErrorNote;
 import 'staff_access_sheet.dart';
 import 'staff_credentials_dialog.dart';
 import 'staff_models.dart';
@@ -304,29 +305,20 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // add-staff-details.png's head: a `label-caps` step marker in `primary` over the
-            // step's own title. The mockup says "STEP 1 OF 3"; this flow has two steps, not
-            // three — the permissions step it counts does not exist here (see the report) —
-            // so the marker names the sheet instead of counting to a step that never arrives.
+            // The sheet's title names the account being made; there is no step counter, because
+            // this flow is one form and a confirmation, and counting to a step that never
+            // arrives would be a promise the sheet does not keep.
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'ADD STAFF',
-                        style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.primary),
-                      ),
-                      const SizedBox(height: Space.xxs / 2),
-                      Text(
-                        'Add ${_role.label.toLowerCase()}',
-                        style: t.textTheme.titleLarge,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                  child: SheetTitle(
+                    title: 'Add ${_role.label.toLowerCase()}',
+                    subtitle: several
+                        ? 'Enter the personal details, assign a role and choose their PGs. They '
+                            'get one login for all of them.'
+                        : 'Enter the personal details and assign a role. They get their own '
+                            'login for ${widget.hostelName ?? 'this PG'}.',
                   ),
                 ),
                 IconButton(
@@ -336,15 +328,6 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: Space.xxs),
-            Text(
-              several
-                  ? 'Enter the personal details, assign a role and choose their PGs. They get '
-                      'one login for all of them.'
-                  : 'Enter the personal details and assign a role. They get their own login for '
-                      '${widget.hostelName ?? 'this PG'}.',
-              style: t.textTheme.bodySmall,
-            ),
             const SizedBox(height: Space.md),
             Flexible(
               child: SingleChildScrollView(
@@ -352,7 +335,7 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('SELECT ROLE', style: t.textTheme.labelSmall),
+                    const SectionHeader(title: 'Role', size: SectionHeaderSize.form),
                     const SizedBox(height: Space.xs),
                     for (final role in StaffRole.values) ...[
                       if (role != StaffRole.values.first) const SizedBox(height: Space.xs),
@@ -367,11 +350,10 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                       ),
                     ],
                     const SizedBox(height: Space.md),
-                    Divider(color: t.colorScheme.outlineVariant, height: Strokes.hairline),
+                    Divider(color: t.dividerTheme.color, height: Strokes.hairline),
                     const SizedBox(height: Space.md),
 
-                    // The design labels every field with a `label-caps` eyebrow ABOVE the box
-                    // and puts an example inside it. `FloatingLabelBehavior.always` plus a
+                    // Every field carries its label ABOVE the box and an example inside it. `FloatingLabelBehavior.always` plus a
                     // hint is exactly that arrangement, and it keeps the label a part of the
                     // field for screen readers rather than a loose line of text near it.
                     //
@@ -438,7 +420,7 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                     ),
                     const SizedBox(height: Space.sm),
 
-                    // The mockup's `ASSIGN TO PROPERTY` control. For a single-PG owner it is
+                    // Which PG the account belongs to. For a single-PG owner it is
                     // drawn as a fact rather than a dropdown: the sheet is always opened FOR a
                     // PG, so a picker would be a control with one option that cannot change
                     // where the account lands. For an owner with two or more it becomes the
@@ -470,7 +452,6 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                     const SizedBox(height: Space.md),
                     FilledButton(
                       onPressed: _busy ? null : _submit,
-                      style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
                       child: _busy
                           ? const SizedBox(
                               height: IconSize.md,
@@ -483,7 +464,8 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                     Text(
                       'A temporary password is generated on the server and shown to you once. '
                       'Apnivaas never stores it.',
-                      style: t.textTheme.bodySmall,
+                      style:
+                          t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -529,16 +511,12 @@ class StaffRoleCard extends StatelessWidget {
 
   final VoidCallback onTap;
 
-  IconData get _icon => switch (role) {
-        StaffRole.manager => Icons.manage_accounts_rounded,
-        StaffRole.warden => Icons.shield_rounded,
-      };
-
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final scheme = t.colorScheme;
-    final accent = selected ? scheme.primary : scheme.outline;
+    final dark = t.brightness == Brightness.dark;
+    final accent = selected ? scheme.primary : scheme.onSurfaceVariant;
     return Semantics(
       button: true,
       selected: selected,
@@ -550,19 +528,53 @@ class StaffRoleCard extends StatelessWidget {
       child: Opacity(
         // A full post stays legible — it is information, not clutter — but visibly out of
         // reach. Not a colour of its own: the design ships no "disabled" role.
-        opacity: enabled ? 1 : 0.5,
-        child: FlatSurface(
-          weight: GlassWeight.regular,
-          borderRadius: Radii.rControl,
-          padding: const EdgeInsets.all(Space.sm),
-          onTap: enabled ? onTap : null,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        opacity: enabled ? 1 : Dim.readOnly,
+        child: Material(
+          color: selected
+              ? (dark ? ApnivaasColors.darkSelected : ApnivaasColors.selectedSurface)
+              : scheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: Radii.rCard,
+            side: BorderSide(
+              color: selected ? scheme.primary : scheme.outlineVariant,
+              width: selected ? Strokes.control : Strokes.hairline,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            child: Padding(
+              padding: const EdgeInsets.all(Space.sm),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ToneBadge(icon: _icon, tone: accent, tinted: selected),
-                  const Spacer(),
+                  ClayIcon(
+                    role == StaffRole.manager ? ClayIcons.roleManager : ClayIcons.roleWarden,
+                    size: ClaySize.list,
+                  ),
+                  const SizedBox(width: Space.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          role.label,
+                          style: t.textTheme.titleMedium?.copyWith(
+                            color: selected ? scheme.primary : null,
+                          ),
+                        ),
+                        const SizedBox(height: Space.hair),
+                        Text(
+                          full
+                              ? 'This PG already has $maxStaffPerRole active '
+                                  '${role.label.toLowerCase()}s. Deactivate one to make room.'
+                              : role.blurb,
+                          style: t.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: Space.xs),
                   Icon(
                     selected
                         ? Icons.radio_button_checked_rounded
@@ -572,22 +584,7 @@ class StaffRoleCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: Space.xs),
-              Text(
-                role.label,
-                style: t.textTheme.titleMedium?.copyWith(
-                  color: selected ? scheme.primary : null,
-                ),
-              ),
-              const SizedBox(height: Space.xxs / 2),
-              Text(
-                full
-                    ? 'This PG already has $maxStaffPerRole active '
-                        '${role.label.toLowerCase()}s. Deactivate one to make room.'
-                    : role.blurb,
-                style: t.textTheme.bodySmall,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -605,28 +602,23 @@ class _AssignedProperty extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return FlatSurface(
-      weight: GlassWeight.regular,
-      borderRadius: Radii.rControl,
+      borderRadius: Radii.rCard,
       padding: const EdgeInsets.all(Space.sm),
       child: Row(
         children: [
-          // The building's glyph in the rooms colour: a hostel as an object belongs to that
-          // area, on this sheet as on the PGs tab. The gold that sat here was the badge's
-          // default for "nothing in particular".
-          const DomainIcon(
-            domain: ApnivaasDomain.rooms,
-            icon: Icons.apartment_rounded,
-            size: DomainIconSize.sm,
-          ),
+          const ClayIcon(ClayIcons.rooms, size: ClaySize.list),
           const SizedBox(width: Space.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('ASSIGNED PROPERTY', style: t.textTheme.labelSmall),
+                Text(
+                  'Assigned PG',
+                  style: t.textTheme.labelMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                ),
                 Text(
                   hostelName ?? 'This PG',
-                  style: t.textTheme.bodyMedium,
+                  style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurface),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -669,7 +661,7 @@ class _PropertyPicker extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('ASSIGNED PGS', style: t.textTheme.labelSmall),
+        const SectionHeader(title: 'Assigned PGs', size: SectionHeaderSize.form),
         const SizedBox(height: Space.xs),
         StaffPgChecklist(
           hostels: owned,
@@ -686,7 +678,7 @@ class _PropertyPicker extends StatelessWidget {
                 : selected.length > 1 && startsIn != null
                     ? 'They start in $startsIn and can switch between these PGs in the app.'
                     : 'Tick more than one to let them switch between PGs in the app.',
-            style: t.textTheme.bodySmall,
+            style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
           ),
         ),
       ],

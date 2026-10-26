@@ -85,6 +85,21 @@ export const LIMITS = {
    * dismissed. Six an hour is already generous for the honest case.
    */
   paymentOrderPerUser: { max: 6, windowSeconds: 3600 },
+
+  /**
+   * SELF SIGN-UP (mobile-auth google/facebook/truecaller with a persona), spent only when an
+   * account is about to be CREATED, on top of the login keys every attempt already spends.
+   * Per IP: the CGNAT reasoning of loginPerIp, scaled to how rarely one person creates an
+   * account. Per identifier (verified email, Facebook id or Truecaller sub): a person signs up
+   * once; three a day covers a retry after a dropped connection. No web mirror: the website
+   * has no sign-up.
+   */
+  signupPerIp: { max: 30, windowSeconds: 3600 },
+  signupPerIdentifier: { max: 3, windowSeconds: 86400 },
+
+  /** Plan payments (subscription-order): orders per owner per hour, and verify calls. */
+  subscriptionOrderPerUser: { max: 6, windowSeconds: 3600 },
+  subscriptionVerifyPerUser: { max: 30, windowSeconds: 3600 },
 } as const satisfies Record<string, RateLimitSpec>;
 
 /** Mirrors LIMITS.accountCreatePerUser in lib/rate-limit.ts. */

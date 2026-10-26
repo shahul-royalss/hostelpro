@@ -569,7 +569,54 @@ void main() {
       }
     });
   });
+
+  // The policy promises a fixed list of Android permissions. The count of OUR permissions is the
+  // one part Dart can check: the <uses-permission> lines in the app's own manifest that are not
+  // tools:node="remove". The other six (FCM's four, Razorpay's two) arrive by manifest merge and
+  // are re-counted in the release build. If a permission is added or dropped, this fails until
+  // both copies of the policy are corrected and the version is bumped.
+  group('the permission sentence matches the manifest', () {
+    const words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+    // Ours plus the six that arrive by merge (FCM's four, Razorpay's two).
+    const totals = {10: 'ten', 11: 'eleven', 12: 'twelve', 13: 'thirteen'};
+    final manifest = File('android/app/src/main/AndroidManifest.xml');
+
+    int ownPermissions() {
+      expect(manifest.existsSync(), isTrue, reason: 'the Android manifest moved; fix this path');
+      return RegExp(r'<uses-permission\b[^>]*>')
+          .allMatches(_xml(manifest))
+          .where((m) => !m.group(0)!.contains('tools:node="remove"'))
+          .length;
+    }
+
+    test('the app copy states the manifest count and names precise location', () {
+      final own = ownPermissions();
+      // Round 3 (R4): the PG pin and "PGs near you" use precise location.
+      expect(_xml(manifest).contains('ACCESS_FINE_LOCATION'), isTrue,
+          reason: 'round 3 declares precise location');
+      final privacy = _textOf(kPrivacyPolicy).join('\n');
+      final capital = words[own][0].toUpperCase() + words[own].substring(1);
+      expect(privacy.contains('$capital are $kLegalProductName' "'s own"), isTrue,
+          reason: 'the app policy does not say "$capital are ...\'s own"; the manifest declares '
+              '$own of our own');
+      expect(privacy.contains('${totals[own + 6]} permissions and no others'), isTrue);
+      expect(privacy.contains('precise location'), isTrue);
+    });
+
+    test('the published page states the same count', () {
+      final own = ownPermissions();
+      final page = File('../app/legal/privacy/page.tsx');
+      expect(page.existsSync(), isTrue, reason: 'app/legal/privacy/page.tsx moved; fix this path');
+      final source = page.readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
+      final capital = words[own][0].toUpperCase() + words[own].substring(1);
+      expect(source.contains('$capital are ours'), isTrue,
+          reason: 'the web policy does not say "$capital are ours"');
+      expect(source.contains('${totals[own + 6]} permissions and no others'), isTrue);
+    });
+  });
 }
+
+String _xml(File f) => f.readAsStringSync().replaceAll(RegExp(r'<!--[\s\S]*?-->'), '');
 
 /// Every string a reader can see in [doc]. A switch over the sealed [LegalBlock], so a block type
 /// added later fails to compile here instead of being skipped by the checks above.

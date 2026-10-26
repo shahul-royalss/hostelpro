@@ -33,6 +33,7 @@ import 'package:mobile/features/warden/actions/assign_bed_sheet.dart';
 import 'package:mobile/features/warden/actions/register_student_sheet.dart';
 import 'package:mobile/features/warden/data/warden_providers.dart';
 import 'package:mobile/features/warden/widgets/warden_ui.dart';
+import 'package:mobile/shared/clay/skeleton.dart' show SkeletonPulse;
 
 const _hostelId = 'h1';
 
@@ -57,7 +58,9 @@ void main() {
 
       expect(find.byType(FreeBedPicker), findsOneWidget,
           reason: 'nothing may be awaited between the tap and the sheet');
-      expect(find.byType(CircularProgressIndicator), findsWidgets,
+      // Working is said with the clay skeleton now — rows in the shape of what is coming —
+      // rather than a spinner. Every clay skeleton is drawn under one SkeletonPulse.
+      expect(find.byType(SkeletonPulse), findsWidgets,
           reason: 'and the sheet must say it is working');
       // Loading is its own state: not the data, not empty, not failed.
       expect(find.text('Room 101 · Bed 2'), findsNothing);
@@ -74,7 +77,7 @@ void main() {
       await _oneFrame(tester);
 
       expect(find.byType(FreeBedPicker), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsWidgets);
+      expect(find.byType(SkeletonPulse), findsWidgets);
       expect(find.text('Room 101 · Bed 2'), findsNothing);
 
       await tester.pumpAndSettle();
@@ -87,7 +90,7 @@ void main() {
       await _oneFrame(tester);
 
       expect(find.text('Who needs a bed?'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsWidgets);
+      expect(find.byType(SkeletonPulse), findsWidgets);
       expect(find.text('Aarav Sharma'), findsNothing);
 
       await tester.pumpAndSettle();
@@ -105,6 +108,7 @@ void main() {
 
       expect(find.byType(FreeBedPicker), findsOneWidget, reason: 'the same sheet, still open');
       expect(find.text('Room 101 · Bed 2'), findsOneWidget);
+      expect(find.byType(SkeletonPulse), findsNothing);
       expect(find.byType(CircularProgressIndicator), findsNothing);
     });
   });

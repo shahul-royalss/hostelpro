@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
+import '../../../core/theme/typography.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/clay/clay.dart';
 import '../../../shared/glass/glass.dart';
 import '../../../shared/rooms/edit_room_sheet.dart';
 import '../owner_providers.dart';
-import '../widgets/states.dart';
+import '../widgets/owner_header.dart';
+import '../widgets/states.dart' show EmptyNote, ErrorNote, whenAsync;
 import 'floor_plan_edit.dart';
 
 /// MAPPING THE BUILDING: how many floors, how many rooms on each, and how many beds the rooms
@@ -67,57 +70,24 @@ class FloorPlanScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
     final hostel = ref.watch(hostelProvider(hostelId));
     final rooms = ref.watch(roomOccupancyProvider(hostelId));
 
     return Scaffold(
       body: Column(
         children: [
-          GlassHeader(
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: 'Back',
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                ),
-                const SizedBox(width: Space.xxs),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Edit layout',
-                        style: t.textTheme.titleLarge?.copyWith(color: t.colorScheme.primary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        hostel.value?.name ?? 'PG',
-                        style: t.textTheme.bodySmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          OwnerSubpageHeader(title: 'Edit layout', subtitle: hostel.value?.name ?? 'PG'),
           Expanded(
             child: whenAsync(
               rooms,
               loading: () => ListView(
-                padding: const EdgeInsets.all(Space.md),
+                padding: OwnerRhythm.pagePadding,
                 children: const [
-                  SkeletonCard(lines: 2),
-                  SizedBox(height: Space.md),
-                  SkeletonCard(lines: 2),
+                  ListSkeleton(rows: 2, leading: false, semanticLabel: 'Loading the layout'),
                 ],
               ),
               error: (error) => ListView(
-                padding: const EdgeInsets.all(Space.md),
+                padding: OwnerRhythm.pagePadding,
                 children: [
                   ErrorNote(
                     error: error,
@@ -133,12 +103,12 @@ class FloorPlanScreen extends ConsumerWidget {
                   // 0 is perfectly legal. Renumbering somebody's building to fit the editor is
                   // not this screen's decision to make, so it says so and stops.
                   return ListView(
-                    padding: const EdgeInsets.all(Space.md),
+                    padding: OwnerRhythm.pagePadding,
                     children: [
-                      EmptyNote(
-                        icon: Icons.stairs_outlined,
+                      EmptyState(
+                        icon: ClayIcons.rooms,
                         title: 'These floors cannot be edited here',
-                        message: 'This PG has floors numbered '
+                        body: 'This PG has floors numbered '
                             '${building.map((f) => f.floor).join(', ')}. The layout editor can '
                             'only describe a building whose floors run 1, 2, 3 and so on with '
                             'none missing. Rooms and beds can still be changed one at a time '
@@ -460,16 +430,28 @@ class _EditorState extends ConsumerState<_Editor> {
       children: [
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.lg),
+            padding: const EdgeInsets.fromLTRB(Space.md, Space.lg, Space.md, Space.lg),
             children: [
-              const SectionHeading(
-                domain: ApnivaasDomain.rooms,
-                icon: Icons.stairs_rounded,
-                title: 'Floors and rooms',
-                caption: 'The bed count sets how many beds a NEW room gets. Rooms that '
-                    'already exist keep the beds they have — tap any room below to rename it '
-                    'or give it a different number of beds.',
+              const Row(
+                children: [
+                  ClayIcon(ClayIcons.rooms, size: ClaySize.list),
+                  SizedBox(width: Space.sm),
+                  Expanded(
+                    child: SectionHeader(title: 'Floors and rooms', size: SectionHeaderSize.card),
+                  ),
+                ],
               ),
+              const SizedBox(height: Space.xs),
+              Text(
+                'The bed count sets how many beds a NEW room gets. Rooms that already exist '
+                'keep the beds they have — tap any room below to rename it or give it a '
+                'different number of beds.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: OwnerRhythm.headingGap),
               if (_plan.isEmpty)
                 const EmptyNote(
                   icon: Icons.stairs_outlined,
@@ -559,7 +541,9 @@ class _FloorRow extends StatelessWidget {
     final hasName = (name ?? '').trim().isNotEmpty;
     final named = floorLabel(entry.floor, name);
 
+    final muted = t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant);
     return FlatSurface(
+      borderRadius: Radii.rSurface,
       padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -572,15 +556,14 @@ class _FloorRow extends StatelessWidget {
                 // The number does not follow it into the title — a heading that reads
                 // "Terrace (Floor 4)" is a screen that does not trust the person who typed the
                 // name — it goes in the caption below, where the plan's own arithmetic is.
-                child: Text(named, style: t.textTheme.titleMedium),
+                child: Text(named, style: context.textRoles.tileTitle),
               ),
               IconButton(
                 tooltip: 'Name this floor',
                 onPressed: enabled ? onRename : null,
                 icon: const Icon(Icons.drive_file_rename_outline_rounded, size: IconSize.md),
               ),
-              if (now == null)
-                const StatusChip(label: 'New floor', tone: ApnivaasColors.info),
+              if (now == null) const StatusChip(label: 'New floor', tone: StatusTone.info),
             ],
           ),
           const SizedBox(height: Space.xxs),
@@ -594,7 +577,7 @@ class _FloorRow extends StatelessWidget {
                 '${roomsLabel(now.roomCount)} now · '
                     '${now.occupiedBeds} of ${now.bedCount} beds taken',
             ].join(' · '),
-            style: t.textTheme.bodySmall,
+            style: muted,
           ),
           const SizedBox(height: Space.sm),
           _Stepper(
@@ -620,14 +603,14 @@ class _FloorRow extends StatelessWidget {
           ),
           if (now != null && now.rooms.isNotEmpty) ...[
             const SizedBox(height: Space.md),
-            Text('Rooms on this floor', style: t.textTheme.bodyMedium),
+            Text('Rooms on this floor', style: t.textTheme.titleMedium),
             const SizedBox(height: Space.xxs),
             Text(
               // Said plainly, because the two bed controls on this card mean different things
               // and the difference is exactly what confused the owner. The stepper above is
               // about rooms that do not exist yet; these are the rooms that do.
               'Tap one to rename it or change its beds. Every room can be different.',
-              style: t.textTheme.bodySmall,
+              style: muted,
             ),
             const SizedBox(height: Space.xs),
             Wrap(
@@ -762,6 +745,8 @@ class _RoomChip extends StatelessWidget {
       label: 'Room ${room.roomNumber}, $beds, ${room.occupied} taken. Edit.',
       excludeSemantics: true,
       child: Material(
+        // The well inside the floor's card: a step off the card so the chip reads as a thing to
+        // press, with the hairline doing the rest.
         color: GlassWeight.regular.surfaceOf(t.colorScheme),
         borderRadius: Radii.rControl,
         child: InkWell(
@@ -789,7 +774,11 @@ class _RoomChip extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(room.roomNumber, style: t.textTheme.titleSmall),
-                    Text(beds, style: t.textTheme.bodySmall),
+                    Text(
+                      beds,
+                      style:
+                          t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                    ),
                   ],
                 ),
                 const SizedBox(width: Space.xs),
@@ -873,18 +862,20 @@ class _PreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return GlassCard(
+    return FlatSurface(
+      borderRadius: Radii.rSurface,
       padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const CardEyebrow(
-            label: 'What saving does',
-            trailing: DomainIcon(
-              domain: ApnivaasDomain.rooms,
-              icon: Icons.rule_rounded,
-              size: DomainIconSize.sm,
-            ),
+          const Row(
+            children: [
+              ClayIcon(ClayIcons.reports, size: ClaySize.list),
+              SizedBox(width: Space.sm),
+              Expanded(
+                child: SectionHeader(title: 'What saving does', size: SectionHeaderSize.form),
+              ),
+            ],
           ),
           const SizedBox(height: Space.sm),
           if (preview.changesNothing)
@@ -964,7 +955,10 @@ class _SaveBar extends StatelessWidget {
             ),
             const SizedBox(height: Space.sm),
           ],
-          Text(preview.headline, style: t.textTheme.bodySmall),
+          Text(
+            preview.headline,
+            style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+          ),
           const SizedBox(height: Space.xs),
           FilledButton(
             onPressed: canSave ? onSave : null,

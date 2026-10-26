@@ -2,9 +2,10 @@
 // fastly when we clicks on any section... it has to come active without lazy load."
 //
 // WHAT THESE PROVE. The owner shell (OwnerSection, behind RoleShell) warms every tab's data in
-// the background while the Dashboard is on screen, so that tapping PGs, More (staff), or the
-// placeholder tabs NEVER lands on a skeleton or spinner once the shell has been up for a
-// moment — and that a revisit renders from the held value without refetching. The one place a
+// the background while Home is on screen, so that tapping Property, People, Money or More
+// (staff) NEVER lands on a skeleton or spinner once the shell has been up for a
+// moment — and that a revisit renders from the held value without refetching. The tabs are
+// Home · Money · People · Property · More, on the clay bar. The one place a
 // skeleton is still allowed — the genuinely cold first paint, before warm-up has had a chance
 // to run — is asserted too, because it is what proves the skeleton finder can detect a
 // regression at all.
@@ -30,8 +31,8 @@ import 'package:mobile/features/owner/owner_providers.dart';
 import 'package:mobile/features/owner/owner_tabs.dart';
 import 'package:mobile/features/owner/staff/staff_models.dart';
 import 'package:mobile/features/owner/staff/staff_providers.dart';
-import 'package:mobile/features/owner/widgets/states.dart';
 import 'package:mobile/features/shell/role_shell.dart';
+import 'package:mobile/shared/clay/clay.dart';
 
 const _period = '2026-08';
 const _sunriseId = 'h-sunrise';
@@ -220,11 +221,18 @@ Future<void> _letWarmupRun(WidgetTester tester) async {
 }
 
 /// The one assertion the product owner asked for, applied to whatever is on (or stacked
-/// behind) the screen: no skeleton, no spinner.
+/// behind) the screen: no skeleton, no spinner. Every clay skeleton — a list, a tile, a bare
+/// block — draws inside a [SkeletonPulse], so finding none of those is finding no skeleton.
 void _expectNoLoadingUi() {
-  expect(find.byType(Skeleton), findsNothing);
-  expect(find.byType(SkeletonCard), findsNothing);
+  expect(find.byType(SkeletonPulse), findsNothing);
   expect(find.byType(CircularProgressIndicator), findsNothing);
+}
+
+/// Taps a tab by its label on the clay bar — by the bar, because a screen may print the same
+/// word in its own header or a heading.
+Future<void> _tapTab(WidgetTester tester, String label) async {
+  await tester.tap(find.descendant(of: find.byType(ClayNavBar), matching: find.text(label)));
+  await tester.pump();
 }
 
 void main() {
@@ -234,7 +242,7 @@ void main() {
     await tester.pump();
 
     // The genuinely cold first paint of the home tab is the one skeleton the contract allows.
-    expect(find.byType(Skeleton), findsWidgets);
+    expect(find.byType(SkeletonPulse), findsWidgets);
 
     await _letWarmupRun(tester);
 
@@ -248,25 +256,22 @@ void main() {
     expect(_financeFetches, 1);
     expect(_hostelsFetches, 1);
 
-    // PGs: both cards drawn on the arrival frame, figures included.
-    await tester.tap(find.text('PGs'));
-    await tester.pump();
+    // Property: both cards drawn on the arrival frame, figures included.
+    await _tapTab(tester, 'Property');
     _expectNoLoadingUi();
     expect(find.text('Sunrise Residency'), findsWidgets);
     expect(find.text('Lakeview'), findsWidgets);
 
-    // Students is a real screen now, and it is warmed like the rest: the roster's first page
-    // is already in hand, so the tap lands on residents rather than on a skeleton. The
-    // placeholder this used to assert is gone from the owner's shell entirely.
-    await tester.tap(find.text('Students'));
-    await tester.pump();
+    // People is warmed like the rest: the roster's first page is already in hand, so the tap
+    // lands on residents rather than on a skeleton. The placeholder this used to assert is gone
+    // from the owner's shell entirely.
+    await _tapTab(tester, 'People');
     _expectNoLoadingUi();
     expect(find.textContaining('not built yet'), findsNothing);
 
-    // Payments: "who paid" is warmed like every other tab, so the first frame after the tap
+    // Money: "who paid" is warmed like every other tab, so the first frame after the tap
     // already carries the resident, the figure and the name of the warden who took it.
-    await tester.tap(find.text('Payments'));
-    await tester.pump();
+    await _tapTab(tester, 'Money');
     _expectNoLoadingUi();
     expect(find.text('Rohan Deshmukh'), findsOneWidget);
     expect(find.text('₹6,200'), findsOneWidget);
@@ -276,8 +281,7 @@ void main() {
     // live behind it too. The warm-up contract is unchanged and is asserted one hop further
     // in — the roster was fetched in the background, so opening Staff accounts lands on
     // people rather than on a skeleton.
-    await tester.tap(find.text('More'));
-    await tester.pump();
+    await _tapTab(tester, 'More');
     _expectNoLoadingUi();
     expect(find.text('Staff accounts'), findsOneWidget);
 
@@ -296,15 +300,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    // Back to the Dashboard: the hero figure is still standing.
-    await tester.tap(find.text('Dashboard'));
-    await tester.pump();
+    // Back to Home: the hero figure is still standing.
+    await _tapTab(tester, 'Home');
     _expectNoLoadingUi();
     expect(find.text('₹50,200'), findsWidgets);
 
     // And around the whole shell again: not one of those taps fetched anything.
-    await tester.tap(find.text('PGs'));
-    await tester.pump();
+    await _tapTab(tester, 'Property');
     _expectNoLoadingUi();
     expect(_statsFetches, {_sunriseId: 1, _lakeviewId: 1});
     expect(_staffFetches, 1);
@@ -321,9 +323,8 @@ void main() {
     await _pumpShell(tester);
     await tester.pump();
 
-    await tester.tap(find.text('PGs'));
-    await tester.pump();
-    expect(find.byType(SkeletonCard), findsWidgets,
+    await _tapTab(tester, 'Property');
+    expect(find.byType(SkeletonPulse), findsWidgets,
         reason: 'nothing is warm yet: the list has not loaded and may honestly say so');
 
     // Drain: once the stubs resolve, the same screen fills in with no further taps.
@@ -338,8 +339,7 @@ void main() {
     await tester.pump();
     await _letWarmupRun(tester);
 
-    await tester.tap(find.text('PGs'));
-    await tester.pump();
+    await _tapTab(tester, 'Property');
     expect(find.text('Lakeview'), findsWidgets);
 
     // What a silent background refresh does: invalidate while the tab is on screen.

@@ -36,9 +36,13 @@ import 'onboarding_screen.dart';
 /// matters exactly once. If the read throws, onboarding is skipped: a person who cannot be
 /// shown the tour can still sign in.
 class OnboardingGate extends StatefulWidget {
-  const OnboardingGate({super.key, required this.child});
+  const OnboardingGate({super.key, required this.child, this.onFirstRunDone});
 
   final Widget child;
+
+  /// Where a FIRST-TIME user goes when the tour ends (1.3.0: "Who are you?"). Null keeps the
+  /// old behaviour: the child is shown.
+  final void Function(BuildContext context)? onFirstRunDone;
 
   /// Overridable so a test can force either branch without touching a real disk.
   @visibleForTesting
@@ -101,7 +105,9 @@ class _OnboardingGateState extends State<OnboardingGate> {
     // Marked before the swap, not after: if the process dies between the two, the tour has
     // still been seen and showing it again would be the wrong recovery.
     OnboardingGate.markSeen();
-    if (mounted) setState(() => _seen = true);
+    if (!mounted) return;
+    setState(() => _seen = true);
+    widget.onFirstRunDone?.call(context);
   }
 
   @override

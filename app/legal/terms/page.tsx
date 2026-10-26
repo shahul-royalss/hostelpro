@@ -93,8 +93,9 @@ export default function TermsOfUsePage() {
         <Callout title="The short version">
           <ul>
             <li>
-              Your hostel subscribes to {APP_NAME} and issues you an account. There is no public
-              sign-up and no self-service account.
+              Your hostel subscribes to {APP_NAME} and issues you an account &mdash; or, as an
+              Owner, a tenant or staff, you create your own in the Android app. A staff sign-up gets
+              access only when a PG&rsquo;s Owner accepts it.
             </li>
             <li>
               If a hostel&rsquo;s subscription lapses, the workspace becomes{" "}
@@ -102,8 +103,10 @@ export default function TermsOfUsePage() {
               is deleted.
             </li>
             <li>
-              {APP_NAME} records payments. It never takes, holds or moves money, and never sees a
-              card number, UPI ID or bank account.
+              {APP_NAME} records rent payments. It never takes, holds or moves rent, and never sees a
+              card number, bank account or a tenant&rsquo;s UPI ID; rent paid by UPI goes straight
+              to the Owner&rsquo;s own UPI ID. An Owner&rsquo;s own plan is paid to us through
+              Razorpay and starts once our server has verified the payment.
             </li>
             <li>
               How personal data is handled is set out separately in the{" "}
@@ -117,7 +120,8 @@ export default function TermsOfUsePage() {
             These terms are an agreement between <strong>{OPERATOR.legalName}</strong> (&ldquo;we&rdquo;,
             &ldquo;us&rdquo;), which provides this service, and you — whether you are the{" "}
             <strong>hostel or PG operator</strong> that subscribes to {APP_NAME}, or an owner,
-            manager, warden or resident given an account by that operator. Wherever these terms
+            manager, warden or resident given an account by that operator, or an owner, tenant or
+            member of staff who created their own account. Wherever these terms
             say that {APP_NAME} does something, they mean {OPERATOR.legalName}.
           </p>
           <p>
@@ -132,8 +136,9 @@ export default function TermsOfUsePage() {
             {APP_NAME} records and organises the running of a hostel or PG: floors, rooms and beds
             and which are occupied; resident records, admission and check-out; a monthly fee ledger;
             complaints with their status history; leave requests; a visitor log; notices, staff
-            tasks and mess menus; and expense and revenue records. It is delivered as a website and
-            an Android app, and needs an internet connection.
+            tasks and mess menus; expense and revenue records; check-out requests; and a PG profile
+            with photos and tenant reviews. A tenant&rsquo;s dues start from their check-in date. It
+            is delivered as a website and an Android app, and needs an internet connection.
           </p>
           <p>
             It is a record-keeping tool. It is <strong>not</strong> an accounting package, not a
@@ -145,17 +150,26 @@ export default function TermsOfUsePage() {
 
         <Section id="accounts" title="3. Your account">
           <p>
-            There is <strong>no public sign-up</strong>. The platform administrator creates the
-            Owner account for a hostel, the Owner creates Manager and Warden accounts, and a Warden
-            registers residents — who sign in with the phone number the hostel registered. Every
-            account comes with a temporary password that must be changed at first sign-in. Owners
-            and residents whose login is a Google account&rsquo;s address may also sign in with
-            Continue with Google.
+            <strong>An Owner, a tenant or a member of staff may create their own account</strong>{" "}
+            in the Android app, with an email address and a password, with Continue with Google or,
+            where the app offers them, Continue with Facebook or Continue with Truecaller. You must
+            be <strong>18 or over</strong> to do so, and the details you give must be your own and
+            true. The website has no sign-up. A staff sign-up gets no access until the Owner of the
+            PG it asked to join accepts it and chooses the role, Manager or Warden.
           </p>
           <p>
-            An account belongs to the hostel&rsquo;s workspace rather than to you personally, and is
-            deactivated on check-out or when employment ends. The operator is responsible for
-            issuing accounts only to people entitled to them and for deactivating them promptly.
+            Otherwise the platform administrator creates the Owner account for a hostel, the Owner
+            may create Manager and Warden accounts, and a Warden registers residents — who sign in with
+            the phone number the hostel registered. Every account created for you comes with a
+            temporary password that must be changed at first sign-in. Owners and residents whose
+            login is a Google account&rsquo;s address may also sign in with Continue with Google.
+          </p>
+          <p>
+            An account a hostel created belongs to the hostel&rsquo;s workspace rather than to you
+            personally, and is deactivated on check-out or when employment ends. An account you
+            created stays yours when you leave a PG. An Owner may delete the account of a Manager or
+            Warden who works for them. The operator is responsible for issuing accounts only to
+            people entitled to them and for deactivating them promptly.
           </p>
           <ul>
             <li>
@@ -166,6 +180,10 @@ export default function TermsOfUsePage() {
             <li>
               Turn on two-factor authentication where it is offered. Where it is required for your
               role you will be asked to set it up before you can continue.
+            </li>
+            <li>
+              Use the app lock where you can. It is on by default for Owners, anyone may turn it on
+              in Security, and it uses your phone&rsquo;s own fingerprint, face or screen lock.
             </li>
             <li>Tell your hostel immediately if you think someone else has your password.</li>
             <li>
@@ -192,8 +210,18 @@ export default function TermsOfUsePage() {
               their knowledge;
             </li>
             <li>
-              use the visitor log, complaints or any other feature to harass a resident, a member of
-              staff or a visitor;
+              use the visitor log, complaints, join requests or any other feature to harass a
+              resident, a member of staff or a visitor, or send a join request to a PG you do not
+              mean to stay in;
+            </li>
+            <li>
+              upload an identity document that is not yours, or an Aadhaar that is not masked when
+              a masked one would do;
+            </li>
+            <li>
+              write a review of a PG you have not stayed in, or one that is false or abusive; put
+              people in a PG&rsquo;s photos without their agreement; or enter a UTR for a UPI
+              payment you did not make;
             </li>
             <li>
               copy, resell, sublicense or reverse-engineer the software, or extract data from it in
@@ -220,7 +248,7 @@ export default function TermsOfUsePage() {
             <li>
               giving residents notice and obtaining their consent before entering their details,
               including a <strong>parent or guardian&rsquo;s consent</strong> where a resident is
-              under 18 — the system holds no date of birth and cannot tell;
+              under 18 — the system does not check ages and cannot tell;
             </li>
             <li>
               displaying a visible notice at the visitor desk, since a visitor whose name and phone
@@ -232,6 +260,15 @@ export default function TermsOfUsePage() {
             <li>
               answering residents&rsquo; requests to see, correct or erase their data, and applying
               the periods in the <Link href="/legal/privacy">Privacy Policy</Link>;
+            </li>
+            <li>
+              answering join requests honestly, and using a requester&rsquo;s photo and identity
+              documents only to decide whether to accept them; answering staff requests and
+              check-out requests promptly;
+            </li>
+            <li>
+              keeping the PG profile, its photos and the UPI ID accurate, and confirming a UPI
+              payment only after seeing it arrive in the Owner&rsquo;s UPI app or bank;
             </li>
             <li>removing accounts for staff who leave.</li>
           </ul>
@@ -266,21 +303,34 @@ export default function TermsOfUsePage() {
             ]}
           />
           <p>
-            Rent reaches the hostel one of two ways, and {APP_NAME} is not holding it in either. A
+            Rent reaches the hostel one of three ways, and {APP_NAME} is not holding it in any. A
             warden records a payment already made in cash, by UPI or by bank transfer; or, if the
             resident chooses, the payment is taken by <strong>Razorpay</strong> in
-            Razorpay&rsquo;s own checkout under Razorpay&rsquo;s terms. {APP_NAME} passes it the
+            Razorpay&rsquo;s own checkout under Razorpay&rsquo;s terms, and {APP_NAME} passes it the
             payer&rsquo;s name, email, phone and the amount, and receives back only a confirmation
-            and the transaction identifiers. In neither case does {APP_NAME}{" "}
-            <strong>take, hold, transfer or refund money</strong>, and in neither case does it store
-            a card number, a bank account number, a UPI ID or a CVV.
+            and the transaction identifiers; or the resident pays <strong>by UPI</strong> from their
+            own UPI app straight to the Owner&rsquo;s UPI ID and enters the UTR, which counts as
+            paid only when the Owner or a Warden confirms it &mdash; the app never takes the
+            phone&rsquo;s word for it. In no case does {APP_NAME}{" "}
+            <strong>take, hold, transfer or refund money</strong>, and in no case does it store a
+            card number, a bank account number, a CVV or the resident&rsquo;s UPI ID.
           </p>
           <p>
             A receipt reflects what a member of staff recorded or what the gateway confirmed; it is
             not independent confirmation that money changed hands. If a receipt is wrong, the hostel
             corrects it. Rent, deposits, refunds and any dispute about them are between the resident
-            and the hostel. Subscription fees and renewal terms are agreed separately with the
-            operator and are not set by this page.
+            and the hostel.
+          </p>
+          <p>
+            <strong>An Owner&rsquo;s plan.</strong> An Owner who creates their own account gets their
+            first PG free for one month, once. After that a plan is bought in the app: the plans and
+            their prices are the ones the app shows at the time, set by us. The payment is taken by
+            Razorpay in its own checkout and is paid to us; {APP_NAME} never sees the card number,
+            UPI ID or bank account. The plan starts only once our server has verified the payment
+            with Razorpay, and adds its months to the end of the current plan. A plan does not renew
+            by itself. If a payment went wrong, write to us at the contact in section 8. A free demo
+            you book is a request for a call from us, which we confirm or rearrange. Fees for a
+            hostel set up by the platform administrator are agreed with the operator separately.
           </p>
         </Section>
 
@@ -303,7 +353,9 @@ export default function TermsOfUsePage() {
             practicable and lawful we tell the operator first, and we restore access as soon as the
             reason is resolved. An operator may stop using the service at any time and may request
             an export of its workspace data first. A resident&rsquo;s account is normally closed by
-            their hostel when they leave.
+            their hostel when they leave. When an account is permanently deleted, its payments,
+            receipts, dues and security log entries are kept, marked &ldquo;Deleted user&rdquo;,
+            for legal and accounting reasons.
           </p>
           <p>
             To the fullest extent permitted by law, neither party is liable to the other for

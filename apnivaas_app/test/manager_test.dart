@@ -6,9 +6,10 @@
 // nobody has ever written one down, an expense category the database cannot store — and the
 // big one for this role, a dashboard figure that RLS zeroes out and the screen prints anyway.
 //
-// The widget tests deliberately do NOT use ApnivaasTheme: it is built on google_fonts, which
-// reaches for the network from inside the test binary. Nothing under test depends on the
-// typeface — only on the scale's slot names, which the stock theme has too.
+// The widget tests run on the stock theme rather than ApnivaasTheme. Nothing under test depends
+// on the typeface or the palette — only on the scale's slot names and the scheme's roles, which
+// the stock theme has too — and a colour assertion reads the scheme from the tree rather than
+// naming a hex, so it holds on either.
 
 import 'dart:async';
 
@@ -30,6 +31,7 @@ import 'package:mobile/features/manager/tasks/manager_tasks_screen.dart';
 import 'package:mobile/features/manager/tasks/task_sheet.dart';
 import 'package:mobile/features/manager/widgets/manager_ui.dart';
 import 'package:mobile/features/shell/role_shell.dart';
+import 'package:mobile/shared/clay/clay.dart';
 import 'package:mobile/shared/glass/glass.dart';
 
 const _hostelId = 'h1';
@@ -337,12 +339,9 @@ void main() {
       );
       await tester.pump();
 
-      final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+      final bar = tester.widget<ClayNavBar>(find.byType(ClayNavBar));
       expect(
-        bar.destinations
-            .cast<NavigationDestination>()
-            .map((d) => d.label)
-            .toList(growable: false),
+        bar.destinations.map((d) => d.label).toList(growable: false),
         const ['Home', 'Expenses', 'Tasks', 'Menu'],
       );
       // A manager is not a small owner: no portfolio, no residents, no rent collection.
@@ -476,10 +475,10 @@ void main() {
     testWidgets('all four meals appear, and the unplanned one says so', (tester) async {
       await _pumpMenu(tester);
 
-      expect(find.text('BREAKFAST'), findsOneWidget);
-      expect(find.text('LUNCH'), findsOneWidget);
-      expect(find.text('SNACKS'), findsOneWidget);
-      expect(find.text('DINNER'), findsOneWidget);
+      expect(find.text('Breakfast'), findsOneWidget);
+      expect(find.text('Lunch'), findsOneWidget);
+      expect(find.text('Snacks'), findsOneWidget);
+      expect(find.text('Dinner'), findsOneWidget);
 
       expect(find.text('Idli, sambar, coconut chutney'), findsOneWidget);
       // No row for dinner on the selected day.
@@ -689,26 +688,41 @@ void main() {
     testWidgets('an overdue count that FAILED is not pixel-identical to zero', (tester) async {
       await _pumpShell(tester, loadError: offline);
 
-      expect(find.descendant(of: find.byType(Badge), matching: find.text('!')), findsOneWidget);
+      // The bar's plain red dot — not a number, so it cannot be read as one — and words for a
+      // screen reader that say the count is missing rather than zero.
+      final tab = _tasksTab(tester);
+      expect(tab.hasBadge, isTrue);
+      expect(tab.badgeCount, isNull);
+      expect(tab.badgeLabel, 'overdue count unavailable');
+      expect(find.byType(CountBadge), findsNothing);
     });
 
     testWidgets('a real zero draws no badge at all', (tester) async {
       await _pumpShell(tester, load: const TaskLoad(open: 3, overdue: 0));
 
-      expect(find.byType(Badge), findsNothing);
+      final tab = _tasksTab(tester);
+      expect(tab.hasBadge, isFalse);
+      expect(tab.badgeCount, isNull);
+      expect(find.byType(CountBadge), findsNothing);
     });
 
     testWidgets('a real count still draws the number', (tester) async {
       await _pumpShell(tester, load: const TaskLoad(open: 9, overdue: 3));
 
-      expect(find.descendant(of: find.byType(Badge), matching: find.text('3')), findsOneWidget);
-      expect(find.descendant(of: find.byType(Badge), matching: find.text('!')), findsNothing);
+      expect(find.descendant(of: find.byType(CountBadge), matching: find.text('3')),
+          findsOneWidget);
+      final tab = _tasksTab(tester);
+      expect(tab.hasBadge, isFalse, reason: 'a count, not the unknown-count dot');
+      expect(tab.badgeLabel, '3 overdue');
     });
 
     testWidgets('a count still in flight draws no badge and no mark', (tester) async {
       await _pumpShell(tester, loadPending: true);
 
-      expect(find.byType(Badge), findsNothing);
+      final tab = _tasksTab(tester);
+      expect(tab.hasBadge, isFalse);
+      expect(tab.badgeCount, isNull);
+      expect(find.byType(CountBadge), findsNothing);
     });
 
     // ── names on the task sheet ─────────────────────────────────────────────
@@ -741,57 +755,77 @@ void main() {
 
   // ───────────────────────────────────────────────────────────────────────────
   //
-  // THE RESTYLE ITSELF. These pin the decisions that separate Figma `4:1159` /
-  // `4:1236` from the Stitch mockup the screens were built against before it. They are
-  // structural rather than pixel assertions: which widget draws a group, how many panes are
-  // on a page, which fill a selected tab takes. A pixel test would fail on a font metric.
-  group('the manager screens are the Figma frames, not the Stitch card stack', () {
-    testWidgets('a group is announced by an uppercase eyebrow, not wrapped in a titled card',
+  // THE RESTYLE ITSELF. These pin the decisions of the clay redesign — forest header, cream
+  // ground, flat cards, clay tiles — against the Figma frames the screens were drawn to before
+  // it. They are structural rather than pixel assertions: which widget draws a group, how many
+  // panes are on a page, which fill a selected tab takes. A pixel test would fail on a font
+  // metric.
+  group('the manager screens are the clay system, not the old frames', () {
+    testWidgets('a group is announced by a clay section heading, not an uppercase eyebrow',
         (tester) async {
       await _pumpHome(tester);
 
-      // 4:1196 and 4:1214: `text-[#6f747a] text-[11px] uppercase`, no box under it. The string
-      // is uppercased by SectionLabel, because a TextStyle cannot.
-      expect(find.text("TODAY'S TASKS"), findsOneWidget);
-      expect(find.text('MONEY IN AND OUT'), findsOneWidget);
-      // 'DO IT NOW' was here. The four-button action grid came off on 2026-09-12: every one of
-      // its destinations is a tab on the bar below, and recording money is one tap from the
-      // Expenses tab's own + button. Asserted ABSENT rather than deleted, so putting it back
-      // is a decision somebody makes on purpose.
+      // Outfit, sentence case, a semantics header — the kit's SectionHeader. The 11px caps
+      // eyebrow these replaced read as a caption that had lost its picture.
+      expect(find.widgetWithText(SectionHeader, "Today's tasks"), findsOneWidget);
+      expect(find.widgetWithText(SectionHeader, 'Money in and out'), findsOneWidget);
+      expect(find.text("TODAY'S TASKS"), findsNothing);
+      // 'DO IT NOW' and the noticeboard came off on 2026-09-12 and stay off. The quick actions
+      // that are here now are a different thing — see the test below.
       expect(find.text('DO IT NOW'), findsNothing);
       expect(find.text('NOTICES'), findsNothing);
 
-      // The Stitch headings these replaced — sentence case, inside a card, behind a glyph.
+      // The Stitch headings before those — sentence case, inside a card, behind a glyph.
       expect(find.text('Task board'), findsNothing);
       expect(find.text('Money this month'), findsNothing);
+    });
+
+    testWidgets('the quick actions open the recording sheets, not tabs the bar already has',
+        (tester) async {
+      // The "Do it now" grid came off because each of its buttons led to a destination the tab
+      // bar carries. These must not: a quick action that switched tabs would be that grid back.
+      await _pumpHome(tester);
+      final container =
+          ProviderScope.containerOf(tester.element(find.byType(ManagerHomeScreen)));
+
+      await tester.tap(find.text('Add expense'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('Day-to-day expense'), findsOneWidget, reason: 'the sheet opened');
+      expect(container.read(managerTabProvider), 0, reason: 'and the tab did not change');
     });
 
     testWidgets('the dashboard body has NO pane on it — only the header has a fill',
         (tester) async {
       await _pumpHome(tester);
 
-      // Every frame in the file is flat: an opaque fill and a 1px hairline, no shadow and no
-      // second rung of elevation. The old screen put its jobs figure on a raised pane as "the
-      // one hero per screen"; 4:1159 has no hero and nothing lifted off the ground.
-      //
-      // THIS USED TO COUNT ONE PANE AND CALL IT THE HEADER. The header is the brow now — it
-      // paints the brand block directly rather than through GlassSurface — so the count is
-      // zero. The claim being protected is unchanged and is actually stated more exactly this
-      // way: nothing in the BODY is a pane. What the header is made of is the header's business
-      // and brow_test.dart's.
+      // Every resting card in the clay system is flat: an opaque fill and a 1px hairline, no
+      // shadow and no second rung of elevation. Nothing in the BODY is a pane, and the header is
+      // the clay AppHeader — the forest backdrop the home of every role opens with — rather
+      // than the brow bar the tabs keep.
       expect(find.byType(GlassSurface), findsNothing,
-          reason: 'the body is flat, and the header is a brow rather than a pane');
-      expect(find.byType(GlassHeader), findsOneWidget);
+          reason: 'the body is flat, and the header paints its own backdrop');
+      expect(find.byType(AppHeader), findsOneWidget);
+      expect(find.byType(GlassHeader), findsNothing);
     });
 
-    testWidgets('the KPI grid is four equal tiles — 4:1177', (tester) async {
+    testWidgets('the overview is four tiles, and only one of them is the forest hero',
+        (tester) async {
       await _pumpHome(tester);
       expect(find.byType(StatCard), findsNWidgets(4));
+      // The hero is the month's spending. One per screen: a strip of forest tiles has no
+      // emphasis left to spend.
+      final heroes = tester
+          .widgetList<StatTile>(find.byType(StatTile))
+          .where((tile) => tile.style == StatTileStyle.hero);
+      expect(heroes.length, 1);
+      expect(heroes.single.label, 'Spent this month');
     });
 
     testWidgets('three tiles fed by one read report one failure, not three', (tester) async {
       // Spent today, spent this month and recorded in all come out of managerFinanceProvider.
-      // That is one request with one outcome, so a failure collapses them to a single card
+      // That is one request with one outcome, so a failure collapses them to a single tile
       // beside the job tile — which still keeps its own face, because it is a different read.
       await _pumpHome(
         tester,
@@ -803,13 +837,11 @@ void main() {
       expect(find.text('4'), findsOneWidget);
     });
 
-    testWidgets('the selected day tab is the gold fill; the rest are the raised surface',
-        (tester) async {
-      // 4:1265 is `bg-[#c9a96e]` with `text-[#0b0d0f]`; 4:1262 is `bg-[#171a1e]` under a
-      // hairline. The scheme is read from the tree rather than named, because these widget
-      // tests deliberately run on the stock theme — see the note at the top of this file.
+    testWidgets('the selected day is the forest fill; the rest are the card', (tester) async {
+      // The scheme is read from the tree rather than named, because these widget tests
+      // deliberately run on the stock theme — see the note at the top of this file.
       await _pumpMenu(tester);
-      final scheme = Theme.of(tester.element(find.text('WED'))).colorScheme;
+      final scheme = Theme.of(tester.element(find.text('Wed'))).colorScheme;
 
       Color fillUnder(String day) => tester
           .widgetList<Material>(
@@ -817,21 +849,19 @@ void main() {
           .first
           .color!;
 
-      expect(fillUnder('WED'), scheme.primary, reason: 'Wednesday is the pinned day');
-      expect(fillUnder('MON'), scheme.surfaceContainer);
+      expect(fillUnder('Wed'), scheme.primary, reason: 'Wednesday is the pinned day');
+      expect(fillUnder('Mon'), scheme.surface);
     });
 
-    testWidgets('a planned meal takes the gold heading, an unplanned one the muted ink',
+    testWidgets("a planned meal's name is forest, an unplanned one the secondary ink",
         (tester) async {
-      // 4:1283 sets every meal name in the accent — but every meal on that frame is planned.
-      // The unplanned case is the one the frame does not draw, and it has to stay visibly
-      // different, because "how much of today is written" is the whole question this screen
-      // answers.
+      // The unplanned case has to stay visibly different, because "how much of today is
+      // written" is the whole question this screen answers.
       await _pumpMenu(tester);
-      final scheme = Theme.of(tester.element(find.text('BREAKFAST'))).colorScheme;
+      final scheme = Theme.of(tester.element(find.text('Breakfast'))).colorScheme;
 
-      expect(tester.widget<Text>(find.text('BREAKFAST')).style?.color, scheme.primary);
-      expect(tester.widget<Text>(find.text('DINNER')).style?.color, isNot(scheme.primary));
+      expect(tester.widget<Text>(find.text('Breakfast')).style?.color, scheme.primary);
+      expect(tester.widget<Text>(find.text('Dinner')).style?.color, isNot(scheme.primary));
     });
   });
 
@@ -902,79 +932,61 @@ void main() {
 
   // ───────────────────────────────────────────────────────────────────────────
   //
-  // tokens.dart is the single source for colour, spacing, radius, icon size and duration.
-  // These are the values manager_ui.dart had inlined where warden_ui.dart — the copy that was
-  // already correct — reads the token.
-  group('manager_ui paints through tokens, not through literals', () {
-    testWidgets('a status pill takes the control radius, not a hardcoded 999', (tester) async {
+  // tokens.dart is the single source for colour, spacing, radius, icon size and duration, and
+  // the clay kit is the single source for a chip, an empty state and a tile. These pin that
+  // manager_ui reaches for both rather than drawing its own.
+  group('manager_ui paints through tokens and the clay kit, not through literals', () {
+    testWidgets('a status pill is the clay status chip, in the tone of its state',
+        (tester) async {
       await tester.pumpWidget(
         const MaterialApp(home: Scaffold(body: Pill(status: TaskStatus.pending))),
       );
 
-      final box = tester
-          .widget<Container>(
-              find.descendant(of: find.byType(Pill), matching: find.byType(Container)))
-          .decoration! as BoxDecoration;
-      // tokens.dart reserves Radii.pill for shapes that can never take a second line. A status
-      // pill takes control — which is also what warden_ui's StatusPill uses.
-      expect(box.borderRadius, Radii.rControl);
+      final chip = tester.widget<StatusChip>(
+          find.descendant(of: find.byType(Pill), matching: find.byType(StatusChip)));
+      // The wording is the enum's own label, the same the web app shows for the same row, and
+      // the tone is toneFor's: pending is work waiting, which is amber.
+      expect(chip.label, TaskStatus.pending.label);
+      expect(chip.tone, StatusTone.warning);
     });
 
-    testWidgets('an empty section and a failed one both draw the shared state card, not two '
-        'inventions', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: Column(children: [
-              EmptyNote(icon: Icons.check_circle_outline_rounded, title: 'Nothing here'),
-              FailureNote(error: OfflineFailure('offline')),
-            ]),
-          ),
-        ),
-      );
-
-      // Figma 4:1562, `screen-empty-error-skeleton`, draws empty and error as the SAME raised
-      // card with the same hairline, differing only in the caps tag and the body. Both of this
-      // role's notes are now that shared card — 36 and 32 used to be two people guessing at an
-      // icon size in two separate hand-rolled columns.
-      expect(find.byType(StateCard), findsNWidgets(2));
-
-      // The tag is a real word, not the spec frame's own "ERROR STATE" label for a designer.
-      expect(find.text('ERROR'), findsOneWidget);
-      expect(find.text('EMPTY STATE'), findsNothing);
-
-      // ONE glyph on the pair, and it belongs to the empty state: 4:1588 gives the error card
-      // no icon at all, because its sentence is the message. A red pictogram over a section
-      // that merely did not load reads as "the app is broken".
-      final icons = tester.widgetList<Icon>(find.byType(Icon)).toList();
-      expect(icons.length, 1);
-      // It sits inside the design's 1.5px outlined square (4:1579), so it is a step down from
-      // the old bare 32dp glyph rather than the same number in a new place.
-      expect(icons.single.size, IconSize.xl - Space.xs);
-
-      // Offline is retryable, but nothing was wired to retry it — so no button is offered. A
-      // control that cannot help is worse than no control.
-      expect(find.widgetWithText(FilledButton, 'Try again'), findsNothing);
-    });
-
-    testWidgets('a quick action and a detail row use the token icon sizes', (tester) async {
+    testWidgets('a failed section is the clay empty state in its failure dress, and never '
+        'offers a retry it cannot honour', (tester) async {
+      _tallView(tester);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: Column(children: [
-              QuickAction(icon: Icons.add, label: 'Add', onTap: () {}),
-              const DetailRow(label: 'Raised by', value: 'Priya', icon: Icons.person_outline),
-            ]),
+            body: SingleChildScrollView(
+              child: Column(children: [
+                // Retryable, but nothing wired to retry it.
+                const FailureNote(error: OfflineFailure('offline')),
+                // Retryable, and wired.
+                FailureNote(error: const OfflineFailure('offline'), onRetry: () {}),
+                // Wired, but a refusal: retrying would be refused again.
+                FailureNote(error: const AccessDeniedFailure('no access'), onRetry: () {}),
+              ]),
+            ),
           ),
         ),
       );
 
-      expect(
-        tester.widget<Icon>(find.descendant(
-                of: find.byType(QuickAction), matching: find.byType(Icon)))
-            .size,
-        IconSize.md,
+      expect(find.byType(EmptyState), findsNWidgets(3));
+      expect(find.text('Could not load this'), findsNWidgets(3));
+      // The failure's own sentence, not a generic one.
+      expect(find.text('no access'), findsOneWidget);
+      // Exactly one button: a control that cannot help is worse than no control.
+      expect(find.widgetWithText(FilledButton, 'Try again'), findsOneWidget);
+    });
+
+    testWidgets("a detail row's glyph takes the token icon size", (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: DetailRow(label: 'Raised by', value: 'Priya', icon: Icons.person_outline),
+          ),
+        ),
       );
+
       expect(
         tester.widget<Icon>(
             find.descendant(of: find.byType(DetailRow), matching: find.byType(Icon))).size,
@@ -1285,6 +1297,10 @@ Future<void> _openTaskSheet(
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
 }
+
+/// The Tasks destination on the shell's clay bar — where the overdue badge lives.
+ClayNavDestination _tasksTab(WidgetTester tester) =>
+    tester.widget<ClayNavBar>(find.byType(ClayNavBar)).destinations[2];
 
 /// The whole shell, because the Tasks badge is the one thing on it that reports a number and
 /// the IndexedStack keeps every tab alive. Every read the four tabs make is stubbed, so this

@@ -7,6 +7,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/clay/clay.dart';
 import '../../../shared/glass/glass.dart';
 import '../data/manager_providers.dart';
 import '../widgets/manager_ui.dart';
@@ -98,8 +99,8 @@ class _TaskSheetState extends ConsumerState<_TaskSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (description != null && description.isNotEmpty) ...[
-            Text(description, style: t.textTheme.bodyMedium),
-            const SizedBox(height: Space.md),
+            Text(description, style: t.textTheme.bodyLarge),
+            const SizedBox(height: Space.sm),
           ],
 
           DetailRow(
@@ -135,7 +136,7 @@ class _TaskSheetState extends ConsumerState<_TaskSheet> {
             ),
 
           const SizedBox(height: Space.lg),
-          const SectionLabel(label: 'Move it along'),
+          SectionLabel(label: 'Move it along', trailing: _busy ? const BusyMark() : null),
           const SizedBox(height: Space.sm),
           Wrap(
             spacing: Space.xs,
@@ -149,19 +150,12 @@ class _TaskSheetState extends ConsumerState<_TaskSheet> {
                 ),
             ],
           ),
-          const SizedBox(height: Space.sm),
-          Text(
-            'Only the status is yours to change. The owner sets the title, the deadline and '
-            'who it goes to.',
-            style: t.textTheme.bodySmall,
+          const SizedBox(height: Space.md),
+          const InfoNote(
+            icon: Icons.info_outline_rounded,
+            message: 'Only the status is yours to change. The owner sets the title, the deadline '
+                'and who it goes to.',
           ),
-          if (_busy) ...[
-            const SizedBox(height: Space.md),
-            const Center(
-              child: SizedBox(
-                  width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-            ),
-          ],
         ],
       ),
     );

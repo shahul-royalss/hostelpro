@@ -4,15 +4,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/clay/clay.dart';
 import '../../shared/glass/glass.dart';
 import 'owner_format.dart';
 import 'owner_insights.dart';
 import 'owner_pg_detail_screen.dart';
 import 'owner_providers.dart';
 import 'widgets/meter.dart';
-import 'widgets/states.dart';
+import 'widgets/owner_header.dart';
+import 'widgets/states.dart' show ErrorNote, whenAsync;
 
-/// Every PG on this owner's account, and which of them needs them today.
+/// Every PG on this owner's account, and which of them needs them today — the Property tab.
+///
+/// Each card opens that PG's room grid, and the floor plan is one tap further in (see
+/// [OwnerPgDetailScreen]). The shell draws the forest header ("Your PGs") above it.
 ///
 /// READS: hostels (owned by this user) · rpc_hostel_stats (one call per PG).
 ///
@@ -41,16 +46,12 @@ class OwnerPgListScreen extends ConsumerWidget {
       child: whenAsync(
         owned,
         loading: () => ListView(
-          padding: const EdgeInsets.all(Space.md),
-          children: const [
-            SkeletonCard(lines: 3, height: 156),
-            SizedBox(height: Space.md),
-            SkeletonCard(lines: 3, height: 156),
-          ],
+          padding: OwnerRhythm.pagePadding,
+          children: const [ListSkeleton(rows: 2, semanticLabel: 'Loading your PGs')],
         ),
         error: (error) => ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(Space.md),
+          padding: OwnerRhythm.pagePadding,
           children: [
             ErrorNote(error: error, onRetry: () => ref.invalidate(myHostelsProvider)),
           ],
@@ -58,32 +59,41 @@ class OwnerPgListScreen extends ConsumerWidget {
         data: (hostels) => hostels.isEmpty
             ? ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(Space.md),
+                padding: OwnerRhythm.pagePadding,
                 children: const [
-                  EmptyNote(
-                    icon: Icons.apartment_rounded,
+                  EmptyState(
+                    icon: ClayIcons.rooms,
                     title: 'No PG on your account yet',
-                    message: 'Apnivaas registers a PG against your account before it appears '
+                    body: 'Apnivaas registers a PG against your account before it appears '
                         'here. Contact your account manager if you were expecting one.',
                   ),
                 ],
               )
-            : ListView.separated(
+            : ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding:
-                    const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.huge),
-                // One extra leading item: the design's `REGISTERED HOSTELS` section label.
-                itemCount: hostels.length + 1,
-                // The section label carries its own trailing space; adding the card gutter on
-                // top of it would put 24dp under a 12px label.
-                separatorBuilder: (_, i) =>
-                    SizedBox(height: i == 0 ? 0 : Space.sm),
-                itemBuilder: (context, i) => i == 0
-                    ? const SectionLabel(label: 'Registered hostels')
-                    : _PgCard(
-                        hostel: hostels[i - 1],
-                        isActive: hostels[i - 1].id == activeId,
-                      ),
+                padding: OwnerRhythm.pagePadding,
+                children: [
+                  SectionHeader(
+                    title: hostels.length == 1 ? 'Registered PG' : 'Registered PGs',
+                    size: SectionHeaderSize.card,
+                  ),
+                  const SizedBox(height: OwnerRhythm.headingGap),
+                  // Two or more PGs is when "which one am I looking at" becomes a question, so
+                  // that is when the answer is written down: the badge on one card, and how to
+                  // move it.
+                  if (hostels.length >= 2) ...[
+                    const InfoNote(
+                      icon: Icons.info_outline_rounded,
+                      message: 'Home, Money and People show the PG marked as on your '
+                          'dashboard. Change it from its name at the top of Home.',
+                    ),
+                    const SizedBox(height: Space.sm),
+                  ],
+                  for (var i = 0; i < hostels.length; i++) ...[
+                    if (i > 0) const SizedBox(height: Space.sm),
+                    _PgCard(hostel: hostels[i], isActive: hostels[i].id == activeId),
+                  ],
+                ],
               ),
       ),
     );
@@ -104,16 +114,13 @@ class _PgCard extends ConsumerWidget {
       hostelStatsProvider(StatsQuery(hostelId: hostel.id, periodMonth: period)),
     );
 
-    // Figma 4:536's own hostel card, top to bottom: the name with its status badge opposite,
-    // the address under it, then the labelled figures — a `Beds Occupied  42/48` row over a
-    // meter, and `Monthly Revenue` opposite its amount.
-    //
-    // THE ICON BADGE THAT USED TO LEAD THIS ROW IS GONE. Every card in the list carried the
-    // same `apartment` glyph, which is a picture of the word "hostel" on a screen headed
-    // REGISTERED HOSTELS. The mockup gives the slot to the status badge instead, which is the
-    // one thing that differs between the cards.
-    return GlassCard(
-      padding: const EdgeInsets.all(Space.sm),
+    // The PG card, top to bottom: the building's clay art beside its name and address with the
+    // status chip opposite, then the labelled figures — beds occupied over a meter, and the
+    // month's collections. The status is the one thing that differs between cards before the
+    // figures arrive, so it gets the corner.
+    return FlatSurface(
+      borderRadius: Radii.rSurface,
+      padding: const EdgeInsets.all(Space.md),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => OwnerPgDetailScreen(hostelId: hostel.id),
@@ -125,6 +132,8 @@ class _PgCard extends ConsumerWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const ClayIcon(ClayIcons.rooms, size: ClaySize.list),
+              const SizedBox(width: Space.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -133,12 +142,12 @@ class _PgCard extends ConsumerWidget {
                         style: t.textTheme.titleMedium,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: Space.xxs / 2),
+                    const SizedBox(height: Space.hair),
                     Text(
                       hostel.address ??
                           '${countLabel(hostel.totalFloors, 'floor')} · '
                               '${countLabel(hostel.totalRooms, 'room')}',
-                      style: t.textTheme.bodySmall,
+                      style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -146,40 +155,53 @@ class _PgCard extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: Space.xs),
-              // 4:536 badges EVERY card, `ACTIVE` in green as readily as `SUSPENDED` in red.
-              // This used to draw the chip only when something was wrong, which meant a healthy
-              // PG and a PG whose status had not loaded looked identical. A hostel that is not
-              // 'active' is read-only or suspended server-side (app.hostel_writable), and that
-              // is worth saying out loud rather than letting staff find out when a write fails.
+              // EVERY card is badged, `Active` in green as readily as `Suspended` in red. Drawing
+              // the chip only when something was wrong meant a healthy PG and a PG whose status
+              // had not loaded looked identical. A hostel that is not 'active' is read-only or
+              // suspended server-side (app.hostel_writable), and that is worth saying out loud
+              // rather than letting staff find out when a write fails.
               StatusChip(
                 label: hostel.status.label,
                 dot: hostel.status != HostelStatus.active,
                 tone: switch (hostel.status) {
-                  HostelStatus.active => ApnivaasColors.success,
-                  HostelStatus.suspended => ApnivaasColors.error,
-                  _ => ApnivaasColors.warning,
+                  HostelStatus.active => StatusTone.success,
+                  HostelStatus.suspended => StatusTone.error,
+                  _ => StatusTone.warning,
                 },
               ),
             ],
           ),
           if (isActive) ...[
             const SizedBox(height: Space.xs),
-            StatusChip(label: 'On your dashboard', tone: t.colorScheme.primary),
+            const Padding(
+              padding: EdgeInsetsDirectional.only(start: ClaySize.list + Space.sm),
+              child: StatusChip(label: 'On your dashboard', tone: StatusTone.brand),
+            ),
           ],
+          const SizedBox(height: Space.sm),
+          Divider(height: Strokes.hairline, color: t.dividerTheme.color),
           const SizedBox(height: Space.sm),
           whenAsync(
             stats,
-            loading: () => const Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Skeleton(height: Space.xs),
-                SizedBox(height: Space.xs),
-                Skeleton(widthFactor: 0.7),
-              ],
+            loading: () => const SkeletonPulse(
+              semanticLabel: 'Loading figures',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Skeleton(widthFactor: 0.6),
+                  SizedBox(height: Space.xs),
+                  Skeleton(height: Space.xs),
+                  SizedBox(height: Space.sm),
+                  Skeleton(widthFactor: 0.7),
+                ],
+              ),
             ),
             error: (error) => ErrorNote(error: error, compact: true),
             data: (s) => s == null
-                ? Text('No figures for this PG yet.', style: t.textTheme.bodySmall)
+                ? Text(
+                    'No figures for this PG yet.',
+                    style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                  )
                 : _PgFigures(stats: s, period: period),
           ),
         ],
@@ -216,7 +238,7 @@ class _StatLine extends StatelessWidget {
       spacing: Space.sm,
       runSpacing: Space.xxs,
       children: [
-        Text(label, style: t.textTheme.bodySmall),
+        Text(label, style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
         Text(
           value,
           style: emphasis ? t.textTheme.headlineSmall : t.textTheme.titleSmall,
@@ -241,11 +263,14 @@ class _PgFigures extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // The mockup's `Beds Occupied ……… 42/48` over its meter. A PG with no beds set up gets
+        // `Beds occupied ……… 42/48` over its meter. A PG with no beds set up gets
         // the sentence instead: "0/0" beside an empty bar is a drawing of a failed business,
         // where the truth is an unfinished setup.
         if (stats.totalBeds == 0)
-          Text(occupancyCaption(stats), style: t.textTheme.bodySmall)
+          Text(
+            occupancyCaption(stats),
+            style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+          )
         else ...[
           _StatLine(
             label: 'Beds occupied',
@@ -255,7 +280,7 @@ class _PgFigures extends StatelessWidget {
           ProportionMeter(value: stats.occupancyRate, semanticLabel: 'Beds occupied'),
         ],
         const SizedBox(height: Space.sm),
-        // 4:536's closing row is `Monthly Revenue`. It is filled with FEE COLLECTIONS, not
+        // The closing row is the month's money. It is filled with FEE COLLECTIONS, not
         // `revenues.amount`: the two are separate ledgers (see the Revenue model), adding them
         // double-counts any PG that also books rent as revenue, and collections are what an
         // owner means by a property's month. The label says which one it is.
@@ -268,8 +293,8 @@ class _PgFigures extends StatelessWidget {
           const SizedBox(height: Space.xs),
           Text(
             '${countLabel(stats.openComplaints, 'complaint')} still open.',
-            // Resolved: canonical #A96D08 as 13px body text on the dark elevated surface
-            // measures 3.83:1, and this line is the one that says money is missing.
+            // The resolved warning INK, never the canonical tone: the canonical amber is rated as
+            // a graphic only, and this line is text.
             style: t.textTheme.bodySmall?.copyWith(color: tones.warning),
           ),
         ],

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/clay/clay.dart' show ClayIcons, ListRowCard, StatusChip, StatusTone;
 import '../../../shared/glass/glass.dart';
 import '../data/warden_models.dart';
 import '../data/warden_providers.dart';
@@ -463,7 +464,7 @@ class _FreeBedList extends StatelessWidget {
     }
 
     return beds.isEmpty
-          ? const EmptyState(
+          ? const WardenEmptyState(
               icon: Icons.bed_outlined,
               title: 'Every bed is taken',
               detail: 'Free one by checking a resident out, or ask the owner to add rooms.',
@@ -472,49 +473,25 @@ class _FreeBedList extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (final entry in floors.entries) ...[
+                  // The floor's free count is the same chip the room grid puts opposite each
+                  // storey, so the picker and the grid say "3 free" the same way.
                   SectionLabel(
                     label: entry.key == null ? 'Elsewhere' : 'Floor ${entry.key}',
-                    trailing: CapsLabel(
-                      '${entry.value.length} free',
-                      tone: ApnivaasColors.success,
+                    trailing: StatusChip(
+                      label: '${entry.value.length} free',
+                      tone: StatusTone.success,
                       dot: true,
                     ),
                   ),
                   for (final option in entry.value)
                     Padding(
                       padding: const EdgeInsets.only(bottom: Space.xs),
-                      child: TapRow(
-                        onTap: () => Navigator.of(context).pop(option),
+                      child: ListRowCard(
+                        icon: ClayIcons.beds,
+                        title: option.label,
+                        subtitle: 'Available now',
                         semanticLabel: '${option.label}, free',
-                        child: Row(
-                          children: [
-                            const IconBadge(
-                              icon: Icons.bed_outlined,
-                              tone: ApnivaasColors.success,
-                            ),
-                            const SizedBox(width: Space.sm),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    option.label,
-                                    style: Theme.of(context).textTheme.titleMedium,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: Space.xxs / 2),
-                                  const CapsLabel(
-                                    'Available now',
-                                    tone: ApnivaasColors.success,
-                                    dot: true,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Icon(Icons.chevron_right_rounded, size: IconSize.lg),
-                          ],
-                        ),
+                        onTap: () => Navigator.of(context).pop(option),
                       ),
                     ),
                 ],
@@ -568,9 +545,8 @@ class _AwaitingBedList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
     return students.isEmpty
-          ? const EmptyState(
+          ? const WardenEmptyState(
               icon: Icons.how_to_reg_outlined,
               title: 'Everyone has a bed',
               detail: 'Register a new resident, or move someone here from another room.',
@@ -581,34 +557,12 @@ class _AwaitingBedList extends StatelessWidget {
                 for (final student in students)
                   Padding(
                     padding: const EdgeInsets.only(bottom: Space.xs),
-                    child: TapRow(
-                      onTap: () => Navigator.of(context).pop(student),
+                    child: ListRowCard(
+                      avatarName: student.fullName,
+                      title: student.fullName,
+                      subtitle: '${student.phone} · joined ${shortDate(student.dateOfJoining)}',
                       semanticLabel: '${student.fullName}, awaiting a bed',
-                      child: Row(
-                        children: [
-                          Avatar(name: student.fullName),
-                          const SizedBox(width: Space.sm),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(student.fullName,
-                                    style: t.textTheme.titleMedium,
-                                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                                const SizedBox(height: Space.xxs / 2),
-                                MetaLine([
-                                  (Icons.phone_outlined, student.phone),
-                                  (
-                                    Icons.event_outlined,
-                                    'joined ${shortDate(student.dateOfJoining)}',
-                                  ),
-                                ]),
-                              ],
-                            ),
-                          ),
-                          const Icon(Icons.chevron_right_rounded, size: IconSize.lg),
-                        ],
-                      ),
+                      onTap: () => Navigator.of(context).pop(student),
                     ),
                   ),
               ],

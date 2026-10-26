@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
+import '../../../shared/clay/skeleton.dart' show Skeleton, SkeletonPulse;
 import 'warden_ui.dart';
 
 /// A list that loads the next page as the warden reaches the bottom.
@@ -65,7 +66,7 @@ class PagedList<T> extends StatelessWidget {
         // RefreshIndicator stops firing and nothing anywhere says why. Naming it costs a line.
         loading: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          children: const [_Spinner()],
+          children: const [_FirstPageSkeleton()],
         ),
         builder: (page) {
           if (page.isEmpty) {
@@ -105,23 +106,61 @@ class PagedList<T> extends StatelessWidget {
 /// The FIRST page, before it lands. Rows, not a spinner: the list already has a known shape
 /// and a skeleton keeps it, where a turning circle replaces the whole screen with a grey void
 /// and then snaps the rows in underneath the warden's thumb.
-class _Spinner extends StatelessWidget {
-  const _Spinner();
+///
+/// THE ROWS' OWN SHAPE — a card per row, a disc where the initials or the clay art will be and
+/// two bars for the words — under ONE pulse, so a screen reader hears "Loading" once rather than
+/// once per row.
+class _FirstPageSkeleton extends StatelessWidget {
+  const _FirstPageSkeleton();
 
-  static const _rows = 4;
+  static const _rows = 5;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.all(Space.md),
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.all(Space.md),
+      child: SkeletonPulse(
         child: Column(
           children: [
             for (var i = 0; i < _rows; i++) ...[
               if (i > 0) const SizedBox(height: Space.xs),
-              const SkeletonBlock(lines: 1),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: t.colorScheme.surface,
+                  borderRadius: Radii.rSurface,
+                  border: Border.all(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: Space.sm + Space.hair,
+                    vertical: Space.sm,
+                  ),
+                  child: Row(
+                    children: [
+                      Skeleton(height: ClaySize.list, circle: true),
+                      SizedBox(width: Space.sm),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Skeleton(widthFactor: 0.55),
+                            SizedBox(height: Space.xs),
+                            Skeleton(widthFactor: 0.35),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _PagedRows<T> extends StatefulWidget {

@@ -84,9 +84,10 @@ export default function LegalIndexPage() {
       <div className="mt-6">
         <Callout title="How accounts work here">
           <p>
-            There is no public sign-up. The platform administrator creates hostel Owner accounts,
-            Owners create Manager and Warden accounts, and a Warden registers residents. Residents
-            sign in with the phone number their hostel registered. If your details are wrong, your
+            Owners and tenants can create their own account in the Android app; the website has no
+            sign-up. The platform administrator creates hostel Owner accounts, Owners create Manager
+            and Warden accounts, and a Warden registers residents, who sign in with the phone number
+            their hostel registered. If your details are wrong, your
             hostel&rsquo;s Warden or Owner can correct them in the app straight away — that is
             faster than writing to us.
           </p>

@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
+import '../../../core/theme/typography.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
 import '../../common/refresh.dart';
+import '../../../shared/clay/clay.dart' show ClayIcon, ClayIcons, StatusChip, StatusTone;
 import '../../../shared/glass/glass.dart';
 import '../widgets/warden_ui.dart';
 import '../../owner/rooms/floor_plan_screen.dart';
@@ -33,20 +35,10 @@ import 'room_sheet.dart';
 /// and that is a claim the database cannot make. The summary and the pips name two states and
 /// mean them.
 ///
-/// THE LEGEND IS GONE AND THE SUMMARY REPLACED IT. The hero card labels each figure with its
-/// own dot in the very colours the pips below are painted, so the figures ARE the key. A
-/// separate legend strip repeated the same two swatches a centimetre lower.
-///
-/// ── ON THE FIGMA FRAME FOR THIS SCREEN ───────────────────────────────────────────────────
-///
-/// `screen-warden-room-management` is node 4:821. It could not be read while this restyle was
-/// made — the Figma MCP account hit its plan's tool-call ceiling after `screen-warden-dashboard`
-/// (4:640) and `screen-warden-students-list` (4:723). So this screen is built from the shared
-/// language those two DO pin down and the file's own tokens: the 56dp header with its brand
-/// dot, uppercase section headings, the card fill behind a hairline at the 8 corner, the 4px
-/// state badge, and 16/700 cream card titles. Anything the frame specifies beyond that —
-/// most likely a floor filter across the top, since 4:660 puts one on the dashboard — is NOT
-/// implemented here and should be checked against 4:821 by whoever next has quota.
+/// THE SUMMARY IS THE LEGEND. The card at the top labels its figures with dots in the very
+/// colours the pips below are painted — forest for a bed that is taken, the free tint for one
+/// that is not — so the figures ARE the key, and no separate legend strip repeats the same two
+/// swatches a centimetre lower.
 class WardenRoomsScreen extends ConsumerWidget {
   const WardenRoomsScreen({super.key});
 
@@ -56,7 +48,7 @@ class WardenRoomsScreen extends ConsumerWidget {
     if (hostelId == null) {
       return const WardenScreen(
         title: 'Rooms & beds',
-        child: EmptyState(
+        child: WardenEmptyState(
           icon: Icons.apartment_rounded,
           title: 'No hostel on this account',
           detail: 'A warden is attached to one hostel. Ask the owner to check the assignment.',
@@ -78,9 +70,9 @@ class WardenRoomsScreen extends ConsumerWidget {
         // (app.can_edit_layout), and this grid is the screen a warden is standing on when a
         // floor is split or a room is added. The owner reaches the same editor from the PG
         // detail card.
-        IconButton(
+        HeaderAction(
           tooltip: 'Edit layout',
-          icon: const Icon(Icons.dashboard_customize_outlined, size: IconSize.md),
+          icon: Icons.dashboard_customize_outlined,
           onPressed: () => Navigator.of(context).push(FloorPlanScreen.route(hostelId)),
         ),
       ],
@@ -103,8 +95,9 @@ class WardenRoomsScreen extends ConsumerWidget {
                 // on a default nothing in this file mentions.
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: const [
-                  EmptyState(
+                  WardenEmptyState(
                     icon: Icons.meeting_room_outlined,
+                    art: ClayIcons.rooms,
                     title: 'No rooms yet',
                     detail: 'Rooms and beds are scaffolded when the hostel is set up. '
                         'Ask the owner if this looks wrong.',
@@ -180,58 +173,90 @@ class _FloorList extends StatelessWidget {
   }
 }
 
-/// The building in four figures — rooms-beds-directory.png's hero card.
+/// The building at a glance: how many beds are free, how full that makes it, and the four
+/// figures underneath — total, occupied, free, rooms.
 ///
-/// The mockup runs TOTAL BEDS / OCCUPIED / FREE / MAINTENANCE as a two-by-two of `label-caps`
-/// eyebrows over `headline-lg` figures, each eyebrow marked with its state's dot, and it is the
-/// first thing on the screen. Three of those four are figures this app has.
+/// The free beds lead, in words and beside the clay bed, because "where is there a bed" is the
+/// question the screen exists for; the meter under them is the same split in the pips' own two
+/// colours. Every figure is folded from the very list the grid below is drawing, so the card and
+/// the tiles cannot drift apart.
 ///
-/// THE FOURTH IS NOT BUILT AND IS NOT FAKED. public.bed_status is exactly ('free','occupied');
-/// a bed under repair is not a state this schema can hold, so the MAINTENANCE cell is absent
-/// rather than drawn as a zero. A zero would read as "nothing is broken", which is a claim the
-/// database cannot make.
-///
-/// Every figure is folded from the very list the grid below is drawing, so the card and the
-/// tiles cannot drift apart.
+/// THERE IS NO MAINTENANCE FIGURE AND IT IS NOT FAKED. public.bed_status is exactly
+/// ('free','occupied'); a bed under repair is not a state this schema can hold, so the figure is
+/// absent rather than drawn as a zero. A zero would read as "nothing is broken", which is a
+/// claim the database cannot make.
 class _BuildingSummary extends StatelessWidget {
   const _BuildingSummary({required this.rooms});
   final List<RoomOccupancy> rooms;
 
   @override
   Widget build(BuildContext context) {
+    final t = Theme.of(context);
     final beds = rooms.fold<int>(0, (sum, r) => sum + r.capacity);
     final taken = rooms.fold<int>(0, (sum, r) => sum + r.occupied);
+    final free = beds - taken;
+    final scale = MediaQuery.textScalerOf(context).scale(1);
 
     return GlassCard(
       padding: const EdgeInsets.all(Space.md),
-      semanticLabel: '$beds beds, $taken occupied, ${beds - taken} free',
+      semanticLabel: '$beds beds, $taken occupied, $free free',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Expanded(child: _Figure(label: 'Total beds', value: '$beds')),
+              const ClayIcon(ClayIcons.beds, size: ClaySize.tile),
+              const SizedBox(width: Space.sm),
               Expanded(
-                child: _Figure(
-                  label: 'Occupied',
-                  value: '$taken',
-                  tone: Theme.of(context).colorScheme.primary,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      beds == 0
+                          ? 'No beds set up yet'
+                          : free == 0
+                              ? 'Every bed is taken'
+                              : '${countOf(free, 'bed')} free',
+                      style: context.textRoles.tileTitle,
+                    ),
+                    if (beds > 0)
+                      Text(
+                        '${(taken / beds * 100).round()}% of the building is full',
+                        style: t.textTheme.bodySmall
+                            ?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                      ),
+                  ],
                 ),
               ),
             ],
           ),
+          if (beds > 0) ...[
+            const SizedBox(height: Space.sm),
+            _Meter(taken: taken, beds: beds),
+          ],
           const SizedBox(height: Space.md),
-          Row(
-            children: [
-              Expanded(
-                child: _Figure(
-                  label: 'Free',
-                  value: '${beds - taken}',
-                  tone: ApnivaasColors.success,
-                ),
-              ),
-              Expanded(child: _Figure(label: 'Rooms', value: '${rooms.length}')),
-            ],
+          Divider(height: Strokes.hairline, color: t.colorScheme.outlineVariant),
+          const SizedBox(height: Space.sm),
+          LayoutBuilder(
+            builder: (context, box) {
+              // Four across while the labels fit on one line; two by two on a narrow phone or
+              // with large text, rather than four squeezed figures.
+              final columns = box.maxWidth >= 300 && scale < 1.3 ? 4 : 2;
+              final cell = (box.maxWidth - Space.xs * (columns - 1)) / columns;
+              return Wrap(
+                spacing: Space.xs,
+                runSpacing: Space.sm,
+                children: [
+                  for (final figure in [
+                    _Figure(label: 'Total beds', value: '$beds'),
+                    _Figure(label: 'Occupied', value: '$taken', dot: t.colorScheme.primary),
+                    _Figure(label: 'Free', value: '$free', dot: context.tones.success),
+                    _Figure(label: 'Rooms', value: '${rooms.length}'),
+                  ])
+                    SizedBox(width: cell, child: figure),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -239,33 +264,77 @@ class _BuildingSummary extends StatelessWidget {
   }
 }
 
-/// One cell of the summary: a dotted `label-caps` eyebrow over a `headline-lg` figure.
-class _Figure extends StatelessWidget {
-  const _Figure({required this.label, required this.value, this.tone});
-  final String label;
-  final String value;
-  final Color? tone;
+/// The building's split as one bar: forest for the beds that are taken, the free tint for the
+/// rest — the pips' own two colours, so the bar reads as all the pips laid end to end.
+class _Meter extends StatelessWidget {
+  const _Meter({required this.taken, required this.beds});
+  final int taken;
+  final int beds;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final accent = tone == null ? null : context.tones.resolve(tone!);
+    return ExcludeSemantics(
+      child: ClipRRect(
+        borderRadius: Radii.rPill,
+        child: SizedBox(
+          height: Space.xs,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: ColoredBox(color: context.tones.chipFill(context.tones.success)),
+              ),
+              FractionallySizedBox(
+                widthFactor: beds == 0 ? 0 : (taken / beds).clamp(0.0, 1.0),
+                heightFactor: 1,
+                alignment: AlignmentDirectional.centerStart,
+                child: ColoredBox(color: t.colorScheme.primary),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One figure of the summary: the number, and under it what it counts — with the dot of its
+/// state where it has one.
+class _Figure extends StatelessWidget {
+  const _Figure({required this.label, required this.value, this.dot});
+  final String label;
+  final String value;
+  final Color? dot;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CapsLabel(label, tone: accent, dot: accent != null),
-        const SizedBox(height: Space.xxs),
-        Text(
-          value,
-          style: t.textTheme.headlineMedium?.copyWith(color: accent),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        Text(value, style: t.textTheme.headlineMedium, maxLines: 1),
+        Row(
+          children: [
+            if (dot != null) ...[
+              ToneDot(tone: dot!, size: Space.tight),
+              const SizedBox(width: Space.xxs),
+            ],
+            Flexible(
+              child: Text(
+                label,
+                style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 }
 
+/// A floor's free beds, opposite its heading — the chip a whole storey earns.
 class _FloorSummary extends StatelessWidget {
   const _FloorSummary({required this.rooms});
   final List<RoomOccupancy> rooms;
@@ -273,42 +342,49 @@ class _FloorSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final free = rooms.fold<int>(0, (sum, r) => sum + r.free);
-    return CapsLabel(
-      free == 0 ? 'full' : '$free free',
-      tone: free == 0 ? null : ApnivaasColors.success,
-      dot: free != 0,
-    );
+    return free == 0
+        ? const StatusChip(label: 'Floor full')
+        : StatusChip(label: '$free free', tone: StatusTone.success, dot: true);
   }
 }
 
 /// One room. Big enough to hit without aiming: the whole tile is the target.
 ///
-/// rooms-beds-directory.png heads each room card with the room number in `primary` and a
-/// `label-caps` bed count on the right; that pairing is what this tile borrows. The pips stay,
-/// because the mockup's per-bed rows need a bed-to-person mapping the grid's RPC does not
-/// return — see the note on [WardenRoomsScreen]. Tapping through to the room sheet is where
-/// that mapping exists.
+/// The room number heads the tile with its bed count opposite, the pips under them, and the
+/// answer at the foot — "2 free" in the free ink, or "Full" in the quiet one. A room with space
+/// is edged in the free tint, so it says so before you read it. The pips stay, because per-bed
+/// rows need a bed-to-person mapping the grid's RPC does not return — see the note on
+/// [WardenRoomsScreen]. Tapping through to the room sheet is where that mapping exists.
 class _RoomTile extends StatelessWidget {
   const _RoomTile({required this.room});
   final RoomOccupancy room;
 
-  /// At 1.0x. Scaled with the text inside it below.
-  static const _tileHeight = 116.0;
+  /// The tile's height at 1.0x text. It scales with the text, so the number, the pips and the
+  /// free line never overrun it.
+  static const _tileHeight = 112.0;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final tones = context.tones;
     final full = room.isFull;
+    final muted = t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant);
 
     return Semantics(
       button: true,
       label: 'Room ${room.roomNumber}, ${room.occupied} of ${room.capacity} beds occupied',
+      excludeSemantics: true,
       child: Material(
         color: t.colorScheme.surface,
-        borderRadius: Radii.rControl,
+        shape: RoundedRectangleBorder(
+          borderRadius: Radii.rCard,
+          side: BorderSide(
+            color: full ? t.colorScheme.outlineVariant : tones.chipBorder(tones.success),
+            width: Strokes.hairline,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
-          borderRadius: Radii.rControl,
           onTap: () => showRoomSheet(
             context,
             roomId: room.roomId,
@@ -318,49 +394,31 @@ class _RoomTile extends StatelessWidget {
             occupied: room.occupied,
           ),
           child: Container(
-            // Scaled with its own text. A fixed 116 was sized against 1.0x type; at 1.4x the
-            // room number, the pips and the "3 free" line together overran it.
             height: MediaQuery.textScalerOf(context).scale(_tileHeight),
-            padding: const EdgeInsets.all(Space.sm),
-            decoration: BoxDecoration(
-              // A grid tile is one of the file's SMALL cards, so it takes the 8 corner its
-              // list rows take rather than a full card's 12.
-              borderRadius: Radii.rControl,
-              border: Border.all(
-                // A room with space says so before you read it.
-                color: full
-                    ? t.colorScheme.outlineVariant
-                    : tones.chipBorder(ApnivaasColors.success),
-                width: Strokes.hairline,
-              ),
-            ),
+            padding: const EdgeInsets.all(Space.sm + Space.hair),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Text(
                         room.roomNumber,
-                        // Cream at 16/700, which is what every card title in the Figma file
-                        // is. It used to be 20/700 in the gold: that is the accent this design
-                        // spends on ONE thing per screen, and twelve gold room numbers in a
-                        // grid leave the free-bed count — the answer the screen exists to
-                        // give — with nothing louder than itself.
-                        style: t.textTheme.titleMedium,
+                        style: context.textRoles.tileTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    // `2 BEDS`, exactly as the mockup labels each room card.
-                    CapsLabel('${room.capacity} beds'),
+                    const SizedBox(width: Space.xxs),
+                    Text(countOf(room.capacity, 'bed'), style: muted),
                   ],
                 ),
                 _BedPips(capacity: room.capacity, occupied: room.occupied),
                 Text(
                   full ? 'Full' : '${room.free} free',
-                  style: t.textTheme.bodySmall?.copyWith(
+                  style: t.textTheme.labelMedium?.copyWith(
                     color: full ? t.colorScheme.onSurfaceVariant : tones.success,
                   ),
                   maxLines: 1,

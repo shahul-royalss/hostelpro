@@ -161,10 +161,11 @@ export default async function AccountDeletionPage() {
 
         <Section id="accounts" title="2. How accounts here are created">
           <p>
-            {APP_NAME} is not an app you sign up for. A hostel or PG operator runs it for their own
-            property: the warden registers each resident, and the owner creates the manager and
-            warden accounts. Nobody creates their own account, and residents sign in with the phone
-            number their warden registered.
+            A hostel or PG operator runs {APP_NAME} for their own property: the warden registers
+            residents, who sign in with the phone number their warden registered, and the owner
+            creates the manager and warden accounts. Owners and tenants may also create their own
+            account in the Android app; while such an account is not part of a PG, a deletion
+            request for it comes to us rather than to a hostel.
           </p>
           <p>
             That is why deletion is a <strong>verified request</strong> rather than a button that

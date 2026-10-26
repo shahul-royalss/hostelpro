@@ -16,6 +16,8 @@ import 'core/notify/push_service.dart';
 import 'core/router/router.dart';
 import 'core/theme/theme.dart';
 import 'core/theme/tokens.dart';
+import 'core/theme/typography.dart';
+import 'features/auth/app_lock_gate.dart';
 import 'features/auth/email_verification_service.dart';
 
 Future<void> main() async {
@@ -25,17 +27,19 @@ Future<void> main() async {
   // app root below) is what keeps the bar icons legible on whichever ground is under them.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-  // The typeface is bundled (see pubspec.yaml), so nothing should ever be fetched. Turning
-  // runtime fetching off makes that a guarantee rather than an intention: if a weight is ever
-  // used without shipping its file, google_fonts throws in debug instead of quietly downloading
-  // it in production. A first launch on a bad connection then still looks like Apnivaas.
+  // The typefaces are bundled and declared as families (see `fonts:` in pubspec.yaml), and the
+  // theme never calls google_fonts, so nothing is fetched. This line keeps that a guarantee
+  // rather than an intention: if somebody reaches for `GoogleFonts.x` later, it throws in debug
+  // instead of quietly downloading in production. A first launch on a bad connection then
+  // still looks like Apnivaas.
   GoogleFonts.config.allowRuntimeFetching = false;
 
   _installErrorHandlers();
 
   // NOTHING IS AWAITED BEFORE THIS LINE, AND THAT IS THE POINT. Every await here is a frame the
-  // app does not draw, and the window Android shows in the meantime is a flat #0B0D0F rectangle
-  // with no logo, no text and no spinner — the owner's "completely black screen". See
+  // app does not draw, and the window Android shows in the meantime is a flat rectangle with no
+  // logo, no text and no spinner — in the dark era it was #0B0D0F, the owner's "completely
+  // black screen". See
   // core/boot/startup.dart for the whole argument; the short version is that the splash can
   // draw itself while initialisation runs behind it, and a startup failure is easier to render,
   // not harder, once there is already a frame on screen.
@@ -250,12 +254,11 @@ class _ApnivaasAppState extends ConsumerState<ApnivaasApp> {
       // Pinning was the right emergency call and the wrong permanent one; the owner switches
       // their phone between schemes and expects the app to follow.
       //
-      // What changed is that light is now a DESIGNED scheme rather than a derivation: warm ivory
-      // ground #FFF8F3, white cards, near-black warm ink #201B13, its own field fill, its own
-      // semantic reds, and a filled button that is NOT the dark theme's cream — a cream button on
-      // a cream page is not a button. Those pairings carry measured WCAG ratios in
-      // theme.dart's comments and are asserted in test/theme_contrast_test.dart, which is what
-      // makes shipping the light half safe now and unsafe before.
+      // What changed is that light is now a DESIGNED scheme rather than a derivation: Forest &
+      // Cream — cream ground #F6F2EA, warm white cards #FFFDF9, ink #1C2B26, its own field fill,
+      // its own semantic inks, and a forest filled button with white type. Those pairings carry
+      // measured WCAG ratios in tokens.dart's comments and are asserted in
+      // test/theme_contrast_test.dart, which is what makes shipping the light half safe.
       theme: ApnivaasTheme.light(),
       // ── LIGHT ONLY, BY DECISION ────────────────────────────────────────────────────────
       //
@@ -276,7 +279,7 @@ class _ApnivaasAppState extends ConsumerState<ApnivaasApp> {
         final mq = MediaQuery.of(context);
         return AnnotatedRegion<SystemUiOverlayStyle>(
           // ONE region at the root, following the theme: light status-bar icons over the dark
-          // ground, dark ones over the ivory. Without this, every screen that draws its own
+          // ground, dark ones over the cream. Without this, every screen that draws its own
           // header instead of an AppBar — which is most of them — left Android's default dark
           // icons on a near-black ground. See ApnivaasTheme.systemBars.
           value: ApnivaasTheme.systemBars(Theme.of(context).brightness),
@@ -284,7 +287,8 @@ class _ApnivaasAppState extends ConsumerState<ApnivaasApp> {
             data: mq.copyWith(
               textScaler: mq.textScaler.clamp(minScaleFactor: 0.9, maxScaleFactor: 1.4),
             ),
-            child: child!,
+            // Round 3 biometric app lock, above every route.
+            child: AppLockGate(child: child!),
           ),
         );
       },
@@ -343,32 +347,35 @@ void _installErrorHandlers() {
 ///
 /// It says the app is still running and names the way out, because that is true: only the
 /// subtree that threw is replaced, so the shell, the bottom bar and every other tab are intact
-/// and one tap away. Hard-coded colours for the same reason [StartupFailure] uses them — this
-/// widget can be built in a context where the thing that threw WAS the theme.
+/// and one tap away. Painted from token CONSTANTS, never the theme, for the same reason
+/// [StartupFailure] is — this widget can be built in a context where the thing that threw WAS
+/// the theme — and on the cream page ground, so a failed section reads as part of the app
+/// rather than as a black hole punched in it.
 class _BrokenScreen extends StatelessWidget {
   const _BrokenScreen();
 
   @override
-  Widget build(BuildContext context) => const ColoredBox(
-        color: Color(0xFF0B0D0F),
+  Widget build(BuildContext context) => ColoredBox(
+        color: ApnivaasColors.background,
         child: Center(
           child: Padding(
-            padding: EdgeInsets.all(32),
+            padding: const EdgeInsets.all(Space.xxl),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
                   'This part did not load',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFFF5F3EE)),
+                  style: ApnivaasType.outfit(18, 24, FontWeight.w600, ApnivaasColors.ink)
+                      .copyWith(decoration: TextDecoration.none),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: Space.xs),
                 Text(
                   'The rest of Apnivaas is still working. Use the bar at the bottom to go to '
                   'another tab, and come back to this one in a moment.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 14, height: 1.4, color: Color(0xFFA2A6AB)),
+                  style: ApnivaasType.manrope(14, 20, FontWeight.w400, ApnivaasColors.inkMuted)
+                      .copyWith(decoration: TextDecoration.none),
                 ),
               ],
             ),
@@ -380,11 +387,13 @@ class _BrokenScreen extends StatelessWidget {
 /// Shown when the app cannot start at all. Deliberately depends on nothing — no theme, no
 /// providers, no network — because whatever it is reporting may be the reason those are absent.
 ///
-/// THE GROUND IS THE BRAND'S, hard-coded for the same reason the splash hard-codes it: the
-/// window behind this is #0B0D0F (android/app/src/main/res), the app is dark-only, and this
-/// screen used to paint a near-white #F6F8FC over it — the same flash the res/ files were
-/// changed to remove, kept alive on the one screen nobody rehearses. The values are literals
-/// rather than tokens because a theme lookup is a dependency and this widget has none.
+/// THE GROUND IS THE BRAND'S. The launch window behind it is the beige of the opening animation
+/// (android/app/src/main/res), the splash fades from that beige to the cream page, and every
+/// screen of the way in — sign-in, consent, the password step — sits on cream. This screen
+/// takes the cream too. It used to paint a near-white #F6F8FC and then, in the dark era, a
+/// near-black #0B0D0F: either way a third colour flashing between two the person had just seen,
+/// on the one screen nobody rehearses. The values are token CONSTANTS rather than theme lookups,
+/// because a theme lookup is a dependency and this widget has none.
 class StartupFailure extends StatelessWidget {
   const StartupFailure({super.key, required this.error, this.onRetry});
 
@@ -394,44 +403,46 @@ class StartupFailure extends StatelessWidget {
   /// is about; a failure with no way forward is the same bug wearing a sentence.
   final VoidCallback? onRetry;
 
-  static const _ground = Color(0xFF0B0D0F);
-  static const _ink = Color(0xFFF5F3EE);
-  static const _secondary = Color(0xFFA2A6AB);
-  static const _tertiary = Color(0xFF6F747A);
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
-        backgroundColor: _ground,
+        backgroundColor: ApnivaasColors.background,
         body: Center(
           child: Padding(
-            padding: const EdgeInsets.all(32),
+            padding: const EdgeInsets.all(Space.xxl),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('Apnivaas could not start',
-                    style:
-                        TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: _ink)),
-                const SizedBox(height: 8),
-                const Text(
+                Text('Apnivaas could not start',
+                    textAlign: TextAlign.center,
+                    style: ApnivaasType.outfit(20, 26, FontWeight.w600, ApnivaasColors.ink)),
+                const SizedBox(height: Space.xs),
+                Text(
                   'This is usually a connection problem. Check your network and try again.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 14, color: _secondary),
+                  style: ApnivaasType.manrope(14, 20, FontWeight.w400, ApnivaasColors.inkMuted),
                 ),
                 if (onRetry != null) ...[
-                  const SizedBox(height: 20),
+                  const SizedBox(height: Space.lg),
+                  // The theme's filled button, spelled out: forest, white words, 52dp, the
+                  // button radius.
                   FilledButton(
                     onPressed: onRetry,
                     style: FilledButton.styleFrom(
-                      backgroundColor: _ink,
-                      foregroundColor: _ground,
+                      backgroundColor: ApnivaasColors.forest,
+                      foregroundColor: ApnivaasColors.headerTitle,
+                      minimumSize: const Size(0, 52),
+                      padding: const EdgeInsets.symmetric(horizontal: Space.xl),
+                      shape: const RoundedRectangleBorder(borderRadius: Radii.rButton),
+                      textStyle: ApnivaasType.outfit(
+                          17, 22, FontWeight.w600, ApnivaasColors.headerTitle),
                     ),
                     child: const Text('Try again'),
                   ),
                 ],
-                const SizedBox(height: 20),
+                const SizedBox(height: Space.lg),
                 // The raw message, small. A user will not read it; the person they send a
                 // screenshot to will, and that is the difference between a bug report and a
                 // guessing game.
@@ -439,7 +450,8 @@ class StartupFailure extends StatelessWidget {
                     textAlign: TextAlign.center,
                     maxLines: 4,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11, color: _tertiary)),
+                    style: ApnivaasType.manrope(
+                        11, 14, FontWeight.w400, ApnivaasColors.inkMuted)),
               ],
             ),
           ),

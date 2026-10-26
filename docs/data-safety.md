@@ -85,28 +85,29 @@ telemetry).
 
 | Play data type | Collected | Shared | Ephemeral | Required / optional | Purpose | Where it lives in the code |
 |---|---|---|---|---|---|---|
-| **Personal info › Name** | **Yes** | No | No | **Required** | App functionality, Account management | `students.full_name` (NOT NULL), `users.full_name` (NOT NULL), `students.guardian_name`, `visitors.visitor_name` (NOT NULL). Also sent to Razorpay as Checkout `prefill.name` — §3.3. Also received from Google at Continue with Google — §3.6 |
+| **Personal info › Name** | **Yes** | No | No | **Required** | App functionality, Account management | `students.full_name` (NOT NULL), `users.full_name` (NOT NULL), `students.guardian_name`, `visitors.visitor_name` (NOT NULL). Also sent to Razorpay as Checkout `prefill.name` — §3.3. Also received from Google at Continue with Google — §3.6. From 1.3.0: `users.emergency_contact_name`, `demo_requests.name`, and the name Facebook or Truecaller shares at sign-up — §3.7 |
 | **Personal info › Email address** | **Yes** | No | No | Optional | App functionality, Account management | `users.email`, `students.email` (both nullable). Staff sign in by email; **students sign in by phone**, mapped to a synthetic email in Supabase Auth. Also `prefill.email` — §3.3. Also received from Google at Continue with Google — §3.6 |
-| **Personal info › Phone number** | **Yes** | No | No | **Required** | App functionality, Account management | `students.phone` (NOT NULL — it is the student's login identifier), `students.guardian_phone`, `users.phone`, `visitors.visitor_phone`. Also `prefill.contact` — §3.3 |
-| **Personal info › Address** | **Yes** | No | No | Optional | App functionality | `students.permanent_address` (nullable), `hostels.address` |
-| **Personal info › User IDs** | **Yes** | No | No | **Required** | App functionality, Account management, Fraud prevention & security | Supabase Auth `uid`, `users.id`, `students.id`, `hostel_id`, role. Plus `payment_intents.razorpay_order_id` and `razorpay_payment_id` — Razorpay's own transaction identifiers. Plus the Google account ID (`auth.identities.provider_id`) for anyone who uses Continue with Google — §3.6 |
-| **Personal info › Other info** | **Yes** | No | No | Optional | App functionality | `students.id_proof_type` — the *kind* of government ID a resident holds. See §6 |
+| **Personal info › Phone number** | **Yes** | No | No | **Required** | App functionality, Account management | `students.phone` (NOT NULL — it is the student's login identifier), `students.guardian_phone`, `users.phone`, `visitors.visitor_phone`. Also `prefill.contact` — §3.3. From 1.3.0: `users.emergency_contact_phone`, `demo_requests.phone`, and the verified phone Truecaller shares — §3.7 |
+| **Personal info › Address** | **Yes** | No | No | Optional | App functionality | `students.permanent_address` (nullable), `hostels.address`, and from 1.3.0 `hostels.locality` / `city` / `pincode` (the PG's, typed by a self-signed-up owner) |
+| **Personal info › User IDs** | **Yes** | No | No | **Required** | App functionality, Account management, Fraud prevention & security | Supabase Auth `uid`, `users.id`, `students.id`, `hostel_id`, role. Plus `payment_intents.razorpay_order_id` and `razorpay_payment_id` — Razorpay's own transaction identifiers. Plus the Google account ID (`auth.identities.provider_id`) for anyone who uses Continue with Google — §3.6. From 1.3.0: `external_identities.subject` (Facebook or Truecaller ID) — §3.7 |
+| **Personal info › Other info** | **Yes** | No | No | Optional | App functionality, Fraud prevention, security and compliance | `students.id_proof_type` — the *kind* of government ID a resident holds. See §6. From 1.3.0: `users.gender`, `users.date_of_birth` (Play lists both under Other info) and `user_documents.kind` — §3.7 |
 | Personal info › Race and ethnicity | No | — | — | — | — | No such column exists |
 | Personal info › Political or religious beliefs | No | — | — | — | — | No such column exists |
 | Personal info › Sexual orientation | No | — | — | — | — | No such column exists |
-| **Financial info › Purchase history** | **Yes** | No | No | **Required** | App functionality, **Fraud prevention, security and compliance** | `fee_payments` (`amount_due`, `amount_paid`, `status`, `paid_on`, `mode`, `notes`), `students.monthly_fee`, and **all of `public.payment_intents` and `public.payment_refunds`** — see §3.1. Fraud prevention is a genuine second purpose here: `razorpay_payment_id` is stored under a unique index precisely so the same payment can never credit twice, and `razorpay_refund_id` under another so the same refund can never reverse the ledger twice |
-| **Financial info › User payment info** | **Yes** | No | No | Optional | App functionality, **Fraud prevention, security and compliance** | **Tick it — this used to say "Do not tick", and that was wrong for Android.** The Razorpay Checkout SDK, opened in-process by `apnivaas_app/lib/features/payments/pay_rent.dart`, handles the card number, expiry, CVV or UPI ID the resident types and transmits it to Razorpay. Still no payment instrument reaches Apnivaas's servers or database. Optional because rent can always be paid to the warden in cash. See §3.2 — the single most consequential answer on the form |
+| **Financial info › Purchase history** | **Yes** | No | No | **Required** | App functionality, **Fraud prevention, security and compliance** | `fee_payments` (`amount_due`, `amount_paid`, `status`, `paid_on`, `mode`, `notes`), `students.monthly_fee`, and **all of `public.payment_intents` and `public.payment_refunds`** — see §3.1. From 1.3.0 also `public.subscription_payments` (an owner's plan purchases: plan, amount, method, Razorpay order and payment ids, status) — §3.7. Fraud prevention is a genuine second purpose here: `razorpay_payment_id` is stored under a unique index precisely so the same payment can never credit twice, and `razorpay_refund_id` under another so the same refund can never reverse the ledger twice |
+| **Financial info › User payment info** | **Yes** | No | No | Optional | App functionality, **Fraud prevention, security and compliance** | **Tick it — this used to say "Do not tick", and that was wrong for Android.** The Razorpay Checkout SDK, opened in-process by `apnivaas_app/lib/features/payments/pay_rent.dart`, handles the card number, expiry, CVV or UPI ID the resident types and transmits it to Razorpay. Still no payment instrument of the payer reaches Apnivaas's servers or database. From 2026-10-26 the **owner's** UPI ID and payee name are stored (`hostel_upi_settings`, the payee address the tenant pays to) — §3.8. Optional because rent can always be paid to the warden in cash. See §3.2 — the single most consequential answer on the form |
 | Financial info › Credit score | No | — | — | — | — | No such column exists |
 | Financial info › Other financial info | No | — | — | — | — | Play defines this as salary, debts and similar. An outstanding rent balance is a transaction record and is disclosed under Purchase history |
-| **Photos and videos › Photos** | **Yes** | No | No | Optional | App functionality | `students.photo_url`, `students.id_proof_url` — in the Android app a warden adds a new resident's photo and ID proof at registration, from the camera or the photo picker (`apnivaas_app/lib/features/warden/actions/register_student_sheet.dart:116-117`, `:324-339`). `fee_payments`/`expenses` receipts. `complaints.photo_url` is not written by the Android app: the resident app has no complaint photo field (`apnivaas_app/lib/features/student/raise_complaint_sheet.dart:28-30`). Buckets `student-docs`, `complaint-photos`, `receipts` — all **private** |
+| **Photos and videos › Photos** | **Yes** | No | No | Optional | App functionality | `students.photo_url`, `students.id_proof_url` — in the Android app a warden adds a new resident's photo and ID proof at registration, from the camera or the photo picker (`apnivaas_app/lib/features/warden/actions/register_student_sheet.dart:116-117`, `:324-339`). `fee_payments`/`expenses` receipts. `complaints.photo_url` is not written by the Android app: the resident app has no complaint photo field (`apnivaas_app/lib/features/student/raise_complaint_sheet.dart:28-30`). Buckets `student-docs`, `complaint-photos`, `receipts` — all **private**. From 1.3.0: profile photos in the private `avatars` bucket (every role, `users.avatar_path`) and identity documents in the private `identity-documents` bucket (`user_documents`), uploaded by the person themselves — §3.7 |
 | Photos and videos › Videos | No | — | — | — | — | `lib/storage.ts` `ALLOWED` permits only `image/jpeg`, `image/png`, `image/webp`, `application/pdf`. No video type is accepted |
-| **Files and docs** | **Yes** | No | No | Optional | App functionality | Same buckets: `application/pdf` is accepted for `student-docs` and `receipts`, so an ID proof or a receipt uploaded as a PDF is a document, not a photo. See §6 |
+| **Files and docs** | **Yes** | No | No | Optional | App functionality, Fraud prevention, security and compliance | Same buckets: `application/pdf` is accepted for `student-docs` and `receipts`, so an ID proof or a receipt uploaded as a PDF is a document, not a photo. See §6. From 1.3.0 also `identity-documents` (accepts PDF) — §3.7. (The 1.3.0 app can only pick images there; the bucket and the policy allow PDF.) |
 | **App activity › App interactions** | **Yes** | No | No | **Required** | **App functionality**, Fraud prevention, security and compliance | App functionality added 2026-09-13: while a payment is open, the in-process Razorpay SDK reports its own checkout-session events to Razorpay in order to run the payment — §3.4. The existing security purpose rests on `audit_log` (`action`, `target_type`, `target_id`, `actor_user_id`, `at`), `security_alerts`. Now includes ten payment events — `payment.order.created`, `payment.captured`, `payment.credited`, `payment.failed`, `payment.webhook.rejected`, `payment.reconcile.required`, and the four refund events `payment.refund.pending`, `payment.refund.processed`, `payment.refund.failed`, `payment.refund.reversed` (`lib/audit.ts`) |
 | **App activity › Other user-generated content** | **Yes** | No | No | Optional | App functionality | `complaints.title`/`description`/`resolution_note`, `complaint_events.note`, `leaves.decision_note` (a warden's approve or reject note, written from the Android warden app — `apnivaas_app/lib/features/warden/data/warden_repository.dart:484-491`), `announcements.body`, `tasks.description`, `fee_payments.notes`, `expenses.note`, `visitors.relation`. `leaves.reason` is not typed in the Android app, which has no resident leave feature; its only `leaves` access is the warden's list and decision (`warden_repository.dart:452-499`) |
 | App activity › In-app search history | No | — | — | — | — | Not recorded |
 | **App activity › Installed apps** | **Yes** | No | No | Optional | App functionality | **Changed from No on 2026-09-13.** The old reason — no `QUERY_ALL_PACKAGES` — was true but incomplete: `AndroidManifest.xml` declares a `<queries>` intent for the `upi:` scheme, and the Razorpay SDK resolves it to find which UPI apps (GPay, PhonePe, Paytm and so on) are installed, so it can offer them in the sheet. Visibility is limited to apps that handle `upi:`. Optional because it only happens when a resident opens a payment — §3.4 |
 | **Device or other IDs** | **Yes** | No | No | **Required** | App functionality; fraud prevention, security and compliance | `audit_log.ip`, `audit_log.user_agent`, `security_alerts.ip`, plus Vercel access logs. **`public.push_devices.token` — the FCM registration token — since 2026-09-12; §3.5.** Razorpay Checkout additionally runs its own device and session telemetry during a payment — inside its iframe on the web, and inside the app's own process on Android — §3.4 |
-| Location (approximate / precise) | **No** | — | — | — | — | No location permission in the manifest; IP is **never** used for geolocation anywhere in the code |
+| **Location › Approximate location** | **Yes** (from 1.3.0) | No | **Yes** for the tenant's search; No for the owner's PG pin | Optional | App functionality | `ACCESS_COARSE_LOCATION` stays declared because Android 12+ lets the person grant approximate only. Same two uses as the precise row below. IP is **never** used for geolocation — §3.7, §3.8 |
+| **Location › Precise location** | **Yes** (from legal version 2026-10-26) | No | **Yes** for the tenant's search; No for the owner's PG pin | Optional | App functionality | `ACCESS_FINE_LOCATION`, one foreground fix at `LocationAccuracy.high` (`apnivaas_app/lib/data/device/signup_device.dart`), no stream, no background location. A tenant's "PGs near you" sends it to `st_nearby_hostels`, which measures distances and stores nothing (ephemeral). The owner's PG pin is saved as `hostels.latitude` / `longitude` (`ow_update_pg_profile`) and never shown to others (they see a distance) — §3.8 |
 | Messages (email / SMS / in-app) | **No** | — | — | — | — | Work-item text, declared under Other user-generated content. Reasoning in the submission pack §2.6 |
 | Health and fitness | **No** | — | — | — | — | No health feature and no health column. Reasoning in the submission pack §2.7 |
 | **App info and performance › Crash logs** | **No** | — | — | — | — | No crash reporter of any kind. Android Vitals is collected by Google Play itself, not by the developer, and does not need declaring |
@@ -403,8 +404,79 @@ and no other Google data is requested (scopes: openid, email, profile).
 - **Permissions unchanged:** google_sign_in's dependency `androidx.biometric` declares USE_BIOMETRIC and
   USE_FINGERPRINT; both are removed in `AndroidManifest.xml` (`tools:node="remove"`), so the merged
   manifest still has exactly the ten permissions the privacy policy lists. Checked in a release build on
-  2026-10-17.
+  2026-10-17. (From 1.3.0 the count is eleven: `ACCESS_COARSE_LOCATION` — §3.7.)
 - **Deletion:** the identity rows go with the account (`auth.identities` cascades from `auth.users`).
+
+### 3.7 Self sign-up, photos, documents, location, plans (from legal version 2026-10-25, app 1.3.0)
+
+Built per `docs/self-signup-onboarding-spec.md`; migration `db/migrations/2026-10-25-self-signup-onboarding.sql`.
+Privacy policy and terms describe all of it from version 2026-10-25.
+
+- **Account creation methods** (App content → Data safety → Account creation): owners and tenants can now
+  create an account in the app. Tick **Google sign-in / OAuth**. Add Facebook and Truecaller only when a
+  build actually shows those buttons (they appear only when their dart-defines are set and the SDKs exist).
+  The **account deletion URL** stays `/legal/account-deletion`.
+- **New data, all already-existing Play types** (rows in §2 carry the column names): gender, date of birth
+  and an emergency contact (tenant's details form, `me_update_profile`); profile photo (`avatars`, ≤ 1 MB
+  JPEG, every role); identity documents (`identity-documents`, ≤ 5 MB, `user_documents.kind`); join
+  requests (`hostel_join_requests`, message ≤ 300 chars — declare under Other user-generated content);
+  demo requests (`demo_requests`: name, phone, PG name, city, bed band, slot); plan payments
+  (`subscription_payments`); the PG's address and optional coordinates (`hostels`); Facebook / Truecaller
+  IDs (`external_identities`, only once enabled).
+- **Approximate location is the one new type.** Declare it Collected, Optional, App functionality. It is
+  processed ephemerally for the tenant search and stored only as the PG's own position.
+- **Who can read photos and documents** (`app.can_view_user_media`): self; the owner of the person's PG
+  (or of any PG a staff member has access to); its wardens (photos of everyone, documents of residents);
+  its managers (photos of staff and owners only); the owner and wardens of a PG with a **pending** join
+  request from the person; Super Admin. Signed URLs live 60 s in the app.
+- **Retention** (`app.apply_retention()` section 17): pending join requests lapse after 30 days; decided
+  ones are deleted 180 days after the decision; demo requests 180 days after the slot; uploads that no
+  row points at are erased after 1 day; photos and documents go with the account (erasure triggers);
+  plan payments are kept like every other money record.
+- **Shared:** still No for every row. Razorpay processes plan payments as a service provider (§4);
+  Meta and Truecaller confirm identity at sign-in only when enabled, which Play treats as the user's own
+  sign-in choice, not sharing.
+- **Permissions: eleven.** The five of ours are INTERNET, ACCESS_NETWORK_STATE, CAMERA,
+  POST_NOTIFICATIONS and ACCESS_COARSE_LOCATION; four come with FCM and two with Razorpay. Re-count them
+  in the merged manifest of the 1.3.0 release build. `geolocator_android` also merges a
+  `GeolocatorLocationService` with `foregroundServiceType="location"` (no permission); the app never
+  starts it. Decide before the Play upload whether to remove it with `tools:node="remove"` so the build
+  does not prompt a foreground-service declaration. (From legal version 2026-10-26 the count is
+  thirteen — §3.8.)
+
+### 3.8 Round 3 (from legal version 2026-10-26)
+
+Built per `docs/round3-spec.md` (R1–R10) and `docs/round3-api.md`; migration
+`db/migrations/2026-10-26-round3.sql`; legal row `db/migrations/2026-10-26-legal-version-round3.sql`.
+Privacy policy and terms describe all of it from version 2026-10-26.
+
+- **Account creation methods:** add **Username and password** (email + password, `mobile-auth`
+  `signup_password`, `signup_source = 'self_email'`) for owners, tenants and staff. Staff sign-ups are
+  applicants (`staff_applicant = true`, no access) until the owner accepts them (`staff_join_requests`).
+- **Precise location is the one new type** (§2 row): Collected, Optional, App functionality; ephemeral
+  for the tenant search, stored only as the PG's pin.
+- **Biometric app lock (`local_auth`):** not a data type. The check runs in Android's BiometricPrompt on
+  the phone; only an on/off preference file is kept on the device. Nothing biometric is collected.
+- **New data, already-ticked types:** PG logo and up to six covers (`pg-media` bucket, private, JPEG,
+  readable by any signed-in user only while the PG is listed and on an active or trial plan) — Photos;
+  PG description, amenities, reviews (`pg_reviews`, rating + comment ≤ 300, shown with the reviewer's
+  first name), staff-request and check-out-request messages and notes — Other user-generated content;
+  UPI payment claims (`payment_claims`: amount, month, UTR, the owner's VPA, status) — Purchase history;
+  the deleted-accounts list (`account_deletions`) — User IDs and Name, security purpose.
+- **UPI rent:** paid in the tenant's own UPI app straight to the owner's VPA (Android intent, no
+  browser). Apnivaas never receives the money and never sees the payer's UPI ID; a claim is marked paid
+  only when the owner or a warden confirms it (`wd_record_payment`). **Shared:** still No.
+- **Retention:** reviews stay after the tenant leaves and go with the account; payment claims are kept
+  like every other money record. A Super Admin permanent delete (`sa_purge_account`) erases the login,
+  profile PII, photos, documents, reviews and requests, and keeps fee payments, receipts, UPI claims,
+  plan payments and the audit trail pointing at "Deleted user" (§7.1). Dues start at the tenant's
+  check-in date (R2), which changes no Data safety answer.
+- **Permissions: thirteen.** The seven of ours are INTERNET, ACCESS_NETWORK_STATE, CAMERA,
+  POST_NOTIFICATIONS, ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION and USE_BIOMETRIC (USE_FINGERPRINT and
+  AD_ID stay removed); four come with FCM (WAKE_LOCK, VIBRATE, c2dm RECEIVE, the app's
+  DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION) and two with Razorpay (NFC, READ_BASIC_PHONE_STATE).
+  `test/legal_consent_test.dart` checks the count of ours against both policies; re-count the merged
+  manifest of the release build before upload.
 
 ## 4. Razorpay: service provider, not third party
 

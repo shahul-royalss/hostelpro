@@ -8,16 +8,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/clay/clay.dart';
 import '../../shared/glass/glass.dart';
-import '../../shared/illustrations.dart';
 import 'owner_format.dart';
 import 'owner_providers.dart';
-import 'widgets/states.dart';
+import 'owner_tabs.dart';
+import '../shell/join_requests.dart';
+import 'requests/staff_requests.dart';
+import '../../shared/person_avatar.dart';
+import 'staff/owner_staff_screen.dart';
+import 'widgets/owner_header.dart';
+import 'widgets/states.dart' show EmptyNote, ErrorNote, whenAsync;
 
-/// EVERY RESIDENT, AND WHAT EACH ONE HAS PAID.
+/// EVERY RESIDENT, AND WHAT EACH ONE HAS PAID — the People tab.
 ///
-/// The owner's tab 2 was a placeholder until now — the shell drew "This screen is not built
-/// yet" over it, which is exactly what the product owner photographed.
+/// The shell draws the forest header ("Residents", and the PG). Under it, first, the way into
+/// staff accounts: the people who work here sit next to the people who live here, which is where
+/// an owner looks for them.
 ///
 /// ── WHY THIS IS NOT THE WARDEN'S ROSTER WITH A DIFFERENT COLOUR ───────────────────────────
 ///
@@ -47,6 +54,9 @@ class OwnerStudentsScreen extends ConsumerStatefulWidget {
 class _OwnerStudentsScreenState extends ConsumerState<OwnerStudentsScreen> {
   final _search = TextEditingController();
   final _scroll = ScrollController();
+
+  /// The search field's focus, so the home header's search pill can land the owner in it.
+  final _searchFocus = FocusNode(debugLabel: 'Resident search');
   Timer? _debounce;
 
   /// The term actually sent to Postgres. Distinct from the field's text because each value is
@@ -59,6 +69,11 @@ class _OwnerStudentsScreenState extends ConsumerState<OwnerStudentsScreen> {
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    // The search pill on Home may have asked before this tab existed — an IndexedStack builds a
+    // tab the first time it is shown — so the request is read once here as well as listened for.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && ref.read(ownerSearchRequestProvider)) _focusSearch();
+    });
   }
 
   @override
@@ -68,7 +83,15 @@ class _OwnerStudentsScreenState extends ConsumerState<OwnerStudentsScreen> {
       ..removeListener(_onScroll)
       ..dispose();
     _search.dispose();
+    _searchFocus.dispose();
     super.dispose();
+  }
+
+  /// Puts the cursor in the search field and clears the request. A field that has not been
+  /// built yet — the roster still loading — takes the focus the moment it attaches.
+  void _focusSearch() {
+    ref.read(ownerSearchRequestProvider.notifier).consume();
+    _searchFocus.requestFocus();
   }
 
   void _onScroll() {
@@ -98,6 +121,14 @@ class _OwnerStudentsScreenState extends ConsumerState<OwnerStudentsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // After the frame, not inside the notification: by then the shell has switched to this tab,
+    // and a tab that is not selected cannot take focus (IndexedStack excludes it).
+    ref.listen<bool>(ownerSearchRequestProvider, (_, asked) {
+      if (!asked) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focusSearch();
+      });
+    });
     final hostelId = ref.watch(activeHostelIdProvider);
     final owned = ref.watch(myHostelsProvider);
 
@@ -111,10 +142,10 @@ class _OwnerStudentsScreenState extends ConsumerState<OwnerStudentsScreen> {
           ),
         AsyncData() => _Page(
             controller: _scroll,
-            child: const EmptyNote(
-              icon: Icons.apartment_rounded,
+            child: const EmptyState(
+              icon: ClayIcons.rooms,
               title: 'No PG on your account yet',
-              message: 'Residents appear here once a PG is registered against your account.',
+              body: 'Residents appear here once a PG is registered against your account.',
             ),
           ),
         _ => _Page(controller: _scroll, child: const _RosterSkeleton()),
@@ -147,6 +178,7 @@ class _OwnerStudentsScreenState extends ConsumerState<OwnerStudentsScreen> {
         data: (page) => _Roster(
           controller: _scroll,
           search: _search,
+          searchFocus: _searchFocus,
           onSearchChanged: _onSearchChanged,
           term: _term,
           page: page,
@@ -156,6 +188,9 @@ class _OwnerStudentsScreenState extends ConsumerState<OwnerStudentsScreen> {
   }
 }
 
+/// The roster's page when it has one thing to say — loading, failed, no PG. The way into staff
+/// accounts stays at the top whatever state the roster is in: who works here does not depend on
+/// whether the residents loaded.
 class _Page extends StatelessWidget {
   const _Page({required this.child, required this.controller});
   final Widget child;
@@ -165,8 +200,29 @@ class _Page extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
         controller: controller,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.huge),
-        children: [child],
+        padding: OwnerRhythm.pagePadding,
+        children: [
+          const JoinRequestsEntry(padding: EdgeInsets.only(bottom: Space.sm)),
+          const StaffRequestsEntry(padding: EdgeInsets.only(bottom: Space.sm)),
+          const _StaffEntry(),
+          const SizedBox(height: OwnerRhythm.sectionGap),
+          child,
+        ],
+      );
+}
+
+/// Managers and wardens, one tap from the residents. The same screen More opens.
+class _StaffEntry extends StatelessWidget {
+  const _StaffEntry();
+
+  @override
+  Widget build(BuildContext context) => ListRowCard(
+        icon: ClayIcons.team,
+        title: 'Staff accounts',
+        subtitle: 'The managers and wardens who run this PG',
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const OwnerStaffScreen()),
+        ),
       );
 }
 
@@ -174,6 +230,7 @@ class _Roster extends StatelessWidget {
   const _Roster({
     required this.controller,
     required this.search,
+    required this.searchFocus,
     required this.onSearchChanged,
     required this.term,
     required this.page,
@@ -181,6 +238,7 @@ class _Roster extends StatelessWidget {
 
   final ScrollController controller;
   final TextEditingController search;
+  final FocusNode searchFocus;
   final ValueChanged<String> onSearchChanged;
   final String term;
   final PagedResult<Student> page;
@@ -193,54 +251,64 @@ class _Roster extends StatelessWidget {
     return ListView(
       controller: controller,
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.huge),
+      padding: OwnerRhythm.pagePadding,
       children: [
+        const JoinRequestsEntry(padding: EdgeInsets.only(bottom: Space.sm)),
+        const StaffRequestsEntry(padding: EdgeInsets.only(bottom: Space.sm)),
+        const _StaffEntry(),
+        const SizedBox(height: OwnerRhythm.sectionGap),
         TextField(
           controller: search,
+          focusNode: searchFocus,
           onChanged: onSearchChanged,
           textInputAction: TextInputAction.search,
           decoration: const InputDecoration(
             hintText: 'Search by name or phone',
-            prefixIcon: Icon(Icons.search_rounded, size: IconSize.md),
+            prefixIcon: Icon(Icons.search_rounded, size: IconSize.lg),
           ),
         ),
         const SizedBox(height: Space.md),
         if (rows.isEmpty)
-          EmptyNote(
-            icon: term.isEmpty ? Icons.people_outline_rounded : Icons.search_off_rounded,
-            // Artwork for the first run, the glyph for a search miss. The drawing says "there
-            // is nothing here yet", which would be a lie over "no match for that".
-            illustration: term.isEmpty ? EmptyArt.residents : null,
-            // The residents' own teal on the first-run state: it belongs to that area and is
-            // neither good news nor bad. A search miss stays neutral — "no match" is a fact
-            // about the search, not about the residents.
-            tone: term.isEmpty ? ApnivaasDomain.people.tone : null,
-            title: term.isEmpty ? 'No residents yet' : 'Nobody matches “$term”',
-            // Two different facts, and conflating them is how an owner concludes their PG is
-            // empty when they have merely mistyped a name.
-            message: term.isEmpty
-                ? 'Residents appear here as your warden registers them at the desk.'
-                : 'Search covers name and phone number. Clear it to see everyone.',
-          )
+          if (term.isEmpty)
+            // The clay art says "there is nothing here yet", which is true on the first run.
+            const EmptyState(
+              icon: ClayIcons.addTenant,
+              title: 'No residents yet',
+              body: 'Residents appear here as your warden registers them at the desk.',
+            )
+          else
+            // A search miss keeps the plain glyph: the art would be a lie over "no match for
+            // that", and conflating the two is how an owner concludes their PG is empty when
+            // they have merely mistyped a name.
+            EmptyNote(
+              icon: Icons.search_off_rounded,
+              title: 'Nobody matches “$term”',
+              message: 'Search covers name and phone number. Clear it to see everyone.',
+            )
         else ...[
-          SectionLabel(label: '${countLabel(rows.length, 'resident')} shown'),
-          const SizedBox(height: Space.xs),
-          for (final s in rows) ...[
-            _StudentRow(student: s),
-            const SizedBox(height: Space.xs),
-          ],
+          SectionHeader(
+            title: '${countLabel(rows.length, 'resident')} shown',
+            size: SectionHeaderSize.card,
+          ),
+          const SizedBox(height: OwnerRhythm.headingGap),
+          ListGroup(children: [for (final s in rows) _StudentRow(student: s)]),
           if (page.hasMore)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: Space.md),
-              child: Center(child: SizedBox.square(dimension: 22, child: CircularProgressIndicator(strokeWidth: 2))),
+              child: Center(
+                child: SizedBox.square(
+                  dimension: IconSize.action,
+                  child: CircularProgressIndicator(strokeWidth: Strokes.focus),
+                ),
+              ),
             )
           else if (rows.length > 8)
             Padding(
-              padding: const EdgeInsets.only(top: Space.sm),
+              padding: const EdgeInsets.only(top: Space.md),
               child: Text(
                 'That is everyone.',
                 textAlign: TextAlign.center,
-                style: t.textTheme.bodySmall,
+                style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
               ),
             ),
         ],
@@ -249,61 +317,29 @@ class _Roster extends StatelessWidget {
   }
 }
 
-/// One resident, as much as fits on a line a thumb can hit.
+/// One resident, as much as fits on a line a thumb can hit: who, how to reach them, whether
+/// they are still here, and what their rent is.
 class _StudentRow extends StatelessWidget {
   const _StudentRow({required this.student});
   final Student student;
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final tones = context.tones;
     final s = student;
-
     final (label, tone) = switch (s.status) {
-      StudentStatus.active => ('Active', tones.success),
-      StudentStatus.onLeave => ('On leave', tones.warning),
-      StudentStatus.vacated => ('Checked out', t.colorScheme.outline),
+      StudentStatus.active => ('Active', StatusTone.success),
+      StudentStatus.onLeave => ('On leave', StatusTone.warning),
+      StudentStatus.vacated => ('Checked out', StatusTone.neutral),
     };
 
-    return FlatSurface(
-      padding: const EdgeInsets.all(Space.md),
+    return ListRow(
+      leading: PersonAvatar(name: s.fullName, userId: s.userId),
+      title: s.fullName,
+      subtitle: s.phone,
+      // The monthly rent with the resident's status under it — the rent they owe each month,
+      // not anything they have paid; the sheet behind the row has the payments.
+      trailing: ListRowAmount(amount: money(s.monthlyFee), status: label, tone: tone),
       onTap: () => showStudentDetail(context, s),
-      semanticLabel: '${s.fullName}, $label',
-      child: Row(
-        children: [
-          InitialsAvatar(name: s.fullName, muted: s.status == StudentStatus.vacated),
-          const SizedBox(width: Space.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(s.fullName,
-                    style: t.textTheme.titleMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                const SizedBox(height: Space.xxs),
-                Text(
-                  s.phone,
-                  style: t.textTheme.bodySmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: Space.xs),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              StatusChip(label: label, tone: tone, dot: true),
-              const SizedBox(height: Space.xxs),
-              Text(money(s.monthlyFee), style: t.textTheme.bodySmall),
-            ],
-          ),
-          Icon(Icons.chevron_right_rounded, color: t.colorScheme.outline),
-        ],
-      ),
     );
   }
 }
@@ -332,15 +368,21 @@ class _StudentDetail extends ConsumerWidget {
       children: [
         Row(
           children: [
-            InitialsAvatar(name: s.fullName, muted: s.status == StudentStatus.vacated),
+            InitialsDisc(name: s.fullName),
             const SizedBox(width: Space.sm),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(s.fullName, style: t.textTheme.titleLarge, maxLines: 2),
+                  Semantics(
+                    header: true,
+                    child: Text(s.fullName, style: t.textTheme.titleLarge, maxLines: 2),
+                  ),
                   const SizedBox(height: Space.xxs),
-                  Text('Joined ${dayLabel(s.dateOfJoining)}', style: t.textTheme.bodySmall),
+                  Text(
+                    'Joined ${dayLabel(s.dateOfJoining)}',
+                    style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                  ),
                 ],
               ),
             ),
@@ -348,20 +390,20 @@ class _StudentDetail extends ConsumerWidget {
         ),
         const SizedBox(height: Space.lg),
 
-        SectionLabel(label: 'Contact'),
+        const SectionHeader(title: 'Contact', size: SectionHeaderSize.form),
         const SizedBox(height: Space.xs),
         _Fact(label: 'Phone', value: s.phone),
         _Fact(label: 'Email', value: s.email),
         _Fact(label: 'Permanent address', value: s.permanentAddress),
 
         const SizedBox(height: Space.md),
-        SectionLabel(label: 'Next of kin'),
+        const SectionHeader(title: 'Next of kin', size: SectionHeaderSize.form),
         const SizedBox(height: Space.xs),
         _Fact(label: 'Guardian', value: s.guardianName),
         _Fact(label: 'Guardian phone', value: s.guardianPhone),
 
         const SizedBox(height: Space.md),
-        SectionLabel(label: 'Tenancy'),
+        const SectionHeader(title: 'Tenancy', size: SectionHeaderSize.form),
         const SizedBox(height: Space.xs),
         _Fact(label: 'Monthly rent', value: money(s.monthlyFee)),
         _Fact(label: 'ID proof', value: s.idProofType),
@@ -372,33 +414,27 @@ class _StudentDetail extends ConsumerWidget {
         if (s.vacatedAt != null) _Fact(label: 'Checked out', value: dayLabel(s.vacatedAt!)),
 
         const SizedBox(height: Space.lg),
-        SectionLabel(label: 'Transactions'),
+        const SectionHeader(title: 'Transactions', size: SectionHeaderSize.form),
         const SizedBox(height: Space.xs),
         whenAsync(
           history,
-          loading: () => const SkeletonCard(lines: 3),
+          loading: () =>
+              const ListSkeleton(rows: 2, leading: false, semanticLabel: 'Loading transactions'),
           error: (error) => ErrorNote(
             error: error,
             compact: true,
             onRetry: () => ref.invalidate(studentFeeHistoryProvider(s.id)),
           ),
           data: (page) => page.items.isEmpty
-              ? const EmptyNote(
-                  icon: Icons.receipt_long_outlined,
+              ? const EmptyState(
+                  compact: true,
+                  icon: ClayIcons.receipt,
                   title: 'Nothing recorded yet',
                   // Not "has not paid" — an empty ledger and an unpaid month are different
                   // facts, and only the warden's desk creates the first row either way.
-                  message: 'Payments appear here once your warden records one at the desk.',
+                  body: 'Payments appear here once your warden records one at the desk.',
                 )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final f in page.items) ...[
-                      _FeeRow(fee: f),
-                      const SizedBox(height: Space.xs),
-                    ],
-                  ],
-                ),
+              : ListGroup(children: [for (final f in page.items) _FeeRow(fee: f)]),
         ),
       ],
     );
@@ -423,14 +459,18 @@ class _Fact extends StatelessWidget {
         children: [
           SizedBox(
             width: 132,
-            child: Text(label, style: t.textTheme.bodySmall),
+            child: Text(
+              label,
+              style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+            ),
           ),
           Expanded(
             child: Text(
               shown.isEmpty ? 'Not recorded' : shown,
+              // The muted ink, not the control border: an absence is still words to read.
               style: shown.isEmpty
-                  ? t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.outline)
-                  : t.textTheme.bodyMedium,
+                  ? t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)
+                  : t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurface),
             ),
           ),
         ],
@@ -445,40 +485,20 @@ class _FeeRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final tones = context.tones;
     final f = fee;
-
     final (label, tone) = switch (f.status) {
-      FeeStatus.paid => ('Paid', tones.success),
-      FeeStatus.partial => ('Part paid', tones.warning),
-      FeeStatus.unpaid => ('Unpaid', tones.error),
+      FeeStatus.paid => ('Paid', StatusTone.success),
+      FeeStatus.partial => ('Part paid', StatusTone.warning),
+      FeeStatus.unpaid => ('Unpaid', StatusTone.error),
     };
 
-    return FlatSurface(
-      padding: const EdgeInsets.all(Space.sm),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(monthLabel(f.periodMonth), style: t.textTheme.titleMedium),
-                const SizedBox(height: Space.xxs),
-                Text(
-                  // Both figures, always: "₹6,500 of ₹9,500" is the whole story of a part
-                  // payment, and showing only what was paid hides the shortfall.
-                  '${money(f.amountPaid)} of ${money(f.amountDue)}'
-                  '${f.paidOn == null ? '' : ' · ${dayLabel(f.paidOn!)}'}',
-                  style: t.textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: Space.xs),
-          StatusChip(label: label, tone: tone),
-        ],
-      ),
+    return ListRow(
+      title: monthLabel(f.periodMonth),
+      // Both figures, always: "₹6,500 of ₹9,500" is the whole story of a part payment, and
+      // showing only what was paid hides the shortfall.
+      subtitle: '${money(f.amountPaid)} of ${money(f.amountDue)}'
+          '${f.paidOn == null ? '' : ' · ${dayLabel(f.paidOn!)}'}',
+      trailing: StatusChip(label: label, tone: tone),
     );
   }
 }
@@ -487,16 +507,6 @@ class _RosterSkeleton extends StatelessWidget {
   const _RosterSkeleton();
 
   @override
-  Widget build(BuildContext context) => const Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SkeletonCard(lines: 1, height: 56),
-          SizedBox(height: Space.md),
-          SkeletonCard(lines: 2, height: 76),
-          SizedBox(height: Space.xs),
-          SkeletonCard(lines: 2, height: 76),
-          SizedBox(height: Space.xs),
-          SkeletonCard(lines: 2, height: 76),
-        ],
-      );
+  Widget build(BuildContext context) =>
+      const ListSkeleton(rows: 5, semanticLabel: 'Loading residents');
 }

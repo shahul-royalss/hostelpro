@@ -47,12 +47,23 @@ void main() {
   const privileged = {UserRole.superAdmin, UserRole.owner};
   const unprivileged = {UserRole.manager, UserRole.warden, UserRole.student};
 
+  /// Roles the APP sends to enrol when they have no factor. Round 3 (R3) dropped owners: an
+  /// owner with no factor is signed in; one with a factor still owes the code.
+  const enrolmentForced = {UserRole.superAdmin};
+
   group('the grace path — a privileged account with no factor is not locked out', () {
     // THE CASE THAT WOULD HAVE TAKEN THE PLATFORM DOWN. On the day enforcement shipped the
     // super admin had no factor and neither did two of the three owners. A flat
     // "privileged ⇒ aal2 or nothing" refuses them on their next request, and enrolling a
     // factor itself needs a working session — so there would have been no way back in.
-    for (final role in privileged) {
+    test('round 3: an owner with no factor at aal1 is signed straight in', () {
+      expect(
+        mfaGate(role: UserRole.owner, isAal2: false, hasVerifiedFactor: false),
+        MfaGate.satisfied,
+      );
+    });
+
+    for (final role in enrolmentForced) {
       test('${role.wire} with no factor at aal1 is sent to enrol, not refused', () {
         expect(
           mfaGate(role: role, isAal2: false, hasVerifiedFactor: false),
@@ -91,11 +102,11 @@ void main() {
       // The same owner, before and after enrolling. Nothing is redeployed in between: the
       // `not exists (select 1 from auth.mfa_factors ...)` arm simply stops matching.
       expect(
-        mfaGate(role: UserRole.owner, isAal2: false, hasVerifiedFactor: false),
+        mfaGate(role: UserRole.superAdmin, isAal2: false, hasVerifiedFactor: false),
         MfaGate.enrolmentOwed,
       );
       expect(
-        mfaGate(role: UserRole.owner, isAal2: false, hasVerifiedFactor: true),
+        mfaGate(role: UserRole.superAdmin, isAal2: false, hasVerifiedFactor: true),
         MfaGate.codeOwed,
       );
     });
@@ -177,11 +188,13 @@ void main() {
     // A FOURTH copy of a list that must agree with app.mfa_required_roles(),
     // MFA_REQUIRED_ROLES in .env.local and DEFAULT_MFA_REQUIRED_ROLES in caller.ts. Nothing but
     // this assertion checks that the client copy has not drifted.
-    expect(mfaRequiredRoles, privileged);
+    // Round 3: the client forces enrolment on the super admin only; the server still asks an
+    // ENROLLED owner for the code, which the codeOwed arm covers for every role.
+    expect(mfaRequiredRoles, enrolmentForced);
     for (final role in UserRole.values) {
       expect(
         mfaRequiredRoles.contains(role),
-        role == UserRole.superAdmin || role == UserRole.owner,
+        role == UserRole.superAdmin,
         reason: '${role.wire} is on the wrong side of the privileged list',
       );
     }
@@ -199,7 +212,7 @@ void main() {
               ? MfaGate.satisfied
               : hasFactor
                   ? MfaGate.codeOwed
-                  : (privileged.contains(role) ? MfaGate.enrolmentOwed : MfaGate.satisfied);
+                  : (enrolmentForced.contains(role) ? MfaGate.enrolmentOwed : MfaGate.satisfied);
           expect(
             gate,
             expected,

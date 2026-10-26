@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import '../../core/theme/tokens.dart';
 import '../brow.dart';
 import '../brow_header.dart';
+import '../clay/app_header.dart' show AppHeader;
+import '../clay/clay_icons.dart';
+import '../clay/list_row.dart' show InitialsDisc;
+import '../illustrations.dart';
 
 /// The pane layer.
 ///
@@ -15,24 +19,22 @@ import '../brow_header.dart';
 /// ── THERE IS NO GLASS IN HERE, AND THERE ARE NO SHADOWS EITHER ───────────────────────────
 ///
 /// The names survive because ~40 call sites across `features/` use them and renaming would be
-/// a diff nobody could review; what they paint is the Figma design. A pane is a FLAT opaque
-/// fill from the design's own three-surface ramp plus a 1px `#292E33` hairline. No
-/// `BackdropFilter`, no `ImageFilter`, no alpha on the fill, and — new with the Figma
-/// restyle — **no box-shadow**.
+/// a diff nobody could review; what they paint is the Forest & Cream design. A pane is a FLAT
+/// opaque fill — the warm white card #FFFDF9 on the cream ground — plus a 1px hairline in
+/// [ColorScheme.outlineVariant] (#ECE4D8). No `BackdropFilter`, no `ImageFilter`, no alpha on
+/// the fill, and **no box-shadow**.
 ///
 /// Both of those are the design, not a compromise:
 ///
 /// * **No blur.** It is the most expensive thing this app can draw, the product owner's field
 ///   report from a real phone was "stuck, lag", and release builds have disabled it
-///   unconditionally since the commit "Release builds never blur". Nothing in Figma asks for
-///   any. Do not reintroduce it — not behind a flag, not "just for the sheet".
+///   unconditionally since the commit "Release builds never blur". Do not reintroduce it — not
+///   behind a flag, not "just for the sheet".
 ///
-/// * **No shadow.** Not one of the nineteen `screen-*` frames carries a `box-shadow`. The
-///   design separates a card from the ground with its hairline, and the arithmetic backs it:
-///   the card #111417 is only 1.05:1 against the ground, but the hairline #292E33 is 1.42:1,
-///   so the EDGE is what you actually see either way. A drop shadow would be adding a smear
-///   to do a job the line already does. [Shadows.level2] is therefore an empty list, and the
-///   only thing that still casts one is a modal sheet floating over a scrim.
+/// * **No shadow on a resting card.** The design separates a card from the ground with its
+///   fill and its hairline (1.24:1 against the card), and a page where every card floats has
+///   no hierarchy. [Shadows.level2] is therefore an empty list; what still casts is what
+///   genuinely sits above the page — a sheet over its scrim, the tab bar, the one FAB.
 ///
 /// ── THREE RULES THIS FILE ENFORCES ───────────────────────────────────────────────────────
 ///
@@ -41,8 +43,7 @@ import '../brow_header.dart';
 ///    a `thin` card is literally the same hex, and with no shadow left there is nothing at all
 ///    to see. [GlassSurface] therefore asserts in debug when it finds itself more than one
 ///    deep. When you need an inner surface, that is what [FlatSurface] is for — and reaching
-///    for it is the normal case, not the fallback. The design does exactly this: its state
-///    cards are the raised fill with `#111417` blocks inside them (4:1603, 4:1606).
+///    for it is the normal case, not the fallback.
 ///
 /// 2. **Nothing here competes with the data.** No decorative gradient, no sheen, no inner
 ///    highlight. An earlier version painted a white 22% diagonal across every pane to suggest
@@ -50,11 +51,10 @@ import '../brow_header.dart';
 ///    number the screen exists to show. A pane earns its separation from its colour and its
 ///    hairline, and then gets out of the way.
 ///
-/// 3. **Elevation is colour in the dark and shadow in the light.** In the dark theme the
-///    design's ramp gets LIGHTER as it rises. In the light theme M3 inverts that — the card is
-///    already the lightest surface — so all weights resolve to the same fill there and the
-///    hairline does the separating. That decision is made in exactly one place,
-///    [GlassWeight.surfaceOf], and nothing here second-guesses it.
+/// 3. **Elevation is colour, decided in one place.** In the dark theme the ramp gets LIGHTER as
+///    it rises. In the light theme the card is already the lightest surface, so a resting card
+///    and a sheet share its fill and an inner block steps down to the well. That decision is
+///    made in exactly one place, [GlassWeight.surfaceOf], and nothing here second-guesses it.
 
 /// Tracks pane depth down the tree so nesting can be caught in debug.
 class _GlassDepth extends InheritedWidget {
@@ -88,7 +88,7 @@ class GlassSurface extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
 
   /// [Shadows.level2] is EMPTY — see the header. The parameter survives so a modal can pass
-  /// [Shadows.level3], which is the one surface in the app that still floats.
+  /// [Shadows.level3] (a sheet) or [Shadows.dialog] (a dialog): the surfaces that still float.
   final List<BoxShadow> shadows;
 
   /// Overrides the default hairline on all four sides. A full-bleed bar wants an edge only
@@ -98,21 +98,11 @@ class GlassSurface extends StatelessWidget {
   final VoidCallback? onTap;
   final String? semanticLabel;
 
-  /// The hairline colour for a pane in the current theme.
-  ///
-  /// In the dark theme this is the design's own `#292E33`, which Figma uses for every card
-  /// border, divider and avatar disc in the file — one border colour, used everywhere. It
-  /// measures 1.35:1 over the card and 1.42:1 over the ground, which is deliberately quiet:
-  /// an edge you see and never read.
-  ///
-  /// In the light theme the edge has to move the other way, so it is ink at
-  /// [GlassWeight.lightEdge] (1.39:1 over the card) — the same visual register.
-  static Color edgeColor(BuildContext context) {
-    final theme = Theme.of(context);
-    return theme.brightness == Brightness.dark
-        ? theme.colorScheme.outlineVariant
-        : ApnivaasColors.textPrimary.withValues(alpha: GlassWeight.lightEdge);
-  }
+  /// The hairline colour for a pane in the current theme: [ColorScheme.outlineVariant] in both,
+  /// the one decorative edge every card, list group and tile in the app draws — #ECE4D8 on the
+  /// light card (1.24:1), #2A3B34 on the dark one. Deliberately quiet: an edge you see and
+  /// never read. A CONTROL's border is `outline`, a different job (see theme.dart).
+  static Color edgeColor(BuildContext context) => Theme.of(context).colorScheme.outlineVariant;
 
   @override
   Widget build(BuildContext context) {
@@ -192,9 +182,8 @@ class FlatSurface extends StatelessWidget {
   final BorderRadius borderRadius;
   final EdgeInsetsGeometry? padding;
 
-  /// The design draws its inner blocks — the skeleton's KPI and list rows (4:1603, 4:1606) —
-  /// as a bare fill with no edge, because a hairline inside a hairlined card reads as a table.
-  /// Pass false for those.
+  /// An inner block — a skeleton's bars, a group inside a card — is a bare fill with no edge,
+  /// because a hairline inside a hairlined card reads as a table. Pass false for those.
   final bool border;
 
   final VoidCallback? onTap;
@@ -214,7 +203,7 @@ class FlatSurface extends StatelessWidget {
           padding: padding,
           decoration: BoxDecoration(
             borderRadius: borderRadius,
-            // outlineVariant #292E33 (1.35:1), NOT outline #6F747A (3.92:1). This is a card's
+            // outlineVariant #ECE4D8 (1.24:1), NOT outline #8F8679 (3.53:1). This is a card's
             // decorative edge; `outline` is a CONTROL border and WCAG 1.4.11 pushes it to 3:1,
             // which on a card reads as a text field. theme.dart keeps those two jobs on
             // separate tokens for exactly this decision — do not collapse them.
@@ -329,8 +318,7 @@ class ToneSurface extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: Radii.rCard,
         // The tone's own hairline rather than outlineVariant. On a tinted ground the neutral
-        // #292E33 edge all but vanishes, and the card loses the shape that made it read as one
-        // object.
+        // edge all but vanishes, and the card loses the shape that made it read as one object.
         border: Border.all(color: tones.chipBorder(accent), width: Strokes.hairline),
       ),
       child: statusLabel == null
@@ -341,8 +329,8 @@ class ToneSurface extends StatelessWidget {
               children: [
                 Text(
                   statusLabel!.toUpperCase(),
-                  // labelSmall is the same 10/600 step the chip's own label uses, so a tinted
-                  // card and a pill state their status in identical type.
+                  // labelSmall (11/700) is the step [StateBadge] uses, so a tinted card and a
+                  // badge state their status in identical type.
                   style: t.textTheme.labelSmall?.copyWith(color: accent),
                 ),
                 const SizedBox(height: Space.xs),
@@ -404,17 +392,17 @@ class GlassCard extends StatelessWidget {
 
 /// A bar content scrolls beneath. Handles its own top inset so screens do not each re-derive it.
 ///
-/// The design's header (4:448, 4:1540) is 56 high with a bottom hairline and nothing else —
-/// no fill change from the ground, no shadow. This paints [GlassWeight.regular] so the bar
-/// stays opaque while content passes under it, which is what a header is for, and edges only
-/// along the bottom.
+/// Plain, it is the page's own cream with a hairline along the bottom and nothing else — no
+/// fill change from the ground, no shadow, the same bar the theme's AppBar draws. Opaque, so
+/// content passing under it does not show through, which is what a header is for. Its child
+/// is built with the theme's ink, which is right on cream.
 class GlassHeader extends StatelessWidget {
   const GlassHeader({super.key, required this.child, this.padding, this.onBrow = false});
   final Widget child;
   final EdgeInsetsGeometry? padding;
 
-  /// Be the brow: paint the brand block, curve the bottom edge, and let the page's first card
-  /// ride the seam.
+  /// Be the brow: the forest header — gradient, dot stars, 30dp bottom corners — with the
+  /// child in white. See `shared/brow_header.dart`.
   ///
   /// ── WHY THE HEADER DRAWS THIS AND NOT THE SHELL ───────────────────────────────────────────
   ///
@@ -425,22 +413,23 @@ class GlassHeader extends StatelessWidget {
   ///   1. A TRANSPARENT HEADER STOPS BEING A HEADER. Its entire job is to stay opaque while
   ///      content scrolls under it. Transparent, the list scrolled up and showed THROUGH it.
   ///   2. THE BODY'S OWN TEXT LANDED ON THE COLOUR. "Good evening, Ananya" is the first thing
-  ///      in the scroll view, it uses the theme's ink, and on #4D2896 that is near-black on
-  ///      deep indigo. Fixing it by whitening the greeting only moves the bug: the greeting
-  ///      SCROLLS, so it would be white-on-white the moment it left the band.
+  ///      in the scroll view, it uses the theme's ink, and on the brand colour that is
+  ///      near-black on deep green. Fixing it by whitening the greeting only moves the bug: the
+  ///      greeting SCROLLS, so it would be white-on-cream the moment it left the band.
   ///
   /// Anything that scrolls cannot be styled for a ground it only sometimes sits on. So the brow
-  /// on a scrolling screen is exactly as tall as the header itself plus its curve — a fixed,
+  /// on a scrolling screen is exactly as tall as the header itself — a fixed,
   /// non-scrolling object — and the only thing that ever crosses it is a card, which brings its
   /// own opaque fill.
   ///
-  /// What it paints — the gradient, the motif, the gold ribbon, the one-shot entrance — and the
-  /// measured inks live in `shared/brow_header.dart`. The same in both themes, because the brow
-  /// is. Build the content with [BrowTitleBlock] so no line can bring the theme's dark ink.
+  /// What it paints and the measured inks live in `shared/brow_header.dart`. The same in both
+  /// themes, because the header is. Build the content with [BrowTitleBlock] so no line can
+  /// bring the theme's dark ink.
   final bool onBrow;
 
-  /// How far the centre of the bottom edge bulges below the bar. Matches [BrandBrow.dip].
-  static const browDip = 22.0;
+  /// The space under the brow's content, above its rounded bottom edge — the forest header's
+  /// own bottom inset. (It was the depth of the violet brow's convex dip; the name survives.)
+  static const browDip = AppHeader.bottomInset;
 
   @override
   Widget build(BuildContext context) {
@@ -449,32 +438,28 @@ class GlassHeader extends StatelessWidget {
         .add(EdgeInsets.only(top: MediaQuery.paddingOf(context).top));
 
     if (!onBrow) {
-      return GlassSurface(
-        weight: GlassWeight.regular,
-        borderRadius: BorderRadius.zero,
-        shadows: Shadows.level1,
-        border: Border(
-          bottom: BorderSide(color: GlassSurface.edgeColor(context), width: Strokes.hairline),
+      final t = Theme.of(context);
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: t.appBarTheme.backgroundColor ?? t.scaffoldBackgroundColor,
+          border: Border(
+            bottom: BorderSide(color: GlassSurface.edgeColor(context), width: Strokes.hairline),
+          ),
         ),
-        padding: pad,
-        child: child,
+        child: Padding(padding: pad, child: child),
       );
     }
 
     return BrowHeaderFrame(
-      // The dip is added to the bottom so the curve is empty space below the content rather
-      // than a crescent cutting into it.
       padding: pad.add(const EdgeInsets.only(bottom: browDip)),
-      dip: browDip,
       child: child,
     );
   }
 }
 
-/// One statistic — the design's KPI card (4:460, 4:479, 4:1546).
-///
-/// Its anatomy is fixed by the mockups: a 10px uppercase eyebrow in the muted ink, the figure
-/// at 20/700, then one supporting line at 11px. Flat by default, on purpose. A grid of
+/// One statistic, in the older console anatomy: a small uppercase label in the muted ink, the
+/// figure (headlineMedium, Outfit 22/700 tabular), then one supporting line. New screens use
+/// the clay kit's StatTile. Flat by default, on purpose. A grid of
 /// elevated tiles is the "rainbow dashboard" the brief warns against: six panes of equal
 /// elevation say nothing about which number matters. [emphasised] opts a single tile into a
 /// pane — use it at most once per screen, for the figure the screen is about.
@@ -495,9 +480,9 @@ class GlassStatCard extends StatelessWidget {
   final String? caption;
   final IconData? icon;
 
-  /// Semantic accent for the FIGURE. The design tones its KPI values — "₹1,37,500" is red and
-  /// "12 Open" is amber (4:481, 4:485) — and leaves the rest cream. Left null for the common
-  /// case, because colour should mean something.
+  /// Semantic accent for the FIGURE — "₹1,37,500" overdue in the error ink, "12 Open" in the
+  /// warning ink — leaving the rest in the body ink. Left null for the common case, because
+  /// colour should mean something.
   final Color? tone;
   final VoidCallback? onTap;
   final bool emphasised;
@@ -517,14 +502,13 @@ class GlassStatCard extends StatelessWidget {
             const SizedBox(width: Space.xs),
           ],
           Expanded(
-            // labelSmall is the design's chip step: 10/600 at +0.05em. A TextStyle cannot
-            // uppercase, so the string does it here.
+            // labelSmall, 11/700. A TextStyle cannot uppercase, so the string does it here.
             child: Text(label.toUpperCase(), style: t.textTheme.labelSmall, maxLines: 1,
                 overflow: TextOverflow.ellipsis),
           ),
         ]),
         const SizedBox(height: Space.xxs / 2),
-        // headlineMedium is 20/700 tabular — a refreshing column of figures must not shuffle
+        // headlineMedium is 22/700 tabular — a refreshing column of figures must not shuffle
         // sideways.
         Text(
           value,
@@ -593,7 +577,7 @@ class _SheetGrip extends StatelessWidget {
         child: Container(
           width: Space.xxl + Space.xxs, // 36
           height: Space.xxs, // 4
-          margin: const EdgeInsets.only(bottom: Space.md),
+          margin: const EdgeInsets.only(bottom: Space.sm),
           decoration: BoxDecoration(
             // A control, so WCAG 1.4.11's 3:1 applies — the same token the stock handle uses.
             color: Theme.of(context).brightness == Brightness.dark
@@ -610,9 +594,10 @@ class _SheetGrip extends StatelessWidget {
 /// Presents a bottom sheet. Centralised so every sheet in the app shares the same geometry,
 /// drag handle and inset handling.
 ///
-/// [GlassWeight.thick] is the raised surface. A sheet is the ONE place [Shadows.level3]
-/// survives the Figma restyle: it is genuinely floating over a scrimmed page, and the design —
-/// which draws no sheets at all — offers nothing to copy.
+/// The card colour ([GlassWeight.thick]) with 28dp top corners, 20dp at the sides, the grip
+/// 10dp from the top, over the forest scrim. A sheet is one of the few surfaces that casts
+/// [Shadows.level3]: it is genuinely floating over a scrimmed page. For a sheet with a heading,
+/// `showApnivaasSheet` in shared/clay/sheet.dart draws the title on top of this.
 Future<T?> showGlassSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -624,9 +609,11 @@ Future<T?> showGlassSheet<T>({
     backgroundColor: Colors.transparent,
     // See [_SheetGrip]: the stock handle cannot land on a transparent-background sheet.
     showDragHandle: false,
-    // Deep, because the ground is already near-black: a barrier that only dims #0B0D0F by a
-    // third does not read as a barrier at all.
-    barrierColor: ApnivaasColors.midnight.withValues(alpha: 0.72),
+    // Forest at 48% over the cream — the page recedes into the brand rather than into grey —
+    // and black at 60% over the dark ground, where a green barrier would barely dim it.
+    barrierColor: Theme.of(context).brightness == Brightness.dark
+        ? ApnivaasColors.darkScrim
+        : ApnivaasColors.scrim,
     builder: (ctx) => Padding(
       // Keeps the sheet above the keyboard without each caller remembering to.
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
@@ -635,8 +622,8 @@ Future<T?> showGlassSheet<T>({
         borderRadius: Radii.rSheetTop,
         shadows: Shadows.level3,
         padding: EdgeInsets.only(
-          left: Space.md, right: Space.md, top: Space.md,
-          bottom: Space.md + MediaQuery.paddingOf(ctx).bottom,
+          left: Space.lg, right: Space.lg, top: Space.sm - Space.hair,
+          bottom: Space.lg + MediaQuery.paddingOf(ctx).bottom,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -652,27 +639,28 @@ Future<T?> showGlassSheet<T>({
 }
 
 // ═════════════════════════════════════════════════════════════════════════════════════════
-// THE STATE LAYER — node 4:1562, `screen-empty-error-skeleton`
+// THE STATE LAYER — empty, failed, loading
 // ═════════════════════════════════════════════════════════════════════════════════════════
 //
-// The design specifies all three of the states a screen is in when it has no data, on one
-// frame, and they share an anatomy: a raised card, a small caps badge in the tone of the
-// state, then the state's own body. That anatomy is [StateCard], and the three bodies are
-// [StateBadge] + whatever the state needs.
+// The three states a screen is in when it has no data share an anatomy: a card, a small caps
+// badge in the tone of the state, then the state's own body. That anatomy is [StateCard], and
+// the three bodies are [StateBadge] + whatever the state needs. New screens reach for the clay
+// kit's EmptyState and skeletons (shared/clay/); these keep every existing call site on the
+// same look.
 //
 // Nothing here decides WHAT to say — the sentences come from `errorGuidance` and the calling
 // screen, which read the real failure. This is the shape only.
 
-/// The design's state badge (4:1576, 4:1589, 4:1600).
+/// A state's tag — "ERROR", "OFFLINE", "SETTING UP".
 ///
-/// `bg-[rgba(<tone>,0.1)] border border-[<tone>] rounded-[4px] px-[6px] py-[2px]` with the
-/// label in the tone at 9px bold. Both alphas come from [ApnivaasSemantics] so a badge and a
-/// status chip carrying the same meaning are the same weight of colour, and so the one place
+/// The status chip's recipe: a pill of the tone's ink at 10% over whatever it sits on, the
+/// label in that ink, no border. The fill alpha comes from [ApnivaasSemantics], so a badge and
+/// a status chip carrying the same meaning are the same weight of colour, and the one place
 /// the ratio is tight is the one place it is measured.
 ///
-/// The label is rendered at the scale's chip step (10/600) rather than the mockup's 9/700:
-/// 9px is below the point at which a semibold uppercase label survives a real phone's
-/// text-scaling, and the two look identical at 1.0.
+/// STILL IN CAPITALS, on purpose and only here: it names a STATE in a word or two, and the
+/// screens built on it (and their tests) read it upper-cased. A status in a sentence belongs in
+/// the clay kit's StatusChip, which is sentence case.
 class StateBadge extends StatelessWidget {
   const StateBadge({super.key, required this.label, this.tone});
 
@@ -687,12 +675,8 @@ class StateBadge extends StatelessWidget {
     final tones = context.tones;
     final accent = tone == null ? tones.muted : tones.resolve(tone!);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: Space.xs, vertical: Space.xxs / 2),
-      decoration: BoxDecoration(
-        color: tones.chipFill(accent),
-        borderRadius: Radii.rTiny,
-        border: Border.all(color: tones.chipBorder(accent), width: Strokes.hairline),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: Space.xs + Space.hair, vertical: Space.hair),
+      decoration: BoxDecoration(color: tones.chipFill(accent), borderRadius: Radii.rPill),
       child: Text(
         label.toUpperCase(),
         style: t.textTheme.labelSmall?.copyWith(color: accent),
@@ -703,11 +687,12 @@ class StateBadge extends StatelessWidget {
   }
 }
 
-/// The card all three states sit in — 4:1575 / 4:1588 / 4:1599, which are the same box.
+/// The card all three states sit in.
 ///
-/// `bg-[#171a1e] border border-[#292e33] rounded-[12px] p-[16px] gap-[12px]`, i.e. the RAISED
-/// surface rather than the card one, so a state card reads as sitting on top of the page
-/// rather than as another empty card in the list.
+/// Light: the warm white card with its hairline, at the list groups' 24dp radius — a state is
+/// what a list group shows when it has nothing, so it wears the same box. Dark: the RAISED
+/// surface rather than the card one, so it reads as sitting on top of the page rather than as
+/// another empty card in the list.
 class StateCard extends StatelessWidget {
   const StateCard({super.key, required this.child, this.badge, this.tone});
 
@@ -720,8 +705,10 @@ class StateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return FlatSurface(
-      weight: GlassWeight.regular,
+      weight: dark ? GlassWeight.regular : GlassWeight.thin,
+      borderRadius: Radii.rSurface,
       padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -738,16 +725,16 @@ class StateCard extends StatelessWidget {
   }
 }
 
-/// The warning strip from node 4:1520, `screen-subscription-expired`.
+/// The warning strip a screen hangs from — "Subscription expired 3 days ago".
 ///
-/// `bg-[rgba(213,166,76,0.1)] border-b border-[#d5a64c] p-[12px]` — a full-bleed band at the
-/// very top of the screen, filled with 10% of its tone, underlined at full strength, with an
-/// alert glyph, a CAPS eyebrow in the tone and the sentence itself in cream. The bottom-only
+/// A full-bleed band at the very top of the screen, filled with 10% of its tone, underlined at
+/// full strength, with an alert glyph, an eyebrow in the tone and the sentence itself in the
+/// body ink. The bottom-only
 /// border is the point of the shape: it reads as a strip the page hangs from rather than as
 /// another card in the stack, which is what a state that applies to the WHOLE screen should
 /// look like.
 ///
-/// WHAT IS NOT COPIED: the mockup puts a "Renew Subscription" button inside the band (4:1537)
+/// WHAT IS NOT COPIED: the mockup puts a "Renew Subscription" button inside the band
 /// and dims everything under it to [Dim.readOnly]. Only Super Admin can write
 /// `public.subscriptions` (rls-policies.sql), so in this app renewal is a phone call and that
 /// button could not do anything — a call to action that cannot act is worse than a plain
@@ -764,10 +751,10 @@ class NoticeBanner extends StatelessWidget {
     this.action,
   });
 
-  /// The CAPS line in the tone — "SUBSCRIPTION EXPIRED" (4:1535).
+  /// The line in the tone — "Subscription expired 3 days ago".
   final String eyebrow;
 
-  /// The sentence, in cream. One or two lines; this is where the real dates and counts go.
+  /// The sentence, in the body ink. One or two lines; this is where the real dates and counts go.
   final String message;
 
   /// Canonical or resolved. Amber for expiring, red for expired.
@@ -812,8 +799,8 @@ class NoticeBanner extends StatelessWidget {
                     // state label. The style is the design's; the case is the sentence's.
                     Text(eyebrow, style: t.textTheme.labelMedium?.copyWith(color: accent)),
                     const SizedBox(height: Space.xxs / 2),
-                    // Cream, not the tone: the tone has already said how serious this is, and
-                    // a full sentence in amber is harder to read than one in the body colour.
+                    // The body ink, not the tone: the tone has already said how serious this
+                    // is, and a full sentence in amber is harder to read than one in the ink.
                     Text(message,
                         style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurface)),
                   ],
@@ -831,12 +818,15 @@ class NoticeBanner extends StatelessWidget {
   }
 }
 
-/// The centred block the design puts inside an empty or failed state (4:1578, 4:1591): an
-/// optional glyph, a 14/600 title, an 11/400 support line, then one action.
+/// The centred block inside an empty or failed state: an optional picture, a title, a support
+/// line, then one action — the clay kit's EmptyState anatomy at its IN-CARD size, because a
+/// state body always sits in a [StateCard], and several screens put that card straight into a
+/// tab body with no scroll view, where 2.0x text on a 320dp phone leaves it no room to spare.
 ///
-/// The glyph is the design's own construction — a 54dp rounded square outlined at 1.5px in
-/// [ApnivaasColors.outline] — rather than a filled icon disc, and the icon sits inside it. That
-/// outline is why [Strokes.glyph] exists.
+/// THE PICTURE. With [illustration], the matching clay icon ([EmptyArt.clayFor]) at 72dp on a
+/// 96dp Mist disc — "nothing here yet". Without it, [icon] as a glyph on a 56dp Mist disc — "no
+/// match for that", which must not borrow the first-run art. Title Manrope 15/20 w700, support
+/// line 13/18 in the muted ink.
 class StateBody extends StatelessWidget {
   const StateBody({
     super.key,
@@ -856,17 +846,17 @@ class StateBody extends StatelessWidget {
   /// no glyph at all — the sentence is the message.
   final IconData? icon;
 
-  /// An asset path under `assets/illustrations/`, drawn at [ArtSize.emptyState] INSTEAD of the
-  /// outlined glyph square.
+  /// An [EmptyArt] constant. It names the STATE; what is drawn for it is the clay icon
+  /// [EmptyArt.clayFor] maps it to, on a Mist disc, INSTEAD of the glyph.
   ///
   /// ONLY THE FIRST-RUN STATES GET ONE. A new owner's first four screens are empty by
   /// definition, and a bare 56dp glyph on all of them is what an unfinished app looks like. A
   /// list that is empty because a FILTER or a SEARCH excluded everything keeps the glyph: the
   /// artwork says "there is nothing here yet", which would be a lie over "no match for that".
   ///
-  /// [icon] is still passed alongside it and is still the fallback — see the errorBuilder in
-  /// [build]. A missing or corrupt asset must degrade to the glyph the state already had, not
-  /// to a broken-image box and not to a blank card.
+  /// [icon] is still passed alongside it, and the clay icon's own fallback is a glyph in the
+  /// brand ink: a missing or corrupt asset degrades to something legible, never to a
+  /// broken-image box and never to a blank card.
   ///
   /// THE ART CARRIES NO WORDS. Every one of these is a wordless drawing, and the title and
   /// message under it stay real Text, so they remain translatable, selectable and legible to a
@@ -874,60 +864,52 @@ class StateBody extends StatelessWidget {
   /// decoration over a sentence that already says the same thing.
   final String? illustration;
 
-  /// The one button. `Retry` on the error card is the cream filled button; `Learn More` on the
-  /// empty card is the hairline outlined one. Pass whichever the state deserves.
+  /// The one button. `Try again` on the error card is the filled button; `Learn more` on the
+  /// empty card the outlined one. Pass whichever the state deserves.
   final Widget? action;
 
-  /// The gold underlined text link under the button — "Contact Support" (4:1598).
+  /// The text link under the button — "Contact support".
   final Widget? link;
 
-  /// Tints the glyph. Null keeps it the design's neutral outline, which is right for a list
-  /// that is merely empty: a reassuring green tick over "no data yet" is the interface
-  /// congratulating itself.
+  /// Tints the glyph. Null keeps it the brand ink, which is right for a list that is merely
+  /// empty: a reassuring green tick over "no data yet" is the interface congratulating itself.
   final Color? tone;
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final accent = tone == null ? t.colorScheme.outline : context.tones.resolve(tone!);
+    final dark = t.brightness == Brightness.dark;
+    final tones = context.tones;
+    final accent = tone == null ? tones.brand : tones.resolve(tone!);
+    final disc = dark ? ApnivaasColors.darkMist : ApnivaasColors.mist;
+    final art = illustration;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (illustration != null || icon != null) ...[
+        if (art != null || icon != null) ...[
           Center(
-            child: illustration == null
-                ? _glyph(accent)
-                : Image.asset(
-                    illustration!,
-                    width: ArtSize.emptyState,
-                    height: ArtSize.emptyState,
-                    fit: BoxFit.contain,
-                    // Decoration over a sentence that already says this. Announcing it would
-                    // read the state twice.
-                    excludeFromSemantics: true,
-                    // DECODE AT THE SIZE IT IS DRAWN. The assets are 480px so that a 3x phone
-                    // gets them pixel-exact; without this the full 480x480 is decoded and held
-                    // at ~900KB on every device including the 2x ones, which is real memory on
-                    // the phone this app is actually shipped to.
-                    cacheWidth:
-                        (ArtSize.emptyState * MediaQuery.devicePixelRatioOf(context)).round(),
-                    // A missing asset falls back to the glyph this state had before there was
-                    // any artwork. An empty state that cannot draw its picture is still an
-                    // empty state; a broken-image box is a bug report.
-                    errorBuilder: (_, _, _) =>
-                        icon == null ? const SizedBox.shrink() : _glyph(accent),
-                  ),
+            child: art != null
+                ? Container(
+                    width: ClaySize.promo,
+                    height: ClaySize.promo,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: disc, shape: BoxShape.circle),
+                    // Decoration over a sentence that already says this; ClayIcon keeps it
+                    // out of semantics and decodes it at the size it is drawn.
+                    child: ClayIcon(EmptyArt.clayFor(art), size: ClaySize.banner),
+                  )
+                : _glyph(disc, accent),
           ),
           const SizedBox(height: Space.sm),
         ],
         Text(title, style: t.textTheme.labelLarge, textAlign: TextAlign.center),
         if (message != null) ...[
           const SizedBox(height: Space.xxs),
-          Text(message!, style: t.textTheme.bodySmall, textAlign: TextAlign.center),
+          Text(message!, style: t.textTheme.bodyMedium, textAlign: TextAlign.center),
         ],
         if (action != null) ...[
-          const SizedBox(height: Space.sm),
+          const SizedBox(height: Space.md),
           Center(child: action!),
         ],
         if (link != null) ...[
@@ -938,17 +920,13 @@ class StateBody extends StatelessWidget {
     );
   }
 
-  /// The design's outlined glyph square (4:1579), unchanged. Still the default, and still what
-  /// an illustration falls back to when its asset will not load.
-  Widget _glyph(Color accent) => Container(
-        // The design's square is 54; 56 is the same square on the 4dp grid.
+  /// The glyph for a state with no art — a search or filter miss, an error: the icon in the
+  /// brand (or [tone]) ink on a small Mist disc, quieter than the first-run art on purpose.
+  Widget _glyph(Color disc, Color accent) => Container(
         width: Space.huge + Space.xs,
         height: Space.huge + Space.xs,
         alignment: Alignment.center,
-        decoration: BoxDecoration(
-          borderRadius: Radii.rControl,
-          border: Border.all(color: accent, width: Strokes.glyph),
-        ),
+        decoration: BoxDecoration(color: disc, shape: BoxShape.circle),
         child: Icon(icon, size: IconSize.xl - Space.xs, color: accent),
       );
 }
@@ -1028,7 +1006,13 @@ class DomainIcon extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: tones.chipFill(ink),
-        borderRadius: circular ? Radii.rPill : Radii.rCard,
+        // A squircle in proportion to the box — the quick-action well's 22 on 64 — rather than
+        // a card radius that turns a 40dp box into a near-circle.
+        borderRadius: circular
+            ? Radii.rPill
+            : size == DomainIconSize.sm
+                ? Radii.rTiny
+                : Radii.rControl,
       ),
       child: Icon(icon ?? domain.icon, size: size.glyph, color: ink),
     );
@@ -1061,10 +1045,11 @@ class DomainIcon extends StatelessWidget {
 /// and Gmail all draw. It also leaves the tinted surface to mean exactly one thing again — the
 /// single [DomainCard] a screen is allowed.
 ///
-/// The label sits in the domain ink on [ColorScheme.surfaceContainer], which is one of the four
-/// surfaces every ink in [ApnivaasSemantics] is measured AA against, so a 14px label here clears
-/// 4.5:1 in both themes. The hairline is the neutral card edge, not the tone — a coloured edge
-/// would put the colour back on the surface by another route.
+/// The label sits in the domain ink on [ColorScheme.surfaceContainer] (the well in light), one
+/// of the surfaces every ink in [ApnivaasSemantics] is measured AA against, so a 15px label here
+/// clears 4.5:1 in both themes. The hairline is the neutral card edge, not the tone — a coloured
+/// edge would put the colour back on the surface by another route. 52dp and radius 16, the
+/// theme's own button geometry, so it lines up beside a FilledButton.
 class DomainButton extends StatelessWidget {
   const DomainButton({
     super.key,
@@ -1103,12 +1088,10 @@ class DomainButton extends StatelessWidget {
         disabledBackgroundColor: fill,
         foregroundColor: ink,
         disabledForegroundColor: ink,
-        // The neutral card edge, so the control reads as a control in the light theme — where
-        // surfaceContainer is white and an unbordered button on an ivory page is invisible.
+        // The neutral card edge, so the control keeps its shape on a card as well as on cream.
         side: BorderSide(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
-        // 48: Material's floor and above Apple's 44, like the theme's own buttons.
-        minimumSize: expand ? const Size.fromHeight(48) : const Size(0, 48),
-        shape: const RoundedRectangleBorder(borderRadius: Radii.rControl),
+        minimumSize: expand ? const Size.fromHeight(52) : const Size(0, 52),
+        shape: const RoundedRectangleBorder(borderRadius: Radii.rButton),
         padding: const EdgeInsets.symmetric(horizontal: Space.md),
         textStyle: t.textTheme.labelLarge,
         elevation: 0,
@@ -1172,10 +1155,12 @@ class DomainCard extends StatelessWidget {
 /// A stable colour for a person, from their name — the way Google Contacts gives every face a
 /// hue so a list of strangers becomes a list of people you can tell apart.
 ///
-/// ── THREE HUES, AND THE THREE IT LEAVES OUT ARE THE POINT ────────────────────────────────
+/// ── ONE HUE NOW, AND WHAT IT LEAVES OUT IS THE POINT ─────────────────────────────────────
 ///
-/// The palette is exactly the domain tones that are NOT also a status: violet, teal, saffron.
-/// `success`, `warning` and `info` are deliberately absent, and an earlier version of this
+/// The palette is the domain tones that are NOT also a status. Under the violet design that was
+/// three hues — violet, teal, saffron; with the domain hues retired all three are the brand,
+/// so every identity disc is forest on Mist and the clay icons carry what kind of thing
+/// something is. `success`, `warning` and `info` stay absent, and an earlier version of this
 /// function included them — which was a real bug, not a stylistic one:
 ///
 ///   The SAME avatar widget carries a STATUS tone on several screens. The warden's fee ledger
@@ -1186,10 +1171,8 @@ class DomainCard extends StatelessWidget {
 ///   to amber wore the exact disc that means "on leave" on the list two taps away.
 ///
 /// Removing those three closes it at the source: an identity colour can no longer collide with
-/// a state colour, on any screen, for any name.
-///
-/// Gold is left out too, for a different reason: it is the brand's, and a face in the brand
-/// colour would read as the account holder.
+/// a state colour, on any screen, for any name. Gold is left out too: it is a fill on forest,
+/// and on cream it measures under 2:1.
 ///
 /// ── WHAT "STABLE" DOES AND DOES NOT PROMISE ──────────────────────────────────────────────
 ///
@@ -1197,7 +1180,7 @@ class DomainCard extends StatelessWidget {
 /// this function choose. It is not a promise that a person looks identical everywhere: a caller
 /// that passes `tone:` is stating a STATUS, and status wins the disc — that is the same rule
 /// the rest of the domain layer follows, and it is why the ledger's amber avatar is correct
-/// even though this function would have painted that resident teal.
+/// even though this function would have painted that resident in the brand.
 ///
 /// Returns a CANONICAL tone — resolve it at the paint site with `context.tones.resolve`.
 Color avatarToneFor(String? name) {
@@ -1217,20 +1200,16 @@ Color avatarToneFor(String? name) {
   return palette[h % palette.length];
 }
 
-/// A tinted disc with one or two initials in it — the "my account" affordance.
+/// A disc with one or two initials in it — the "my account" affordance.
 ///
-/// ── WHY A THIRD ONE ───────────────────────────────────────────────────────────────────────
+/// ── WHY IT IS NOT THE KIT'S DISC ──────────────────────────────────────────────────────────
 ///
-/// There are already two widgets called InitialsAvatar, in features/student/widgets/common.dart
-/// and features/owner/widgets/states.dart, and neither was reusable here. They are not
-/// duplicates of each other: the resident's takes a `size` and derives its hue from the name,
-/// the owner's takes an explicit `tone` and a `muted` flag for a revoked account. Merging them
-/// is a real refactor with real call sites behind it, and doing it in passing while wiring a
-/// header would have been the wrong moment.
-///
-/// What the shell needs is the small half of both: a disc, a size, initials, the shared
-/// [avatarToneFor] hue. That lives here in shared/ because the shell must not import a feature
-/// — the dependency runs the other way round.
+/// The clay kit's [InitialsDisc] draws a person in a list; this is the signed-in account, and
+/// the one difference that matters is the forest header: on the brow it turns to white
+/// initials on a 16% white disc (see build). The initials themselves come from
+/// [InitialsDisc.initialsFor], so the two can never spell a name differently. It lives in
+/// shared/ because the shell must not import a feature — the dependency runs the other way
+/// round. (The two feature-local InitialsAvatar widgets it once sat beside are gone.)
 class AccountAvatar extends StatelessWidget {
   const AccountAvatar({super.key, required this.name, this.size = 32});
 
@@ -1238,39 +1217,26 @@ class AccountAvatar extends StatelessWidget {
   final double size;
 
 
-  Color _tone(BuildContext context) => context.tones.resolve(avatarToneFor(name));
-
-  /// Up to two initials. Falls back to a single glyph rather than an empty circle, because a
-  /// blank disc reads as a failed image load.
-  static String initialsFor(String? name) {
-    final words = (name ?? '').trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-    if (words.isEmpty) return '?';
-    if (words.length == 1) return words.first.characters.first.toUpperCase();
-    return (words.first.characters.first + words.last.characters.first).toUpperCase();
-  }
+  /// Up to two initials — [InitialsDisc.initialsFor], so every disc in the app agrees.
+  static String initialsFor(String? name) => InitialsDisc.initialsFor(name);
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    const white = Color(0xFFFFFFFF);
-    // 16% white, not the 22% it was on the flat brow. The avatar sits in the top-left corner,
-    // which is the gradient's lightest stop (#6341A4), and 22% there put the white initials at
-    // 4.38:1. At 16% the disc is #7C5FB3 — 1.47:1 against the brow, still a visible disc — and
-    // the initials measure 5.05:1. See shared/brow_header.dart.
-    // THE IDENTITY COLOUR CANNOT SURVIVE THE BROW. A normal avatar is a 10% chip of the name's
-    // own hash with the hash as initials, arithmetic tuned against a white or near-black pane.
-    // On #4D2896 the chip fill all but disappears and violet initials are violet on violet:
-    // six of the eight avatar tones fail 4.5:1 there and one of them IS the brand.
-    //
-    // So on a brow it drops the per-person colour for white on 16% white. That is a real loss,
-    // taken deliberately — a header where some people's initials are legible and others' are
-    // not, decided by their name, is worse than one where nobody's are coloured.
+    final dark = t.brightness == Brightness.dark;
+    // ON A BROW THE IDENTITY DISC CANNOT SURVIVE. Off it, the disc is Mist with the name's
+    // tone (the brand, for everybody) as initials: forest on Mist 7.54:1, the dark primary on
+    // the dark Mist 6.43:1. On the forest header Mist would be a pale coin punched in the
+    // brand, so it goes to white initials on 16% white — the disc composites to #437A6C on the
+    // header's lightest stop, a visible disc at 1.47:1, and the initials measure 4.94:1 on it.
     //
     // Read from [BrowScope] rather than passed in: four mastheads draw this widget and a flag
     // would have to be remembered at each of them, which is three chances to forget.
     final onBrow = BrowScope.of(context);
-    final fill = onBrow ? white.withValues(alpha: 0.16) : context.tones.chipFill(_tone(context));
-    final ink = onBrow ? white : _tone(context);
+    final fill = onBrow
+        ? ApnivaasColors.headerTitle.withValues(alpha: 0.16)
+        : (dark ? ApnivaasColors.darkMist : ApnivaasColors.mist);
+    final ink = onBrow ? ApnivaasColors.headerTitle : context.tones.resolve(avatarToneFor(name));
     return Container(
       width: size,
       height: size,

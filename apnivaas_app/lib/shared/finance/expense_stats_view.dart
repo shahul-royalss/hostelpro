@@ -157,7 +157,15 @@ class _ExpenseStatsViewState extends ConsumerState<ExpenseStatsView> {
   }
 }
 
-/// Which colour means which kind — the design's dot-and-word legend (4:1221).
+/// The two kinds' colours, as canonical tones resolved at the paint site. Monthly bills are the
+/// brand, day-to-day spend the info blue: two hues rather than two greens, because the money
+/// green stacked on forest read as one colour at chart size. Both clear 3:1 on the card.
+abstract final class _KindTone {
+  static const monthly = ApnivaasColors.brand;
+  static const daily = ApnivaasColors.info;
+}
+
+/// Which colour means which kind — a dot-and-word legend.
 class _Legend extends StatelessWidget {
   const _Legend();
 
@@ -167,11 +175,11 @@ class _Legend extends StatelessWidget {
     final tones = context.tones;
     return Row(
       children: [
-        _Dot(color: tones.resolve(ApnivaasDomain.rooms.tone)),
+        _Dot(color: tones.resolve(_KindTone.monthly)),
         const SizedBox(width: Space.xxs),
         Text('Monthly', style: t.textTheme.labelSmall),
         const SizedBox(width: Space.sm),
-        _Dot(color: tones.resolve(ApnivaasDomain.money.tone)),
+        _Dot(color: tones.resolve(_KindTone.daily)),
         const SizedBox(width: Space.xxs),
         Text('Day-to-day', style: t.textTheme.labelSmall),
       ],
@@ -252,13 +260,13 @@ class _MonthBars extends StatelessWidget {
                             _Segment(
                               height: _height *
                                   (stats.totalOfKind(month, ExpenseKind.monthly) / peak),
-                              color: tones.resolve(ApnivaasDomain.rooms.tone),
+                              color: tones.resolve(_KindTone.monthly),
                               top: true,
                             ),
                             _Segment(
                               height: _height *
                                   (stats.totalOfKind(month, ExpenseKind.daily) / peak),
-                              color: tones.resolve(ApnivaasDomain.money.tone),
+                              color: tones.resolve(_KindTone.daily),
                               top: false,
                             ),
                           ],
@@ -404,7 +412,7 @@ class _MonthPanel extends StatelessWidget {
                           // Against the MONTH'S own total, so a bar reads as a share of this
                           // month rather than against the tallest month on the chart above.
                           widthFactor: total <= 0 ? 0 : (row.total / total).clamp(0, 1),
-                          child: ColoredBox(color: tones.resolve(ApnivaasDomain.money.tone)),
+                          child: ColoredBox(color: tones.brand),
                         ),
                       ),
                     ),

@@ -9,6 +9,7 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../common/form_parts.dart';
 import '../student/student_providers.dart';
 import '../student/widgets/format.dart';
 
@@ -185,7 +186,9 @@ Future<CheckoutOutcome> _openSheet(CheckoutOrder order) {
       // method most Indian residents actually use.
       'retry': {'enabled': true, 'max_count': 1},
       'timeout': 300,
-      'theme': {'color': '#C9A96E'},
+      // The sheet's accent, so the checkout the resident is handed to wears the app's forest
+      // rather than the gold of the brand before it.
+      'theme': {'color': _checkoutAccent},
     });
   } catch (_) {
     // open() throws synchronously on a malformed options map. Treated as "did not pay", which
@@ -197,6 +200,10 @@ Future<CheckoutOutcome> _openSheet(CheckoutOrder order) {
   // delivers its result into this dead closure. See the file header.
   return done.future.whenComplete(razorpay.clear);
 }
+
+/// [ApnivaasColors.forest] in the `#RRGGBB` form Razorpay's options take.
+final String _checkoutAccent =
+    '#${(ApnivaasColors.forest.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
 
 /// Poll the resident's own ledger until the webhook has moved it, or the window closes.
 ///
@@ -276,23 +283,19 @@ class _PayRentButtonState extends ConsumerState<PayRentButton> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        FilledButton.icon(
-          onPressed: _busy ? null : _pay,
-          icon: _busy
-              ? SizedBox.square(
-                  dimension: IconSize.md,
-                  child: CircularProgressIndicator(
-                    strokeWidth: Strokes.glyph,
-                    color: t.colorScheme.onPrimary,
-                  ),
-                )
-              : const Icon(Icons.lock_rounded, size: IconSize.md),
-          label: Text(_busy ? 'Opening…' : 'Pay ${rupees(widget.amount)} now'),
+        // Keeps its forest while the sheet opens, so the spinner reads as "opening" and not as
+        // a button that has gone grey.
+        BusyFilledButton(
+          label: 'Pay ${rupees(widget.amount)} now',
+          icon: Icons.lock_rounded,
+          busy: _busy,
+          busyLabel: 'Opening…',
+          onPressed: _pay,
         ),
         const SizedBox(height: Space.xs),
         Text(
           'UPI, cards, net banking and wallets. Apnivaas never sees your card or UPI details.',
-          style: t.textTheme.bodySmall,
+          style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
           textAlign: TextAlign.center,
         ),
       ],

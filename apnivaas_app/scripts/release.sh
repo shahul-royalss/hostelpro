@@ -358,12 +358,15 @@ verify_apk() {
     esac
   done
 
-  # 4. The typeface must ship. google_fonts fetches at runtime by default, and an app that
-  #    downloads its own font renders as the system font on a first launch with no network.
-  case "$entries" in
-    *"google_fonts/Inter-Regular.ttf"*) ;;
-    *) die "$label: Inter is not bundled — the app would download its font on first launch" ;;
-  esac
+  # 4. The typefaces must ship. Both families are declared under `fonts:` in pubspec.yaml, and a
+  #    family whose files are missing from the package renders in the system font — the app
+  #    looks like a different product. One face of each family stands for its whole declaration.
+  for face in Outfit-SemiBold Manrope-Regular; do
+    case "$entries" in
+      *"google_fonts/$face.ttf"*) ;;
+      *) die "$label: $face.ttf is not bundled — the app would render in the system font" ;;
+    esac
+  done
 
   # 5. NO SECRETS ON THE DEVICE. An APK is a zip anyone can unpack. The service-role key bypasses
   #    every RLS policy; the Razorpay secret authorises money movement. Neither may be in here.

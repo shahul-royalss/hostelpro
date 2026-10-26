@@ -68,8 +68,9 @@ abstract final class ReceiptPaper {
 
 /// The dispenser the paper comes out of.
 ///
-/// Brushed gold, as supplied: a warm metal against the app's cool indigo, which is what makes
-/// the machine read as an object sitting on the screen rather than as another panel of UI.
+/// Brushed gold, as supplied: a warm metal under the forest header, kin to the brand's own gold
+/// accent, and a material no panel of UI is made of — which is what makes the machine read as an
+/// object sitting on the screen rather than as another card.
 abstract final class ReceiptPrinter {
   static const hoodWidth = 400.0;
   static const hoodTopHeight = 34.0;

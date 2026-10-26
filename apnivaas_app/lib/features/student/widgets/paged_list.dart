@@ -68,11 +68,11 @@ class StudentPagedList<T> extends StatelessWidget {
           padding: _padding,
           physics: const AlwaysScrollableScrollPhysics(),
           children: const [
-            SkeletonCard(lines: 2),
-            SizedBox(height: Space.xs),
-            SkeletonCard(lines: 2),
-            SizedBox(height: Space.xs),
-            SkeletonCard(lines: 2),
+            SkeletonCard(lines: 3),
+            SizedBox(height: Space.sm),
+            SkeletonCard(lines: 3),
+            SizedBox(height: Space.sm),
+            SkeletonCard(lines: 3),
           ],
         ),
         // The failure, and nothing else — no [header]. The loudest thing on a screen that
@@ -181,7 +181,7 @@ class _RowsState<T> extends State<_Rows<T>> {
       // Always scrollable, so pull-to-refresh works even on a list of one row.
       physics: const AlwaysScrollableScrollPhysics(),
       itemCount: items.length + (hasHeader ? 1 : 0) + (hasFooter ? 1 : 0),
-      separatorBuilder: (_, _) => const SizedBox(height: Space.xs),
+      separatorBuilder: (_, _) => const SizedBox(height: Space.sm),
       itemBuilder: (context, index) {
         if (hasHeader && index == 0) return widget.header!;
         final row = index - (hasHeader ? 1 : 0);
@@ -249,7 +249,8 @@ class _LoadMoreFooterState extends State<_LoadMoreFooter> {
       child: Column(
         children: [
           Text(errorGuidance(error).next,
-              style: t.textTheme.bodySmall, textAlign: TextAlign.center),
+              style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+              textAlign: TextAlign.center),
           const SizedBox(height: Space.xs),
           TextButton(onPressed: widget.onRetry, child: const Text('Load more')),
         ],

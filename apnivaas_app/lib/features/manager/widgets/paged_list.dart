@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
+import '../../../shared/clay/clay.dart';
 import 'manager_ui.dart';
 
 /// A list that loads the next page as the manager reaches the bottom.
@@ -20,6 +21,10 @@ import 'manager_ui.dart';
 /// The trigger is the footer being BUILT rather than a scroll-offset listener: it fires once
 /// when the end comes into view, costs nothing while the list is still, and does not need to
 /// know the row height.
+///
+/// EACH ROW IS ITS OWN CARD, a [Space.xs] apart — the way every paged list in the app draws its
+/// rows. One card around the whole list would have to be built in one piece, and a list that
+/// loads as you scroll is built a row at a time.
 class PagedList<T> extends StatelessWidget {
   const PagedList({
     super.key,
@@ -53,14 +58,18 @@ class PagedList<T> extends StatelessWidget {
       child: AsyncSection<PagedResult<T>>(
         value: value,
         onRetry: onRefresh,
+        // The list IS the page, so a failure stands on the ground at full size rather than in a
+        // card among other cards.
+        carded: false,
         // The loading and failure states are scrollable too, or pull-to-refresh is the one
-        // gesture that cannot rescue a screen that failed to load.
+        // gesture that cannot rescue a screen that failed to load. The skeleton is the rows'
+        // own outline under the filters, which stay usable while the first page is coming.
         loading: ListView(
           padding: padding,
           // Explicit rather than inherited from ScrollView's `primary` inference — the same
           // reasoning as the empty state below, and as the warden's copy of this file.
           physics: const AlwaysScrollableScrollPhysics(),
-          children: [?header, const Spinner()],
+          children: [?header, const ListSkeleton(rows: 4)],
         ),
         builder: (page) {
           if (page.isEmpty) {
@@ -201,21 +210,20 @@ class _LoadMoreFooterState extends State<_LoadMoreFooter> {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final error = widget.error;
-    if (error == null) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: Space.lg),
-        child: Center(
-          child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-        ),
-      );
-    }
+    // The next page's outline, in the same card as the rows above it, rather than a spinner
+    // under them: the list visibly continues instead of pausing.
+    if (error == null) return const ListSkeleton(rows: 1, semanticLabel: 'Loading more');
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Space.md),
       child: Column(
         children: [
-          Text(error.message, style: t.textTheme.bodySmall, textAlign: TextAlign.center),
+          Text(
+            error.message,
+            style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: Space.xs),
-          TextButton(onPressed: widget.onRetry, child: const Text('Load more')),
+          PillButton(label: 'Load more', icon: Icons.refresh_rounded, onPressed: widget.onRetry),
         ],
       ),
     );

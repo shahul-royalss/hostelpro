@@ -1,5 +1,7 @@
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 /// Apnivaas's design tokens. The single place any visual constant is defined.
@@ -9,95 +11,59 @@ import 'package:flutter/material.dart';
 /// `features/` may hardcode a colour, a radius, a duration or a spacing value.
 ///
 // ═════════════════════════════════════════════════════════════════════════════════════════
-// WHERE THESE VALUES COME FROM
+// FOREST & CREAM — WHERE THESE VALUES COME FROM
 // ═════════════════════════════════════════════════════════════════════════════════════════
 //
-// FIGMA, file `8qkhZArLAz9KVOIiWF8ZTG`, the nineteen `screen-*` frames in the `4:*` range.
-// The file defines no Figma variables, so the hexes below are the raw literals the designer
-// used, read off `get_design_context` for the frames named in each comment. If one of them is
-// wrong it is wrong in Figma and the fix belongs there, not here.
+// The design canvas (`apnivaas_canvas/project/*.dc.html`: the look sheet, sign-in, role
+// picker, book-a-demo and owner home boards) and the clay icon set in `design-3d/icons-v3`.
+// The logo's own greens: Forest #174E43, Leaf #3F7F68, Sage #7A9684, Mist #DCE8DF, on a warm
+// Cream #F6F2EA ground with #FFFDF9 cards, Gold #E2AE4A for the one warm accent, and ink
+// #1C2B26. THIS REPLACES THE PURPLE BROW AND THE FIGMA DARK PALETTE: violet, teal and saffron
+// are gone from the live theme, and the clay icon now says what kind of thing something is.
 //
-// THIS REPLACES THE STITCH PALETTE. The app previously shipped `design-stitch/`: navy-black
-// #0B1326 with Material 3's stock dark purple #D0BCFF and a mint #4EDEA3. That was the colour
-// Flutter generates when nobody picks one. The Figma palette is a deliberate brand — neutral
-// near-black, warm cream text, gold accent — and every surface, every accent and the whole
-// type stack moves with it. See `design-figma/DESIGN-SYSTEM.md`.
+// ── THE THREE DECISIONS WORTH READING BEFORE CHANGING ANYTHING ────────────────────────────
 //
-// ── THE FOUR DECISIONS WORTH READING BEFORE CHANGING ANYTHING ────────────────────────────
+//   1. THE CANVAS HAD FIVE VALUES THAT FAIL, AND THEY WERE REPLACED, NOT SHIPPED. The input
+//      and chip border #DDD5C8 measures 1.43:1 on the card (a control edge owes 3:1), the
+//      placeholder #7B8A83 3.56:1, the inactive tab label #6B7A73 4.44:1, the header search
+//      placeholder #CFE0D4 3.94:1 and Leaf as text on the ground 4.23:1. Their replacements
+//      ([controlBorder], [placeholder], [inkMuted], [headerPlaceholder], [forest]) are the
+//      nearest values that pass. "Restoring the canvas value" reintroduces a failure.
 //
-//   1. THE PRIMARY BUTTON IS CREAM, NOT GOLD. `screen-signin` (4:83) and the retry button on
-//      `screen-empty-error-skeleton` (4:1596) are `bg-[#f5f3ee]` with `text-[#0b0d0f]`. That
-//      is the single most distinctive decision in this design and it is not a mistake to be
-//      "fixed" to the accent colour. So [primaryContainer] is the cream and theme.dart wires
-//      FilledButton to it; [primary] is the gold #C9A96E, which is what a link, an active tab
-//      and an emphasis figure use. The gold DOES fill one button — the "Renew Subscription"
-//      CTA inside the expired-subscription banner (4:1537) — and that is [primary].
+//   2. GOLD IS A FILL, NEVER A GRAPHIC ON CREAM. 1.81:1 on the ground, 1.99:1 on a card. It
+//      lives on forest and on dark surfaces only: the unread dot, the hero tile's progress, the
+//      header stars.
 //
-//   2. THE DESIGN IS FLAT AND EDGED, NOT SHADOWED. Not one frame in the file carries a
-//      `box-shadow`. Every card is a fill plus a 1px #292E33 hairline, and the ground is dark
-//      enough that the hairline is the only separator needed (#292E33 measures 1.42:1 on the
-//      ground against the card's own 1.05:1). [Shadows.level2] is therefore EMPTY: a resting
-//      card gets its edge, not a smear. Only a genuinely floating surface — a modal sheet
-//      over a scrim — keeps a shadow. And there is still no blur anywhere; see [GlassWeight].
-//
-//   3. #6F747A COULD NOT SURVIVE AS TEXT, AND THAT IS ARITHMETIC. The design sets CAPS
-//      labels, meta lines, chart axes and input placeholders in `#6f747a`. Measured, that is
-//      4.13:1 on the ground, 3.92:1 on the card and 3.70:1 on the raised surface — below AA
-//      on every surface in the app, including the one the mockup itself puts it on. It
-//      survives untouched as [outline], where WCAG 1.4.11's 3:1 applies and it clears it
-//      everywhere. As TEXT it is [darkMuted], the same hue and saturation lifted in lightness
-//      until the tightest case in the app passes. The exact delta is recorded there.
-//
-//   4. THE MOCKUPS' OWN BADGES ARE NOT AA, AND THE FIX IS IN THE COLOUR, NOT THE RECIPE. The
-//      state badges on `screen-empty-error-skeleton` are 9px bold text on a 10% tint of
-//      themselves — `#5577ad` on `rgba(85,119,173,0.1)`, which measures 4.03:1. The recipe is
-//      kept exactly (10% fill, full-strength 1px border; see [ApnivaasSemantics]) and the two
-//      tones that could not carry it were lifted along their own hue by the minimum that
-//      works. Four of the six design tones were already fine and are used verbatim.
+//   3. THE UNPREFIXED MATERIAL ROLE NAMES ARE THE DARK SCHEME. [surfaceContainerLow],
+//      [onSurface], [primary] and friends predate the light theme and still carry the dark
+//      values, because that is the scheme theme.dart builds from them. The light theme reads
+//      the light names ([background], [surface], [textPrimary]…) and the brand names at the top
+//      of [ApnivaasColors]. A feature painting without a BuildContext should reach for a BRAND
+//      name — [forest], [mist], [cream] — not a role name, or it is painting the dark theme.
 //
 // ── EVERY NUMBER IN A COMMENT IS MEASURED ────────────────────────────────────────────────
 //
-// The ratios quoted next to the tokens are WCAG 2.1 relative-luminance measurements, not
-// estimates, and `test/theme_contrast_test.dart` recomputes every one of them from the token
-// itself. A colour nudged by eye fails `flutter test` with the number it actually measured.
-// The bars are §1.4.3 (text, 4.5:1) and §1.4.11 (graphical objects and UI components, 3:1).
-//
-// ── THE LIGHT THEME IS DERIVED, NOT DRAWN ────────────────────────────────────────────────
-//
-// Figma ships one look and it is dark. (`screen-admin-dashboard` 4:1369 is light; the design
-// note treats it as a stale exploration and the admin dashboard is built dark like the rest.)
-// A light-mode phone still has to get something legible, so the light scheme is
-// `ColorScheme.fromSeed(seedColor: ApnivaasColors.seed)` with the seed set to the design's own
-// gold accent — derived, never hand-picked. The consts below are that function's output,
-// pinned so they can be used in `const` expressions; the test asserts each still equals what
-// `fromSeed` produces, so they cannot drift into being invented. It measures clean (worst
-// text pair 5.01:1) and it is warm rather than the generic grey-violet the old seed produced,
-// but nobody designed it. The honest recommendation that goes with it is `ThemeMode.dark`.
+// The ratios quoted next to the tokens are WCAG 2.1 relative-luminance measurements, and
+// `test/theme_contrast_test.dart` recomputes them from the token itself. A colour nudged by eye
+// fails `flutter test` with the number it actually measured. The bars are §1.4.3 (text, 4.5:1)
+// and §1.4.11 (graphical objects and UI components, 3:1).
 //
 // ── WHY THERE ARE STILL THREE SEMANTIC SETS ──────────────────────────────────────────────
 //
-// A single flat colour cannot be AA-legible as text on both a white surface and a near-black
-// one. To reach 4.5:1 on the light card #FFFFFF a colour needs relative luminance L ≤ 0.1833;
-// to reach 4.5:1 on the dark card #111417 (L = 0.00681) it needs L ≥ 0.2057. The windows do
-// not overlap at any hue, because luminance is the only variable in the ratio. So:
+// One flat colour cannot be AA text on both cream and near-black, because luminance is the only
+// variable in the ratio. So:
 //
-//   1. CANONICAL — [ApnivaasColors.success] and friends. The IDENTITY of a meaning, and the
-//      value that survives when a colour is painted with no BuildContext: chart bars, meter
-//      fills, status icons, tinted borders. Each is the corresponding FIGMA tone taken to the
-//      lightness that maximises its worst case across all eight surfaces of both themes;
-//      worst measured 3.50:1, so every one clears WCAG 1.4.11 everywhere, including the light
-//      input fill and the dark `surface-bright`. (The old palette could not do that — its
-//      windows were disjoint. The new ground is darker and the new light surfaces are less
-//      extreme, and the window opened. The test proves the overlap rather than asserting it.)
-//      NOT legible enough for small text — do not put 11px type in them.
-//   2. LIGHT TEXT — the `...Ink` values, AA on every light surface AND on a 10% chip of
-//      themselves over any of them. Worst 4.57:1.
-//   3. DARK TEXT  — the `...Dark` values, same contract on the dark surfaces. Worst 4.56:1.
+//   1. CANONICAL — [ApnivaasColors.success] and friends. The IDENTITY of a meaning, and what a
+//      shape is painted with when there is no BuildContext: chart bars, meter fills, rails, a
+//      `tone:` plumbed through an enum. Each sits in the luminance window that clears 3:1 on
+//      the light ground, card, well and chip AND on the dark ground, card and raised surface.
+//      NOT legible enough for small text.
+//   2. LIGHT TEXT — the `...Ink` values, AA on every light surface and on a 10% chip of
+//      themselves.
+//   3. DARK TEXT  — the `...Dark` values, the same contract on the dark surfaces.
 //
-//   Sets 2 and 3 are reached through [ApnivaasSemantics], the ThemeExtension registered on both
-//   themes. At a paint site with a context write `context.tones.error`; where a canonical
-//   colour has already been plumbed through a `tone:` parameter call
-//   `context.tones.resolve(tone)`.
+//   Sets 2 and 3 are reached through [ApnivaasSemantics]: `context.tones.error`, or
+//   `context.tones.resolve(tone)` where a canonical colour has been plumbed through.
 //
 //   THIS IS THE RULE: canonical for shapes, resolved for type.
 // ═════════════════════════════════════════════════════════════════════════════════════════
@@ -107,454 +73,423 @@ import 'package:flutter/material.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// The palette. Ratios in comments are measured — see the header.
-///
-/// Two vocabularies live here on purpose. The `dark*` / `*Ink` names are the ones ~200 call
-/// sites across `features/` already use, so they keep their meaning and simply point at new
-/// values: an unconverted screen shifts to the new identity instead of breaking. The
-/// Material-3 role names ([surfaceContainerLow] and friends) are the design's own vocabulary
-/// and are what a screen being restyled against a mockup should reach for.
 abstract final class ApnivaasColors {
-  // ═══ THE SOURCE COLOUR ══════════════════════════════════════════════════════
-  /// The design's gold accent, used ONLY as a seed for the light scheme. Paint with
-  /// [primary], which is the same hex in the role it actually has.
-  static const seed = Color(0xFFC9A96E);
+  // ═══ THE BRAND — raw values. Paint through the roles below where a role exists. ═══════
 
-  // ═══ DARK — the Figma palette, verbatim ═════════════════════════════════════
-  // Read off `screen-student-dashboard` 4:947, `screen-owner-dashboard` 4:437,
-  // `screen-signin` 4:60, `screen-subscription-expired` 4:1520 and
-  // `screen-empty-error-skeleton` 4:1562. Do not adjust by eye.
+  /// THE BRAND. The filled button, links, focus, the selected tab, the hero stat tile and the
+  /// middle stop of the header. 9.36:1 on the card, 8.52:1 on the ground; white on it 9.51:1.
+  static const forest = Color(0xFF174E43);
 
-  // ── surfaces. The design ships THREE, plus one brighter fill. Elevation gets LIGHTER as it
-  //    rises, which is how depth reads on an emissive panel and how M3 expresses it in dark.
+  /// The header gradient's first (darkest) stop, behind the greeting. White on it 12.74:1.
+  static const forestDeep = Color(0xFF10392F);
 
-  /// `background` — the page ground. Every `screen-*` frame is `bg-[#0b0d0f]`.
-  static const ground = Color(0xFF0B0D0F);
+  /// The header gradient's last (LIGHTEST) stop. Every header ink is measured on this one:
+  /// white 7.28:1, [headerGreeting] 5.11:1, [headerSub] 5.29:1.
+  static const forestHigh = Color(0xFF1F6150);
 
-  /// The deepest well — the scrim, the modal barrier, the snackbar.
-  ///
-  /// (= [ground]) The design has nothing below its background, so this is not a fifth colour;
-  /// it is the same one, named for the job. A scrim at 72% of it over the ground still reads
-  /// as a barrier because the sheet in front is two rungs lighter.
+  /// A pressed filled button. White on it 12.58:1.
+  static const forestPressed = Color(0xFF0F3A31);
+
+  /// The progress track inside the forest hero tile. [gold] on it 3.13:1.
+  static const forestTrack = Color(0xFF2D6A5A);
+
+  /// A graphic green. As TEXT only on the card or white (4.65:1); 4.23:1 on the ground, so
+  /// never text there. It is also the canonical [brand] tone.
+  static const leaf = Color(0xFF3F7F68);
+
+  /// Decorative graphics only — 3.17:1 on the card, 2.52:1 on the chip fill. Never text.
+  static const sage = Color(0xFF7A9684);
+
+  /// Tonal tiles, the tab-bar indicator, the persona art panel, the tonal button. Forest on
+  /// it 7.54:1, [ink] 11.70:1, [inkMuted] 4.88:1.
+  static const mist = Color(0xFFDCE8DF);
+
+  /// THE PAGE GROUND. (= [background])
+  static const cream = Color(0xFFF6F2EA);
+
+  /// Cards, sheets, the tab bar and the input fill. (= [surface])
+  static const card = Color(0xFFFFFDF9);
+
+  /// The one warm accent, as a FILL: the unread dot (3.60:1 on [forestHigh]), the hero tile's
+  /// progress, the header stars. 1.81:1 on cream, so never a graphic there. Ink on it 7.30:1.
+  static const gold = Color(0xFFE2AE4A);
+
+  /// A header star's core, and its halo.
+  static const goldStar = Color(0xFFF6DFA0);
+  static const goldHalo = Color(0xFFFFF6D8);
+
+  /// Primary text. 14.53:1 on the card, 11.57:1 on the chip fill (its worst surface).
+  static const ink = Color(0xFF1C2B26);
+
+  /// Labels and notes, one step under [ink]. 9.14:1 on the card, 7.28:1 on the chip fill.
+  static const inkStrong = Color(0xFF3D4A44);
+
+  /// Secondary text. 6.06:1 on the card; 4.83:1 on the chip fill, its worst surface. Replaces
+  /// the canvas's inactive-tab grey #6B7A73, which measured 4.44:1.
+  static const inkMuted = Color(0xFF55655E);
+
+  /// Supporting text on Mist. 5.81:1 there.
+  static const mistInk = Color(0xFF3F5C52);
+
+  /// A text field's placeholder: 4.77:1 on the field's own fill ([card]). Replaces the
+  /// canvas's #7B8A83 (3.56:1).
+  static const placeholder = Color(0xFF66756E);
+
+  /// The quick-action well and the inner surface of a card. 1.09:1 against the card — a
+  /// whisper, which is all an inset needs.
+  static const well = Color(0xFFEEF4EF);
+
+  /// A selected persona card.
+  static const selectedSurface = Color(0xFFF2F8F3);
+
+  /// A skeleton block on the card (1.22:1) and on the ground (1.15:1). Quiet on purpose: a
+  /// placeholder that is easy to read is a placeholder people try to read.
+  static const skeleton = Color(0xFFECE6DB);
+  static const skeletonOnGround = Color(0xFFE9E2D5);
+
+  /// The tab bar's top edge and a light progress track. [forest] on it 7.13:1.
+  static const track = Color(0xFFE6DED2);
+
+  /// The rules either side of "or continue with". Decorative.
+  static const rule = Color(0xFFE2DACD);
+
+  /// The modal barrier: forest-deep at 48%.
+  static const scrim = Color(0x7A10392F);
+
+  /// The dark theme's barrier: black at 60%. Forest-deep is not dark enough to read as a
+  /// barrier over a near-black page.
+  static const darkScrim = Color(0x99000000);
+
+  /// The light error container, behind an error banner. [errorInk] on it 5.48:1.
+  static const errorContainerLight = Color(0xFFF7E8E3);
+
+  /// A disabled control's label and glyph on [track]. Disabled controls owe no contrast; this
+  /// is simply the quiet the canvas draws.
+  static const disabledInk = Color(0xFF8A958F);
+
+  // ── the header's inks. The same in both themes, because the header is.
+
+  static const headerTitle = Color(0xFFFFFFFF);
+
+  /// The greeting line. 5.11:1 on [forestHigh].
+  static const headerGreeting = Color(0xFFBFE0CC);
+
+  /// Meta lines and captions on forest. 5.29:1 on [forestHigh], 6.92:1 on [forest].
+  static const headerSub = Color(0xFFCFE0D4);
+
+  /// The search pill's placeholder: 4.65:1 on the pill's composited fill #3A7465. The canvas's
+  /// #CFE0D4 measured 3.94:1 there.
+  static const headerPlaceholder = Color(0xFFE6F0EA);
+
+  /// White at 12% / 22%: the search pill's fill and its (decorative) border. White text on the
+  /// fill 5.42:1.
+  static const headerSearchFill = Color(0x1FFFFFFF);
+  static const headerSearchBorder = Color(0x38FFFFFF);
+
+  /// White at 8% / 24%: a round header button's fill and border. Its white glyph 6.01:1.
+  static const headerButtonFill = Color(0x14FFFFFF);
+  static const headerButtonBorder = Color(0x3DFFFFFF);
+
+  /// The 3dp ring around the header's avatar disc: white at 22%.
+  static const headerAvatarRing = Color(0x38FFFFFF);
+
+  /// THE HEADER. CSS `linear-gradient(160deg, #10392F 0%, #174E43 55%, #1F6150 100%)`: top to
+  /// bottom, turned 20° anticlockwise so the darkest corner sits behind the greeting.
+  static const headerGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    transform: GradientRotation(-math.pi / 9),
+    colors: [forestDeep, forest, forestHigh],
+    stops: [0, 0.55, 1],
+  );
+
+  /// The dots drawn over [headerGradient]. (= [HeaderStars.dots]) Named here so the header's
+  /// paint is found in one place; where a dot may sit, and where a halo may not, is
+  /// [HeaderStars].
+  static const starDots = HeaderStars.dots;
+
+  // ── the gold task banner ("Meter readings due"). Its own inks, measured on both stops.
+
+  static const bannerTop = Color(0xFFFFF5DF);
+  static const bannerBottom = Color(0xFFF8E3B6);
+
+  /// 10.34:1 on [bannerBottom], its darker stop.
+  static const bannerTitle = Color(0xFF3D2F0E);
+
+  /// 6.79:1 on [bannerBottom].
+  static const bannerBody = Color(0xFF5C4A1E);
+
+  /// CSS 120deg, left to right.
+  static const bannerGradient = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    transform: GradientRotation(math.pi / 6),
+    colors: [bannerTop, bannerBottom],
+  );
+
+  /// The same banner on the dark ground: a low brown-gold, so the one warm surface in the
+  /// palette is still warm at night rather than a pale slab glowing on near-black.
+  static const bannerTopDark = Color(0xFF2E2614);
+  static const bannerBottomDark = Color(0xFF3A2F15);
+
+  /// [goldStar] for the title, 10.00:1 on [bannerBottomDark]; the body 8.99:1 there.
+  static const bannerTitleDark = goldStar;
+  static const bannerBodyDark = Color(0xFFE6D4AA);
+
+  static const bannerGradientDark = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    transform: GradientRotation(math.pi / 6),
+    colors: [bannerTopDark, bannerBottomDark],
+  );
+
+  /// The brand's source colour. Nothing is derived from it any more; it names the colour the
+  /// whole palette is built around.
+  static const seed = forest;
+
+  // ═══ DARK — the dark scheme. Switched off in main.dart, still built and measured. ═════
+  //
+  // The canvas has no dark mode, so this one was designed against the same rules. The header
+  // gradient, the forest hero tile and gold are IDENTICAL in both themes.
+
+  /// The page ground.
+  static const ground = Color(0xFF0D1613);
+
+  /// (= [ground]) Nothing sits below the ground.
   static const surfaceContainerLowest = ground;
 
-  /// `surface (card)` #111417 — the rent card, the KPI cards, notice items, and the inner
-  /// blocks of the skeleton layout (4:1603, 4:1606).
-  static const surfaceContainerLow = Color(0xFF111417);
+  /// A card. `colorScheme.surface` in dark. 1.12:1 against the ground, so cards carry a
+  /// hairline.
+  static const surfaceContainerLow = Color(0xFF15221D);
 
-  /// `surface raised` #171A1E — icon buttons (4:454), inputs (4:77), the room card, the
-  /// activity feed's disc, the chart panel, and the empty/error/skeleton cards (4:1575).
-  static const surfaceContainer = Color(0xFF171A1E);
+  /// Raised: fields, sheets, an inner block on a card. 1.24:1 against the ground.
+  static const surfaceContainer = Color(0xFF1B2B25);
 
-  /// Headers and sheets. (= [surfaceContainer]) The design's own bars and panels are the
-  /// raised surface and it ships nothing above it for that job; a modal sheet is separated
-  /// from the bar behind it by the scrim and [Shadows.level3], not by another rung of colour.
+  /// Sheets. (= [surfaceContainer])
   static const surfaceContainerHigh = surfaceContainer;
 
-  /// Chips and the input fill. (= [surfaceContainer]) 4:77 is the design's own text field:
-  /// `bg-[#171a1e] border border-[#292e33]`.
-  static const surfaceContainerHighest = surfaceContainer;
+  /// The neutral chip.
+  static const surfaceContainerHighest = Color(0xFF26342F);
 
-  /// `#1D2227` — the brightest fill in the file. It is the shimmer bar of the skeleton layout
-  /// (4:1604, 4:1605, 4:1609, 4:1610) and it is what an icon badge sits on.
-  ///
-  /// A FILL, NEVER A TEXT BACKGROUND in the design — though every text token here is AA on it
-  /// anyway (worst 4.56:1), so a label that lands on one is still legible.
-  static const surfaceBright = Color(0xFF1D2227);
+  /// The brightest fill — a skeleton block, a pressed row. 1.26:1 against the card.
+  static const surfaceBright = Color(0xFF22352E);
 
-  // ── key colours
+  /// The quick-action well, a dark Mist, and a selected persona, in the dark theme.
+  static const darkWell = Color(0xFF1F302A);
+  static const darkMist = Color(0xFF1D3A31);
+  static const darkSelected = Color(0xFF1A3029);
 
-  /// THE METAL. `#C9A96E`, the Figma accent — and no longer the brand.
-  ///
-  /// WHY IT WAS DEMOTED, WHICH IS ARITHMETIC AND NOT TASTE. On white this measures 2.24:1. To
-  /// clear 4.5:1 on white a gold has to be darkened to about L 0.30, and a gold at L 0.30 is a
-  /// brown — which is precisely what `ColorScheme.fromSeed(#C9A96E)` returned for the old light
-  /// theme (#79590C) and precisely the trap the competitor fell into with peach over brown.
-  /// Blue and violet keep their identity across the lightness range a dual-theme app needs;
-  /// gold does not. So gold keeps every job where it is unbeatable — the wordmark, the splash,
-  /// the BeamCard comet, the subscription accent, graphics on [brandDeep] (4.56:1 on it) — and
-  /// gives up the one it could never hold, which is being the colour on a white card.
-  ///
-  /// 8.70:1 on the ground, 7.16:1 on [surfaceBright]. NEVER light-theme text.
-  static const gold = Color(0xFFC9A96E);
+  /// THE BRAND, dark theme: links, focus, the active tab. 6.43:1 on its worst surface
+  /// ([darkMist]), 9.59:1 on the ground.
+  static const primary = Color(0xFF86C9A9);
 
-  /// THE BRAND, dark theme. (= [roomsDark]) `scheme.primary` in dark: the FAB, the focus ring,
-  /// text buttons, the nav indicator. 4.73:1 worst on the four dark surfaces.
-  ///
-  /// This is the same hue 262 family as [brand] and [brandInk]; see [gold] for why the brand
-  /// moved off the gold at all.
-  static const primary = roomsDark;
-
-  /// Text on [primary]. The ground, at 5.74:1 — dimmer than the gold's 8.70:1 and well clear
-  /// of the 4.5 bar.
+  /// 9.59:1 on [primary].
   static const onPrimary = ground;
 
-  /// THE FULL-BLEED BRAND. `#4D2896` — the hero brow, the four onboarding grounds, and the
-  /// light theme's filled button.
-  ///
-  /// IDENTICAL IN BOTH THEMES, deliberately: it is the one surface where a light phone and a
-  /// dark phone show literally the same object, which is what makes the app recognisable
-  /// before a single word is read. A light-theme-only competitor cannot answer that.
-  ///
-  /// Cream #F5F3EE on it 9.20:1 · white 10.20:1 · [gold] 4.56:1, so even gold TEXT passes.
-  /// Against the light canvas 8.96:1; against the dark ground 1.91:1 — quiet there, but 35%
-  /// louder than the 1.42:1 hairline that currently does all the separating, so it still reads
-  /// as a block.
-  ///
-  /// Painted with no BuildContext, so it is never a canonical tone and never goes through
-  /// [ApnivaasSemantics.resolve].
-  static const brandDeep = Color(0xFF4D2896);
+  /// THE FULL-BLEED BRAND — the onboarding grounds and the light theme's filled button.
+  /// (= [forest]) White on it 9.51:1.
+  static const brandDeep = forest;
 
-  /// THE CREAM PRIMARY BUTTON — `bg-[#f5f3ee]` on 4:83 ("Continue") and 4:1596 ("Retry").
-  /// Not a container in the M3 tonal sense; it is the design's filled action and this is the
-  /// role theme.dart wires FilledButton to. (= [onSurface])
-  static const primaryContainer = Color(0xFFF5F3EE);
+  /// THE DARK FILLED BUTTON — Mist with a forest label, so the main action is the brightest
+  /// object on a dark screen. (= [mist]) It is also the light plate the 2FA QR code sits on in
+  /// both themes: a QR is a scanning target before it is interface.
+  static const primaryContainer = mist;
 
-  /// Text on the cream button. The design's own `text-[#0b0d0f]`. 17.56:1 — the highest
-  /// contrast pairing in the app, on the control that matters most.
-  static const onPrimaryContainer = ground;
+  /// 7.54:1 on [primaryContainer].
+  static const onPrimaryContainer = forest;
 
-  /// `warning (amber-gold)` #D5A64C — due, expiring, the subscription banner's eyebrow
-  /// (4:1535) and the "12 Open" complaints figure (4:485). 8.70:1 on the ground.
-  ///
-  /// It is the M3 `secondary` role because it is the design's second voice: the same family
-  /// as the gold, one step warmer, and never used for anything that is merely decorative.
-  static const secondary = Color(0xFFD5A64C);
+  /// DUE, EXPIRING — the dark theme's warm second voice. (= [warningDark]) Ground on it
+  /// 10.08:1.
+  static const secondary = Color(0xFFE9B85C);
 
-  /// 8.70:1 on [secondary].
   static const onSecondary = ground;
 
-  /// The design's own `rgba(213,166,76,0.1)` banner fill (4:1531) composited over the card,
-  /// pinned flat. Nothing translucent is stored in a ColorScheme, and a container role that
-  /// is secretly transparent composites twice the moment somebody stacks it.
-  static const secondaryContainer = Color(0xFF25231C);
+  /// [secondary] at 10% over the dark card, flattened. 7.35:1 for [secondary] on it.
+  static const secondaryContainer = Color(0xFF2A3123);
 
-  /// 7.03:1 on [secondaryContainer].
   static const onSecondaryContainer = secondary;
 
-  /// POSITIVE — paid, occupied, resolved, on-duty. The design's own `#5fae82`, from the rent
-  /// collection meter and its "77%" label (4:467, 4:468). 7.29:1 on the ground.
-  static const tertiary = Color(0xFF5FAE82);
+  /// POSITIVE — paid, occupied, resolved. (= [successDark]) Ground on it 9.35:1.
+  static const tertiary = Color(0xFF6FCB98);
 
-  /// 7.29:1 on [tertiary].
   static const onTertiary = ground;
 
-  /// [tertiary] at the design's 10%, composited over the card. See [secondaryContainer].
-  static const tertiaryContainer = Color(0xFF192322);
+  /// [tertiary] at 10% over the dark card, flattened. 6.84:1 for [tertiary] on it.
+  static const tertiaryContainer = Color(0xFF1E3329);
 
-  /// 6.03:1 on [tertiaryContainer].
   static const onTertiaryContainer = tertiary;
 
-  /// NEGATIVE — overdue, failed, the error-state badge (4:1590), the notification dot
-  /// (4:457), the "Pending Fees" figure (4:481).
-  ///
-  /// The design's `#C96B6B` lifted by (+3, +7, +7). At 9px on its own 10% tint the mockup's
-  /// value measures 4.29:1 — the badge in the file is not AA — and this is the minimum lift
-  /// along its own hue that clears 4.5:1 both plain and on that tint. 5.76:1 on the ground.
-  ///
-  /// Named `errorTone` rather than `error` because [error] is the CANONICAL dual-theme red
-  /// further down, and the two are not interchangeable: this one is a dark-theme TEXT colour,
-  /// that one is a graphic that has to survive a white background.
-  static const errorTone = Color(0xFFCC7272);
+  /// NEGATIVE, dark theme. (= [errorDark]) Ground on it 7.69:1. Named `errorTone` because
+  /// [error] is the CANONICAL red further down; this one is a dark-theme TEXT colour.
+  static const errorTone = Color(0xFFF08C82);
 
-  /// 5.76:1 on [errorTone].
   static const onErrorTone = ground;
 
-  /// [errorTone] at the design's 10%, composited over the card. See [secondaryContainer].
-  static const errorContainer = Color(0xFF241D20);
+  /// [errorTone] at 10% over the dark card, flattened. 5.82:1 for [errorTone] on it.
+  static const errorContainer = Color(0xFF2B2D27);
 
-  /// 4.89:1 on [errorContainer].
   static const onErrorContainer = errorTone;
 
-  // ── ink and lines
+  /// The info tint over the dark card, the one container Material has no slot for.
+  static const darkInfoContainer = Color(0xFF213131);
 
-  /// `on-surface` #F5F3EE — primary text. WARM CREAM, NOT PURE WHITE, and the difference is
-  /// the whole temperature of the product. 16.67:1 on the card.
-  static const onSurface = Color(0xFFF5F3EE);
+  /// Primary text, dark. 10.75:1 on its worst surface ([darkMist]).
+  static const onSurface = Color(0xFFF3EFE6);
 
-  /// `on-surface secondary` #A2A6AB — supporting text, roommate names, the sub-lines under a
-  /// KPI figure. 7.55:1 on the card.
-  static const onSurfaceVariant = Color(0xFFA2A6AB);
+  /// Secondary text, dark. 6.82:1 worst.
+  static const onSurfaceVariant = Color(0xFFB6C4BC);
 
-  /// `on-surface tertiary` #6F747A — the design's quietest ink, and here it draws SHAPES
-  /// rather than type: the 1.5px outline of the empty-state glyph (4:1579), its three bars,
-  /// the home-indicator pill, and the border of a text field.
-  ///
-  /// 3.92:1 on the card and 3.70:1 on the raised surface, so it clears the 3:1 of WCAG
-  /// 1.4.11 everywhere a control's edge or an illustrative stroke is drawn. As TEXT it does
-  /// not clear 4.5:1 anywhere at all — that is what [darkMuted] is for, and the header
-  /// explains why the design's own usage had to be split in two.
-  static const outline = Color(0xFF6F747A);
+  /// A control's edge, dark. 3.66:1 on the raised field, 4.06:1 on the card.
+  static const outline = Color(0xFF6E837A);
 
-  /// `outline / hairline` #292E33 — every card border, every divider, the avatar disc, the
-  /// header's underline, the meter track. 1.35:1 on the card: a line you can see and never
-  /// read, which is exactly the job.
-  static const outlineVariant = Color(0xFF292E33);
+  /// The dark card edge and divider. 1.39:1 on the card — a line you see and never read.
+  static const outlineVariant = Color(0xFF2A3B34);
 
   // ── legacy names, re-pointed. Same meaning, new value; unconverted screens move with us.
 
-  /// The page ground. (= [ground])
   static const darkBackground = ground;
 
-  /// A card. (= [surfaceContainerLow])
-  ///
-  /// `colorScheme.surface` is wired here, NOT to the design's `background` role, because 17
-  /// call sites in `features/` paint a CARD with `colorScheme.surface` and the ground would
-  /// make every one of them vanish. The ground is `scaffoldBackgroundColor`. See theme.dart,
-  /// which says the same thing where it matters.
+  /// A card. `colorScheme.surface` is wired to the CARD, not the ground, because call sites in
+  /// `features/` paint a card with it; the ground is `scaffoldBackgroundColor`.
   static const darkSurface = surfaceContainerLow;
 
-  /// A raised card. (= [surfaceContainer])
   static const darkElevated = surfaceContainer;
 
-  /// Brand ink: scrims, the modal barrier, the snackbar. (= [surfaceContainerLowest])
-  static const midnight = surfaceContainerLowest;
+  /// Brand ink for barriers and scrims, in both themes. (= [forestDeep]) A credential dialog's
+  /// barrier is this at 48%, which is exactly [scrim].
+  static const midnight = forestDeep;
 
   /// The dark theme's accent. (= [primary]) The name is historical; nothing here is indigo.
   static const darkIndigo = primary;
 
-  /// The second voice. (= [secondary]) The name is historical; nothing in this design is
-  /// blue. Never for meaning on its own — a chart's other line, an illustrative fill.
+  /// The dark second voice. (= [secondary]) The name is historical; nothing here is blue.
   static const softBlue = secondary;
 
-  /// Body text, dark. (= [onSurface]) 16.67:1 on the card, 14.45:1 on [surfaceBright].
   static const darkTextPrimary = onSurface;
-
-  /// Secondary text, dark. (= [onSurfaceVariant]) 7.55:1 / 6.55:1.
   static const darkTextSecondary = onSurfaceVariant;
 
-  /// Muted text, dark. THE ONE FIGMA VALUE THAT HAD TO MOVE FOR A TEXT ROLE.
-  ///
-  /// The design's `#6F747A` measures 4.13 / 3.92 / 3.70 / 3.40 on ground / card / raised /
-  /// bright — it fails AA on every surface in the app, and the tightest case is tighter still
-  /// (12px type on a 10% tint of itself over the raised surface, which is what a muted status
-  /// chip and a lapsed-staff avatar are). This is that hue and saturation lifted in lightness
-  /// by the minimum that clears 4.5:1 in all eight of those places:
-  ///
-  ///   #6F747A → #898D93, a delta of (+26, +25, +25) — 5.84 ground · 5.54 card · 5.23 raised ·
-  ///   4.80 bright, and 4.57:1 at its worst on a chip of itself.
-  ///
-  /// #6F747A survives untouched as [outline], where 3:1 applies and it clears it everywhere.
-  static const darkMuted = Color(0xFF898D93);
+  /// Muted text, dark. 4.76:1 on its worst surface ([darkMist]), 6.34:1 on the card.
+  static const darkMuted = Color(0xFF93A59C);
 
-  /// A divider between rows already on the same surface. (= [outlineVariant]) 1.35:1.
+  /// A placeholder on the dark field. 5.11:1 on the raised fill.
+  static const darkPlaceholder = Color(0xFF8A9C93);
+
   static const darkHairline = outlineVariant;
-
-  /// A card's edge against the ground. (= [outlineVariant]) The design ships ONE hairline
-  /// colour and every one of those jobs uses it — card borders, dividers and avatar discs are
-  /// all `#292e33`. 1.42:1 on the ground, which is what does the separating now that nothing
-  /// casts a shadow.
   static const darkCardBorder = outlineVariant;
-
-  /// The only boundary a text field or an outlined button has, so WCAG 1.4.11 applies.
-  /// (= [outline]) 3.70:1 on the design's own field fill.
   static const darkControlBorder = outline;
 
-  // ═══ LIGHT — DRAWN, at last ═════════════════════════════════════════════════
-  //
-  // These were `ColorScheme.fromSeed(seedColor: #C9A96E)` output until now, and the file said
-  // so in its own voice: "nobody designed a light Apnivaas… the honest recommendation is
-  // ThemeMode.dark". But main.dart ships ThemeMode.system, so on a light-mode phone — which is
-  // most phones — the quantiser's bronze #79590C WAS the product. A competitor teardown made
-  // that impossible to keep: peach-and-brown lost to us on rigour and beat us on presence, and
-  // our light theme was in the same brown family without even having chosen it.
-  //
-  // So the light scheme is now hand-drawn around hue 262, the indigo the app already owned as
-  // `rooms`. Every value below carries its MEASURED ratio and test/theme_contrast_test.dart
-  // recomputes all of them; a colour nudged by eye fails the build with the number it got.
-  //
-  // Worst plain text on any light surface: 5.14:1. Worst on a 10% chip of itself: 4.52:1.
-  // Worst control border: 3.26:1. Bars are 4.5 (§1.4.3) and 3.0 (§1.4.11).
-  //
-  // ── THE ONE NUMBER THAT LOOKS ARBITRARY AND IS NOT ────────────────────────────────────────
-  // [lightField] #DFE2EE has relative luminance 0.7625 against the old #EBE1D4's 0.7627. That
-  // is deliberate to four decimal places: the status chip is the tightest case in the app, its
-  // arithmetic is driven by the field, and holding the field's luminance still means seven of
-  // the eight semantic inks survive the redraw with no edit at all. Only [foodInk] moved, by
-  // one byte of red, because the shipped #864F1F measures 4.4986:1 on a 10% chip over the new
-  // field — one ten-thousandth under the bar.
+  // ═══ LIGHT — the live theme ═══════════════════════════════════════════════════════════
 
-  /// Derived `surface` — the light canvas. `scaffoldBackgroundColor`.
-  static const background = Color(0xFFEEF0F8);
+  /// The page ground. `scaffoldBackgroundColor`. (= [cream])
+  static const background = cream;
 
-  /// Derived `surfaceContainerLowest` — a card. In the light direction elevation runs TOWARD
-  /// white, which is why the card is the lowest container rather than the highest.
-  static const surface = Color(0xFFFFFFFF);
+  /// A card — `colorScheme.surface` in light. (= [card]) 1.10:1 against the ground, which is
+  /// a fill step only, so a card also takes the [cardBorder] hairline. It casts no shadow.
+  static const surface = card;
 
-  /// Derived `surfaceContainerHigh` — a sheet.
-  static const lightSheet = Color(0xFFF7F8FC);
+  /// A sheet. (= [card])
+  static const lightSheet = card;
 
-  /// Derived `surfaceContainerHighest` — chips and the input fill.
-  static const lightField = Color(0xFFDFE2EE);
+  /// The neutral chip and the info note. `surfaceContainerHighest`. [inkMuted] on it 4.83:1,
+  /// the tightest text pair in the light theme.
+  static const lightField = Color(0xFFEAE3D6);
 
-  /// Derived `onSurface`. 17.11:1 on the card.
-  static const textPrimary = Color(0xFF14161D);
+  /// (= [lightField]) The design's own name for the same fill.
+  static const chipNeutral = lightField;
 
-  /// Derived `onSurfaceVariant`. 9.30:1 on the card, 7.19:1 on the field.
-  static const textSecondary = Color(0xFF434857);
+  /// `onSurface`. (= [ink])
+  static const textPrimary = ink;
 
-  /// Derived `primary`.
-  ///
-  /// `fromSeed`'s tonalSpot variant pulls most of the chroma out of #C9A96E and returns a
-  /// dark bronze. It is legible (6.47:1 on the card, 5.01:1 on the field, white on it 6.47:1)
-  /// and it is derived rather than guessed, which is the most that can be claimed for a
-  /// scheme nobody designed. It is at least the right FAMILY now — the previous seed produced
-  /// a grey-violet that shared nothing with the product. The recommendation stands:
-  /// run the app `ThemeMode.dark`.
-  static const lightPrimary = roomsInk;
+  /// The stronger supporting ink. (= [inkStrong])
+  static const textSecondary = inkStrong;
+
+  /// `primary` in light. (= [forest])
+  static const lightPrimary = forest;
 
   /// (= [lightPrimary]) The name the existing call sites already use.
   static const indigo = lightPrimary;
 
-  /// Derived `secondary`. 6.48:1 on the card. Kept under its old name for the call sites that
-  /// mean "the other accent".
-  static const softBlueInk = Color(0xFF464E6B);
+  /// The quieter accent ink, kept under its old name for the call sites that mean "the other
+  /// accent". (= [mistInk]) 5.75:1 on its worst surface.
+  static const softBlueInk = mistInk;
 
-  /// Derived `outline` — the light control border. 4.48:1 on the card, 3.47:1 on the field.
-  static const controlBorder = Color(0xFF767B8C);
+  /// THE CONTROL BORDER — inputs, chips, radios, a drag handle. 3.53:1 on the card, 3.21:1 on
+  /// the ground. Replaces the canvas's #DDD5C8 (1.43:1) and #BFB6A8 (1.97:1).
+  static const controlBorder = Color(0xFF8F8679);
 
-  /// Derived `outlineVariant` — a card's edge. 1.70:1 on the card.
-  static const cardBorder = Color(0xFFCDD1E0);
+  /// A card's edge. 1.13:1 on the ground — decorative, which is the job.
+  static const cardBorder = Color(0xFFECE4D8);
 
-  /// A divider. (= [lightField]) 1.29:1 on the card — quieter than [cardBorder], which is the
-  /// whole reason the two are separate tokens.
-  static const hairline = Color(0xFFE4E7F1);
+  /// A divider between rows. 1.20:1 on the card.
+  static const hairline = Color(0xFFEFE8DC);
 
   // ═══ SEMANTIC ══════════════════════════════════════════════════════════════
 
-  // ── CANONICAL. Identity + graphics, both themes, never small text.
+  // ── CANONICAL. Identity + graphics, both themes, never small text. Each sits inside the
+  //    dual-theme luminance window; worst cases are measured in theme_contrast_test.dart.
+
+  /// Paid, occupied, resolved. 3.30:1 worst (the light chip fill), 3.51:1 dark.
+  static const success = Color(0xFF3C8A5C);
+
+  /// Due, pending, expiring. 3.74:1 / 3.10:1.
+  static const warning = Color(0xFF986A10);
+
+  /// Overdue, failed, refused. 3.79:1 / 3.06:1.
+  static const error = Color(0xFFC8443B);
+
+  /// Refund, new, "here is something you should know". 3.74:1 / 3.11:1.
+  static const info = Color(0xFF3F76AD);
+
+  /// The canonical "muted" identity, for a `tone:` that means nothing in particular. For
+  /// muted TEXT use `context.tones.muted`. 3.39:1 / 3.42:1.
+  static const textMuted = Color(0xFF6E7D76);
+
+  // ── DARK-THEME TEXT. AA plain on every dark surface and on a 10% chip of itself.
+
+  static const successDark = tertiary; //   6.13:1 worst, on a chip of itself
+  static const warningDark = secondary; //  6.58:1
+  static const errorDark = errorTone; //    5.16:1 worst, on dark Mist
+  static const infoDark = Color(0xFF8DB7E6); // 5.82:1
+
+  // ── LIGHT-THEME TEXT. AA plain on every light surface and on a 10% chip of itself.
+
+  static const successInk = Color(0xFF256B45); // 5.01:1 worst, on a chip over the ground
+  static const warningInk = Color(0xFF8A5A00); // 4.64:1 — the tightest status ink
+  static const errorInk = Color(0xFFB3261E); //   4.99:1
+  static const infoInk = Color(0xFF2C5D8A); //    5.36:1
+
+  /// Muted text, light. (= [inkMuted])
+  static const mutedInk = inkMuted;
+
+  // ═══ DOMAIN — retired as colours ═══════════════════════════════════════════════════
   //
-  //    Each is the FIGMA tone of that meaning, held at its own hue and saturation and moved
-  //    in lightness to the point that maximises its worst case across all eight surfaces of
-  //    both themes. Worst measured 3.50:1, so every one clears WCAG 1.4.11 everywhere — the
-  //    light input fill and the dark `surface-bright` included. Two of them land essentially
-  //    on the design's own hex, which is the clearest evidence the derivation is honest.
+  // Rooms, people and food used to be three hues — violet, teal, saffron — so a row's icon
+  // said what kind of thing it was. The clay icons do that job now, with far more character
+  // than a tinted glyph ever had, and three extra hues on a cream page were the "rainbow"
+  // the redesign exists to remove. So all three re-point to THE BRAND: one green family, plus
+  // the four status tones that genuinely mean something. The names survive because ~30 call
+  // sites pass them as `tone:`; they now resolve to forest in light and mint in dark.
 
-  /// From the design's `#5FAE82`. 4.58:1 light card / 4.04:1 dark card, worst 3.50:1.
-  static const success = Color(0xFF42825F);
+  /// THE BRAND, canonical. (= [leaf]) Context-free paint: chart marks, rails, a meter. Inside
+  /// the dual-theme window — 3.70:1 worst light, 3.13:1 worst dark. NOT legible as small text;
+  /// resolve it first.
+  static const brand = leaf;
 
-  /// From the design's `#D5A64C`. 4.55:1 / 4.06:1, worst 3.52:1.
-  static const warning = Color(0xFF976F23);
+  /// THE BRAND as light-theme text. (= [forest])
+  static const brandInk = forest;
 
-  /// From the design's `#C96B6B`. 4.56:1 / 4.05:1, worst 3.51:1.
-  static const error = Color(0xFFC05353);
+  /// THE BRAND as dark-theme text. (= [primary])
+  static const brandDark = primary;
 
-  /// From the design's `#5577AD` — the empty-state badge's blue, which needed a lightness
-  /// nudge of one point to be optimal and is otherwise the file's own value. 4.55:1 / 4.07:1,
-  /// worst 3.52:1.
-  static const info = Color(0xFF5477AD);
-
-  /// The canonical "muted" identity, for the same reason the four above exist: it gets passed
-  /// as a `tone:` into widgets that paint it without a context. From the design's `#6F747A`,
-  /// two points lighter. For muted TEXT use `context.tones.muted`. 4.53:1 / 4.08:1.
-  static const textMuted = Color(0xFF71777D);
-
-  // ── DARK-THEME TEXT. Reached via ApnivaasSemantics.
-  //    Contract: AA plain on ground / card / raised / bright, AND AA as 12px type on a 10%
-  //    tint of itself over any of the three content surfaces. Worst across the set: 4.56:1.
-
-  /// The design's positive green, USED VERBATIM. (= [tertiary]) 6.92:1 on the card, 5.60:1 on
-  /// a chip of itself.
-  static const successDark = tertiary;
-
-  /// The design's amber, USED VERBATIM. (= [secondary]) 8.26:1 on the card, 6.58:1 on a chip.
-  static const warningDark = secondary;
-
-  /// The design's red, lifted by (+3, +7, +7). (= [errorTone]) See [errorTone] for why.
-  static const errorDark = errorTone;
-
-  /// The design's `#5577AD`, lifted by (+28, +23, +14).
-  ///
-  /// This is the empty-state badge's blue (4:1577). At its own size and fill in the mockup it
-  /// measures 4.03:1; this is the minimum lift along its own hue that clears 4.5:1 plain
-  /// (5.83 ground · 5.53 card · 5.23 raised · 4.80 bright) and 4.56:1 on a chip of itself.
-  static const infoDark = Color(0xFF718EBB);
-
-  // ── LIGHT-THEME TEXT. Reached via ApnivaasSemantics.
-  //    Same contract against the derived light surfaces. Each is the FIGMA hue darkened
-  //    rather than a colour invented for the light theme, so the two themes are recognisably
-  //    the same product. Worst across the set: 4.57:1.
-
-  static const successInk = Color(0xFF33654A); // 6.77:1 on the card
-  static const warningInk = Color(0xFF75561C); // 6.76:1
-  static const errorInk = Color(0xFF9D3939); //   6.82:1
-  static const infoInk = Color(0xFF415C88); //    6.75:1
-
-  /// Muted text, light. The design's `#6F747A` darkened until it clears the same chip case.
-  /// 6.71:1 on the card, 5.20:1 on the field, 4.57:1 on a chip of itself.
-  static const mutedInk = Color(0xFF595C61);
-
-  // ═══ DOMAIN — colour as wayfinding, the way Google's own apps use it ══════════
-  //
-  // The four semantic tones above say what STATE a thing is in. These three say what KIND of
-  // thing it is: food, rooms, people. That is the other job colour does in a well-made app —
-  // Gmail is red, Calendar is blue, Keep is yellow — and it is not decoration, because it is
-  // consistent: the saffron icon at the head of a row means "this is the menu" on every screen
-  // it appears on. See [ApnivaasDomain] for the mapping and the rule that keeps the two layers
-  // apart.
-  //
-  // DERIVED BY THE SAME METHOD AS THE FOUR ABOVE, NOT PICKED. Each canonical is a hue of the
-  // app's own muted register taken to the lightness that maximises its worst 3:1 case across
-  // all eight surfaces of both themes (worst 3.50–3.52, the same figures success/warning/error
-  // land on). Each ink is that canonical moved in lightness by the MINIMUM that clears 4.5:1
-  // plain on every surface of its theme AND on a 10% chip of itself — the exact contract the
-  // `...Dark` / `...Ink` sets above meet. The method was checked by re-deriving the shipped
-  // inks from their Figma seeds: it lands on #708CBA for info (shipped #718EBB), #CB7171 for
-  // error (shipped #CC7272) and #5FAE82 for success (exact). Every figure below is measured in
-  // test/theme_contrast_test.dart.
-  //
-  // Money, complaints and notices did NOT get new tones. Money is `success` (a rent ledger's
-  // natural colour is the paid one), complaints are `warning` (open work, which is also what
-  // `complaintTone(open)` already paints), and notices are `info`. Three new hues, not seven,
-  // because a palette a person can hold in their head is the whole point of wayfinding.
-
-  /// FOOD — the weekly menu. Saffron, at hue 28°. Worst 3:1 case 3.52:1.
-  static const food = Color(0xFFAB6528);
-
-  /// ROOMS — floors, rooms, beds. Violet, at hue 262°. Worst 3:1 case 3.52:1.
-  static const rooms = Color(0xFF8566BA);
-
-  /// PEOPLE — residents, staff, roommates. Teal, at hue 178°. Worst 3:1 case 3.50:1.
-  static const people = Color(0xFF35817E);
-
-  /// [food] lifted for the dark theme. 4.70:1 plain, 4.55:1 on a chip of itself.
-  static const foodDark = Color(0xFFC9772F);
-
-  /// [rooms] lifted for the dark theme. 4.73:1 plain, 4.53:1 on a chip.
-  static const roomsDark = Color(0xFF997FC5);
-
-  /// [people] lifted for the dark theme. 4.73:1 plain, 4.53:1 on a chip.
-  static const peopleDark = Color(0xFF3F9995);
-
-  /// [food] darkened for the light theme. 5.16:1 plain, 4.51:1 on a chip.
-  static const foodInk = Color(0xFF854F1F);
-
-  /// [rooms] darkened for the light theme. 5.14:1 plain, 4.50:1 on a chip — at the bar, and
-  /// the bar is the contract. The chip alpha is at its ceiling for every tone in this file.
-  static const roomsInk = Color(0xFF6C4AA5);
-
-  // ── THE BRAND, under the name it earned ──────────────────────────────────────────────────
-  //
-  // Three aliases, no new hexes. `rooms` was always the only colour in this palette with a
-  // full-bleed presence — AuroraField paints it behind the sign-in screen and behind two of
-  // the shells — and it was the one canonical tone never allowed to be the brand, because the
-  // brand was the gold. See [gold] for why that could not survive a light theme.
-  //
-  // In a PG product the building IS the platform, so rooms and the brand being one colour is
-  // the honest reading rather than a coincidence being exploited.
-
-  /// THE BRAND, canonical. (= [rooms]) Context-free paint only: chart marks, avatar hashes,
-  /// domain icons. L 0.1803, which sits inside the dual-theme window, so it clears 3:1 on all
-  /// eight surfaces. NOT legible as small text — resolve it first.
-  static const brand = rooms;
-
-  /// THE BRAND as light-theme text. (= [roomsInk]) `scheme.primary` in light.
-  static const brandInk = roomsInk;
-
-  /// THE BRAND as dark-theme text. (= [roomsDark]) `scheme.primary` in dark.
-  static const brandDark = roomsDark;
-
-  /// [people] darkened for the light theme. 5.19:1 plain, 4.56:1 on a chip.
-  static const peopleInk = Color(0xFF296562);
+  static const rooms = brand;
+  static const people = brand;
+  static const food = brand;
+  static const roomsInk = brandInk;
+  static const peopleInk = brandInk;
+  static const foodInk = brandInk;
+  static const roomsDark = brandDark;
+  static const peopleDark = brandDark;
+  static const foodDark = brandDark;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -566,11 +501,14 @@ abstract final class ApnivaasColors {
 /// Registered on both themes, so `context.tones.error` is always the right red. See the
 /// header of this file for why a single flat colour cannot do that job.
 ///
-/// The chip recipe lives here too, and it is the design's own: the state badges on
-/// `screen-empty-error-skeleton` are `bg-[rgba(<tone>,0.1)] border border-[<tone>]` with the
-/// label in the tone at full strength. That is the tightest contrast case in the app — 12px
-/// type on a 10% tint of itself — so putting the fill and border alphas in one place is what
-/// stops a future chip being drawn at a plausible-looking alpha that fails.
+/// The chip recipe lives here too: a status chip is its ink on a 10% fill of itself, made
+/// opaque over whatever it sits on. That is the tightest contrast case in the app — 12px type on
+/// a tint of itself — so the alpha lives in one place, where it is measured.
+///
+/// WHERE A CHIP MAY SIT: the ground, a card or a well (and their dark twins). NOT on Mist or on
+/// the neutral chip fill — both are darker than the ground, and the light warning chip measures
+/// 4.13:1 on Mist and 4.09:1 on the chip fill. A tonal tile states its status in a word, the way
+/// a tinted surface does (see [surfaceTintAlpha]).
 @immutable
 class ApnivaasSemantics extends ThemeExtension<ApnivaasSemantics> {
   const ApnivaasSemantics({
@@ -614,19 +552,16 @@ class ApnivaasSemantics extends ThemeExtension<ApnivaasSemantics> {
     chipBorderAlpha: _chipBorder,
   );
 
-  /// The design's own `rgba(<tone>, 0.1)` — 4:1576, 4:1589, 4:1600, 4:1531 all use it.
-  ///
-  /// IT IS ALL THE PALETTE CAN TAKE, and that is tighter than intuition says, because a tint of
-  /// the tone moves the fill TOWARDS the text rather than away from it. Worst case across both
-  /// ink sets, measured: 0.10 → 4.57:1 · 0.11 → 4.50:1, the last value that clears AA at all ·
-  /// 0.12 → 4.44:1, a fail. The design's own 0.10 is used rather than the arithmetic ceiling,
-  /// so the recipe has a point of headroom instead of sitting on the line. One number serves
-  /// both themes, so a chip reads at the same weight whichever one is on.
+  /// 10%. Measured worst case across both ink sets: 0.10 → 4.64:1 (light warning) · 0.12 →
+  /// 4.51:1, the last value that still clears AA · 0.14 → 4.39:1, a fail. A tint of the tone
+  /// moves the fill TOWARDS the text, so the ratio falls as the alpha rises; 0.10 keeps a
+  /// point of headroom. One number for both themes, so a chip reads at the same weight in
+  /// either.
   static const _chipFill = 0.10;
 
-  /// FULL STRENGTH, which is the design's own badge (`border border-[#5577ad]`, no alpha).
-  /// The tones in this palette are muted rather than saturated, so a 1px edge at full strength
-  /// reads as a defined chip and not as a warning light.
+  /// FULL STRENGTH. The new chips are unstroked — the design draws them as a fill and a word —
+  /// but the legacy [StateBadge] and [ToneSurface] still draw an edge, and when they do it is
+  /// the tone at full strength, which clears 3:1 as a graphic.
   static const _chipBorder = 1.0;
 
   final Color success;
@@ -635,8 +570,8 @@ class ApnivaasSemantics extends ThemeExtension<ApnivaasSemantics> {
   final Color info;
   final Color muted;
 
-  /// The three DOMAIN inks — what kind of thing, not what state it is in. Same contract as the
-  /// four above; see the domain block in [ApnivaasColors].
+  /// The three retired DOMAIN inks. All three are the brand ink now; see the domain block in
+  /// [ApnivaasColors].
   final Color food;
   final Color rooms;
   final Color people;
@@ -644,94 +579,63 @@ class ApnivaasSemantics extends ThemeExtension<ApnivaasSemantics> {
   final double chipFillAlpha;
   final double chipBorderAlpha;
 
+  /// The brand as this theme's text colour: forest in light, mint in dark. (= [rooms])
+  Color get brand => rooms;
+
   /// Maps a CANONICAL colour ([ApnivaasColors.success] and friends) to this theme's legible text
   /// value, and passes anything else through unchanged.
   ///
   /// This exists for the plumbing case: a widget is handed a `tone:` chosen far away, often
   /// inside a context-free `switch` over an enum. The caller keeps naming the meaning; the
   /// paint site fixes the theme.
+  ///
+  /// EVERY SPELLING OF THE BRAND RESOLVES. The canonical [ApnivaasColors.brand], the light
+  /// [ApnivaasColors.lightPrimary] and the dark [ApnivaasColors.primary] all land on this
+  /// theme's brand ink. Two call sites pass `ApnivaasColors.primary` as a tone, and that
+  /// constant is the DARK scheme's mint — 1.9:1 on cream if it were painted as given.
   Color resolve(Color tone) {
     if (tone == ApnivaasColors.success) return success;
     if (tone == ApnivaasColors.warning) return warning;
     if (tone == ApnivaasColors.error) return error;
     if (tone == ApnivaasColors.info) return info;
     if (tone == ApnivaasColors.textMuted) return muted;
-    if (tone == ApnivaasColors.food) return food;
-    if (tone == ApnivaasColors.rooms) return rooms;
-    if (tone == ApnivaasColors.people) return people;
-    // [ApnivaasColors.brand] IS [ApnivaasColors.rooms], so the branch above already caught it and
-    // security resolves with every other domain. It did not used to: security named the gold,
-    // the gold had no branch, and `return tone` handed #C9A96E straight to the paint site —
-    // 2.24:1 on a white card, on the Home tab of three of the five roles.
+    // rooms, people, food and brand are one value now, so this one branch is all four.
+    if (tone == ApnivaasColors.brand) return rooms;
+    if (tone == ApnivaasColors.lightPrimary || tone == ApnivaasColors.primary) return rooms;
     return tone;
   }
 
   /// The fill behind a status chip, given either a canonical or a resolved tone.
   Color chipFill(Color tone) => resolve(tone).withValues(alpha: chipFillAlpha);
 
-  /// The hairline around a status chip.
+  /// The edge of a legacy status chip.
   Color chipBorder(Color tone) => resolve(tone).withValues(alpha: chipBorderAlpha);
 
   /// The alpha a whole SURFACE takes to carry a meaning, rather than a chip inside it.
   ///
-  /// IT IS THE SAME NUMBER AS [chipFillAlpha], deliberately and not by coincidence. A tinted
-  /// card and a status chip are the same gesture at two scales — "this thing is overdue" — and
-  /// giving the card its own alpha would let the two drift until a row and the card it sits in
-  /// were different strengths of the same meaning. One number, one weight of colour.
+  /// THE SAME NUMBER AS [chipFillAlpha], on purpose: a tinted card and a status chip are the
+  /// same gesture at two scales, and one number keeps them the same weight of colour.
   ///
-  /// ── WHAT IT MEASURES, AND THE ONE RULE THAT FALLS OUT OF IT ─────────────────────────────
+  /// ── THE RULE THAT FALLS OUT OF IT ───────────────────────────────────────────────────────
   ///
-  /// Measured over the CONTENT surfaces only — card `#111417` and raised `#171A1E` on dark,
-  /// `#FFFFFF` on light — across all five tones. The two themes do NOT behave the same here,
-  /// and the difference is the whole reason this comment is long:
+  /// **A STATUS CHIP MAY NOT SIT ON A SURFACE TINTED WITH ITS OWN TONE.** The chip's fill is a
+  /// tint of the tone, so over a ground that is already one it lands twice as far toward its
+  /// own label. Measured, that fails in BOTH themes now: 4.09:1 for the light warning chip on
+  /// a warning-tinted well, 4.09:1 for the dark muted chip on a muted-tinted raised surface.
+  /// So a tinted surface does not wear a chip: the GROUND is the chip, and the status word
+  /// sits on it in the tone at full strength (worst 4.64:1 light, 4.82:1 dark). [ToneSurface]
+  /// is the widget that enforces this.
   ///
-  /// |                              | dark     | light    |
-  /// |------------------------------|----------|----------|
-  /// | body / secondary text on it  | 6.02:1   | 7.95:1   |
-  /// | the tone itself, as text     | 4.56:1   | 5.83:1   |
-  /// | a CHIP of the same tone      | **3.98** | 5.03:1   |
-  ///
-  /// A dark tint moves the ground TOWARD its own light text; a light tint moves it AWAY from
-  /// its dark text. So the light theme has room the dark theme does not, and every rule below
-  /// is set by the dark column — one widget serves both themes, and it cannot be legible in
-  /// only one of them.
-  ///
-  /// **A STATUS CHIP MAY NOT SIT ON A SURFACE TINTED WITH ITS OWN TONE.** The chip's fill is
-  /// itself a tint of the tone, so over a ground that is already one it lands twice as far
-  /// toward its own label: **3.98:1 in the dark theme**, and no value of this constant rescues
-  /// it — the ratio is already below AA at 0.06. (In the light theme the same stack measures
-  /// 5.03:1 and would have been fine. It is still not drawn, because a widget that grew a chip
-  /// on one theme and not the other would be two designs.) So a tinted surface does not wear a
-  /// chip: the GROUND is the chip, and the status word sits on it in the tone at full strength,
-  /// which is the 4.56:1 row above. [ToneSurface] is the widget that enforces this and
-  /// [StatusWord] is the label it enforces it with.
-  ///
-  /// The [Dark.bright] rung is excluded on purpose — that is the input fill, and a tinted text
-  /// field is a field that looks like a state.
-  ///
-  /// ── THIS IS NOT A NEW COLOUR. IT IS THE DESIGN'S OWN CONTAINER RUNG ─────────────────────
-  ///
-  /// The strongest evidence that this recipe is the right one is that it was already in the
-  /// file. Composite each dark tone over the card `#111417` at this alpha and the results are,
-  /// byte for byte, the container colours the Figma designer picked by hand:
-  ///
-  ///   success `#5FAE82` → **#192322** = [ApnivaasColors.tertiaryContainer]
-  ///   warning `#D5A64C` → **#25231C** = [ApnivaasColors.secondaryContainer]
-  ///   error   `#CC7272` → **#241D20** = [ApnivaasColors.errorContainer]
-  ///
-  /// Three for three, at the 8-bit precision that reaches a display. So a tinted card is not a
-  /// fourth palette and not a new surface: it is the container colour this design system
-  /// already shipped, reached by formula instead of by hand — which is what lets it extend to
-  /// the two tones (info, muted) that never got a container drawn for them. `theme_contrast_test.dart` asserts the three
-  /// identities so a nudge to any tone has to answer for the containers as well.
+  /// In the dark theme a tint of the card reproduces the dark container colours byte for byte
+  /// ([ApnivaasColors.tertiaryContainer], [ApnivaasColors.secondaryContainer],
+  /// [ApnivaasColors.errorContainer]); the contrast test asserts it, so a nudge to a tone has
+  /// to answer for its container too.
   static const surfaceTintAlpha = _chipFill;
 
   /// An OPAQUE fill: this theme's [tone] laid over [base] at [surfaceTintAlpha].
   ///
-  /// Opaque rather than translucent so the result does not depend on what happens to be behind
-  /// the card. [base] must be the fill the surface would otherwise have painted — i.e.
-  /// `GlassWeight.surfaceOf(scheme)` — because that is the set the ratios above were measured
-  /// against.
+  /// [base] must be the fill the surface would otherwise have painted — i.e.
+  /// `GlassWeight.surfaceOf(scheme)` — because that is the set the ratios were measured on.
   Color tintedSurface(Color tone, Color base) =>
       Color.alphaBlend(resolve(tone).withValues(alpha: surfaceTintAlpha), base);
 
@@ -784,9 +688,9 @@ class ApnivaasSemantics extends ThemeExtension<ApnivaasSemantics> {
 
 /// `context.tones.error` — the short way to the theme's semantic colours.
 ///
-/// The fallback is the DARK set. It only fires for a widget pumped without an Apnivaas theme,
-/// and this is a dark-first app: guessing light there would put a #33654A green on a
-/// near-black card at 1.5:1.
+/// The fallback is the DARK set. It only fires for a widget pumped without an Apnivaas theme —
+/// several feature tests do exactly that and assert the dark inks — and production always has
+/// the theme.
 extension ApnivaasTonesX on BuildContext {
   ApnivaasSemantics get tones =>
       Theme.of(this).extension<ApnivaasSemantics>() ?? ApnivaasSemantics.dark;
@@ -796,58 +700,40 @@ extension ApnivaasTonesX on BuildContext {
 // DOMAIN — what kind of thing this is.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// The areas of the product, each with the one colour that identifies it everywhere.
+/// The areas of the product.
 ///
-/// ── THE RULE THAT KEEPS THIS FROM BECOMING A RAINBOW ─────────────────────────────────────
+/// Each still names a tone and a glyph, because ~50 call sites build rows, buttons and cards
+/// from a domain. The TONES have collapsed to the brand plus the status tones that genuinely
+/// mean something — money is the paid green, complaints the amber of open work, notices the
+/// info blue — and rooms, people, food and security are the brand. What KIND of thing a row is
+/// belongs to its clay icon now (`domainClayIcon` in lib/shared/clay/clay_icons.dart).
 ///
-/// **Domain colour lives on icons, actions and avatars. Status colour lives on surfaces and
-/// figures.** They occupy different objects, so they never compete on the same pixel:
+/// The old rule still holds for what is left: domain colour lives on icons, actions and
+/// avatars; status colour lives on surfaces and figures, and status wins a whole card.
 ///
-///   * the saffron [DomainIcon] at the head of a menu row says WHAT this is, on every screen,
-///     always; the amber [StatusPill] beside a complaint says what STATE it is in, today;
-///   * a rent card that is unpaid is a red [ToneSurface], and every coloured thing on it —
-///     including the wallet glyph in its corner — takes that same red. STATUS WINS THE WHOLE
-///     CARD. The money-domain wallet appears on that card only in the one state that has no
-///     status to state: the "No rent record yet" face;
-///   * a screen where everything is tinted has said nothing, so a domain tint on a SURFACE
-///     ([DomainCard]) is allowed at most once per screen, and never on a card that carries a
-///     status. A control is not an exception dressed up: [DomainButton] puts its colour in the
-///     glyph and the label and leaves its ground neutral, for exactly this reason.
-///
-/// This is how Google's own apps use colour — Gmail is red, Calendar is blue, and neither means
-/// "error" or "info" — and it is compatible with this design's older rule that colour must
-/// mean something. It means "this is the menu".
-///
-/// Every colour here is a CANONICAL tone from [ApnivaasColors]; resolve it at the paint site with
-/// `context.tones.resolve(domain.tone)` like any other, or let [DomainIcon] and friends do it.
+/// Every colour here is a CANONICAL tone; resolve it at the paint site with
+/// `context.tones.resolve(domain.tone)`, or let [DomainIcon] and friends do it.
 enum ApnivaasDomain {
   /// Rent, fees, payments, expenses, subscriptions. The ledger's natural colour is the paid one.
   money(ApnivaasColors.success, Icons.account_balance_wallet_rounded),
 
-  /// Floors, rooms, beds, the building. Also a hostel as an object.
+  /// Floors, rooms, beds, the building. The brand.
   rooms(ApnivaasColors.rooms, Icons.meeting_room_rounded),
 
-  /// Residents, staff, roommates, guardians, visitors, leaves.
+  /// Residents, staff, roommates, guardians, visitors, leaves. The brand.
   people(ApnivaasColors.people, Icons.people_alt_rounded),
 
   /// Complaints and tasks — open work. Amber, which is also what an OPEN complaint's own
-  /// status pill paints, so an open row and its icon agree rather than argue.
+  /// status chip paints, so an open row and its icon agree rather than argue.
   complaints(ApnivaasColors.warning, Icons.report_problem_rounded),
 
   /// Notices and announcements — "here is something you should know".
   notices(ApnivaasColors.info, Icons.campaign_rounded),
 
-  /// The weekly menu.
+  /// The weekly menu. The brand.
   food(ApnivaasColors.food, Icons.restaurant_rounded),
 
-  /// Security, the account, the platform itself. The brand — and it resolves like every other
-  /// domain now.
-  ///
-  /// IT USED TO BE THE GOLD, AND THAT WAS A LIGHT-MODE BUG. `ApnivaasColors.primary` was
-  /// #C9A96E, [ApnivaasSemantics.resolve] had no branch for it, so the paint site received the
-  /// canonical gold and drew it at 2.24:1 on a white card — below even the 3:1 graphics bar.
-  /// This is the Home/Dashboard domain for the owner, student and manager shells, so it was
-  /// the most-drawn tone in the app. It now resolves to #6C4AA5 in light and #997FC5 in dark.
+  /// Security, the account, the platform itself. The brand.
   security(ApnivaasColors.brand, Icons.shield_rounded);
 
   const ApnivaasDomain(this.tone, this.icon);
@@ -860,20 +746,20 @@ enum ApnivaasDomain {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SPACING — the design's scale, which is already a 4dp rhythm.
+// SPACING — a 4dp rhythm, with two half-steps the canvas uses.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// The Figma frames pad screens and cards at 16, gap 20 between sections, and 24 / 16 / 12 /
-/// 8 / 6 / 4 / 2 within them. Every one of those is a step this scale already had, so both the
-/// names and the values are unchanged:
+/// `hair 2 · xxs 4 · tight 6 · xs 8 · sm 12 · md 16 · lg 20 · xl 24 · xxl 32 · xxxl 40 · huge 48`.
 ///
-///   [xxs] 4 · [xs] 8 · [sm] 12 · [md] 16 = card and screen padding · [lg] 20 = section gap ·
-///   [xl] 24 = the signin form's block gap
-///
-/// [xxl], [xxxl] and [huge] are off the design's list but on its rhythm; they exist because
-/// 32/40/48dp blocks are needed and inventing them at call sites is what this file prevents.
+/// The screen gutter is [md] on dashboards and tab bodies and [lg] on auth, forms and
+/// steppers. Sections sit [md] apart; a header sits [sm] above the content under it.
 abstract final class Space {
+  /// The gap between a figure and its caption, a dot and its word.
+  static const hair = 2.0;
   static const xxs = 4.0;
+
+  /// The gap between a quick-action well and its label.
+  static const tight = 6.0;
   static const xs = 8.0;
   static const sm = 12.0;
   static const md = 16.0;
@@ -885,139 +771,157 @@ abstract final class Space {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RADIUS — the design's four steps.
+// RADIUS
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// `14 screen · 12 card · 8 small card / button / icon button · 4 badge`, which is what
-/// `design-figma/DESIGN-SYSTEM.md` records and what the frames overwhelmingly use.
+/// The corners, from a badge to the header.
 ///
-/// The frames also contain 10, 6, 3 and 2 in a handful of places — the KPI cards are
-/// `rounded-[10px]`, the retry and renew buttons are `rounded-[6px]`, a meter track is 3 and
-/// the home indicator is 2. Those are strays rather than a second vocabulary: the same
-/// element is drawn at 8 elsewhere in the same file, and half of them are pill shapes whose
-/// radius is just half their height. Do not add steps to match them.
-// ── THE CORNERS GREW, AND HERE IS THE EVIDENCE THAT SAID THEY SHOULD ────────────────────────
-//
-// The values below used to be 4 / 8 / 12 / 14, taken from the Figma frames. Tearing down the
-// nearest shipping competitor settled the question of whether that was tight: across all 282
-// of its layouts, EVERY card is `cardCornerRadius=20dp` and every inner tile is 10dp, with no
-// exceptions — dashboard, inmate, bill, expense, notice, issue, payment-approval, people,
-// wallet and rooms cards all agree. Their consistency is as deliberate as ours; their number
-// is simply bigger, and next to it a 12dp card reads as austere rather than crisp.
-//
-// What we did NOT copy from them is elevation: every one of those cards is `cardElevation=0dp`.
-// They separate a card from its ground with a lighter fill, exactly as this file already does
-// with a hairline. So the no-shadow rule below stands, and only the corner moved.
-//
-// This is a two-line change that reaches ~145 call sites, because every corner in the app is
-// drawn from this class — there are exactly two hardcoded BorderRadius literals in lib/, and
-// both are shapes (a 999 pill and a 2px meter track) rather than strays.
+/// TWO CARD SIZES, AND WHY. The canvas draws its containers at 24 — a stat tile, the list
+/// group, the quick-action panel, the banner. But ~150 call sites in `features/` round every
+/// card with [rCard], including 56dp rows where 24 turns a card into a capsule that reads as a
+/// button. So [card] is 20, the generic card and row, and [surface] is the canvas's 24 for the
+/// large containers the clay widgets draw.
 abstract final class Radii {
-  /// A badge — every state badge and the notification dot. Something too small to have a
-  /// corner in the usual sense, lifted from 4 so it does not read as a hard square beside the
-  /// softer controls around it.
-  static const tiny = 6.0;
+  /// A legacy badge, a progress track's end.
+  static const tiny = 8.0;
 
-  /// Buttons, inputs, icon buttons, inner rows, small cards. The competitor's inner tiles are
-  /// 10; 12 keeps this a clean step below [card] and above [tiny].
-  static const control = 12.0;
+  /// Inputs, choice chips, the back button, the search pill, a snackbar.
+  static const control = 14.0;
 
-  /// Cards and list groups. 16 rather than the competitor's 20: Apnivaas's cards are denser —
-  /// a warden's fee row carries four figures where theirs carries one — and 20dp on a 64dp-tall
-  /// row starts eating the content's own corners.
-  static const card = 16.0;
+  /// A 52dp button, the tab-bar indicator, an info note.
+  static const button = 16.0;
 
-  /// The largest step in the file: the screen shell itself, and large panels. This is where
-  /// the competitor's 20 belongs, on the biggest surfaces, where it reads as generous rather
-  /// than bubbly.
-  static const surface = 20.0;
+  /// The 56dp call to action.
+  static const buttonLarge = 18.0;
 
-  /// Bottom sheets and modals. A sheet is a screen-sized surface, so it takes the screen's own
-  /// corner rather than a card's.
-  static const sheet = 20.0;
+  /// The 64dp quick-action well and the Mist info banner.
+  static const well = 22.0;
 
-  /// Only for things genuinely capsule-shaped that never wrap to a second line: a progress
-  /// track, a drag handle, an avatar, the FAB. A status pill uses [control] — a capsule that
-  /// wraps looks broken, and status wording is not under our control.
+  /// A content card or row. See the class note.
+  static const card = 20.0;
+
+  /// The canvas's large containers: stat tiles, list groups, the quick-action panel, banners.
+  static const surface = 24.0;
+
+  /// The sign-in hero card.
+  static const hero = 28.0;
+
+  /// Bottom sheets and modals.
+  static const sheet = 28.0;
+
+  /// The header's bottom corners.
+  static const header = 30.0;
+
+  /// Genuinely capsule-shaped: chips, pill buttons, progress tracks, an avatar.
   static const pill = 999.0;
+
+  /// A checkbox's corner.
+  static const check = 6.0;
 
   static const rTiny = BorderRadius.all(Radius.circular(tiny));
   static const rControl = BorderRadius.all(Radius.circular(control));
+  static const rButton = BorderRadius.all(Radius.circular(button));
+  static const rButtonLarge = BorderRadius.all(Radius.circular(buttonLarge));
+  static const rWell = BorderRadius.all(Radius.circular(well));
   static const rCard = BorderRadius.all(Radius.circular(card));
+  static const rSurface = BorderRadius.all(Radius.circular(surface));
+  static const rHero = BorderRadius.all(Radius.circular(hero));
   static const rSheetTop = BorderRadius.vertical(top: Radius.circular(sheet));
+  static const rHeaderBottom = BorderRadius.vertical(bottom: Radius.circular(header));
   static const rPill = BorderRadius.all(Radius.circular(pill));
+  static const rCheck = BorderRadius.all(Radius.circular(check));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ICONS + STROKES
+// ICONS, ART + STROKES
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// The design draws small. Its glyphs are 8 (status dot), 10 (chevron), 12 (activity icon),
-/// 14 (row chevron), 16 (bell, alert triangle, status bar) and 20 at the very largest — a
-/// header icon in this file is 16px inside a 32px button, not 24px inside a 40px one.
-///
-/// These sizes moved DOWN from the previous scale (14/16/18/22/32) to match. A glyph is not a
-/// tap target; the 48dp minimum lives on the control, not on the icon inside it.
+/// Material glyph sizes. A glyph is not a tap target; the 48dp minimum lives on the control.
 abstract final class IconSize {
   static const xs = 12.0; // inside a chip, an activity disc
   static const sm = 14.0; // beside a label, a row chevron
-  static const md = 16.0; // list rows, section headings, the header's own icons
-  static const lg = 20.0; // app bar, bottom nav
+  static const md = 16.0; // list rows, section headings
+  static const lg = 20.0; // app bar, a row's trailing chevron
 
-  /// The single glyph over an empty or failed section. One size for both: an empty list and a
-  /// broken one are the same weight of event.
+  /// The glyph inside a 44dp header or back button.
+  static const action = 22.0;
+
+  /// The single glyph over an empty or failed section, where there is no clay art.
   static const xl = 32.0;
+}
+
+/// The clay icons' sizes. One table, so a quick action and a stat tile can never drift a few
+/// dp apart. The art ships at 192px (role art at 320px), so 64dp is pixel-exact at 3x and
+/// anything larger is softly oversampled — which is why nothing below is bigger than it needs
+/// to be.
+abstract final class ClaySize {
+  /// A tab-bar icon, unselected and selected.
+  static const navOff = 34.0;
+  static const nav = 36.0;
+
+  /// The leading icon of a list row.
+  static const list = 46.0;
+
+  /// Inside a 64dp quick-action well.
+  static const action = 54.0;
+
+  /// A stat tile's icon.
+  static const tile = 56.0;
+
+  /// An info banner.
+  static const banner = 72.0;
+
+  /// The forest hero tile.
+  static const hero = 78.0;
+
+  /// An empty state, and the gold task banner.
+  static const promo = 96.0;
+
+  /// Persona art on the role picker.
+  static const persona = 128.0;
+
+  /// The owner on the sign-in hero card.
+  static const heroArt = 184.0;
 }
 
 /// THE ACCOUNT DISC AT THE TOP-LEFT OF EVERY STAFF SCREEN.
 ///
-/// 44, not the 32 it was. The product owner: "in all dashboards, the top left corner profile has
-/// to some big to access and to view perfectly." It is the ONLY way to profile, two-factor and
-/// sign out on four of the five shells, and at 32dp with two initials in it, it read as
-/// decoration rather than as the control it is.
-///
-/// It has its own name rather than another step on [IconSize] because it is not an icon: it is a
-/// person, drawn at the size a person is drawn at, and it must not move when a glyph scale is
-/// retuned. With [Space.xs] either side the tap target is 60dp, past Material's 48 and Apple's 44.
+/// 44 is the disc the existing mastheads draw, and the size the product owner asked to be "big
+/// to access and to view perfectly". The new header draws [headerLarge] — the canvas's 50 —
+/// and drops back to [header] below 360dp.
 abstract final class AvatarSize {
   static const header = 44.0;
+  static const headerLarge = 50.0;
+
+  /// An initials disc at the head of a list row, matching [ClaySize.list].
+  static const list = 46.0;
 }
 
-/// The generated artwork that replaces the glyph on a first-run empty state.
-///
-/// ONE SIZE, AND IT IS THE ONLY ONE. 160 is what the art was drawn to be read at, and the
-/// assets ship at 480px so the same file is exact at 3x and oversampled below it. Growing this
-/// number does not make the illustration better, it makes it soft.
-///
-/// It is deliberately much larger than [IconSize.xl]'s 32dp glyph. These states are the FIRST
-/// screens a new PG owner sees, before any data exists, and a 56dp outlined square is a
-/// placeholder where the product should be introducing itself.
+/// The generated artwork on a first-run empty state.
 abstract final class ArtSize {
+  /// The legacy flat illustrations' box.
   static const emptyState = 160.0;
+
+  /// The Mist disc a clay empty-state icon sits on.
+  static const emptyDisc = 136.0;
 }
 
-/// Every border in the app is one physical hairline. Weight comes from colour, not width.
+/// Border widths. Weight comes from colour first, then width.
 abstract final class Strokes {
+  /// A card's edge and a divider.
   static const hairline = 1.0;
 
-  /// The empty-state glyph's outline — `border-[1.5px]` on 4:1579. An illustration, not a
-  /// border: it is the one stroke in the design allowed to be heavier than a hairline without
-  /// meaning "focused".
+  /// A control's edge: an input, a chip, an outlined button, a radio ring.
+  static const control = 1.5;
+
+  /// A drawn line at glyph weight — a progress ring, a chart's rule.
   static const glyph = 1.5;
 
-  static const focus = 1.6; // the only place a CONTROL's border is allowed to thicken
+  /// A focused or errored control.
+  static const focus = 2.0;
 
-  /// The coloured strip down a card's leading edge — the mockups' `border-l-4`.
-  ///
-  /// Already the width [OutlineCard] drew its rail at; named here because a second widget
-  /// ([ToneSurface]) now draws the same strip, and two call sites reaching for `Space.xxs` and
-  /// meaning "rail" is how the two quietly stop matching.
-  ///
-  /// A rail is always the tone at FULL strength. It is a graphic and not text, and every
-  /// canonical tone is already measured at worst 3.50:1 against every surface of both themes,
-  /// so the rail clears WCAG 1.4.11 wherever it is drawn. It is also never the only carrier of
-  /// its meaning — the row it edges still spells the status out in a word — so a resident who
-  /// cannot separate the hues loses nothing.
+  /// The strip down a tinted card's leading edge. A graphic, always the tone at full strength,
+  /// and never the only carrier of its meaning — the card still spells the status out.
   static const rail = Space.xxs;
 }
 
@@ -1025,69 +929,58 @@ abstract final class Strokes {
 // OPACITY
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// The two places the design dims something instead of recolouring it.
+/// The places the design dims something instead of recolouring it.
 abstract final class Dim {
-  /// `screen-subscription-expired` puts the whole body inside a container at `opacity-45`
-  /// (4:1539) while the banner above it stays at full strength. That is how the design says
-  /// "you can look at this, you cannot use it" — one number over the whole subtree rather than
-  /// a disabled variant of every control in it.
+  /// "You can look at this, you cannot use it" — one number over a whole subtree.
   static const readOnly = 0.45;
 
   /// The floor of a skeleton's pulse. It breathes between here and opaque.
-  static const skeletonPulse = 0.45;
+  static const skeletonPulse = 0.55;
+
+  /// A skeleton held still under reduce motion.
+  static const skeletonStill = 0.8;
+
+  /// An unselected tab's clay icon, drawn through the greyscale filter.
+  static const navOff = 0.85;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SURFACE WEIGHT — an elevation ladder, and NOT a blur.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Three weights of raised surface. The name is historical: these panes used to blur.
+/// Three weights of surface. The name is historical: these panes used to blur.
 ///
 /// ── THERE IS NO BLUR IN THIS APP ─────────────────────────────────────────────────────────
 ///
 /// `BackdropFilter` is the most expensive thing this app can draw, the product owner's own
 /// phone reported "stuck, lag", and release builds have disabled it unconditionally since the
-/// commit "Release builds never blur". The Figma design does not ask for any: every surface in
-/// every frame is an opaque fill with a 1px `#292e33` hairline. Do not reintroduce it — not
-/// behind a flag, not "just for the sheet".
+/// commit "Release builds never blur". Do not reintroduce it — not behind a flag, not "just for
+/// the sheet".
 ///
 /// ── WHAT EACH WEIGHT IS ──────────────────────────────────────────────────────────────────
 ///
-/// The design ships three surfaces and this is those three, in the dark direction where
-/// elevation runs LIGHTER as it rises. [thick] and [regular] are the same fill because the
-/// design has nothing above its raised surface: a sheet is separated from the bar behind it
-/// by the modal scrim and [Shadows.level3], which is a stronger cue than one more rung of
-/// near-black would be. In the light theme M3 inverts the whole idea — elevation runs toward
-/// white and the card is already white — so all three resolve to the same surface there and
-/// the shadow does the separating. [surfaceOf] is the only place that decision is made.
+/// Light: a card is [ApnivaasColors.card]; `regular` — an inner block, a row inside a card —
+/// is the [ApnivaasColors.well] one whisper below it; a sheet is a card lifted out. Dark: card,
+/// then the raised fill for both `regular` and `thick`, because a sheet is separated by the
+/// scrim and [Shadows.level3], not by another rung of near-black. [surfaceOf] is the only place
+/// that decision is made.
 enum GlassWeight {
-  /// A resting card. `#111417` — the design's own card.
+  /// A resting card.
   thin,
 
-  /// A bar, a header, or a card that sits on top of another surface. `#171A1E` — the design's
-  /// raised fill, which is what its icon buttons, inputs and state cards paint.
+  /// A surface that sits on another one: an inner block, a row inside a card.
   regular,
 
-  /// A sheet or modal. (= [regular])
+  /// A sheet or modal.
   thick;
 
   /// The surface this weight paints in the given scheme.
   Color surfaceOf(ColorScheme scheme) {
-    // LIGHT HAS A RAMP NOW. This used to short-circuit to `scheme.surface` for every weight,
-    // on the reasoning that "light elevates by shadow, not by colour" — but Shadows.level1 and
-    // level2 are both empty lists, so light elevated by NEITHER and card, bar and sheet were
-    // all #FFFFFF. The three-rung hierarchy this enum describes was invisible on half the
-    // phones running the app.
-    //
-    // The direction is inverted from dark on purpose: a light card is white and the surfaces
-    // BEHIND it step down toward the canvas, where a dark card is near-black and the surfaces
-    // above it step up. `regular` — the bar, the header — is the only rung that moves, because
-    // it is the only one that is ever seen against another pane.
     if (scheme.brightness == Brightness.light) {
       return switch (this) {
-        GlassWeight.thin => scheme.surface, // #FFFFFF, the card
-        GlassWeight.regular => ApnivaasColors.lightSheet, // #F7F8FC, the bar and the header
-        GlassWeight.thick => scheme.surface, // #FFFFFF, a sheet reads as a card lifted out
+        GlassWeight.thin => scheme.surface, // #FFFDF9, the card
+        GlassWeight.regular => scheme.surfaceContainer, // #EEF4EF, the well
+        GlassWeight.thick => scheme.surface, // a sheet reads as a card lifted out
       };
     }
     return switch (this) {
@@ -1096,16 +989,6 @@ enum GlassWeight {
       GlassWeight.thick => scheme.surfaceContainerHigh,
     };
   }
-
-  /// Alpha of the INK hairline that edges a pane in the LIGHT theme, over the pane itself:
-  /// 1.39:1, the same visual register as [ApnivaasColors.cardBorder] (1.70:1). Weight-independent
-  /// on purpose — the edge says "this is a pane", and that sentence does not get louder for a
-  /// sheet.
-  ///
-  /// There is no dark counterpart any more. The dark theme's pane edge is the design's own
-  /// hairline `#292E33` (1.35:1 on the card), not a white alpha: Figma ships one border colour
-  /// and uses it on every card, divider and disc in the file.
-  static const lightEdge = 0.16;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1113,56 +996,61 @@ enum GlassWeight {
 // ─────────────────────────────────────────────────────────────────────────────
 
 abstract final class Motion {
+  /// The press itself — a scale to 0.97 on a card or button, 0.94 on an icon well.
+  static const press = Duration(milliseconds: 100);
+
   /// The brief's 150–350ms band. Fast enough to feel like a response, slow enough to be read.
-  static const fast = Duration(milliseconds: 150); // press feedback, colour change
-  static const base = Duration(milliseconds: 240); // cards, tabs, list items
-  static const slow = Duration(milliseconds: 340); // sheets, page transitions
+  static const fast = Duration(milliseconds: 150); // release, colour, opacity, icon cross-fade
+  static const base = Duration(milliseconds: 240); // cards, tabs, chips, the nav indicator
+  static const slow = Duration(milliseconds: 340); // sheets, page change, stepper progress
+
+  /// Something leaving: a sheet closing.
+  static const exit = Duration(milliseconds: 200);
 
   /// Decelerating: motion that enters the screen should arrive, not bounce.
   static const enter = Curves.easeOutCubic;
 
+  /// Accelerating, for an exit.
+  static const leave = Curves.easeInCubic;
+
   /// Symmetric, for things that move within the screen.
   static const move = Curves.easeInOutCubic;
+
+  /// About 6% overshoot. ONLY the tab-bar indicator's pop and a persona being chosen — the two
+  /// moments a small bounce reads as "yes, that one" rather than as decoration.
+  static const emphasis = Cubic(0.34, 1.36, 0.64, 1.0);
 
   /// The delay between one item of a list entering and the next.
   ///
   /// Small on purpose. At 40ms a six-row list is fully in at 200ms plus the item's own [base],
   /// which reads as one movement with a direction rather than as rows arriving one at a time.
-  /// Anything longer and the last row of a long list is still animating after the reader has
-  /// got there, which is a screen that feels slow rather than alive.
   ///
   /// ── THE RULES A STAGGER HERE MUST KEEP ──────────────────────────────────────────────────
   ///
-  ///  * It runs ONCE, on first build, and never again. Nothing in this app animates
-  ///    continuously; a list that re-plays its entrance on every rebuild is a list that
-  ///    flickers whenever a provider refreshes.
+  ///  * It runs ONCE, on first build, and never again. A list that re-plays its entrance on
+  ///    every rebuild is a list that flickers whenever a provider refreshes.
   ///  * It never delays the first frame. The entrance is an opacity and a small offset on
   ///    content that is already laid out and already hit-testable.
   ///  * It is capped — see [staggerCap]. A 200-row list must not compute a ten-second ramp.
   static const stagger = Duration(milliseconds: 40);
 
   /// How many items still get a stagger step before the delay stops growing.
-  ///
-  /// Beyond this the entrance is simply [base] with the last delay. Only the first screenful
-  /// is ever watched arriving, and an off-screen row that is still waiting its turn is a row
-  /// that fades in under the reader's thumb as they scroll to it.
   static const staggerCap = 8;
 
+  /// One skeleton breath, out and back. The only repeating animation in the app, and it stops
+  /// the moment data arrives.
+  static const skeletonPulse = Duration(milliseconds: 1200);
+
   /// How long an inline confirmation stays on the control that produced it — the "Copied" that
-  /// replaces a copy button's label. Not an animation: long enough to be read, short enough
-  /// that a second tap reads as a second confirmation.
+  /// replaces a copy button's label.
   static const confirmed = Duration(milliseconds: 1600);
 
-  /// How long a snackbar carrying a FAILURE stays up. A reading budget, not an animation.
-  /// Material's default 4s is sized for "Saved"; the sentences this app shows on a refusal are
-  /// a full line ("Bed 3 is already occupied. Choose a free bed.") and a warden reads them
-  /// while talking to somebody.
+  /// How long a snackbar carrying a FAILURE stays up. A reading budget, not an animation: the
+  /// sentences this app shows on a refusal are a full line, read while talking to somebody.
   static const readMessage = Duration(seconds: 5);
 
   /// VESTIGIAL. Nothing in the app blurs any more — see [GlassWeight] — so setting this
-  /// changes nothing that gets drawn. It survives only because `main.dart` writes to it and
-  /// that file is outside this change; removing the field would stop the app compiling.
-  /// Whoever next touches `main.dart` should delete `_decideGlassBudget` and this together.
+  /// changes nothing that gets drawn. It survives only because `main.dart` writes to it.
   static bool glassFallback = false;
 }
 
@@ -1170,38 +1058,119 @@ abstract final class Motion {
 // ELEVATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// THE DESIGN HAS NO SHADOWS. Not one of the nineteen Figma frames carries a `box-shadow`;
-/// separation is done entirely by the `#292E33` hairline, which is 1.42:1 against the ground
-/// where the card itself is only 1.05:1. That is why [level1] and [level2] are both empty: a
-/// resting card gets an edge, not a smear, and a drop shadow under a full-bleed bar is the
-/// cheapest-looking thing in mobile design.
+/// Soft, low and tinted with the brand — and used sparingly, which is most of the design.
 ///
-/// The one exception is a surface that is genuinely FLOATING over a scrimmed page. Nothing in
-/// the file draws one, so [level3] is the app's own — black rather than tinted, because a
-/// coloured shadow over #0B0D0F is invisible.
+/// A RESTING CARD CASTS NOTHING. The canvas separates a card from the cream ground with its fill
+/// and a hairline ([ApnivaasColors.cardBorder]); across all six boards the only shadow under a
+/// surface is the chosen persona's. So [level1] and [level2] are both empty — and that matters,
+/// because ~40 call sites take [level2] as [GlassSurface]'s default, and a page where every card
+/// floats has no hierarchy. What still casts is what genuinely sits above the page: a chosen
+/// persona or a dragged item ([lift]), the tab bar ([bar]), a sheet or dialog ([level3]) and
+/// the one FAB ([glow]).
+///
+/// The tint is the point of the ones that remain: a black drop shadow on cream reads as a grey
+/// smudge, forest at a low alpha as the object sitting a millimetre above the page. These are
+/// LIGHT-theme values; on the dark ground a tinted shadow is invisible, and depth there comes
+/// from the surface ladder.
 abstract final class Shadows {
-  /// Flat against the ground. The design's default, and now the card's too.
+  /// Flat against the ground: fill and hairline only.
   static const level1 = <BoxShadow>[];
 
-  /// A resting card. (= [level1]) Kept as a separate name because the call sites that pass it
-  /// mean "this is a card", and that sentence should survive even though it currently costs
-  /// nothing to draw.
+  /// A resting card. EMPTY, like [level1] — see the class note. Kept as its own name because
+  /// [GlassSurface] defaults to it and a modal passes [level3] in its place.
   static const level2 = <BoxShadow>[];
 
-  /// Something genuinely floating over a barrier: a sheet, a modal, a menu. A large soft
-  /// shadow plus a tight contact shadow so the edge does not float free of it.
-  static const level3 = <BoxShadow>[
-    BoxShadow(color: Color(0x66000000), blurRadius: 40, offset: Offset(0, 12)),
-    BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 2)),
+  /// A selected persona card, a dragged item: forest at 16%.
+  static const lift = <BoxShadow>[
+    BoxShadow(color: Color(0x29174E43), blurRadius: 20, offset: Offset(0, 8)),
   ];
 
-  /// The FAB's halo — [ApnivaasColors.primary] at 30%. The app's one flourish beyond the design,
-  /// kept because a floating action button with no lift on a flat near-black page reads as a
-  /// sticker. Sparingly: one per screen, on the one control that is the screen's purpose.
+  /// The bottom tab bar, casting upward.
+  static const bar = <BoxShadow>[
+    BoxShadow(color: Color(0x0F174E43), blurRadius: 18, offset: Offset(0, -6)),
+  ];
+
+  /// A sheet floating over the scrim. A large soft shadow plus a tight contact one so the edge
+  /// does not float free of it, cast UPWARD from the bottom edge the sheet rises from.
+  static const level3 = <BoxShadow>[
+    BoxShadow(color: Color(0x2E10392F), blurRadius: 32, offset: Offset(0, -8)),
+    BoxShadow(color: Color(0x0F10392F), blurRadius: 4, offset: Offset(0, -1)),
+  ];
+
+  /// A dialog in the middle of the screen: [level3]'s two shadows cast DOWNWARD, as light from
+  /// above falls under a card lifted towards it. On a centred card level3's upward cast sat
+  /// above the card, which read as a shadow with nothing to cast it.
+  static const dialog = <BoxShadow>[
+    BoxShadow(color: Color(0x2E10392F), blurRadius: 32, offset: Offset(0, 8)),
+    BoxShadow(color: Color(0x0F10392F), blurRadius: 4, offset: Offset(0, 1)),
+  ];
+
+  /// The FAB's halo — [ApnivaasColors.forest] at 30%. One per screen, on the one control that
+  /// is the screen's purpose.
   static const glow = <BoxShadow>[
-    // Follows [ApnivaasColors.primary], which is the brand indigo #997FC5 now rather than the
-    // gold. A halo in a different colour from the button it surrounds reads as a bug.
-    BoxShadow(color: Color(0x4D997FC5), blurRadius: 20),
+    BoxShadow(color: Color(0x4D174E43), blurRadius: 20),
+  ];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE HEADER'S STARS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One dot of the header's star field, in the canvas's 390×170 reference box.
+@immutable
+class StarDot {
+  const StarDot(this.x, this.y, this.radius, this.color, this.alpha,
+      {this.haloRadius, this.haloColor, this.haloAlpha});
+
+  final double x;
+  final double y;
+  final double radius;
+  final Color color;
+  final double alpha;
+
+  /// A faint disc behind the core, on the three brightest stars only.
+  final double? haloRadius;
+  final Color? haloColor;
+  final double? haloAlpha;
+}
+
+/// The procedural "stars" in the forest header, verbatim from the owner-home board.
+///
+/// Deterministic: the same dots in the same places on every screen and every launch, so the
+/// header reads as a printed object rather than as noise. x scales with the header's width
+/// against [referenceWidth]; y stays in dp from the top of the content, so the field keeps its
+/// relationship to the greeting whatever the status bar's height.
+///
+/// They stay in the trailing half and along the top and bottom edges, so none lands behind the
+/// greeting or the title. The halos are the only part that could lift a ground under type (a
+/// halo under the greeting would take it to 3.71:1), so a halo is drawn only from
+/// [haloMinFraction] of the width outward; a star further in keeps its core alone.
+abstract final class HeaderStars {
+  static const referenceWidth = 390.0;
+  static const referenceHeight = 170.0;
+
+  /// Halos only at or beyond this fraction of the header's width.
+  static const haloMinFraction = 0.78;
+
+  static const dots = <StarDot>[
+    StarDot(322, 30, 1.7, ApnivaasColors.goldStar, 1,
+        haloRadius: 5, haloColor: ApnivaasColors.goldHalo, haloAlpha: 0.14),
+    StarDot(268, 72, 1.3, Color(0xFFFFFFFF), 0.9,
+        haloRadius: 4, haloColor: Color(0xFFFFFFFF), haloAlpha: 0.11),
+    StarDot(360, 104, 1.2, ApnivaasColors.goldStar, 0.95,
+        haloRadius: 3.6, haloColor: ApnivaasColors.goldHalo, haloAlpha: 0.12),
+    StarDot(212, 10, 1, Color(0xFFFFFFFF), 0.7),
+    StarDot(150, 8, 0.9, ApnivaasColors.goldStar, 0.75),
+    StarDot(292, 14, 1, Color(0xFFFFFFFF), 0.6),
+    StarDot(380, 34, 1, Color(0xFFFFFFFF), 0.55),
+    StarDot(344, 64, 0.8, ApnivaasColors.goldStar, 0.65),
+    StarDot(300, 50, 0.8, Color(0xFFFFFFFF), 0.5),
+    StarDot(372, 150, 1, Color(0xFFFFFFFF), 0.5),
+    StarDot(28, 152, 0.9, Color(0xFFFFFFFF), 0.4),
+    StarDot(112, 158, 0.8, Color(0xFFFFFFFF), 0.4),
+    StarDot(198, 160, 0.8, ApnivaasColors.goldStar, 0.5),
+    StarDot(300, 158, 0.9, Color(0xFFFFFFFF), 0.45),
+    StarDot(66, 8, 0.8, Color(0xFFFFFFFF), 0.45),
   ];
 }
 
@@ -1210,7 +1179,7 @@ abstract final class Shadows {
 // ─────────────────────────────────────────────────────────────────────────────
 
 abstract final class Breakpoints {
-  static const compact = 360.0; // smallest phone still supported
+  static const compact = 360.0; // smallest phone the layouts are drawn for (tests run 320)
   static const medium = 600.0; // large phone / small tablet
 
   /// Where a phone layout stops being the right one: container padding grows and the bottom
@@ -1221,9 +1190,7 @@ abstract final class Breakpoints {
 /// The widest a tab body is allowed to be, from [Breakpoints.expanded] up.
 ///
 /// 720 is the width at which a row of three KPI tiles, a fee ledger row with four figures, or
-/// a paragraph of a notice all still read at arm's length on a 10-inch tablet. Past it a card
-/// stretches until its title and its number are on opposite sides of the screen, which is
-/// the "website that happens to be installed" look this exists to prevent. Applied in
+/// a paragraph of a notice all still read at arm's length on a 10-inch tablet. Applied in
 /// shared/motion/tab_swap.dart, the one widget all five shells run their tabs through; the
-/// chrome around the body — brow, header, nav bar — stays full-bleed on purpose.
+/// chrome around the body — header, nav bar — stays full-bleed on purpose.
 const maxContentWidth = 720.0;

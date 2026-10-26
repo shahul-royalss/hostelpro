@@ -33,7 +33,7 @@
 /// refuses a version it has never heard of, and at the gate the only thing a user may do is
 /// accept — so the wrong order locks every account out of the product: Agree fails with 22023
 /// "Unknown legal document version" and Sign out is the only way off the screen. The row for the
-/// version below is db/migrations/2026-10-12-legal-version-apnivaas.sql; the rule it has to
+/// version below is db/migrations/2026-10-26-legal-version-round3.sql; the rule it has to
 /// satisfy is db/migrations/2026-09-02-legal-consent.sql §4.
 ///
 /// test/legal_consent_test.dart asserts (1) and (2) against each other, so the pair cannot
@@ -54,10 +54,20 @@ library;
 /// 2026-10-17 added "Continue with Google": who may use it, what Google shares, and Google's
 /// third job as a recipient. Row: db/migrations/2026-10-17-legal-version-google.sql, which must
 /// be live before any build carrying this string reaches anybody.
-const kLegalVersion = '2026-10-17';
+///
+/// 2026-10-25 added self sign-up (Google; Facebook and Truecaller once switched on), profile
+/// photos, identity documents, the tenant's own details, approximate location for "PGs near
+/// you", the PG's position, join requests, demo requests and Razorpay plan payments, and moved
+/// the permission count to eleven. Row: db/migrations/2026-10-25-legal-version-signup.sql.
+///
+/// 2026-10-26 (round 3) added email and password sign-up, staff sign-up requests, precise
+/// location, the on-device biometric lock, PG profiles and reviews, check-out requests, UPI rent
+/// paid straight to the owner, and what a permanent deletion keeps; the permission count went to
+/// thirteen. Row: db/migrations/2026-10-26-legal-version-round3.sql.
+const kLegalVersion = '2026-10-26';
 
 /// Human-readable form of [kLegalVersion], for the "last updated" line.
-const kLegalVersionLabel = '17 October 2026';
+const kLegalVersionLabel = '26 October 2026';
 
 const kTermsUrl = 'https://hostelpro-three.vercel.app/legal/terms';
 const kPrivacyUrl = 'https://hostelpro-three.vercel.app/legal/privacy';
@@ -188,30 +198,40 @@ const kPrivacyPolicy = LegalDocument(
           'Protection Act 2023 your hostel is the Data Fiduciary and $kLegalProductName is the '
           'Data Processor. So a request to see, correct or erase your data is answered by your '
           'hostel first. For platform staff accounts and the security log, $kLegalProductName is '
-          'the Data Fiduciary itself.',
+          'the Data Fiduciary itself — and so it is for an account you create yourself, with '
+          'the photo, details and documents you add to it, the PGs you ask to join, a demo you '
+          'book and a plan you pay for, until a PG accepts you as its resident or its staff.',
         ),
         Para(
           '$kLegalProductName is operated by $kOperatorName. Wherever this policy says that '
           '$kLegalProductName does something, or says we or us, it means $kOperatorName.',
         ),
         Para(
-          'Nobody signs themselves up. The platform creates hostel owners, an owner creates '
-          'their manager and warden, and a warden registers residents. Residents sign in with '
-          'the phone number their hostel registered, which is why changing it is something '
-          'staff do rather than a profile edit. Everyone is given a temporary password and must '
-          'set their own at first sign-in; passwords are hashed by the sign-in service and are '
-          'never seen by $kLegalProductName, by your hostel or by us.',
+          'Accounts are made in two ways. An owner, a tenant or a member of staff may create '
+          'their own account in the Android app, with their email address and a password or '
+          'with Continue with Google, and — only where the app offers them — Continue with '
+          'Facebook or Continue with Truecaller. A staff sign-up has no access to anything: it '
+          'is a request to join a PG, and only that PG\'s owner can accept it and make the '
+          'person its manager or warden. Otherwise accounts are made '
+          'by people: the platform creates hostel owners, and a warden registers residents, who '
+          'sign in with the phone number their hostel registered — which is why changing it is '
+          'something staff do rather than a profile edit. An account made by people comes with '
+          'a temporary password that must be changed at first sign-in; passwords are hashed by '
+          'the sign-in service and are never seen by $kLegalProductName, by your hostel or by '
+          'us.',
         ),
         Para(
           'Owners and residents whose login is an email address that is also a Google account '
-          'may sign in with Continue with Google instead of their password. Managers, wardens '
-          'and platform administrators cannot: the database refuses it, and they sign in only '
-          'with the login they were given.',
+          'may sign in with Continue with Google instead of their password. A manager or warden '
+          'an owner created, and every platform administrator, cannot use Google, Facebook or '
+          'Truecaller: the database refuses it, and they sign in only with the login they were '
+          'given. A manager or warden who signed up themselves may keep using the sign-in they '
+          'signed up with.',
         ),
         Para(
-          'That is why this policy matters more than it would for an app you chose to install: '
-          'most of what is here was typed in by hostel staff, from documents you handed them at '
-          'the desk.',
+          'If a hostel registered you, most of what is here was typed in by its staff, from '
+          'documents you handed them at the desk. If you made your own account, it is what you '
+          'typed and uploaded yourself.',
         ),
       ],
     ),
@@ -231,6 +251,29 @@ const kPrivacyPolicy = LegalDocument(
                 'Nothing is posted to your Google account and nothing else is read from it.',
           ),
           (
+            term: 'Facebook or Truecaller sign-in',
+            detail: 'Only where the app offers it and you choose it. Facebook: your Facebook user '
+                'ID, name and email address if it shares one. Truecaller: your Truecaller ID, the '
+                'phone number Truecaller has verified, and your name. The ID is kept with your '
+                'login and used only to sign you in; nothing is posted and nothing else is read.',
+          ),
+          (
+            term: 'Email and password sign-up',
+            detail: 'If you sign up with a password: your name, phone number, email address and, '
+                'for an owner or a tenant, your city and pincode. The password is hashed by the '
+                'sign-in service, and your email address is confirmed by a link.',
+          ),
+          (
+            term: 'Your own details',
+            detail: 'If you sign up as a tenant: gender, date of birth, and an emergency '
+                'contact\'s name and phone number, which you type in yourself and can change.',
+          ),
+          (
+            term: 'Profile photo',
+            detail: 'A photo you choose for your account, from the camera or your gallery, '
+                'cropped square and reduced to at most 512 pixels. Any role may add one.',
+          ),
+          (
             term: 'Resident details',
             detail: 'Permanent address, guardian\'s name and phone number, date of joining, '
                 'monthly fee, the room and bed assigned to you, and whether you are active, on '
@@ -238,14 +281,57 @@ const kPrivacyPolicy = LegalDocument(
           ),
           (
             term: 'Photograph and identity document',
-            detail: 'A photo and a scan of the ID proof you presented at registration. This is '
-                'the most sensitive thing in the system and it is treated as such — see below.',
+            detail: 'A photo and a scan of the ID proof you presented at registration, or the '
+                'identity documents you upload yourself (a masked Aadhaar, PAN, driving licence, '
+                'voter ID, passport, college or work ID) with the kind of each. This is the most '
+                'sensitive thing in the system and it is treated as such — see below.',
+          ),
+          (
+            term: 'Join requests',
+            detail: 'When a tenant asks to join a PG: which PG, an optional message, when it was '
+                'sent, and the answer — accepted, declined with an optional note, cancelled or '
+                'lapsed — with who gave it.',
+          ),
+          (
+            term: 'Staff requests',
+            detail: 'When someone who signed up as staff asks to join a PG: which PG, an optional '
+                'message, when, and the owner\'s answer — the role given, or a note on declining.',
+          ),
+          (
+            term: 'Check-out requests',
+            detail: 'When a tenant asks to check out: the preferred date, an optional reason, and '
+                'the warden\'s answer — the check-out date, or a note on declining.',
+          ),
+          (
+            term: 'Your PG',
+            detail: 'If you are an owner: the PG\'s name, type, who it is for, address, locality, '
+                'city and pincode, its floors and rooms, and — only if you set it — its exact '
+                'position on the map, from your phone\'s precise location or a pin you place. '
+                'Also its profile: a logo, up to six cover photos, a description, amenities and '
+                'house rules.',
+          ),
+          (
+            term: 'Reviews',
+            detail: 'A current tenant may rate their PG from 1 to 5 with an optional comment. '
+                'The review is stored with your account and shown with your first name.',
+          ),
+          (
+            term: 'Plan payments and demo requests',
+            detail: 'If you are an owner: the plan you paid for, the amount, the method, the '
+                'Razorpay order and payment references and whether it succeeded; and, if you book '
+                'a demo, the name, phone number, PG name, city, size and time slot you give.',
           ),
           (
             term: 'Money',
-            detail: 'Rent due, rent paid, the date and method of each payment, and free-text '
-                'notes a warden adds to a receipt. Where rent is paid online, the reference the '
-                'payment gateway issues.',
+            detail: 'Rent due from your check-in date, rent paid, the date and method of each '
+                'payment, and free-text notes a warden adds to a receipt. Where rent is paid '
+                'online, the reference the payment gateway issues.',
+          ),
+          (
+            term: 'UPI rent payments',
+            detail: 'An owner\'s UPI ID and payee name, which the tenants of that PG can see. '
+                'When a tenant pays by UPI: the amount, the month, the UTR (transaction ID) they '
+                'enter, and whether staff confirmed or rejected it, with any note.',
           ),
           (
             term: 'Things you raise',
@@ -275,7 +361,8 @@ const kPrivacyPolicy = LegalDocument(
             detail: 'A record of significant actions — sign-ins, account changes, money '
                 'recorded — with the IP address and browser or device description of the '
                 'request. Login rate limits are kept as irreversible hashes, never as a '
-                'readable phone number.',
+                'readable phone number. Also a list of deleted accounts: who, their role and '
+                'PG, when, by whom and why.',
           ),
           (
             term: 'Your agreement to this policy',
@@ -294,18 +381,27 @@ const kPrivacyPolicy = LegalDocument(
       heading: 'What is never collected',
       blocks: [
         Bullets([
-          'No date of birth and no age. The system has no such field.',
-          'No card number, UPI ID, CVV or bank account is ever received or stored by '
-              '$kLegalProductName. '
+          'No date of birth from anybody a hostel registers. Only a tenant who signs up gives '
+              'one, on their own details form; nothing in $kLegalProductName uses it to decide '
+              'anything about them.',
+          'No card number, CVV or bank account, and no tenant\'s UPI ID, is ever received or '
+              'stored by $kLegalProductName. '
               'Where rent is paid online those details are typed into Razorpay\'s checkout, which '
               'on Android runs inside this app, and go to Razorpay (see Razorpay below). What '
-              'comes back is a reference saying a payment of a stated amount succeeded.',
-          'No location, contacts, calendar, microphone or biometrics. The Android app declares '
-              'ten permissions and no others. Four are $kLegalProductName\'s own: internet access; '
-              'the ability '
-              'to tell whether you are online; the camera, used only when you choose to take a '
-              'photo of an identity document, a resident or a receipt; and permission to show '
-              'notifications. Four more are added by the libraries that deliver notifications and '
+              'comes back is a reference saying a payment of a stated amount succeeded. A UPI '
+              'payment to the owner is made in your own UPI app, straight to the owner\'s UPI '
+              'ID: $kLegalProductName never receives or holds that money, and stores only the '
+              'UTR, amount and month you enter.',
+          'No location history, and no contacts, calendar, microphone or biometric data. The '
+              'Android app declares thirteen permissions and no others. Seven are '
+              '$kLegalProductName\'s own: internet access; the ability to tell whether you are '
+              'online; the camera, used only when you choose to take a photo of yourself, an '
+              'identity document, a resident, a receipt or your PG; permission to show '
+              'notifications; precise location and approximate location (Android lets you choose '
+              'which to give), asked for in words first and used only when you tap "PGs near '
+              'you" or set your PG\'s position; and the biometric permission, used only by the '
+              'optional app lock. Four more are added by the libraries that '
+              'deliver notifications and '
               'run the app: waking the device, vibrating, receiving a message, and an internal '
               'permission only this app can hold. The last two come from Razorpay\'s checkout: '
               'NFC, so a payment card can be tapped, and a basic phone-state permission; '
@@ -331,6 +427,14 @@ const kPrivacyPolicy = LegalDocument(
               'in, read by the server alone.',
           'No SMS, no marketing email and no mailing list. The only emails sent are the ones '
               'that keep the account working — a confirmation link, a password reset.',
+          'No location history and no tracking. Your precise location is read once, when you '
+              'ask for PGs near you, sent to the server only to measure distances, and not saved '
+              '— not with your account, not in the security log. An owner\'s PG position is '
+              'different: that is saved, as the PG\'s location.',
+          'No fingerprint, face or PIN. The optional app lock — on by default for owners — asks '
+              'your phone\'s own screen lock to check it is you. That check happens on the phone; '
+              'nothing biometric reaches $kLegalProductName, and whether the lock is on is kept '
+              'only on the phone.',
           'No notification content beyond what you already see in the app. Push notifications '
               'ARE sent — see "What is collected" above for the device registration they '
               'require, and section 6 for the part Google plays in delivering them.',
@@ -351,11 +455,36 @@ const kPrivacyPolicy = LegalDocument(
               'app (8 MB on the website, which uploads by a different route).',
         ),
         Para(
+          'Profile photos and the identity documents you upload yourself are kept in two more '
+          'private stores, each file filed under your own account, and only you can add one. A '
+          'profile photo can be seen by you; the owner of your PG; its wardens; its managers, '
+          'except a resident\'s photo; and the owner and wardens of a PG you have asked to '
+          'join, while the request is open. An identity document can be seen by you, the owner '
+          'and wardens of your PG — never a manager — and the owner and wardens of a PG you have '
+          'asked to join, while the request is open. Platform administrators can see both, for '
+          'support. Other residents never can. Each is shown through a link that lasts one '
+          'minute. A photo is at most 1 MB; a document at most 5 MB, as an image or a PDF.',
+        ),
+        Para(
+          'The copy on your phone is not kept after an identity document is uploaded. A new '
+          'profile photo replaces the old one, which is deleted. When you leave a PG, its staff '
+          'lose access to your photo and documents. Both are deleted with your account, and '
+          'anything uploaded but never saved to your account is deleted after a day.',
+        ),
+        Para(
+          'A PG\'s logo and cover photos are different: they are meant to be seen. They are '
+          'held in private storage under the PG, only its owner can add them, and they can be '
+          'opened by its own people and by anyone signed in while the PG is listed and its plan '
+          'or free month is running. Do not put people in them.',
+        ),
+        Para(
           'A note on Aadhaar. Aadhaar is governed by its own law and UIDAI guidance restricts '
           'holding copies of the Aadhaar letter. $kLegalProductName does not require Aadhaar and '
           'does not '
           'treat it differently from any other document; if your hostel asks for an ID you may '
-          'offer a different one, or a masked Aadhaar where that is accepted. A hostel can also '
+          'offer a different one, or a masked Aadhaar where that is accepted. If you upload one '
+          'yourself, upload a masked Aadhaar — downloaded from UIDAI with only the last four '
+          'digits showing — or a different document. A hostel can also '
           'record the document type and skip the scan entirely — the system works with no image '
           'stored at all, and that is the safest option.',
         ),
@@ -376,7 +505,13 @@ const kPrivacyPolicy = LegalDocument(
               'must display a visible notice at the desk, because a visitor has no account here '
               'and gets no notice from the app.',
           'Staff and owners — their employment or commercial relationship with the hostel, and '
-              'administration of the subscription.',
+              'administration of the subscription, including a plan an owner pays for and a demo '
+              'an owner asks for.',
+          'An account you create yourself — your consent, given when you sign up and agree to '
+              'this policy, to run the account, find you a PG, send your join or staff request '
+              'to the PG you chose, and let that PG check who you are. Your location is used '
+              'only on the occasion you ask for it. A review is published because you chose to '
+              'write it.',
           'The security log — $kLegalProductName\'s own interest in keeping the system secure '
               'and being able to investigate a compromised account. It exists for that and '
               'nothing else.',
@@ -402,6 +537,23 @@ const kPrivacyPolicy = LegalDocument(
           'You see your own record, fees, complaints, leave and notices. Of your roommates you '
               'see a name and phone number — no photographs and no documents.',
           'Your warden sees the residents of their hostel; the owner sees their hostels.',
+          'When you ask to join a PG, its owner and wardens see your name, phone number, email '
+              'address, gender, date of birth, emergency contact and message, and can open your '
+              'photo and identity documents until they answer. The request stays in their list '
+              'until it is deleted. If they accept, they become your PG.',
+          'When a staff applicant asks to join a PG, its owner sees their name, phone number, '
+              'email address and message, and chooses whether to make them its manager or warden.',
+          'A tenant\'s check-out request is seen by the wardens and the owner of their PG.',
+          'Anyone signed in who is looking for a PG sees its name, type, who it is for, '
+              'locality, city, distance, logo, cover photos, description, amenities, house rules, '
+              'rating and reviews, each review with the reviewer\'s first name — never its full '
+              'address, its map position or the owner\'s contact details. A PG appears while it '
+              'is listed and its plan or free month is running. The owner can read reviews but '
+              'not change or remove them.',
+          'The tenants of a PG see its UPI ID and payee name, so they can pay. A UPI payment '
+              'they submit is seen by its wardens and owner, who confirm or reject it.',
+          'A demo you book is seen by you and by the platform\'s own staff, who call you to '
+              'arrange it.',
           'A manager sees rooms, money and operations, and is cut off from resident personal '
               'data at the database layer.',
           'A platform administrator can reach tenant records for support and billing. Every '
@@ -409,9 +561,9 @@ const kPrivacyPolicy = LegalDocument(
           'Other residents cannot see anything else about you. There is no resident directory.',
         ]),
         Para(
-          'Outside your hostel, five companies process some part of it. That is the complete '
-          'list: no analytics vendor, no advertising network, no crash reporter, no messaging '
-          'tool and no AI provider.',
+          'Outside your hostel, five companies process some part of it, and two more only if '
+          'you choose to sign in with them. That is the complete list: no analytics vendor, no '
+          'advertising network, no crash reporter, no messaging tool and no AI provider.',
         ),
         Rows([
           (
@@ -432,8 +584,8 @@ const kPrivacyPolicy = LegalDocument(
           ),
           (
             term: 'Razorpay',
-            detail: 'Only where you choose to pay rent in the app. Receives your name, email, '
-                'phone and the amount. Its checkout runs inside this app on Android: while a '
+            detail: 'Only where you choose to pay rent in the app, or an owner pays for a '
+                '$kLegalProductName plan. Receives your name, email, phone and the amount. Its checkout runs inside this app on Android: while a '
                 'payment is open it takes the card, UPI or netbanking details you type, and checks '
                 'which UPI apps are installed so it can offer them. Those details go to Razorpay '
                 'and never reach us. We get back the amount, the identifiers and the method. '
@@ -448,7 +600,26 @@ const kPrivacyPolicy = LegalDocument(
                 'you choose Continue with Google, it confirms who you are when you sign in, so it '
                 'learns that you signed in to this app.',
           ),
+          (
+            term: 'Meta (Facebook)',
+            detail: 'Only if the app offers Continue with Facebook and you choose it. It confirms '
+                'who you are and shares your Facebook user ID, name and email address; it learns '
+                'that you signed in to this app.',
+          ),
+          (
+            term: 'Truecaller',
+            detail: 'Only if the app offers Continue with Truecaller and you choose it. It confirms '
+                'your phone number and shares it with your name and Truecaller ID; it learns that '
+                'you signed in to this app.',
+          ),
         ]),
+        Para(
+          'Your location is worked out by your phone\'s own location service — on most Android '
+          'phones that is Google Play services, under Google\'s own settings, which also shows '
+          'the "Turn on location" prompt — and $kLegalProductName passes it to nobody. A UPI '
+          'payment is handled by your own UPI app and bank, not by $kLegalProductName or any '
+          'company named above.',
+        ),
         Para(
           'Data is encrypted in transit and at rest. The DPDP Act permits personal data to be '
           'sent outside India except to countries the Central Government has restricted. '
@@ -459,7 +630,8 @@ const kPrivacyPolicy = LegalDocument(
         Para(
           'What protects it: row-level security on every table; a manager role deliberately '
           'blocked from resident personal data; two-factor authentication available to every '
-          'role and required for the roles that carry the most access; a forced password change '
+          'role and required for the roles that carry the most access; an optional app lock on '
+          'the phone; a forced password change '
           'at first sign-in; the security log; TLS with strict transport security on every '
           'response; private storage with short-lived links; password hashes that never reach '
           'the application; login rate limiting keyed on an irreversible hash; and a strict '
@@ -486,7 +658,36 @@ const kPrivacyPolicy = LegalDocument(
             term: 'A departed resident',
             detail: 'The record, and the photograph and identity document with it, are erased '
                 'one month after check-out. Their complaints, leave requests and visitor '
-                'entries go at the same time, and so does the login.',
+                'entries go at the same time, and so does a login the hostel made. A tenant who '
+                'made their own account keeps it on leaving, so they can find another PG; the PG '
+                'loses access to it at once.',
+          ),
+          (
+            term: 'Profile photos and documents you upload',
+            detail: 'Kept while your account exists and deleted with it. A replaced photo is '
+                'deleted at once, and an upload never saved to an account after a day.',
+          ),
+          (
+            term: 'Join requests',
+            detail: 'A request nobody answers lapses after 30 days. An answered, cancelled or '
+                'lapsed request is deleted 180 days later.',
+          ),
+          (
+            term: 'Demo requests',
+            detail: 'Deleted 180 days after the booked time slot, and with the owner\'s account.',
+          ),
+          (
+            term: 'Your location',
+            detail: 'Not kept at all. A PG\'s saved position stays with the PG.',
+          ),
+          (
+            term: 'Staff requests',
+            detail: 'Kept with the PG\'s records, and deleted with the applicant\'s account.',
+          ),
+          (
+            term: 'Reviews and check-out requests',
+            detail: 'A review stays after you leave the PG and is deleted with your account. A '
+                'check-out request stays with the resident\'s record.',
           ),
           (
             term: 'Complaints and notices',
@@ -517,12 +718,19 @@ const kPrivacyPolicy = LegalDocument(
                 'operating history of the hostel itself.',
           ),
           (
-            term: 'Fee, expense and revenue records',
+            term: 'Fee, expense, revenue, UPI payment and plan payment records',
             detail: 'Kept indefinitely. This is the one exception and it is not ours to waive: '
                 'a business has a statutory duty to keep records of money received. Where that '
                 'collides with erasure the person is removed rather than the record — name, '
                 'phone, email, photograph, guardian details, address and ID proof are stripped '
                 'out and the figures are left attached to nobody.',
+          ),
+          (
+            term: 'An account permanently deleted',
+            detail: 'When the platform administrator permanently deletes an account, the login, '
+                'profile details, photos, documents, reviews and requests are erased. Payments, '
+                'receipts, dues and the security log are kept, for legal and accounting reasons, '
+                'and show the person as "Deleted user".',
           ),
           (
             term: 'Your acceptance of this policy',
@@ -566,8 +774,10 @@ const kPrivacyPolicy = LegalDocument(
         ),
         Para(kDeletionUrl),
         Para(
-          'If your hostel does not answer, or the request is about the security log or a '
-          'platform account, write to the Grievance Officer below.',
+          'If your hostel does not answer, or the request is about the security log, a platform '
+          'account, or an account you made yourself and is not in a PG, write to the Grievance '
+          'Officer below — or file the same request in the app. Your own details and photo you '
+          'can change in the app at any time.',
         ),
         Para(
           'Requests are free. We acknowledge one within 72 hours and aim to finish within 30 '
@@ -589,9 +799,10 @@ const kPrivacyPolicy = LegalDocument(
           'built rather than by a promise.',
         ),
         Para(
-          'The system records no date of birth and therefore cannot tell who is a minor. Your '
-          'hostel must obtain a guardian\'s consent in its own registration paperwork before '
-          'registering one.',
+          'Only a tenant who signs up gives a date of birth, and nothing checks it, so the '
+          'system cannot tell who is a minor. Creating your own account is for people aged 18 '
+          'or over. A resident under 18 is registered by their hostel, which must obtain a '
+          'guardian\'s consent in its own registration paperwork first.',
         ),
       ],
     ),
@@ -633,7 +844,8 @@ const kTermsOfUse = LegalDocument(
         Para(
           'These terms are between $kOperatorName (we, us), which provides this service, and '
           'you — whether you are a hostel owner who subscribes to it, a manager or warden given '
-          'an account by an owner, or a resident given an account by a warden. Wherever these '
+          'an account by an owner, a resident given an account by a warden, or an owner, tenant '
+          'or member of staff who created their own account. Wherever these '
           'terms say that $kLegalProductName does something, they mean $kOperatorName.',
         ),
         Para(
@@ -648,8 +860,9 @@ const kTermsOfUse = LegalDocument(
         Para(
           '$kLegalProductName records and organises the running of a hostel or PG: rooms and beds, '
           'residents, rent due and rent received, complaints, leave, visitors, notices, meals, '
-          'staff tasks and expenses. It is delivered as a website and an Android app, and needs '
-          'an internet connection.',
+          'staff tasks and expenses, check-out requests, and a PG profile with photos and '
+          'tenant reviews. A tenant\'s dues start from their check-in date. It is delivered as a '
+          'website and an Android app, and needs an internet connection.',
         ),
         Para(
           'It is a record-keeping tool. It is not an accounting package, not a legal or tax '
@@ -663,11 +876,21 @@ const kTermsOfUse = LegalDocument(
       heading: 'Your account',
       blocks: [
         Para(
-          'There is no self sign-up. Your account was created for you and comes with a '
-          'temporary password you must change when you first sign in. Owners and residents '
-          'whose login is a Google account\'s address may also sign in with Continue with '
-          'Google. An account belongs to the hostel\'s workspace rather than to you personally, '
-          'and is deactivated when you check out or when your employment ends.',
+          'An owner, a tenant or a member of staff may create their own account in the Android '
+          'app, with an email address and a password, with Continue with Google or, where the '
+          'app offers them, Continue with Facebook or Continue with Truecaller. You must be 18 or '
+          'over to do so, and the details you give must be your own and true. A staff sign-up '
+          'gets no access until the owner of the PG it asked to join accepts it and chooses the '
+          'role; an owner may also create staff accounts. Any other account was '
+          'created for you and comes with a temporary password you must change when you first '
+          'sign in; owners and residents whose login is a Google account\'s address may also '
+          'sign in with Continue with Google.',
+        ),
+        Para(
+          'An account a hostel created belongs to the hostel\'s workspace rather than to you '
+          'personally, and is deactivated when you check out or when your employment ends. An '
+          'account you created stays yours when you leave a PG, and an owner may delete the '
+          'account of a manager or warden who works for them.',
         ),
         Bullets([
           'Keep your password to yourself, and keep the Google account you sign in with secure '
@@ -675,6 +898,8 @@ const kTermsOfUse = LegalDocument(
               'because that is how the security log records it.',
           'Turn on two-factor authentication where it is offered. Where it is required for your '
               'role you will be asked to set it up before you can continue.',
+          'Use the app lock where you can. It is on by default for owners, anyone may turn it on '
+              'in Security, and it uses your phone\'s own fingerprint, face or screen lock.',
           'Tell your hostel immediately if you think someone else has your password.',
           'Do not use somebody else\'s account, and do not ask a member of staff to act as you.',
         ]),
@@ -691,7 +916,13 @@ const kTermsOfUse = LegalDocument(
               'service for a way to do so. Deliberately tripping the rate limits or the '
               'security alerts is itself a breach of these terms.',
           'Upload anything unlawful, or a photograph of a person taken without their knowledge.',
-          'Use the visitor log, complaints or any other feature to harass anybody.',
+          'Use the visitor log, complaints, join requests or any other feature to harass '
+              'anybody, or send a join request to a PG you do not mean to stay in.',
+          'Upload an identity document that is not yours, or an Aadhaar that is not masked '
+              'when a masked one would do.',
+          'Write a review of a PG you have not stayed in, or one that is false or abusive; put '
+              'people in a PG\'s photos without their agreement; or enter a UTR for a UPI '
+              'payment you did not make.',
           'Copy, resell, sublicense or reverse-engineer the software, or extract data from it '
               'in bulk by automated means, except where the law says you may despite this.',
         ]),
@@ -713,11 +944,16 @@ const kTermsOfUse = LegalDocument(
         Bullets([
           'Giving residents notice and obtaining their consent before entering their details, '
               'including a parent or guardian\'s consent where a resident is a minor — the '
-              'system holds no date of birth and cannot tell.',
+              'system does not check ages and cannot tell.',
           'Displaying a visible notice at the visitor desk, since a visitor whose name and '
               'phone number you log has no account and gets no notice from the app.',
           'Collecting only what you need, and preferring a non-Aadhaar identity document.',
           'Answering residents\' requests to see, correct or erase their data.',
+          'Answering join requests honestly, and using a requester\'s photo and identity '
+              'documents only to decide whether to accept them. Answering staff requests and '
+              'check-out requests promptly.',
+          'Keeping your PG profile, its photos and your UPI ID accurate, and confirming a UPI '
+              'payment only after you have seen it arrive in your UPI app or bank.',
           'Removing accounts for staff who leave.',
         ]),
         Para(
@@ -742,10 +978,22 @@ const kTermsOfUse = LegalDocument(
           'explanation. Nothing is deleted, and renewing makes it writable again immediately.',
         ),
         Para(
-          'Rent is either recorded at the desk by a warden, or paid online through Razorpay on '
-          'Razorpay\'s own checkout under Razorpay\'s terms. $kLegalProductName never takes, '
-          'holds, transfers or refunds money, and never sees a card number, UPI ID, CVV or bank '
-          'account.',
+          'An owner who creates their own account gets their first PG free for one month, once. '
+          'After that a plan is bought in the app: the plans and their prices are the ones the '
+          'app shows at the time, set by us. The payment is taken by Razorpay in its own '
+          'checkout and is paid to us. The plan starts only once our server has verified the '
+          'payment with Razorpay, and adds its months to the end of the current plan. A plan '
+          'does not renew by itself. If a payment went wrong, write to us at the contact below. '
+          'A free demo you book is a request for a call from us, which we confirm or rearrange.',
+        ),
+        Para(
+          'Rent is recorded at the desk by a warden, paid online through Razorpay on Razorpay\'s '
+          'own checkout under Razorpay\'s terms, or paid by UPI from the tenant\'s own UPI app '
+          'straight to the owner\'s UPI ID. A UPI payment counts as paid only when the owner or '
+          'a warden confirms the UTR the tenant entered; the app never takes the phone\'s word '
+          'for it. $kLegalProductName never takes, holds, transfers or refunds rent, and never '
+          'sees a card number, CVV, bank account or the tenant\'s UPI ID — for rent or for a '
+          'plan.',
         ),
         Para(
           'A receipt records what the hostel entered or what the gateway confirmed; it is not '
@@ -772,7 +1020,10 @@ const kTermsOfUse = LegalDocument(
           'non-payment of a subscription, after a security incident, or where leaving it open '
           'would put other people\'s data at risk. Where it is practicable and lawful the '
           'hostel is told first, and access is restored once the reason is resolved. A '
-          'resident\'s account is normally closed by their hostel when they leave.',
+          'resident\'s account is normally closed by their hostel when they leave, unless they '
+          'created it themselves. When an account is permanently deleted, its payments, '
+          'receipts, dues and security log entries are kept, marked "Deleted user", for legal '
+          'and accounting reasons.',
         ),
         Para(
           'Neither side is liable for indirect or consequential loss, for lost profits, or for '

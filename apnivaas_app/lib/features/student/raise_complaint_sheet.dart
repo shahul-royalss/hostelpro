@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/clay/clay.dart';
 import '../../shared/glass/glass.dart';
 import 'widgets/common.dart';
 import 'widgets/complaint.dart';
@@ -109,15 +110,13 @@ class _RaiseComplaintSheetState extends ConsumerState<_RaiseComplaintSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Raise a complaint', style: t.textTheme.titleLarge),
-              const SizedBox(height: Space.xxs),
-              Text(
-                'Your warden and the owner see this. Other residents never do.',
-                style: t.textTheme.bodySmall,
+              const SheetTitle(
+                title: 'Raise a complaint',
+                subtitle: 'Your warden and the owner see this. Other residents never do.',
               ),
-              const SizedBox(height: Space.md),
+              const SizedBox(height: Space.lg),
 
-              const CapsLabel('Category'),
+              const SectionHeader(title: 'Category', size: SectionHeaderSize.form),
               const SizedBox(height: Space.xs),
               Wrap(
                 spacing: Space.xs,
@@ -176,13 +175,15 @@ class _RaiseComplaintSheetState extends ConsumerState<_RaiseComplaintSheet> {
                 },
               ),
 
+              // Inline, under the fields it is about: a full-size failure state here would push
+              // the form the resident was filling in off the sheet.
               if (_failure != null) ...[
                 const SizedBox(height: Space.xs),
-                ErrorNote(error: _failure!),
+                ErrorNote(error: _failure!, compact: true),
               ],
 
               const SizedBox(height: Space.md),
-              // The sheet's primary action, full-bleed and cream: this form's whole purpose is
+              // The sheet's primary action, full-bleed and forest: this form's whole purpose is
               // the one button at the bottom of it. See the note on the Close button in
               // complaint_detail_sheet.dart for why the width has to be said out loud.
               SizedBox(
@@ -195,12 +196,9 @@ class _RaiseComplaintSheetState extends ConsumerState<_RaiseComplaintSheet> {
                           height: IconSize.md,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            // The spinner sits ON the cream fill, so it takes that button's own
-                            // foreground rather than the theme's default accent. `onPrimary` and
-                            // not `onPrimaryContainer`: theme.dart wires the filled button to
-                            // the CREAM `primaryContainer` in the dark theme and to `primary` in
-                            // the light one, and `onPrimary` is the value that is right for both
-                            // (near-black on cream, white on gold).
+                            // The spinner sits ON the button's fill, so it takes that button's own
+                            // foreground rather than the theme's default accent — white on the
+                            // forest in light.
                             color: t.colorScheme.onPrimary,
                           ),
                         )
@@ -223,16 +221,14 @@ class _RaiseComplaintSheetState extends ConsumerState<_RaiseComplaintSheet> {
   }
 }
 
-/// One category, as the design draws a chip: a 10% wash of the accent behind a full-strength
-/// hairline, with the glyph and the label in the accent — and the hairline surface with the
-/// ordinary control border when it is not chosen.
+/// One category, as the design's choice chip: the card fill with the control border when it is
+/// not chosen, and the forest fill with a white label when it is.
 ///
-/// A hand-built box rather than Material's [ChoiceChip], which paints its selected state in
-/// `secondaryContainer`. That is #25231C in this palette — a dark olive that reads as a
-/// disabled chip rather than a chosen one — and there is no way to reach the design's recipe
-/// through `ChipThemeData` without also changing every other chip in the app from a file this
-/// agent does not own. The two alphas come from [ApnivaasSemantics], where the tightest contrast
-/// case in the product is measured, so a chosen category is exactly as loud as a status pill.
+/// A hand-built box rather than Material's [ChoiceChip], whose selected state is the scheme's
+/// `secondaryContainer` and whose shape is the chip theme's — reaching the design's recipe
+/// through `ChipThemeData` would change every other chip in the app. The selection is never
+/// colour alone: the fill, the border and the label all change, and the semantics say
+/// "selected".
 class _CategoryChip extends StatelessWidget {
   const _CategoryChip({
     required this.category,
@@ -250,45 +246,54 @@ class _CategoryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final tones = context.tones;
+    final dark = t.brightness == Brightness.dark;
     final enabled = onSelected != null;
-    final accent = selected ? t.colorScheme.primary : t.colorScheme.onSurfaceVariant;
+    // Light: forest with white. Dark: the Mist with a forest label — the design's dark selected
+    // chip — because forest on the dark ground is a hole, not a highlight.
+    final fill = selected
+        ? (dark ? ApnivaasColors.mist : ApnivaasColors.forest)
+        : t.colorScheme.surface;
+    final ink = selected
+        ? (dark ? ApnivaasColors.forest : ApnivaasColors.headerTitle)
+        : t.colorScheme.onSurface;
+    final border = selected
+        ? fill
+        : (dark ? t.colorScheme.outline : ApnivaasColors.controlBorder);
 
     return Semantics(
       button: true,
       selected: selected,
       enabled: enabled,
-      child: Material(
-        color: selected ? tones.chipFill(t.colorScheme.primary) : Colors.transparent,
-        borderRadius: Radii.rControl,
-        child: InkWell(
-          borderRadius: Radii.rControl,
-          onTap: onSelected,
-          child: Opacity(
-            opacity: enabled ? 1 : Dim.readOnly,
-            child: Container(
-              // 44 high with 12/8 padding: a chip is a tap target before it is a decoration.
-              constraints: const BoxConstraints(minHeight: Space.xxl + Space.sm),
-              padding: const EdgeInsets.symmetric(horizontal: Space.sm, vertical: Space.xs),
-              decoration: BoxDecoration(
-                borderRadius: Radii.rControl,
-                border: Border.all(
-                  color: selected
-                      ? tones.chipBorder(t.colorScheme.primary)
-                      : t.colorScheme.outline,
-                  width: Strokes.hairline,
+      child: Opacity(
+        opacity: enabled ? 1 : Dim.readOnly,
+        child: Material(
+          color: fill,
+          shape: RoundedRectangleBorder(
+            borderRadius: Radii.rControl,
+            side: BorderSide(color: border, width: Strokes.control),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onSelected,
+            child: ConstrainedBox(
+              // 48 high: a chip is a tap target before it is a decoration.
+              constraints: const BoxConstraints(minHeight: Space.huge),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Space.sm, vertical: Space.xs),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(complaintIcon(category), size: IconSize.md, color: ink),
+                    const SizedBox(width: Space.xs),
+                    Flexible(
+                      child: Text(
+                        category.label,
+                        style: t.textTheme.titleSmall
+                            ?.copyWith(color: ink, fontFeatures: const []),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(complaintIcon(category), size: IconSize.sm, color: accent),
-                  const SizedBox(width: Space.xs),
-                  Text(
-                    category.label,
-                    style: t.textTheme.labelLarge?.copyWith(color: accent),
-                  ),
-                ],
               ),
             ),
           ),

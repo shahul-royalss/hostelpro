@@ -187,6 +187,52 @@ void main() {
     expect(find.text("Passwords don't match"), findsOneWidget);
   });
 
+  testWidgets('a voluntary change pushed from a profile has a way back; the forced one does not',
+      (tester) async {
+    // The forced change is the gate route: nothing is behind it, so no arrow.
+    await pump(tester, AuthSignedIn(sessionFor(mustChangePassword: true)));
+    expect(find.text('Set your password'), findsOneWidget);
+    expect(find.byTooltip('Back'), findsNothing);
+
+    // The voluntary one is pushed over a profile, which is where Back takes it.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          splashGateProvider.overrideWith(OpenSplashGate.new),
+          authControllerProvider.overrideWith(
+            () => _StubAuth(AuthSignedIn(sessionFor(mustChangePassword: false))),
+          ),
+        ],
+        child: MaterialApp(
+          theme: ApnivaasTheme.light(),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const ChangePasswordScreen()),
+                ),
+                child: const Text('the profile'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('the profile'));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('Change your password'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('Change your password'), findsNothing);
+    expect(find.text('the profile'), findsOneWidget);
+  });
+
   testWidgets('an account that does NOT owe a change is never sent here', (tester) async {
     await pump(tester, AuthSignedIn(sessionFor(mustChangePassword: false)));
 

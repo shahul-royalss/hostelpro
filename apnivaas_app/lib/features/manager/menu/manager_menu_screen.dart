@@ -4,15 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
+import '../../../core/theme/typography.dart';
 import '../../../data/providers.dart';
+import '../../../shared/clay/clay.dart';
 import '../../common/refresh.dart';
-import '../../../shared/glass/glass.dart';
 import '../data/manager_models.dart';
 import '../data/manager_providers.dart';
 import '../widgets/manager_ui.dart';
 import 'edit_meal_sheet.dart';
 
-/// The week's food. Figma `4:1236`, `screen-meal-editor`.
+/// The week's food.
 ///
 /// TABLE: public.menus. Seven days times four meals, unique on (hostel_id, day_of_week, meal),
 /// so the whole week is at most 28 rows and is fetched in one request — see
@@ -28,40 +29,30 @@ import 'edit_meal_sheet.dart';
 /// meal nobody has written, and inventing a blank one would let this screen tell a hostel there
 /// is no dinner on Sunday — a claim the database never made. See WeeklyMenu.
 ///
-/// ══ WHAT 4:1236 ASKS FOR THAT public.menus CANNOT STORE ═══════════════════════════════════
+/// ══ WHAT A MEAL PLANNER USUALLY HAS THAT public.menus CANNOT STORE ═══════════════════════
 ///
-/// The frame is a WEEK-OF-DATES editor. This table is a WEEK-OF-WEEKDAYS. That single
-/// difference makes five of its elements unbuildable, and every one of them would have to be
+/// The table is a WEEK-OF-WEEKDAYS, not a week of dates. That single difference rules out
+/// five things a planner screen would normally draw, and every one of them would have to be
 /// fabricated to draw:
 ///
-///  1. **`01 Sep - 07 Sep 2026` and the two week arrows (4:1254–4:1259).** `menus` is keyed on
-///     `day_of_week`, an enum of mon..sun. There is no date column, so there is no such thing
-///     as last week's menu or next week's — Monday has exactly one row, forever, and paging
-///     the week would page over the same twenty-eight rows. The day strip therefore names the
-///     weekday and not a date; drawing `31 / 01 / 02` under it would attach this week's
-///     calendar to rows that do not belong to a week.
-///  2. **`BREAKFAST • 08:00 AM` (4:1283).** There is no service-time column anywhere in
+///  1. **A date range and arrows to the next week.** `menus` is keyed on `day_of_week`, an
+///     enum of mon..sun. There is no date column, so there is no such thing as last week's menu
+///     or next week's — Monday has exactly one row, forever, and paging the week would page over
+///     the same twenty-eight rows. The day strip therefore names the weekday and not a date.
+///  2. **A serving time beside each meal.** There is no service-time column anywhere in
 ///     db/schema.sql. The meal name is the whole of what the row knows.
-///  3. **The dish chips with `×`, and `+ Add Item` (4:1291–4:1306).** `items` is ONE `text`
-///     column, `not null default ''`. A chip editor would have to serialise its chips into
-///     that string, and the web app — which reads the same rows for residents — would then
-///     show a line of delimiters. The sheet writes the column the database actually has.
-///  4. **`Draft` and the gold "currently editing" card (4:1286–4:1289).** There is no draft
-///     column and no publish step: the upsert IS the publication, and every resident of the
-///     hostel can read the row the moment it lands (menus_select is `can_read_hostel`). A
-///     "Draft" label over a row that is already live is the most dangerous kind of wrong.
-///  5. **`Save & Broadcast Menu` (4:1313).** Nothing broadcasts. The write is an upsert on one
-///     meal; there is no notification trigger on public.menus in schema.sql, so a button
-///     promising a broadcast would promise something that does not happen. Saving is per-meal,
-///     in the sheet, and the sheet says who can read it.
-///
-/// WHAT IS TAKEN: the day strip's chip (4:1262 unselected, 4:1265 gold-selected), the meal card
-/// (4:1281 — raised fill, hairline, a gold caps meal name with the edit glyph opposite, the
-/// dishes under it in body semibold), and the frame's 16dp body rhythm.
-/// The frame's 6dp gap between day tabs (4:1261). See the note beside manager_ui's own copy on
-/// why six is written as half of [Space.sm] rather than added to the scale.
-const double _gap6 = Space.sm / 2;
-
+///  3. **Dish chips with ×, and "Add item".** `items` is ONE `text` column, `not null default
+///     ''`. A chip editor would have to serialise its chips into that string, and the web app —
+///     which reads the same rows for residents — would then show a line of delimiters. The sheet
+///     writes the column the database actually has.
+///  4. **A "Draft" label.** There is no draft column and no publish step: the upsert IS the
+///     publication, and every resident of the hostel can read the row the moment it lands
+///     (menus_select is `can_read_hostel`). A "Draft" label over a row that is already live is
+///     the most dangerous kind of wrong.
+///  5. **"Save & broadcast".** Nothing broadcasts. The write is an upsert on one meal; there is
+///     no notification trigger on public.menus in schema.sql, so a button promising a broadcast
+///     would promise something that does not happen. Saving is per meal, in the sheet, and the
+///     sheet says who can read it.
 class ManagerMenuScreen extends ConsumerWidget {
   const ManagerMenuScreen({super.key});
 
@@ -75,10 +66,10 @@ class ManagerMenuScreen extends ConsumerWidget {
         title: 'Menu',
         child: SingleChildScrollView(
           padding: EdgeInsets.all(Space.md),
-          child: EmptyNote(
-            icon: Icons.restaurant_rounded,
+          child: EmptyState(
+            icon: ClayIcons.navProperty,
             title: 'No hostel on this account',
-            detail: 'A manager runs exactly one hostel. Ask the owner to check the assignment.',
+            body: 'A manager runs exactly one hostel. Ask the owner to check the assignment.',
           ),
         ),
       );
@@ -103,6 +94,9 @@ class ManagerMenuScreen extends ConsumerWidget {
           children: [
             AsyncSection(
               value: menu,
+              // The week IS this page, so a failure stands on the ground at full size.
+              carded: false,
+              loading: const _MenuSkeleton(),
               onRetry: () => ref.invalidate(weeklyMenuProvider(hostelId)),
               builder: (week) => Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -114,7 +108,10 @@ class ManagerMenuScreen extends ConsumerWidget {
                     const SizedBox(height: Space.md),
                     Text(
                       'Menu last changed ${shortDate(week.lastUpdated!)}',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -128,17 +125,15 @@ class ManagerMenuScreen extends ConsumerWidget {
   }
 }
 
-/// The frame's day tabs (4:1261), carrying the one fact this table has instead of a date.
+/// The day strip, carrying the one fact this table has instead of a date.
 ///
-/// The chip's anatomy is the design's: `rounded-[8px] px-[10px] py-[8px] gap-[4px]`, a 10px
-/// caps line over a 12/700 one, unselected on the raised fill under a hairline and SELECTED IN
-/// THE GOLD with near-black on it.
+/// Each day is a small calendar tile: the weekday over how much of it is written — `2/4` — in
+/// the date-numeral type. That second line is what turns the strip from navigation into
+/// information: a manager can see that Saturday has nothing on it without opening Saturday.
 ///
-/// The design puts the day of the MONTH on the second line — `MON / 31`. This table has no
-/// dates (see the class note on [ManagerMenuScreen]), so that line carries how much of the day
-/// is written instead: `2/4`. It is the better number anyway. It is what turns the strip from
-/// navigation into information — a manager can see that Saturday has nothing on it without
-/// opening Saturday.
+/// A SingleChildScrollView, not a ListView: the page's own ListView is the one pull-to-refresh
+/// is found on, and a second, sideways one nested inside it would be the last ListView in the
+/// tree.
 class _DayStrip extends ConsumerWidget {
   const _DayStrip({required this.week, required this.selected, required this.today});
 
@@ -150,10 +145,11 @@ class _DayStrip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.none,
       child: Row(
         children: [
           for (final day in MenuDay.values) ...[
-            if (day != MenuDay.values.first) const SizedBox(width: _gap6),
+            if (day != MenuDay.values.first) const SizedBox(width: Space.tight),
             _DayChip(
               day: day,
               planned: week.plannedOn(day),
@@ -168,6 +164,10 @@ class _DayStrip extends ConsumerWidget {
   }
 }
 
+/// One day of the strip. Selected is forest with white on it — the one way this design says
+/// "this is the one you are looking at". Unselected is the card on a hairline; TODAY, when it
+/// is not the selected day, keeps a forest edge, so the strip still says where "now" is after
+/// the manager has looked at Thursday.
 class _DayChip extends StatelessWidget {
   const _DayChip({
     required this.day,
@@ -187,57 +187,55 @@ class _DayChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final scheme = t.colorScheme;
-    final onChip = isSelected ? scheme.onPrimary : scheme.onSurface;
+    final shape = RoundedRectangleBorder(
+      borderRadius: Radii.rControl,
+      side: isSelected
+          ? BorderSide.none
+          : BorderSide(
+              color: isToday ? scheme.primary : scheme.outlineVariant,
+              width: isToday ? Strokes.control : Strokes.hairline,
+            ),
+    );
     return Semantics(
       button: true,
       selected: isSelected,
       label: '${day.label}, $planned of ${Meal.values.length} meals planned'
           '${isToday ? ', today' : ''}',
+      excludeSemantics: true,
+      onTap: onTap,
       child: Material(
-        // The gold fill is the design's own selected tab. Unselected is the raised surface,
-        // which is what every other chip and icon button in the file sits on.
-        color: isSelected ? scheme.primary : scheme.surfaceContainer,
-        borderRadius: Radii.rControl,
+        color: isSelected ? scheme.primary : scheme.surface,
+        shape: shape,
         child: InkWell(
-          borderRadius: Radii.rControl,
+          customBorder: shape,
           onTap: onTap,
-          child: Container(
-            // 48dp square keeps the target on Material's tap floor; the design's own chip is
-            // shorter, and a day nobody can hit is a day nobody plans.
-            constraints: const BoxConstraints(minWidth: Space.huge, minHeight: Space.huge),
-            padding:
-                const EdgeInsets.symmetric(horizontal: Space.xs, vertical: Space.xs),
-            decoration: BoxDecoration(
-              borderRadius: Radii.rControl,
-              border: Border.all(
-                // Today is marked with the gold edge when it is not the selected day, so the
-                // strip still says where "now" is after the manager has looked at Thursday.
-                color: isSelected
-                    ? scheme.primary
-                    : isToday
-                        ? scheme.primary
-                        : scheme.outlineVariant,
-                width: Strokes.hairline,
-              ),
+          child: ConstrainedBox(
+            // 52 x 56: past the 48dp tap floor both ways, with room for the numeral.
+            constraints: const BoxConstraints(
+              minWidth: Space.huge + Space.xxs,
+              minHeight: Space.huge + Space.xs,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  day.short.toUpperCase(),
-                  // chip 10/600 — the design's `text-[10px]` day label.
-                  style: t.textTheme.labelSmall?.copyWith(
-                    color: isSelected ? scheme.onPrimary : context.tones.muted,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Space.xs, vertical: Space.tight),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    day.short,
+                    style: t.textTheme.labelMedium?.copyWith(
+                      color: isSelected ? scheme.onPrimary : scheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
-                const SizedBox(height: Space.xxs),
-                Text(
-                  '$planned/${Meal.values.length}',
-                  // 12/600 caps is the closest step to the design's 12/700 date line.
-                  style: t.textTheme.labelMedium?.copyWith(color: onChip, letterSpacing: 0),
-                ),
-              ],
+                  const SizedBox(height: Space.hair),
+                  Text(
+                    '$planned/${Meal.values.length}',
+                    style: context.textRoles.dateNumeral.copyWith(
+                      color: isSelected ? scheme.onPrimary : scheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -246,18 +244,11 @@ class _DayChip extends StatelessWidget {
   }
 }
 
-/// The day being edited — the ONE domain-tinted surface this screen gets.
+/// The day being planned: the thali, the day's name and how much of it is written, then the
+/// four meals in one card.
 ///
-/// A saffron [DomainCard] around the four meals, opened by the food glyph: the manager's side
-/// of the resident's "Today's food" card, so the menu is recognisably the menu on both ends of
-/// the app. It is the card that IS the screen's subject and it carries no status — an unplanned
-/// meal is said in muted ink inside it, never as a tint of the whole — which is exactly the
-/// case [ApnivaasDomain] allows a domain onto a surface. Nothing else here is tinted: the day
-/// strip keeps the design's gold-selected chip, because that is selection, not identity.
-///
-/// The meal blocks inside drop their hairline. The design's own inner blocks (4:1603, 4:1606)
-/// are bare fills — a hairline inside a hairlined card reads as a table — and the card's
-/// tone-coloured edge is the only outline this group needs.
+/// One card, divided, rather than four: the meals are one day's food and read as one list, and
+/// the divider between them is the only structure four rows need.
 class _DayMenu extends StatelessWidget {
   const _DayMenu({required this.hostelId, required this.day, required this.week});
 
@@ -268,40 +259,42 @@ class _DayMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return DomainCard(
-      domain: ApnivaasDomain.food,
-      padding: const EdgeInsets.all(Space.sm),
+    final planned = week.plannedOn(day);
+    return SectionCard(
+      padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.xxs),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              // A BARE GLYPH, NOT A PLATE. This card is a DomainCard(food), so its ground is
-              // already a 10% saffron tint — and a DomainIcon's fill is a 10% tint of the same
-              // tone, which lands twice as far toward its own glyph and all but disappears. It
-              // is the tint-on-tint stack ApnivaasSemantics.surfaceTintAlpha describes for chips,
-              // one layer up. One domain object per card: the ground says food, so the mark in
-              // the corner only has to be legible, and the ink at full strength is.
-              Icon(
-                Icons.restaurant_rounded,
-                size: IconSize.md,
-                color: context.tones.resolve(ApnivaasDomain.food.tone),
-              ),
-              const SizedBox(width: Space.xs),
+              const ClayIcon(ClayIcons.food, size: ClaySize.list),
+              const SizedBox(width: Space.sm),
               Expanded(
-                child: Text(
-                  day.label,
-                  style: t.textTheme.titleSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Semantics(
+                      header: true,
+                      child: Text(day.label, style: context.textRoles.tileTitle.copyWith(
+                        color: t.colorScheme.onSurface,
+                      )),
+                    ),
+                    Text(
+                      planned == Meal.values.length
+                          ? 'Every meal is planned'
+                          : '$planned of ${Meal.values.length} meals planned',
+                      style: t.textTheme.bodySmall
+                          ?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: Space.sm),
+          const SizedBox(height: Space.xs),
           for (final meal in Meal.values) ...[
-            if (meal != Meal.values.first) const SizedBox(height: Space.xs),
-            _MealCard(
+            Divider(height: Strokes.hairline, color: t.dividerTheme.color),
+            _MealRow(
               hostelId: hostelId,
               day: day,
               meal: meal,
@@ -314,20 +307,14 @@ class _DayMenu extends StatelessWidget {
   }
 }
 
-/// One meal, in the frame's meal-card anatomy (4:1281).
+/// One meal: its glyph, its name, and what is being served — or that nothing is written yet.
 ///
-/// `bg-[#171a1e] border border-[#292e33] rounded-[10px] p-[12px] gap-[8px]`: the meal's name
-/// along the top in GOLD CAPS with the edit glyph opposite it, and the dishes underneath in
-/// body semibold cream. The border is the one part not drawn any more — see [_DayMenu] for
-/// why an inner block of a tinted card goes edgeless.
-///
-/// THE GOLD IS THE DESIGN'S, AND IT STILL MEANS SOMETHING HERE. 4:1283 and 4:1310 set every
-/// meal heading in `#c9a96e` regardless of state, because every meal on that frame is planned.
-/// An unplanned meal is the case the frame does not draw, and it takes the muted ink and a `+`
-/// instead of a pencil — so the four rows still say at a glance how much of the day is
-/// written, which is the question a manager standing in the kitchen is actually asking.
-class _MealCard extends StatelessWidget {
-  const _MealCard({
+/// A PLANNED MEAL'S NAME IS FOREST and its glyph sits on a Mist disc; an unplanned one is in the
+/// secondary ink on an empty ring, with a + where the pencil would be. So the four rows say at a
+/// glance how much of the day is written, which is the question a manager standing in the
+/// kitchen is actually asking.
+class _MealRow extends StatelessWidget {
+  const _MealRow({
     required this.hostelId,
     required this.day,
     required this.meal,
@@ -341,60 +328,162 @@ class _MealCard extends StatelessWidget {
   /// Null when there is no row, and null when the row is blank. Both mean "not planned".
   final String? items;
 
+  static IconData _glyphFor(Meal meal) => switch (meal) {
+        Meal.breakfast => Icons.free_breakfast_rounded,
+        Meal.lunch => Icons.lunch_dining_rounded,
+        Meal.snacks => Icons.cookie_rounded,
+        Meal.dinner => Icons.dinner_dining_rounded,
+      };
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final scheme = t.colorScheme;
+    final dark = t.brightness == Brightness.dark;
     final planned = items != null;
-    final accent = planned ? t.colorScheme.primary : context.tones.muted;
 
-    // The raised fill at a card's radius — the frame's meal block, not a list row on the
-    // ground. FlatSurface rather than GlassSurface: nothing here is elevated above the page,
-    // and GlassSurface asserts the moment two panes stack. No hairline: this block sits inside
-    // the day's tinted card, whose own edge already outlines the group.
-    return FlatSurface(
-      weight: GlassWeight.regular,
-      borderRadius: Radii.rCard,
-      border: false,
-      padding: const EdgeInsets.all(Space.sm),
-      semanticLabel: '${meal.label}: ${items ?? 'not planned yet'}. Tap to change.',
-      onTap: () => showEditMealSheet(
-        context,
-        hostelId: hostelId,
-        day: day,
-        meal: meal,
-        current: items,
+    void edit() => showEditMealSheet(
+          context,
+          hostelId: hostelId,
+          day: day,
+          meal: meal,
+          current: items,
+        );
+
+    return Semantics(
+      container: true,
+      button: true,
+      label: '${meal.label}: ${items ?? 'not planned yet'}. Tap to change.',
+      excludeSemantics: true,
+      onTap: edit,
+      child: InkWell(
+        onTap: edit,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: ListRow.minHeight),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: Space.sm),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: Space.xxxl,
+                  height: Space.xxxl,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: planned
+                        ? (dark ? ApnivaasColors.darkMist : ApnivaasColors.mist)
+                        : Colors.transparent,
+                    border: planned
+                        ? null
+                        : Border.all(color: scheme.outlineVariant, width: Strokes.control),
+                  ),
+                  child: Icon(
+                    _glyphFor(meal),
+                    size: IconSize.lg,
+                    color: planned ? scheme.primary : scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: Space.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        meal.label,
+                        style: t.textTheme.titleMedium?.copyWith(
+                          color: planned ? scheme.primary : scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: Space.hair),
+                      Text(
+                        items ?? 'Not planned yet',
+                        style: t.textTheme.bodyMedium?.copyWith(
+                          color: planned ? scheme.onSurface : scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: Space.xs),
+                Padding(
+                  padding: const EdgeInsets.only(top: Space.xs),
+                  child: Icon(
+                    planned ? Icons.edit_outlined : Icons.add_rounded,
+                    size: IconSize.lg,
+                    color: scheme.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
+    );
+  }
+}
+
+/// The week's outline while it loads: the strip's seven tiles, then the day card.
+class _MenuSkeleton extends StatelessWidget {
+  const _MenuSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final card = BoxDecoration(
+      color: t.colorScheme.surface,
+      borderRadius: Radii.rSurface,
+      border: Border.all(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
+    );
+    return SkeletonPulse(
+      semanticLabel: 'Loading the menu',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  meal.label.toUpperCase(),
-                  // label-caps 12/600 — the design's own `text-[12px] Bold uppercase`.
-                  style: t.textTheme.labelMedium?.copyWith(color: accent),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              for (var i = 0; i < 5; i++) ...[
+                if (i > 0) const SizedBox(width: Space.tight),
+                const Skeleton(
+                  width: Space.huge + Space.xxs,
+                  height: Space.huge + Space.xs,
+                  radius: Radii.rControl,
                 ),
-              ),
-              const SizedBox(width: Space.xs),
-              Icon(
-                planned ? Icons.edit_outlined : Icons.add_rounded,
-                // The frame's edit glyph is 14 (4:1358).
-                size: IconSize.sm,
-                color: accent,
-              ),
+              ],
             ],
           ),
-          const SizedBox(height: Space.xs),
-          planned
-              ? Text(items!, style: t.textTheme.titleSmall)
-              : Text(
-                  'Not planned yet',
-                  style: t.textTheme.titleSmall?.copyWith(color: context.tones.muted),
-                ),
+          const SizedBox(height: Space.md),
+          DecoratedBox(
+            decoration: card,
+            child: Padding(
+              padding: const EdgeInsets.all(Space.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Skeleton(widthFactor: 0.4, height: Space.md),
+                  for (var i = 0; i < 4; i++) ...[
+                    const SizedBox(height: Space.lg),
+                    const Row(
+                      children: [
+                        Skeleton(width: Space.xxxl, height: Space.xxxl, circle: true),
+                        SizedBox(width: Space.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Skeleton(widthFactor: 0.35),
+                              SizedBox(height: Space.xs),
+                              Skeleton(widthFactor: 0.7),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

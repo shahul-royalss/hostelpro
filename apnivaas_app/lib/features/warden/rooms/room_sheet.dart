@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/clay/clay.dart' show PillButton;
 import '../../../shared/glass/glass.dart';
 import '../../../shared/rooms/edit_room_sheet.dart';
 import '../actions/assign_bed_sheet.dart';
@@ -69,40 +70,40 @@ class _RoomSheet extends ConsumerWidget {
     return SheetBody(
       title: 'Room $roomNumber',
       subtitle: 'Floor $floorNumber',
+      // The RLS admits the warden AND the owner to rooms_update (widened 2026-09-02; it used
+      // to admit only the warden, while this sheet told the warden the opposite). The person
+      // standing in the corridor when a room is split is usually this one.
+      //
+      // The clay pill beside the room's name: one quiet outlined control for the one thing
+      // about the ROOM a warden can change, apart from the beds' own actions below.
+      trailing: PillButton(
+        label: 'Edit room',
+        icon: Icons.edit_outlined,
+        onPressed: () async {
+          final changed = await showEditRoomSheet(
+            context,
+            roomId: roomId,
+            roomNumber: roomNumber,
+            capacity: capacity,
+            occupied: occupied,
+            floorNumber: floorNumber,
+          );
+          if (!changed || !context.mounted) return;
+          ref.invalidate(bedsInRoomProvider(roomId));
+          refreshBeds(ref);
+          Navigator.of(context).pop();
+        },
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // The RLS admits the warden AND the owner to rooms_update (widened 2026-09-02; it
-          // used to admit only the warden, while this sheet told the warden the opposite).
-          // The person standing in the corridor when a room is split is usually this one.
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () async {
-                final changed = await showEditRoomSheet(
-                  context,
-                  roomId: roomId,
-                  roomNumber: roomNumber,
-                  capacity: capacity,
-                  occupied: occupied,
-                  floorNumber: floorNumber,
-                );
-                if (!changed || !context.mounted) return;
-                ref.invalidate(bedsInRoomProvider(roomId));
-                refreshBeds(ref);
-                Navigator.of(context).pop();
-              },
-              icon: const Icon(Icons.edit_outlined, size: IconSize.sm),
-              label: const Text('Edit room'),
-            ),
-          ),
           AsyncSection<List<Bed>>(
         value: beds,
         onRetry: () => ref.invalidate(bedsInRoomProvider(roomId)),
         builder: (bedRows) {
           if (bedRows.isEmpty) {
-            return const EmptyState(
+            return const WardenEmptyState(
               icon: Icons.bed_outlined,
               title: 'This room has no beds',
               detail: 'Bed rows follow the room capacity. Use Edit room to change it.',
@@ -174,7 +175,7 @@ enum _BedAction { move, free }
 /// the mockup's `Rahul Singh / Check-in: 12 Aug`. That date is `students.date_of_joining`, a
 /// real column this sheet already has on the row it is drawing; nothing about it is invented.
 ///
-/// A FREE bed is the mockup's inset "Available" row: a violet-edged well, `Ready for
+/// A FREE bed is the mockup's inset "Available" row: a forest-edged card, `Ready for
 /// assignment` underneath, and a round `+` at the right. The design draws it INSIDE the room
 /// card rather than as a peer of the occupied rows, which is what the tone on the surrounding
 /// [TapRow] does here.
@@ -212,7 +213,7 @@ class _BedRow extends ConsumerWidget {
                 ],
               ),
             ),
-            // The mockup's round `+`: a filled violet disc at the right edge of an available
+            // The mockup's round `+`: a filled forest disc at the right edge of an available
             // bed. IconButton.filled gives it the 48dp target a warden needs; the design's own
             // circle is smaller than anything you can hit standing up.
             IconButton.filled(

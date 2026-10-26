@@ -85,9 +85,14 @@ class CodeField extends StatelessWidget {
               Expanded(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(minWidth: 36, minHeight: 56),
+                  // Each box is a text field's own anatomy — the field fill, the 1.5px control
+                  // edge (3.53:1, a control owes 3:1), radius 14 — and the box the next digit
+                  // lands in takes the 2px brand focus ring the theme gives a focused field. A
+                  // rejected code rings every box in the error tone at the same 2px, so the
+                  // state is a change of weight as well as of hue.
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: t.colorScheme.surface,
+                      color: t.inputDecorationTheme.fillColor ?? t.colorScheme.surface,
                       borderRadius: Radii.rControl,
                       border: Border.all(
                         color: hasError
@@ -95,7 +100,7 @@ class CodeField extends StatelessWidget {
                             : i == code.length
                                 ? t.colorScheme.primary
                                 : t.colorScheme.outline,
-                        width: i == code.length ? 1.8 : 1,
+                        width: hasError || i == code.length ? Strokes.focus : Strokes.control,
                       ),
                     ),
                     child: Center(

@@ -366,9 +366,12 @@ void main() {
     late List<String> requests;
     late SupabaseClient client;
     late List<Object?> factors;
+    // Round 3: only the super admin is sent to enrol, so the factor-lookup test uses one.
+    var rowRole = 'owner';
 
     setUp(() {
       requests = [];
+      rowRole = 'owner';
       factors = [
         const {
           'id': factorId,
@@ -406,7 +409,7 @@ void main() {
             return json([
               {
                 'id': 'user-1',
-                'role': 'owner',
+                'role': rowRole,
                 'full_name': 'Owner',
                 'email': 'owner@example.com',
                 'phone': null,
@@ -492,6 +495,7 @@ void main() {
       // 400 `refresh_token_not_found` and gotrue drops the session outright. A lookup must not
       // be able to end the session it is asking about.
       factors = const []; // this token's user object lists none: the branch that goes to the wire
+      rowRole = 'super_admin';
       final c = container();
       await c.read(authControllerProvider.future);
 

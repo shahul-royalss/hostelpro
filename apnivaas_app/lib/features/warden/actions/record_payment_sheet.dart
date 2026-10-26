@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/clay/clay_icons.dart' show ClayIcons;
 import '../../../shared/glass/glass.dart';
 import '../../payments/payments.dart';
 import '../data/warden_providers.dart';
@@ -322,7 +323,7 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
               },
             ),
             const SizedBox(height: Space.md),
-            const CapsLabel('Paid by'),
+            const EyebrowLabel('Paid by'),
             const SizedBox(height: Space.xs),
             // ── A WARDEN RECORDS CASH, AND ONLY CASH ────────────────────────────────────────
             //
@@ -458,8 +459,8 @@ class _Recorded extends ConsumerWidget {
       hostelName: ref.watch(hostelContactsProvider).value?.hostelName,
     );
 
-    // assign-bed-success.png's panel: a haloed mint tick, the outcome in words, then the
-    // SUMMARY of what was written under a `label-caps` heading, then the ways on.
+    // assign-bed-success.png's panel: the clay tick on its disc, the outcome in words, then
+    // the SUMMARY of what was written under a small heading, then the ways on.
     //
     // Every line of that summary is a field of [row] — the composite the RPC returned — which
     // is the whole reason the panel is worth having here: it puts the ledger's own numbers in
@@ -468,6 +469,7 @@ class _Recorded extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SuccessPanel(
+          art: ClayIcons.success,
           title: corrected ? 'Ledger corrected' : 'Payment recorded',
           message: row.amountPaid <= 0
               ? 'This month now shows nothing received.'
@@ -530,8 +532,8 @@ class _BalanceStrip extends StatelessWidget {
     // No row yet means nothing has been paid — rpc_fee_ledger reports exactly that as 'unpaid',
     // so showing the same word here keeps the sheet and the list telling one story.
     final shown = status ?? FeeStatus.unpaid;
-    // resident-profile.png's figure card: `label-caps` eyebrows over their values, the state
-    // marked with its own dot, and the figure that is a call to act taking the colour.
+    // resident-profile.png's figure card: small labels over their values, the state marked
+    // with its own dot, and the figure that is a call to act taking the colour.
     return FlatSurface(
       weight: GlassWeight.regular,
       padding: const EdgeInsets.all(Space.md),
@@ -540,7 +542,7 @@ class _BalanceStrip extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Expanded(child: CapsLabel('This month')),
+              const Expanded(child: EyebrowLabel('This month')),
               StatusPill(status: shown),
             ],
           ),
@@ -575,15 +577,20 @@ class _Figure extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CapsLabel(label, tone: tone, dot: tone != null),
+          EyebrowLabel(label, tone: tone, dot: tone != null),
           const SizedBox(height: Space.xxs),
-          Text(
-            value,
-            style: t.textTheme.titleSmall?.copyWith(
-              color: tone == null ? t.colorScheme.onSurface : context.tones.resolve(tone!),
+          // A figure scales down to fit its third of the card rather than losing digits to an
+          // ellipsis: "₹1,50,0…" is a different amount, not a shorter one.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              value,
+              style: t.textTheme.headlineSmall?.copyWith(
+                color: tone == null ? t.colorScheme.onSurface : context.tones.resolve(tone!),
+              ),
+              maxLines: 1,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

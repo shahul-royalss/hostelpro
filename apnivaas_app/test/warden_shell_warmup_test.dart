@@ -16,8 +16,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile/shared/wordmark.dart';
-import 'package:mobile/shared/glass/glass.dart';
+import 'package:mobile/shared/clay/app_header.dart' show HeaderAvatar;
+import 'package:mobile/shared/clay/nav_bar.dart';
+import 'package:mobile/shared/clay/skeleton.dart' show SkeletonPulse;
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
 import 'package:mobile/data/models/models.dart';
@@ -103,18 +104,17 @@ void main() {
     _expectNoLoadingIndicators('Complaints');
 
     await _tapTab(tester, 'Home');
-    // THE GREETING IS BACK, and this assertion has now swung twice — worth recording why.
+    // THE GREETING STAYS, and this assertion has swung more than once — worth recording why.
     //
-    // The header first carried "Hello, Priya", then became the drawn signature alone (and this
-    // comment was rewritten to say the greeting "was the old header's job"), and is now the
-    // masthead block: the greeting on top with Apnivaas set as type beneath it. The product
-    // owner's call each time, and the second reversal is the one that stuck because a masthead
-    // that says who you are is more use at 8am than a logo on a screen you already know is ours.
+    // The header first carried "Hello, Priya", then became the drawn signature alone, then the
+    // masthead block (the greeting with Apnivaas set as type beneath it). It is now the clay
+    // forest header every role's home shares: today's date over "Hello, Priya", the account
+    // avatar at the leading edge. A header that says who you are is more use at 8am than a
+    // logo on a screen you already know is ours, which is the call that has stuck each time.
     //
-    // First name only, by MastheadBlock's own rule — a full name read aloud is a database row.
-    expect(find.byType(AccountAvatar), findsOneWidget);
-    expect(find.text('Hello Priya'), findsOneWidget);
-    expect(find.byType(ApnivaasTypeMark), findsOneWidget);
+    // First name only — a full name read aloud is a database row.
+    expect(find.byType(HeaderAvatar), findsOneWidget);
+    expect(find.text('Hello, Priya'), findsOneWidget);
     _expectNoLoadingIndicators('Home');
   });
 
@@ -171,13 +171,18 @@ void main() {
 void _expectNoLoadingIndicators(String where) {
   expect(find.byType(SkeletonBlock), findsNothing,
       reason: '$where must render from warm data, not repaint a skeleton');
+  // AsyncSection's default loading state is the clay list skeleton now, not a spinner, and
+  // every clay skeleton is drawn under one SkeletonPulse — so this is the finder that sees it.
+  expect(find.byType(SkeletonPulse), findsNothing,
+      reason: '$where must render from warm data, not repaint a skeleton');
   expect(find.byType(CircularProgressIndicator), findsNothing,
       reason: '$where must never greet a tap with a spinner');
 }
 
 Future<void> _tapTab(WidgetTester tester, String label) async {
   await tester.tap(
-    find.descendant(of: find.byType(NavigationBar), matching: find.text(label)),
+    // The shell's bar is the clay ClayNavBar now, not Material's NavigationBar.
+    find.descendant(of: find.byType(ClayNavBar), matching: find.text(label)),
   );
   // ONE frame: this is the instant the tab appears under the warden's thumb. Everything the
   // no-skeleton contract promises must already be true here, without settling.

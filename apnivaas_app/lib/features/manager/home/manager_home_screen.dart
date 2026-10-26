@@ -2,28 +2,36 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
-import '../../../shared/dashboard.dart';
+import '../../../shared/clay/clay.dart';
+import '../../../shared/finance/expense_stats_screen.dart';
+import '../../../shared/motion/settle.dart';
+import '../../auth/verify_email_screen.dart';
 import '../../common/refresh.dart';
 import '../../common/staff_hostel_switcher.dart';
+import '../../shell/staff_profile_sheet.dart';
+import '../../warden/notices/warden_notices_screen.dart';
+import '../../../core/auth/session.dart' show UserRole;
+import '../../../shared/person_avatar.dart';
 import '../data/manager_models.dart';
-import '../../auth/verify_email_screen.dart';
 import '../data/manager_providers.dart';
+import '../expenses/record_money_sheet.dart';
 import '../tasks/task_sheet.dart';
 import '../widgets/in_out_bars.dart';
 import '../widgets/manager_ui.dart';
 
-/// What needs attention today. Figma `4:1159`, `screen-manager-dashboard`.
+/// What needs attention today.
 ///
-/// NOT A DASHBOARD, AND NOT A SMALL OWNER'S DASHBOARD. A manager runs one hostel's day: the
-/// jobs waiting, the money that left the building this month, and what is being cooked. There
-/// is no occupancy figure, no fee collection rate, no resident count and no second hostel —
-/// not because the screen chose restraint, but because RLS gives this role no access to any of
-/// it, and a tile reading "0 residents" would be a fabricated number rather than a missing one.
+/// NOT A SMALL OWNER'S DASHBOARD. A manager runs one hostel's day: the jobs waiting, the money
+/// that left the building this month, and what is being cooked. There is no occupancy figure,
+/// no fee collection rate, no resident count and no second hostel — not because the screen
+/// chose restraint, but because RLS gives this role no access to any of it, and a tile reading
+/// "0 residents" would be a fabricated number rather than a missing one.
 ///
 /// EVERY FIGURE HERE IS COUNTED OR SUMMED BY POSTGRES:
 ///   · open and overdue jobs — `count(*)` over public.tasks, two HEAD requests (TaskLoad)
@@ -32,49 +40,52 @@ import '../widgets/manager_ui.dart';
 /// Nothing is derived from a loaded page, sampled or estimated. In particular the task counts
 /// are NOT `page.items.length`, which would read "20" for a manager with sixty jobs waiting.
 ///
-/// ── THE FRAME'S RHYTHM, AND THE ONE THING ON IT THAT COULD NOT BE BUILT ───────────────────
+/// ── THE SHAPE EVERY ROLE'S HOME SHARES ───────────────────────────────────────────────────
 ///
-/// 4:1159 is three blocks: a 2x2 KPI grid, `TODAY'S TASKS` over boxed rows, and
-/// `CATEGORIZED EXPENSES` over a stacked bar with a percentage legend. The first two are here,
-/// in that order and in that dress.
+/// The forest header with the date over the greeting, then the PG, then an overview strip of
+/// clay tiles, the quick actions, the jobs nearest their deadline and the month's money. The
+/// four reads behind it are the four it always made; the shape is new, the questions are not.
 ///
-/// THE NOTICEBOARD AND THE ACTION GRID CAME OFF ON 2026-09-12, both at the product owner's
-/// request, and both for a reason worth keeping. Notices reach wardens and residents now — a
-/// manager's instructions arrive as TASKS, which carry a due date and a status, where the
-/// noticeboard was a second inbox with neither. The four "Do it now" buttons led to destinations
-/// the tab bar already carries; recording money is one tap from the Expenses tab's + button.
+/// THE QUICK ACTIONS OPEN SHEETS, NOT TABS. The "Do it now" grid came off on 2026-09-12
+/// because every one of its buttons led somewhere the tab bar already goes. These four do not:
+/// three open the recording sheets directly — the most common thing a manager does, two taps
+/// sooner than the Expenses tab's + — and the fourth opens the month-by-month charts, which no
+/// tab carries.
 ///
-/// THE THIRD IS NOT, and it is the one thing on either of this role's frames that the database
-/// cannot answer. A share-per-category needs `sum(amount) group by category`, and nothing in
-/// db/schema.sql produces one: `rpc_daily_finance` returns a revenue and an expense TOTAL per
-/// day and no breakdown, and the only other route to public.expenses is the paginated list,
-/// whose first page is twenty rows. "Groceries 42%" computed from twenty rows of a hostel with
-/// four hundred is a number that looks like a measurement and is not one — the same defect as
-/// counting open tasks from page zero, which this role's own providers exist to avoid. So the
-/// slot keeps the design's shape (eyebrow, bar, legend) and is filled with the series Postgres
-/// really does return: money in against money out, one pair per day, zero-filled by
-/// generate_series so a flat stretch is a quiet week and not a gap.
+/// THE NOTICEBOARD IS STILL NOT HERE, on purpose: a manager's instructions arrive as TASKS,
+/// which carry a due date and a status, where the noticeboard was a second inbox with neither.
+///
+/// THE MONEY CARD IS IN AGAINST OUT, NOT A CATEGORY BREAKDOWN. A share-per-category needs
+/// `sum(amount) group by category` over the month, and the only other route to public.expenses
+/// from this screen is the paginated list, whose first page is twenty rows. "Groceries 42%"
+/// computed from twenty rows of a hostel with four hundred is a number that looks like a
+/// measurement and is not one — the same defect as counting open tasks from page zero, which
+/// this role's own providers exist to avoid. So the card shows the series Postgres really does
+/// return: money in against money out, one pair per day.
 class ManagerHomeScreen extends ConsumerWidget {
   const ManagerHomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(sessionProvider);
+    final name = ref.watch(sessionProvider)?.fullName.trim() ?? '';
     final hostelId = ref.watch(currentHostelIdProvider);
 
     if (hostelId == null) {
-      return const ManagerScreen(
-        title: 'Today',
-        masthead: true,
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(Space.md),
-          child: EmptyNote(
-            icon: Icons.home_work_outlined,
-            title: 'No hostel on this account',
-            detail: 'Ask the owner to give you access to a PG. Until then there is nothing to '
-                'show.',
+      return Column(
+        children: [
+          _HomeHeader(name: name),
+          const Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(Space.md),
+              child: EmptyState(
+                icon: ClayIcons.navProperty,
+                title: 'No hostel on this account',
+                body: 'Ask the owner to give you access to a PG. Until then there is nothing to '
+                    'show.',
+              ),
+            ),
           ),
-        ),
+        ],
       );
     }
 
@@ -83,101 +94,167 @@ class ManagerHomeScreen extends ConsumerWidget {
     final hostel = ref.watch(hostelProvider(hostelId));
     final load = ref.watch(taskLoadProvider(hostelId));
     final finance = ref.watch(managerFinanceProvider(hostelId));
-    final firstName = (session?.fullName ?? '').split(' ').first;
 
-    return ManagerScreen(
-      title: firstName.isEmpty ? 'Today' : 'Hello, $firstName',
-      subtitle: hostel.value?.name,
-      masthead: true,
-      child: RefreshIndicator(
-        // The hostel row is refreshed here too. Before, pull-to-refresh could not clear a
-        // failed status read, so the one retry gesture on the screen could not reach the one
-        // message on it that is about safety.
-        //
-        // The WAIT is on the money, which is what this screen is mostly made of. Bounded and
-        // spoken: AsyncSection keeps the figures already drawn through a failed reload, so
-        // without this a pull that did not land looked exactly like one that did. See
-        // features/common/refresh.dart.
-        onRefresh: () {
-          ref.invalidate(hostelProvider(hostelId));
-          ref.invalidate(taskLoadProvider(hostelId));
-          ref.invalidate(managerFinanceProvider(hostelId));
-          ref.invalidate(tasksProvider);
-          // So a PG the owner has just given this manager access to brings the Switch PG
-          // control with it on a pull, rather than only after the next sign-in.
-          ref.invalidate(myStaffHostelsProvider);
-          return settleRefresh(
-              context, () => ref.read(managerFinanceProvider(hostelId).future));
-        },
-        // The frame's own body: `p-[16px] gap-[16px]`, groups announced by an uppercase
-        // eyebrow rather than wrapped in a titled card. See SectionLabel.
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, Space.huge),
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            const VerifyEmailBanner(),
-            // Which PG every figure below belongs to, and the Switch PG control for a manager
-            // with two or more. The masthead carries the greeting and not the property.
-            StaffHostelBar(hostelId: hostelId),
-            const SizedBox(height: Space.md),
-            _HostelStatus(hostelId: hostelId, hostel: hostel),
-            // Banded like every other role's home — see shared/dashboard.dart. The tiles below
-            // were already tinted, one figure each, so this names the groups rather than
-            // rebuilding them.
-            const DashboardBand(label: 'Essentials'),
-            _KpiGrid(hostelId: hostelId, load: load, finance: finance),
-            const SizedBox(height: Space.md),
-            // No band here: _TodaysTasks is a Section that already heads itself "Today's tasks".
-            // A DashboardBand('Today') used to sit above it, so the screen read "TODAY" and then
-            // "TODAY'S TASKS" one line apart. The band is the redundant one — it says less.
-            _TodaysTasks(hostelId: hostelId),
-            const SizedBox(height: Space.md),
-            _MoneySection(hostelId: hostelId, finance: finance),
-          ],
+    return Column(
+      children: [
+        // A fixed object the page passes under, not the first row of the scroll view: a
+        // greeting that scrolls off the forest lands in the theme's ink on whatever is under it.
+        _HomeHeader(name: name, hostelId: hostelId),
+        Expanded(
+          child: RefreshIndicator(
+            // The hostel row is refreshed here too. Before, pull-to-refresh could not clear a
+            // failed status read, so the one retry gesture on the screen could not reach the one
+            // message on it that is about safety.
+            //
+            // The WAIT is on the money, which is what this screen is mostly made of. Bounded and
+            // spoken: AsyncSection keeps the figures already drawn through a failed reload, so
+            // without this a pull that did not land looked exactly like one that did. See
+            // features/common/refresh.dart.
+            onRefresh: () {
+              ref.invalidate(hostelProvider(hostelId));
+              ref.invalidate(taskLoadProvider(hostelId));
+              ref.invalidate(managerFinanceProvider(hostelId));
+              ref.invalidate(tasksProvider);
+              // So a PG the owner has just given this manager access to brings the Switch PG
+              // control with it on a pull, rather than only after the next sign-in.
+              ref.invalidate(myStaffHostelsProvider);
+              return settleRefresh(
+                  context, () => ref.read(managerFinanceProvider(hostelId).future));
+            },
+            // NO HORIZONTAL PADDING ON THE LIST: the overview strip bleeds to the screen edge and
+            // brings the gutter as its own padding, so every other section is held off the edge
+            // by [_Gutter].
+            child: ListView(
+              padding: const EdgeInsets.only(top: Space.lg, bottom: Space.huge),
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                // First, and above the PG: an unproved address is this manager's own, and the
+                // one thing on the screen about the ACCOUNT rather than the building.
+                const _Gutter(child: VerifyEmailBanner()),
+                // Which PG every figure below belongs to, and the Switch PG control for a
+                // manager with two or more. The header carries the greeting and not the property.
+                _Gutter(child: StaffHostelBar(hostelId: hostelId)),
+                _HostelStatus(hostelId: hostelId, hostel: hostel),
+                const _Gutter(top: Space.xl, child: SectionHeader(title: 'Overview')),
+                const SizedBox(height: Space.sm),
+                _Overview(hostelId: hostelId, load: load, finance: finance),
+                _Gutter(
+                  top: Space.xl,
+                  child: _QuickActions(hostelId: hostelId, hostelName: hostel.value?.name),
+                ),
+                _Gutter(top: Space.xl, child: _TodaysTasks(hostelId: hostelId)),
+                _Gutter(top: Space.xl, child: _MoneySection(hostelId: hostelId, finance: finance)),
+              ],
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 }
 
-/// The 2x2 grid at the top of the frame — 4:1177.
+/// The forest header: today's date over the greeting, and the account at the leading edge.
 ///
-/// Four tiles, all the same size, all 16/700: money out today, money out this month, money in
-/// this month, and the job load. There is no hero card any more — the design has nothing on
-/// this screen at 48px and nothing on a shadowed pane, and the emphasis comes instead from the
-/// single tile that is allowed a colour (4:1193, the overdue count in red).
+/// The PG is NOT the title here: it is named, with its Switch PG control, by [StaffHostelBar]
+/// directly beneath — which also does the work of noticing when the PG moved on another device
+/// — and saying it twice a thumb apart would be the header and the card arguing about whose
+/// fact it is.
+class _HomeHeader extends StatelessWidget {
+  const _HomeHeader({required this.name, this.hostelId});
+
+  final String name;
+  final String? hostelId;
+
+  /// "Saturday, 24 October". The day is what a manager's morning is organised around.
+  static final _today = DateFormat('EEEE, d MMMM');
+
+  @override
+  Widget build(BuildContext context) {
+    // First name only: a full name read aloud is a database row, not a greeting.
+    final first = name.split(RegExp(r'\s+')).first;
+    return AppHeader(
+      greeting: _today.format(DateTime.now()),
+      title: first.isEmpty ? 'Today' : 'Hello, $first',
+      // Profile, "Change photo", two-factor, Switch PG, change password and sign out.
+      leading: MyHeaderAvatar(onTap: () => showStaffProfile(context)),
+      actions: [
+        if (hostelId != null)
+          // No badge: nothing records which notices this manager has read.
+          HeaderIconButton(
+            icon: Icons.notifications_none_rounded,
+            label: 'Notices',
+            onPressed: () => Navigator.of(context)
+                .push(WardenNoticesScreen.route(hostelId!, viewerRole: UserRole.manager)),
+          ),
+      ],
+    );
+  }
+}
+
+/// A section of the page, held off the screen edge.
+class _Gutter extends StatelessWidget {
+  const _Gutter({required this.child, this.top = 0});
+  final Widget child;
+  final double top;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: EdgeInsets.fromLTRB(Space.md, top, Space.md, 0),
+        child: child,
+      );
+}
+
+/// The overview strip: the month's spending on the forest tile, then the job load, today's
+/// spending and the money booked in.
+///
+/// THE FOREST TILE IS THE MONTH'S SPENDING, the figure a manager is asked about first. The job
+/// tile is beside it, where the eye lands next, and it is the one tile allowed a colour: "2 past
+/// their date" as a red chip, "None late" as a green one. Each tile opens what it counts.
 ///
 /// ── THREE TILES, ONE READ, AND THEREFORE ONE FAILURE ─────────────────────────────────────
 ///
 /// The three money tiles all come out of `managerFinanceProvider`. That is one request, so it
-/// has one outcome, and printing "Cannot reach Apnivaas" three times across a grid would say
+/// has one outcome, and printing "Cannot reach Apnivaas" three times across a strip would say
 /// three times over what happened once. When the finance read fails or is still in flight, the
-/// money half of the grid collapses to a SINGLE card in its place — the failure's own sentence,
-/// with a retry only where retrying could work. The job tile is a different read and keeps its
-/// own face throughout, which is the whole point of four states looking different.
+/// money tiles collapse to a SINGLE tile in their place — the failure's own sentence, with a
+/// retry only where retrying could work. The job tile is a different read and keeps its own
+/// face throughout, which is the whole point of four states looking different.
 ///
 /// BOTH HALVES GO THROUGH [AsyncStat] RATHER THAN READING `.value`. `load.value` is null while
 /// the two HEAD requests are in flight, null when they failed, and null when RLS refused them
 /// — three facts, one dash, and a dash in a figure slot is read as a zero. "Nothing is late"
 /// and "we never got an answer" are opposite instructions to the person holding the phone.
 ///
-/// THE MOCKUP'S CAPTIONS ARE NOT COPIED. "94% of budget spent" needs a budget, and there is no
-/// budget column anywhere in db/schema.sql — not on public.hostels, not on public.expenses.
-/// "↑ 14% vs last month" needs last month, which this screen does not fetch, and a percentage
-/// change against a month that booked nothing is a divide by zero. "Utilities, Food stock"
-/// needs the per-category breakdown that does not exist. Each tile carries a caption it can
-/// actually stand behind, or none.
-class _KpiGrid extends ConsumerWidget {
-  const _KpiGrid({required this.hostelId, required this.load, required this.finance});
+/// THE COLD FIRST PAINT IS A SKELETON. Before either read has answered there is nothing for any
+/// tile to say, so the strip draws its own outline; from the first answer on, each tile wears
+/// the face its own read has earned.
+///
+/// NO CAPTION CLAIMS MORE THAN THE DATA. "94% of budget spent" needs a budget, and there is no
+/// budget column anywhere in db/schema.sql. "↑ 14% vs last month" needs last month, which this
+/// screen does not fetch. Each tile carries a caption it can actually stand behind, or none.
+class _Overview extends ConsumerWidget {
+  const _Overview({required this.hostelId, required this.load, required this.finance});
 
   final String hostelId;
   final AsyncValue<TaskLoad> load;
   final AsyncValue<FinanceWindow> finance;
 
+  static bool _waiting(AsyncValue<Object?> v) => !v.hasValue && !v.hasError;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (_waiting(load) && _waiting(finance)) {
+      return const Settle(
+        state: 'loading',
+        child: StatCarouselSkeleton(semanticLabel: 'Loading the overview'),
+      );
+    }
+
+    void openLedger() => ref.read(managerTabProvider.notifier).go(1);
+
     final jobs = AsyncStat<TaskLoad>(
       value: load,
+      icon: ClayIcons.tasks,
       label: 'Jobs open',
       loadingCaption: 'Counting',
       onTap: () => ref.read(managerTabProvider.notifier).go(2),
@@ -190,24 +267,37 @@ class _KpiGrid extends ConsumerWidget {
     );
 
     if (!finance.hasValue) {
-      // One card for one read. It sits beside the job tile so the grid keeps its shape.
+      // One tile for one read, beside the job tile.
       final money = finance.hasError
           ? FailedStat(
               label: 'Money',
+              icon: ClayIcons.expense,
               error: finance.error!,
               onRetry: () => ref.invalidate(managerFinanceProvider(hostelId)),
             )
-          : const StatCard(label: 'Money', value: '—', caption: 'Adding up');
-      return _Pair(left: money, right: jobs);
+          : const StatCard(
+              label: 'Money', value: '—', caption: 'Adding up', icon: ClayIcons.expense);
+      return Settle(state: 'partial', child: StatCarousel(children: [money, jobs]));
     }
 
     final window = finance.requireValue;
     final today = window.todayOut;
 
-    return Column(
-      children: [
-        _Pair(
-          left: StatCard(
+    return Settle(
+      state: 'data',
+      child: StatCarousel(
+        children: [
+          StatCard(
+            hero: true,
+            icon: ClayIcons.expense,
+            label: 'Spent this month',
+            value: money(window.monthOut),
+            caption: monthTitle(window.monthStart),
+            onTap: openLedger,
+          ),
+          jobs,
+          StatCard(
+            icon: ClayIcons.receipt,
             label: 'Spent today',
             // rpc_daily_finance zero-fills every day in the range, so a hostel that spent
             // nothing today comes back as 0 and is drawn as ₹0 — a real figure. A NULL here
@@ -216,50 +306,72 @@ class _KpiGrid extends ConsumerWidget {
             // words, so it cannot be mistaken for a spend of zero.
             value: today == null ? '—' : money(today),
             caption: today == null ? 'No figure for today' : 'Booked against today',
-            onTap: () => ref.read(managerTabProvider.notifier).go(1),
+            onTap: openLedger,
           ),
-          right: StatCard(
-            label: 'Spent this month',
-            value: money(window.monthOut),
-            caption: monthTitle(window.monthStart),
-            onTap: () => ref.read(managerTabProvider.notifier).go(1),
-          ),
-        ),
-        const SizedBox(height: Space.xs),
-        _Pair(
-          left: StatCard(
+          StatCard(
+            icon: ClayIcons.money,
             label: 'Recorded in',
             value: money(window.monthIn),
+            // public.fee_payments is unreadable to this role, so the difference between money
+            // in and money out is NOT the hostel's profit. This tile is where that is said.
             caption: 'Mess and deposits, not rent',
-            onTap: () => ref.read(managerTabProvider.notifier).go(1),
+            onTap: openLedger,
           ),
-          right: jobs,
+        ],
+      ),
+    );
+  }
+}
+
+/// The things a manager does most, one tap from the home screen.
+///
+/// Three recording sheets — the same ones the Expenses tab's + opens, with the same checks and
+/// the same write — and the month-by-month charts the owner reads from More. See the class note
+/// on [ManagerHomeScreen] for why these four and not the tabs again.
+class _QuickActions extends StatelessWidget {
+  const _QuickActions({required this.hostelId, required this.hostelName});
+
+  final String hostelId;
+  final String? hostelName;
+
+  // SHORT WORDS ON PURPOSE. A tile is about 75dp wide on a 360dp phone, and at the 1.4x text the
+  // app allows, "Day-to-day" or "Month by month" no longer fit a line and end in an ellipsis.
+  // Every word here fits at that size; the spoken label is the full sentence.
+  @override
+  Widget build(BuildContext context) {
+    return QuickActionGrid(
+      actions: [
+        QuickActionTile(
+          icon: ClayIcons.expense,
+          label: 'Add expense',
+          semanticLabel: 'Record a day-to-day expense',
+          onTap: () => showRecordExpenseSheet(context, hostelId: hostelId),
+        ),
+        QuickActionTile(
+          icon: ClayIcons.invoice,
+          label: 'Monthly bill',
+          semanticLabel: 'Record a monthly expense',
+          onTap: () =>
+              showRecordExpenseSheet(context, hostelId: hostelId, kind: ExpenseKind.monthly),
+        ),
+        QuickActionTile(
+          icon: ClayIcons.money,
+          label: 'Record money in',
+          onTap: () => showRecordRevenueSheet(context, hostelId: hostelId),
+        ),
+        QuickActionTile(
+          icon: ClayIcons.analytics,
+          label: 'Expense charts',
+          semanticLabel: 'Expenses month by month',
+          onTap: () => Navigator.of(context)
+              .push(ExpenseStatsScreen.route(hostelId, hostelName: hostelName)),
         ),
       ],
     );
   }
 }
 
-/// Two tiles side by side at the frame's 8dp gutter, each taking half the width.
-class _Pair extends StatelessWidget {
-  const _Pair({required this.left, required this.right});
-  final Widget left;
-  final Widget right;
-
-  @override
-  Widget build(BuildContext context) => IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(child: left),
-            const SizedBox(width: Space.xs),
-            Expanded(child: right),
-          ],
-        ),
-      );
-}
-
-/// `TODAY'S TASKS` — 4:1195. The three jobs nearest their deadline, then the way to the rest.
+/// "Today's tasks" — the three jobs nearest their deadline, then the way to the rest.
 ///
 /// SAME QUERY AS THE TASKS TAB. TaskQuery has value equality and this key — open only, no
 /// status — is the one the tab's default filter builds, so opening Tasks reuses this fetch
@@ -267,10 +379,9 @@ class _Pair extends StatelessWidget {
 /// repository orders by due_date ascending with undated tasks LAST, which is why taking the
 /// first three is "nearest the deadline" and not "whichever arrived first".
 ///
-/// THREE ROWS AND A FOOTER IS THE DESIGN'S OWN SHAPE — its section holds exactly three. The
-/// footer is not the design's (it draws none), and it is shown whenever there is a list to go
-/// to rather than only when this section is truncating one: the tab it opens carries the
-/// filters and the finished jobs, which are not here at any length.
+/// The heading's "View all" opens the tab, which carries the filters and the finished jobs —
+/// neither of which is here at any length — so it is there whether or not this list is
+/// truncating one.
 class _TodaysTasks extends ConsumerWidget {
   const _TodaysTasks({required this.hostelId});
   final String hostelId;
@@ -282,31 +393,35 @@ class _TodaysTasks extends ConsumerWidget {
 
     return Section(
       label: "Today's tasks",
+      actionLabel: 'View all',
+      onAction: () => ref.read(managerTabProvider.notifier).go(2),
       child: AsyncSection<PagedResult<Task>>(
         value: page,
         onRetry: () => ref.invalidate(tasksProvider(query)),
+        loading: const ListSkeleton(semanticLabel: 'Loading tasks'),
         builder: (result) {
           if (result.isEmpty) {
-            return const EmptyNote(
-              icon: Icons.check_circle_outline_rounded,
-              title: 'Nothing waiting on you',
-              detail: 'New jobs arrive here when the owner assigns one.',
-              tone: ApnivaasColors.success,
+            // The trophy, because an empty to-do list is the good news on this screen — and
+            // only here and on the Tasks tab's own "To do" filter does an empty list earn it.
+            return const SectionCard(
+              padding: EdgeInsets.zero,
+              child: EmptyState(
+                compact: true,
+                icon: ClayIcons.success,
+                title: 'Nothing waiting on you',
+                body: 'New jobs arrive here when the owner assigns one.',
+              ),
             );
           }
           final shown = result.items.take(3).toList(growable: false);
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          return ListGroup(
             children: [
-              for (final task in shown) ...[
-                TaskLine(task: task, onTap: () => showTaskSheet(context, task: task)),
-                const SizedBox(height: Space.xs),
-              ],
-              const SizedBox(height: Space.xxs),
-              CapsButton(
-                label: 'View all tasks',
-                onTap: () => ref.read(managerTabProvider.notifier).go(2),
-              ),
+              for (final task in shown)
+                TaskLine(
+                  task: task,
+                  grouped: true,
+                  onTap: () => showTaskSheet(context, task: task),
+                ),
             ],
           );
         },
@@ -314,16 +429,17 @@ class _TodaysTasks extends ConsumerWidget {
     );
   }
 }
-/// The frame's third block — `CATEGORIZED EXPENSES` (4:1213), filled with the only aggregate
-/// this role can actually read.
+
+/// The month's money: the difference between what came in and what went out, over the daily
+/// bars it is the sum of — the only aggregate this role can actually read beyond the tiles.
 ///
-/// The design draws a stacked bar of category shares and a four-dot legend of percentages.
-/// There is no query behind that — see the class note on [ManagerHomeScreen]. What is here
-/// instead is money IN against money OUT, day by day, straight off `rpc_daily_finance`, with
-/// the month's difference stated above it.
+/// The difference is never called profit: rent is collected into public.fee_payments by the
+/// warden, which this role cannot read, so "in minus out" here is the hand-kept ledgers' balance
+/// and nothing more. It turns red only when the month is under water, which is a state; a
+/// positive difference stays in the ink, because it is not a claim of anything.
 ///
-/// THE MOCKUP'S BUDGET METER IS ALSO NOT DRAWN, for the same reason: there is no budget column
-/// to be the denominator, and the percentage would have to be invented.
+/// THE MOCKUP'S BUDGET METER IS NOT DRAWN: there is no budget column to be the denominator,
+/// and the percentage would have to be invented.
 class _MoneySection extends ConsumerWidget {
   const _MoneySection({required this.hostelId, required this.finance});
 
@@ -339,56 +455,102 @@ class _MoneySection extends ConsumerWidget {
       child: AsyncSection<FinanceWindow>(
         value: finance,
         onRetry: () => ref.invalidate(managerFinanceProvider(hostelId)),
+        loading: const _MoneySkeleton(),
         builder: (window) {
           final net = window.monthNet;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text('Difference this month',
-                        style: t.textTheme.bodyMedium,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                  ),
-                  const SizedBox(width: Space.xs),
-                  // Flexible, not bare: a hostel that books in lakhs plus a phone at 1.6x
-                  // text scale is ₹12,34,567 at 26px, which is wider than a 320dp row has
-                  // left. The figure wins the space it needs and the label gives way first.
-                  Flexible(
-                    child: Text(
-                      money(net),
-                      // headlineSmall is 16/700 tabular — a refreshing figure must not shuffle
-                      // sideways. Red only when the month is under water, which is a state; a
-                      // positive difference stays cream, because it is not a claim of profit.
-                      style: t.textTheme.headlineSmall?.copyWith(
-                        color: net < 0 ? context.tones.error : t.colorScheme.onSurface,
+          return SectionCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LayoutBuilder(
+                  builder: (context, box) => Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Difference this month',
+                                style: t.textTheme.titleSmall?.copyWith(fontFeatures: const []),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: Space.hair),
+                            Text(
+                              monthTitle(window.monthStart),
+                              style: t.textTheme.bodySmall
+                                  ?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                            ),
+                          ],
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.end,
-                    ),
+                      const SizedBox(width: Space.xs),
+                      // CAPPED AND SCALED, NEVER CUT. A hostel that books in lakhs plus a phone
+                      // at 1.6x text is ₹12,34,567 at 35px, wider than a 320dp card has left
+                      // beside its label. The figure takes up to three fifths of the row and
+                      // shrinks inside that rather than ellipsising — `₹12,34…` is a different
+                      // number — and the label gives way first.
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: box.maxWidth * 0.6),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: Text(
+                            money(net),
+                            // Tabular, so a refreshing figure does not shuffle sideways.
+                            style: t.textTheme.headlineMedium?.copyWith(
+                              color: net < 0 ? context.tones.error : t.colorScheme.onSurface,
+                            ),
+                            maxLines: 1,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: Space.xxs),
-              // The month, and nothing else. The sentence that used to follow it — "Rent is
-              // collected separately by the warden and is not counted here" — came off at the
-              // product owner's request. What it guarded against is still true and is still
-              // said: the "Recorded in" tile above is captioned "Mess and deposits, not rent",
-              // and the Money screen's subtitle repeats it. A third telling, in two lines under
-              // a figure, read as an apology for the number.
-              Text(monthTitle(window.monthStart), style: t.textTheme.bodySmall),
-              const SizedBox(height: Space.sm),
-              InOutBars(window: window),
-            ],
+                ),
+                const SizedBox(height: Space.md),
+                InOutBars(window: window),
+              ],
+            ),
           );
         },
       ),
     );
   }
 }
+
+/// The money card's outline: the heading line, the figure, and the plot.
+class _MoneySkeleton extends StatelessWidget {
+  const _MoneySkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return SkeletonPulse(
+      semanticLabel: 'Loading the money in and out',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: t.colorScheme.surface,
+          borderRadius: Radii.rSurface,
+          border: Border.all(color: t.colorScheme.outlineVariant, width: Strokes.hairline),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.all(Space.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Skeleton(widthFactor: 0.5),
+              SizedBox(height: Space.xs),
+              Skeleton(widthFactor: 0.3),
+              SizedBox(height: Space.lg),
+              Skeleton(height: Space.huge * 2, radius: Radii.rControl),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Whether this hostel can be written to — INCLUDING WHEN WE DO NOT KNOW.
 ///
 /// THE MOST IMPORTANT WIDGET ON THIS SCREEN, and it used to be the quietest. It was written as
@@ -399,7 +561,7 @@ class _MoneySection extends ConsumerWidget {
 /// hour later. A safety message that fails silently is worse than no safety message, because
 /// its absence is read as an all-clear.
 ///
-/// So the read's own outcome is now on the screen. Four faces, and only one of them is blank:
+/// So the read's own outcome is now on the screen. Five faces, and only one of them is blank:
 ///   · loaded, active            — nothing. The all-clear, and the only honest way to earn it.
 ///   · loaded, suspended/lapsed  — the warning, in the same words as before.
 ///   · loaded, no row            — plain, unalarming: the row is not visible to this account.
@@ -419,7 +581,7 @@ class _HostelStatus extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final strip = _strip(ref);
     if (strip == null) return const SizedBox.shrink();
-    return Padding(padding: const EdgeInsets.only(bottom: Space.sm), child: strip);
+    return _Gutter(top: Space.md, child: strip);
   }
 
   /// hasValue before hasError, as AsyncSection does it: a refresh that fails must not replace a
@@ -474,5 +636,3 @@ class _HostelStatus extends ConsumerWidget {
     );
   }
 }
-
-

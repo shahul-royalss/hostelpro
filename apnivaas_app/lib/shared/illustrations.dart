@@ -1,51 +1,54 @@
-/// The four pieces of artwork that stand in for a glyph on a first-run empty state.
+/// The four first-run empty states, by name — and what is drawn for each.
 library;
 
-/// Asset paths for the empty-state illustrations, so no screen carries a raw string.
+import 'clay/clay_icons.dart';
+
+/// The four first-run empty states, so no screen carries a raw string.
 ///
 /// ── WHAT THESE ARE ────────────────────────────────────────────────────────────────────────
 ///
-/// Four wordless drawings for the four screens a NEW PG owner opens before any data exists:
-/// no residents, no complaints, no notices, no payments. Those screens used to show a 32dp
-/// glyph inside a 56dp outlined square, which is correct for "this filter matched nothing" and
-/// far too quiet for the very first thing a paying customer sees.
+/// The four screens a NEW PG owner opens before any data exists: no residents, no complaints,
+/// no notices, no payments. Those screens used to show a 32dp glyph inside a 56dp outlined
+/// square, which is correct for "this filter matched nothing" and far too quiet for the very
+/// first thing a paying customer sees.
 ///
-/// ── WHY THEY ARE NOT SVG ──────────────────────────────────────────────────────────────────
+/// ── WHAT IS DRAWN FOR THEM NOW ────────────────────────────────────────────────────────────
 ///
-/// `flutter_svg` is already a dependency, so SVG was the obvious choice and was not taken:
-/// these came out of an image generator as raster art, and hand-tracing them to vector would
-/// be inventing geometry rather than shipping what was approved. They are 480px PNGs — the
-/// exact pixel size of a 160dp box on a 3x phone — and total 87KB for all four, which is
-/// roughly a tenth of one of the five bundled Inter faces.
+/// Each constant names a STATE, and [clayFor] maps it to the clay icon drawn for it — the
+/// same art the rest of the app uses for that kind of thing, at 96dp on a Mist disc (see
+/// `StateBody` in glass/glass.dart and the clay kit's `EmptyState`). Every call site passes
+/// the constant and never the picture, which is why the art could change without touching
+/// one of them.
 ///
-/// ── WHAT IS TRUE OF EVERY FILE HERE, AND MUST STAY TRUE ───────────────────────────────────
+/// The PNGs the paths point at are the previous drawings: wordless two-ink line art in the old
+/// dark design's gold #c9a96e and cream #f5f3ee. On the cream ground their cream strokes
+/// vanish, so nothing draws them any more. They are kept in the bundle only because the paths
+/// are the constants' identity and `test/illustration_assets_test.dart` holds them to it; they
+/// can go, with that test's bundle check, once every screen has moved to the clay EmptyState.
 ///
-///  * **No text inside the image.** Not a word, not a numeral. The title and the support line
-///    under the artwork are real `Text` in Inter, so they stay translatable, selectable and
-///    readable by a screen reader. Artwork with baked-in English would break all three.
-///  * **Transparent background.** The art is keyed off its near-black ground, so the raised
-///    card `#171a1e` shows through it. An opaque `#0b0d0f` tile would paint a visibly darker
-///    square inside the card it sits in.
-///  * **Two inks only, and they are the design's own.** Every non-transparent pixel is exactly
-///    the design's gold `#c9a96e` or its cream `#f5f3ee`; the assets were snapped to those two
-///    values rather than trusted to arrive at them.
-///  * **Dark-only, like the rest of the app.** These read on `#0b0d0f`. If a light path is
-///    ever reintroduced — it should not be — this artwork does not come with it.
-///
-/// Every name is what the state IS, not what the picture SHOWS, so replacing the drawing later
-/// does not mean renaming a constant at six call sites.
+/// THE ART NEVER CARRIES WORDS. The title and the support line stay real `Text`, so they stay
+/// translatable, selectable and readable by a screen reader.
 abstract final class EmptyArt {
   static const _dir = 'assets/illustrations';
 
-  /// The warden's resident list before anybody has been registered. An empty bunk bed.
+  /// The resident list before anybody has been registered.
   static const residents = '$_dir/no_residents.png';
 
-  /// A resident's complaint history before they have raised one. A speech bubble and a spanner.
+  /// A resident's complaint history before they have raised one.
   static const complaints = '$_dir/no_complaints.png';
 
   /// A noticeboard with nothing pinned to it yet.
   static const notices = '$_dir/no_notices.png';
 
-  /// The rent ledger before a single payment has been recorded. An open, blank ledger book.
+  /// The rent ledger before a single payment has been recorded.
   static const payments = '$_dir/no_payments.png';
+
+  /// The clay icon drawn for [state]. Anything unrecognised gets the welcoming default.
+  static String clayFor(String state) => switch (state) {
+        residents => ClayIcons.addTenant,
+        complaints => ClayIcons.complaint,
+        notices => ClayIcons.announcement,
+        payments => ClayIcons.collectPayment,
+        _ => ClayIcons.success,
+      };
 }

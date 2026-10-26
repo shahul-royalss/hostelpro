@@ -15,6 +15,8 @@ import '../settings/security_screen.dart';
 import 'create/create_wizard_screen.dart';
 import 'data/sa_models.dart';
 import 'data/sa_providers.dart';
+import 'sa_deletions_screen.dart';
+import 'sa_signups_screen.dart';
 import 'widgets/sa_ui.dart';
 
 /// SA-1 — the platform at a glance. FIGMA `screen-dashboard`, node 4:125.
@@ -113,6 +115,9 @@ class SaOverviewScreen extends ConsumerWidget {
           const SaSectionRule(),
           const DashboardBand(label: 'Onboarding'),
           const _Onboarding(),
+          // Round 3: one list of self sign-ups with their trials and demos, and the deletions.
+          const SaSignupsEntry(),
+          const SaDeletedAccountsEntry(),
           const SaSectionRule(),
           const DashboardBand(label: 'Security'),
           const _Security(),

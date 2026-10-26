@@ -205,6 +205,25 @@ class WardenTab extends Notifier<int> {
 
 final wardenTabProvider = NotifierProvider<WardenTab, int>(WardenTab.new);
 
+/// "Put the cursor in the resident search" — asked by the home header's search pill, answered
+/// by the Students tab.
+///
+/// A flag rather than a callback, because the Students tab may not be mounted yet when the pill
+/// is tapped: the shell builds a tab the first time it is warmed or shown, so the screen reads
+/// this once when it mounts and listens for it afterwards, and clears it when it has acted on
+/// it. Screen state only — it reads nothing and writes nothing.
+class WardenSearchRequest extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void request() => state = true;
+
+  void consume() => state = false;
+}
+
+final wardenSearchRequestProvider =
+    NotifierProvider<WardenSearchRequest, bool>(WardenSearchRequest.new);
+
 /// Which slice of the fee ledger the collections screen is showing. Null means everyone.
 class FeeFilter extends Notifier<FeeStatus?> {
   @override

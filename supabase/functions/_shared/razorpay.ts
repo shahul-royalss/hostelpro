@@ -272,3 +272,64 @@ export async function createOrder(input: CreateOrderInput): Promise<{ id: string
   }
   return { id: orderId };
 }
+
+/* ───────────────────────── Checkout verification (plan payments) ───────────────────────── */
+
+/**
+ * The checkout success handler's `razorpay_signature`: lowercase hex HMAC-SHA256 of
+ * `order_id|payment_id` keyed with the API secret. Compared in constant time by
+ * crypto.subtle.verify. A client "success" without a signature that verifies activates nothing.
+ */
+export async function verifyCheckoutSignature(orderId: string, paymentId: string, signature: unknown): Promise<boolean> {
+  const secret = keySecret();
+  if (!secret) throw new Error(NOT_CONFIGURED);
+  if (typeof signature !== "string" || !/^[0-9a-fA-F]{64}$/.test(signature)) return false;
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+  return await crypto.subtle.verify("HMAC", key, hexToBytes(signature), encoder.encode(`${orderId}|${paymentId}`));
+}
+
+export interface RazorpayPayment {
+  id: string;
+  order_id: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  method: string | null;
+}
+
+/** GET /v1/payments/:id with the secret. Throws RazorpayApiError(502) when Razorpay cannot answer. */
+export async function fetchPayment(paymentId: string): Promise<RazorpayPayment> {
+  const id = keyId();
+  const secret = keySecret();
+  if (!id || !secret) throw new Error(NOT_CONFIGURED);
+  if (!PAYMENT_ID_RE.test(paymentId)) throw new RazorpayApiError(400, "Invalid payment.");
+  let response: Response;
+  try {
+    response = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
+      headers: { Authorization: `Basic ${btoa(`${id}:${secret}`)}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (e) {
+    throw new RazorpayApiError(502, `Could not reach Razorpay: ${e instanceof Error ? e.name : "error"}`);
+  }
+  const text = await response.text();
+  if (!response.ok) {
+    console.error("[payments] razorpay payments API said", response.status, text.slice(0, 400));
+    throw new RazorpayApiError(response.status === 404 || response.status === 400 ? 400 : 502, `Razorpay could not find the payment (HTTP ${response.status}).`);
+  }
+  let p: Record<string, unknown>;
+  try {
+    p = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new RazorpayApiError(502, "Razorpay returned something that is not a payment.");
+  }
+  return {
+    id: String(p["id"] ?? ""),
+    order_id: typeof p["order_id"] === "string" ? p["order_id"] : null,
+    amount: typeof p["amount"] === "number" ? p["amount"] : Number.NaN,
+    currency: String(p["currency"] ?? ""),
+    status: String(p["status"] ?? ""),
+    method: typeof p["method"] === "string" ? p["method"] : null,
+  };
+}

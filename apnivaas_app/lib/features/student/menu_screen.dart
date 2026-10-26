@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/clay/clay.dart' show ClayIcons;
 import '../common/refresh.dart';
 import 'widgets/common.dart';
 import 'widgets/format.dart';
@@ -76,14 +77,14 @@ class _Menu extends ConsumerWidget {
               // NOTHING AT ALL IS ITS OWN STATE. Seven cards each saying "no menu set" is a
               // wall of the same sentence; one card says it once and names who fills it in.
               if (week.isEmpty) {
-                return EmptyNote(
+                // An unwritten week is not bad news, so it gets the thali — the same art as the
+                // "Today's food" tile on Home — and a sentence naming who fills it in.
+                return const EmptyNote(
+                  clay: ClayIcons.food,
                   icon: Icons.restaurant_menu_rounded,
                   title: 'No menu put up yet',
                   message: 'Your hostel manager writes the week here. Nothing has been '
                       'entered for any day so far.',
-                  // An unwritten week is not bad news, so the plate keeps the food domain's
-                  // saffron — the same mark as the "Today's food" heading on Home.
-                  tone: ApnivaasDomain.food.tone,
                 );
               }
 
