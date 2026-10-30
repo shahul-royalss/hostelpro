@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/providers.dart';
-import '../../shared/glass/glass.dart';
 import '../common/refresh.dart';
 import 'data/sa_models.dart';
 import 'data/sa_providers.dart';
@@ -281,7 +280,7 @@ class _SaAlertCardState extends ConsumerState<SaAlertCard> {
     final alert = widget.alert;
     final tone = severityTone(context, alert.severity);
 
-    return FlatSurface(
+    return SaCard(
       padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

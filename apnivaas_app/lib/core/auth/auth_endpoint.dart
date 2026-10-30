@@ -130,16 +130,19 @@ typedef FunctionInvoker = Future<FunctionResponse> Function(
   Object? body,
 });
 
-/// How long one call to the endpoint may take before the app stops waiting.
-///
-/// The same fifteen seconds [AuthController] already allowed each sign-in step, and for the
-/// same reason: Dart's HTTP client has no default request timeout, so a backend that completes
-/// the TLS handshake and then answers nothing leaves the button spinning for minutes. Kept
-/// here rather than inherited so this class is complete on its own.
-const authEndpointTimeout = Duration(seconds: 15);
+/// How long the first call may take. Twenty seconds: a cold function on slow mobile data is
+/// slow, and Dart's HTTP client has no default timeout of its own.
+const authEndpointTimeout = Duration(seconds: 20);
+
+/// The pause before the one automatic retry of a transient failure (R4.4).
+const authRetryDelay = Duration(seconds: 1);
 
 class MobileAuthEndpoint {
-  const MobileAuthEndpoint(this._invoke, {this.timeout = authEndpointTimeout});
+  const MobileAuthEndpoint(
+    this._invoke, {
+    this.timeout = authEndpointTimeout,
+    this.retryDelay = authRetryDelay,
+  });
 
   /// The real thing, bound to the app's one Supabase client.
   ///
@@ -154,6 +157,7 @@ class MobileAuthEndpoint {
 
   final FunctionInvoker _invoke;
   final Duration timeout;
+  final Duration retryDelay;
 
   /// [loginEmail] must ALREADY be resolved by `resolveLoginEmail` — the caller passes the
   /// address, not the raw typed string.
@@ -184,6 +188,7 @@ class MobileAuthEndpoint {
       _call(
         {'action': _actionMfa, 'factorId': factorId, 'code': code},
         unavailable: mfaUnavailable,
+        idempotent: false,
       );
 
   /// "Continue with Google": the ID token Android's account sheet produced, and the raw nonce
@@ -231,6 +236,7 @@ class MobileAuthEndpoint {
         },
         unavailable: truecallerUnavailable,
         rejected: truecallerRejected,
+        idempotent: false,
       );
 
   /// Manual sign-up (docs/round3-api.md §1.1). Same success body as [signIn].
@@ -256,27 +262,57 @@ class MobileAuthEndpoint {
         },
         unavailable: signUpUnavailable,
         rejected: signUpRejected,
+        idempotent: false,
       );
 
+  /// One automatic retry, ~1 s later, for a transient failure only (R4.4): a timeout, a relay
+  /// or fetch failure, 408, or 5xx with no server message. Never a 4xx, never a 429.
+  /// A call that may already have taken effect (a one-time code, a sign-up) is retried only
+  /// when the request provably never reached our code (fetch or relay failure).
   Future<AuthVerdict> _call(
     Map<String, Object?> body, {
     required String unavailable,
     String rejected = genericRejection,
+    bool idempotent = true,
+  }) async {
+    final first = await _attempt(body, unavailable: unavailable, rejected: rejected);
+    final retry = switch (first.transient) {
+      _Transient.none => false,
+      _Transient.neverArrived => true,
+      _Transient.maybeArrived => idempotent,
+    };
+    if (!retry) return first.verdict;
+    await Future<void>.delayed(retryDelay);
+    return (await _attempt(body, unavailable: unavailable, rejected: rejected)).verdict;
+  }
+
+  Future<({AuthVerdict verdict, _Transient transient})> _attempt(
+    Map<String, Object?> body, {
+    required String unavailable,
+    required String rejected,
   }) async {
     try {
       final response = await _invoke(mobileAuthFunction, body: body).timeout(timeout);
-      final granted = _grantFrom(response.data);
       // A 2xx with no tokens in it is a client/server shape disagreement, not a credential
       // verdict. Saying "wrong password" here would blame the user for our own bug.
-      return granted ?? AuthUnavailable(unavailable);
+      return (verdict: _grantFrom(response.data) ?? AuthUnavailable(unavailable), transient: _Transient.none);
     } on FunctionsHttpException catch (e) {
-      return verdictFor(e.status, e.details, unavailable: unavailable, rejected: rejected);
+      final transient = (e.status == 408 || e.status >= 500) && _messageFrom(e.details) == null
+          ? _Transient.maybeArrived
+          : _Transient.none;
+      return (
+        verdict: verdictFor(e.status, e.details, unavailable: unavailable, rejected: rejected),
+        transient: transient,
+      );
     } on FunctionException catch (e) {
       // FunctionsFetchException (the request never left) and FunctionsRelayException (the
       // platform edge failed before our code ran). Both are "we could not ask the question".
-      return AuthUnavailable(e.status == 0 ? unreachable : unavailable);
+      return (
+        verdict: AuthUnavailable(e.status == 0 ? unreachable : unavailable),
+        transient: _Transient.neverArrived,
+      );
     } on TimeoutException {
-      return AuthUnavailable(unavailable);
+      return (verdict: AuthUnavailable(unavailable), transient: _Transient.maybeArrived);
     }
     // AuthException is deliberately NOT caught: `functions.invoke` refreshes an expiring session
     // before sending, and when that refresh fails the right answer is "sign in again", which is
@@ -422,6 +458,8 @@ class MobileAuthEndpoint {
 
   static const sessionEnded = 'Your session has ended. Sign in again to continue.';
 }
+
+enum _Transient { none, neverArrived, maybeArrived }
 
 /// The endpoint the auth controller uses. Overridable in tests.
 final mobileAuthEndpointProvider = Provider<MobileAuthEndpoint>(

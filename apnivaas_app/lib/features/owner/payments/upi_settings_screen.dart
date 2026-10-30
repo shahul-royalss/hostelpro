@@ -153,6 +153,12 @@ class _FormState extends ConsumerState<_Form> {
               'directly. Apnivaas never holds it. Check your UPI app or bank, then confirm '
               'each payment in Apnivaas.',
         ),
+        const SizedBox(height: Space.sm),
+        const InfoNote(
+          icon: Icons.tips_and_updates_rounded,
+          message: 'For the smoothest payments, use a UPI ID from PhonePe for Business, Paytm '
+              'for Business or BharatPe. Some apps limit payments to personal UPI IDs.',
+        ),
         const SizedBox(height: Space.lg),
         TextField(
           controller: _vpa,

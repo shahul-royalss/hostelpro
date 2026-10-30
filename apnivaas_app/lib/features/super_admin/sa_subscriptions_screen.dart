@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
-import '../../shared/glass/glass.dart';
 import '../common/refresh.dart';
 import 'data/sa_providers.dart';
 import 'sa_hostel_detail_screen.dart';
@@ -322,7 +321,7 @@ class _ReadOnlyExplainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return FlatSurface(
+    return SaCard(
       padding: const EdgeInsets.all(Space.md),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

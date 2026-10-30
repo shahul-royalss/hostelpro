@@ -26,7 +26,9 @@ abstract interface class PeopleApi {
   // ── §5 join requests ──
   Future<int> pendingJoinRequestCount();
   Future<List<ReviewJoinRequest>> joinRequests({String status = 'pending'});
-  Future<void> decideJoinRequest(String requestId, {required bool accept, String? note});
+  /// On accept, [monthlyFee] and [dueDay] are saved on the new roster row (round 4).
+  Future<void> decideJoinRequest(String requestId,
+      {required bool accept, String? note, double? monthlyFee, int? dueDay});
 
   // ── §3 photos ──
   /// A 60-second signed URL, or null when storage refuses (show initials).
@@ -126,12 +128,15 @@ final class PeopleRepository implements PeopleApi {
   }
 
   @override
-  Future<void> decideJoinRequest(String requestId, {required bool accept, String? note}) async {
+  Future<void> decideJoinRequest(String requestId,
+      {required bool accept, String? note, double? monthlyFee, int? dueDay}) async {
     final trimmed = note?.trim();
     await _rpc('ow_decide_join_request', {
       'p_request_id': requestId,
       'p_accept': accept,
       'p_note': (trimmed == null || trimmed.isEmpty) ? null : trimmed,
+      if (accept && monthlyFee != null) 'p_monthly_fee': monthlyFee,
+      if (accept && dueDay != null) 'p_due_day': dueDay,
     });
   }
 

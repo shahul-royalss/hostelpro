@@ -19,6 +19,9 @@ import '../../shared/person_avatar.dart';
 import 'staff/owner_staff_screen.dart';
 import 'widgets/owner_header.dart';
 import 'widgets/states.dart' show EmptyNote, ErrorNote, whenAsync;
+import '../../data/repositories/tenant_admin_repository.dart' show tenantProfileProvider;
+import '../warden/actions/rent_sheet.dart' show editRent;
+import '../warden/students/edit_tenant_sheet.dart' show showEditTenantSheet;
 
 /// EVERY RESIDENT, AND WHAT EACH ONE HAS PAID — the People tab.
 ///
@@ -388,6 +391,45 @@ class _StudentDetail extends ConsumerWidget {
             ),
           ],
         ),
+        if (s.isResident) ...[
+          const SizedBox(height: Space.md),
+          // R4.1 / R4.2: the owner edits the same details and rent as the warden. This sheet
+          // shows a snapshot, so it closes after a save and the list re-reads.
+          Wrap(
+            spacing: Space.xs,
+            runSpacing: Space.xs,
+            children: [
+              OutlinedButton.icon(
+                key: const ValueKey('owner-edit-tenant'),
+                onPressed: () async {
+                  final nav = Navigator.of(context);
+                  final saved = await showEditTenantSheet(context,
+                      studentId: s.id, studentName: s.fullName);
+                  if (saved) {
+                    ref.invalidate(studentsProvider);
+                    nav.maybePop();
+                  }
+                },
+                icon: const Icon(Icons.edit_note_rounded, size: IconSize.md),
+                label: const Text('Edit details'),
+              ),
+              OutlinedButton.icon(
+                key: const ValueKey('owner-edit-rent'),
+                onPressed: () async {
+                  final nav = Navigator.of(context);
+                  final change = await editRent(context,
+                      studentId: s.id,
+                      studentName: s.fullName,
+                      currentFee: s.monthlyFee,
+                      currentDueDay: ref.read(tenantProfileProvider(s.id)).value?.rentDueDay);
+                  if (change != null) nav.maybePop();
+                },
+                icon: const Icon(Icons.currency_rupee_rounded, size: IconSize.md),
+                label: Text(s.monthlyFee > 0 ? 'Change rent' : 'Set rent'),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: Space.lg),
 
         const SectionHeader(title: 'Contact', size: SectionHeaderSize.form),

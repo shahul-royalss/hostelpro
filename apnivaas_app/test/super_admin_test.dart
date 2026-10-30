@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/shared/clay/clay.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
 import 'package:mobile/core/theme/theme.dart';
@@ -79,6 +80,39 @@ void main() {
     // The exact string every super-admin tab used to show.
     expect(find.text('This screen is not built yet.'), findsNothing);
     expect(find.byType(SaShell), findsOneWidget);
+  });
+
+  testWidgets('R4.5: the clay console lays out at 1.4x on 360dp', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: _overrides().cast(),
+        child: MaterialApp(
+          theme: ApnivaasTheme.light(),
+          debugShowCheckedModeBanner: false,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.4)),
+            child: child!,
+          ),
+          home: const SaShell(),
+        ),
+      ),
+    );
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(tester.takeException(), isNull, reason: 'no overflow on the overview');
+    expect(find.byType(ClayNavBar), findsOneWidget);
+    expect(find.byType(SaKpiTile), findsWidgets);
+    for (final tab in ['Hostels', 'Subscriptions', 'Security']) {
+      await tester.tap(find.descendant(of: find.byType(ClayNavBar), matching: find.text(tab)));
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(tester.takeException(), isNull, reason: 'no overflow on $tab');
+    }
   });
 
   testWidgets('platform figures come from the stats row, not from literals', (tester) async {
@@ -335,14 +369,28 @@ void main() {
   });
 
   group('the Security tab badge', () {
+    testWidgets('counts open alerts on the clay tab bar', (tester) async {
+      await _pump(tester, [
+        ..._overrides(),
+        saOpenAlertCountProvider.overrideWith((ref) => 3),
+      ]);
+
+      final tab = tester.widget<ClayNavBar>(find.byType(ClayNavBar)).destinations[3];
+      expect(tab.badgeCount, 3);
+      expect(find.byType(CountBadge), findsOneWidget);
+    });
+
     testWidgets('draws nothing when there is nothing outstanding', (tester) async {
       await _pump(tester, [
         ..._overrides(),
         saOpenAlertCountProvider.overrideWith((ref) => 0),
       ]);
 
-      expect(find.byType(Badge), findsNothing,
-          reason: 'a badge reading 0 trains people to ignore badges');
+      final tab = tester.widget<ClayNavBar>(find.byType(ClayNavBar)).destinations[3];
+      expect(tab.label, 'Security');
+      expect(tab.badgeCount, isNull, reason: 'a badge reading 0 trains people to ignore badges');
+      expect(tab.hasBadge, isFalse, reason: 'a badge reading 0 trains people to ignore badges');
+      expect(find.byType(CountBadge), findsNothing);
     });
 
     testWidgets('marks a count it could not read rather than looking like zero',
@@ -355,7 +403,9 @@ void main() {
 
       // Silently dropping the badge shows exactly what the best possible day looks like at the
       // moment the console cannot tell whether it is one.
-      expect(find.text('?'), findsOneWidget);
+      final tab = tester.widget<ClayNavBar>(find.byType(ClayNavBar)).destinations[3];
+      expect(tab.hasBadge, isTrue);
+      expect(tab.badgeLabel, 'open alert count unavailable');
     });
   });
 

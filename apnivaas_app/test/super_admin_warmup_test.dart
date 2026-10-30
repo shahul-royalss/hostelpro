@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/shared/clay/clay.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
 import 'package:mobile/core/theme/theme.dart';
@@ -113,7 +114,7 @@ void main() {
 
   /// A destination on the bottom bar, told apart from a screen title wearing the same word.
   Finder destination(String label) =>
-      find.descendant(of: find.byType(NavigationBar), matching: find.text(label));
+      find.descendant(of: find.byType(ClayNavBar), matching: find.text(label));
 
   /// The two shapes of "still loading" a tab could betray the contract with. The thin
   /// LinearProgressIndicator is exempt: it is the designed silent-refresh affordance and only

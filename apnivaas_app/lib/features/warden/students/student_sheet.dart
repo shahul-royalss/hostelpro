@@ -6,14 +6,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers.dart';
+import '../../../data/repositories/tenant_admin_repository.dart' show tenantProfileProvider;
 import '../../../shared/clay/clay.dart' show ClayIcon, ClayIcons, ListGroup, ListSkeleton;
 import '../../../shared/glass/glass.dart';
 import '../actions/assign_bed_sheet.dart';
 import '../actions/record_payment_sheet.dart';
+import '../actions/rent_sheet.dart';
 import '../actions/sheet_scaffold.dart';
 import '../actions/student_credentials_dialog.dart';
 import '../data/warden_providers.dart';
 import '../widgets/warden_ui.dart';
+import 'edit_tenant_sheet.dart';
 
 /// One resident: who they are, where they sleep, what they owe, and the three things a warden
 /// does about it.
@@ -130,10 +133,13 @@ class _Loaded extends ConsumerWidget {
           _Placement(student: student),
 
           const SectionLabel(label: 'Personal details'),
-          DetailRow(
-            label: 'Monthly rent',
-            value: money(student.monthlyFee),
-          ),
+          // Monthly rent (R4.1): editable for current residents only.
+          resident
+              ? _EditableRentRow(student: student)
+              : DetailRow(
+                  label: 'Monthly rent',
+                  value: money(student.monthlyFee),
+                ),
           DetailRow(
             label: 'Joined',
             value: shortDate(student.dateOfJoining),
@@ -157,6 +163,26 @@ class _Loaded extends ConsumerWidget {
               label: 'Checked out',
               value: shortDate(student.vacatedAt!),
               tone: ApnivaasColors.error,
+            ),
+          if (resident)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                key: const ValueKey('edit-tenant-details'),
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.maybeOf(context);
+                  final saved = await showEditTenantSheet(context,
+                      studentId: student.id, studentName: student.fullName);
+                  if (saved) {
+                    messenger?.showSnackBar(const SnackBar(
+                      behavior: SnackBarBehavior.floating,
+                      content: Text('Details saved.'),
+                    ));
+                  }
+                },
+                icon: const Icon(Icons.edit_note_rounded, size: IconSize.md),
+                label: const Text('Edit details'),
+              ),
             ),
           if (student.userId == null) ...[
             const SizedBox(height: Space.xs),
@@ -576,4 +602,83 @@ Future<String?> showStudentEmailSheet(
       );
     },
   );
+}
+
+/// The monthly rent and due day as a tappable row (R4.1). Amber while rent is unset: no dues
+/// are created until it is. Changes go through `wd_set_tenant_rent`.
+class _EditableRentRow extends ConsumerWidget {
+  const _EditableRentRow({required this.student});
+  final Student student;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context);
+    final fee = student.monthlyFee;
+    final unset = fee <= 0;
+    // The due day lives on the roster row (round 4); null follows the PG's day.
+    final dueDay = ref.watch(tenantProfileProvider(student.id)).value?.rentDueDay;
+    final value = unset
+        ? 'Not set — tap to add'
+        : '${money(fee)} · ${dueDay == null ? "due on the PG's day" : 'due on day $dueDay'}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          key: const ValueKey('rent-row'),
+          borderRadius: Radii.rControl,
+          onTap: () => editRent(
+            context,
+            studentId: student.id,
+            studentName: student.fullName,
+            currentFee: fee,
+            currentDueDay: dueDay,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: Space.xs),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Monthly rent',
+                          style: t.textTheme.bodySmall
+                              ?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                      const SizedBox(height: Space.hair),
+                      Text(
+                        value,
+                        style: t.textTheme.bodyLarge?.copyWith(
+                          color: unset ? context.tones.warning : null,
+                          fontWeight: unset ? FontWeight.w600 : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.edit_rounded,
+                  size: IconSize.md,
+                  color: unset ? context.tones.warning : t.colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (unset)
+          Padding(
+            padding: const EdgeInsets.only(top: Space.xxs),
+            child: InfoCallout(
+              icon: Icons.warning_amber_rounded,
+              tone: ApnivaasColors.warning,
+              child: Text(
+                'No rent is set, so no dues are created and payments cannot be recorded. '
+                'Set the monthly rent to start their ledger.',
+                style: t.textTheme.bodySmall,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }

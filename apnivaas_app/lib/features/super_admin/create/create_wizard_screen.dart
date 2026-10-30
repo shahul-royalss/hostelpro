@@ -437,7 +437,7 @@ class _OwnerRow extends StatelessWidget {
       opacity: owner.isActive ? 1 : Dim.readOnly,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: Radii.rCard,
+          borderRadius: Radii.rSurface,
           border: Border.all(
             color: selected ? t.colorScheme.primary : Colors.transparent,
             width: selected ? Strokes.focus : 0,
@@ -566,7 +566,7 @@ class _HostelStep extends ConsumerWidget {
         // the colour was identifying nothing. The quiet outline ink is what the same note
         // wears on the Subscriptions tab (_ReadOnlyExplainer), which is the shape a note has
         // in this app.
-        FlatSurface(
+        SaCard(
           weight: GlassWeight.regular,
           borderRadius: Radii.rControl,
           padding: const EdgeInsets.all(Space.sm),
@@ -821,7 +821,7 @@ class _ReviewSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return FlatSurface(
+    return SaCard(
       padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -894,7 +894,7 @@ class _SuccessPanel extends ConsumerWidget {
         ),
         const SizedBox(height: Space.md),
         if (result.credentials != null)
-          FlatSurface(
+          SaCard(
             weight: GlassWeight.regular,
             padding: const EdgeInsets.all(Space.md),
             child: Row(
@@ -968,7 +968,7 @@ class _StepShell extends StatelessWidget {
     // one object, separated from the stepper above and the action bar below. Loose text on the
     // page background made the title look like a section heading for the whole screen rather
     // than the label of this step's form.
-    return FlatSurface(
+    return SaCard(
       padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

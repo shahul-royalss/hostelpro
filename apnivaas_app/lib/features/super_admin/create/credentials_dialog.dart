@@ -89,7 +89,7 @@ class _CredentialsDialogState extends State<CredentialsDialog> {
         insetPadding: const EdgeInsets.all(Space.md),
         child: GlassSurface(
           weight: GlassWeight.thick,
-          borderRadius: Radii.rCard,
+          borderRadius: Radii.rSurface,
           shadows: Shadows.level3,
           padding: const EdgeInsets.all(Space.lg),
           child: SingleChildScrollView(
@@ -240,7 +240,7 @@ class _CredentialRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return FlatSurface(
+    return SaCard(
       padding: const EdgeInsets.fromLTRB(Space.sm, Space.xs, Space.xxs, Space.xs),
       child: Row(
         children: [

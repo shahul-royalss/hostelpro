@@ -27,6 +27,8 @@ import '../data/warden_providers.dart';
 import '../notices/warden_notices_screen.dart';
 import '../widgets/warden_ui.dart';
 import 'desk_sheets.dart';
+import 'rent_needed.dart';
+import '../../../data/repositories/tenant_admin_repository.dart' show rentlessResidentsProvider;
 import '../claims/payment_claims_screen.dart';
 
 /// What needs doing today.
@@ -171,6 +173,7 @@ class _Body extends ConsumerWidget {
         // So a PG the owner has just given this warden access to brings the Switch PG control
         // with it on a pull, rather than only after the next sign-in.
         ref.invalidate(myStaffHostelsProvider);
+        ref.invalidate(rentlessResidentsProvider);
         return settleRefresh(context, () => ref.read(stats.future));
       },
       // NO HORIZONTAL PADDING ON THE LIST: the overview strip bleeds to the screen edge and
@@ -187,6 +190,8 @@ class _Body extends ConsumerWidget {
           _Gutter(child: StaffHostelBar(hostelId: hostelId)),
           const JoinRequestsEntry(padding: EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, 0)),
           PaymentClaimsEntry(hostelId: hostelId, padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, 0)),
+          RentNeededEntry(
+              hostelId: hostelId, padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.md, 0)),
           if (loaded != null && loaded.subscriptionState != SubscriptionState.active)
             _Gutter(top: Space.md, child: _SubscriptionBanner(stats: loaded)),
           _Gutter(

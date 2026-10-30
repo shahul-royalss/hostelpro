@@ -7,7 +7,7 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
-import '../../shared/dashboard.dart';
+import '../../shared/clay/clay.dart';
 import '../../shared/glass/glass.dart';
 import '../auth/verify_email_screen.dart';
 import '../common/refresh.dart';
@@ -102,7 +102,7 @@ class SaOverviewScreen extends ConsumerWidget {
           // SaSectionRule dividers — they are part of the super admin's denser, more clerical
           // look and there is no reason to flatten that — but a reader moving between roles
           // now finds the groups named the same way everywhere.
-          const DashboardBand(label: 'Platform'),
+          const _Band(label: 'Platform'),
           saAsync<SaStats?>(
             stats,
             loading: () => const _PlatformSkeleton(),
@@ -113,13 +113,13 @@ class SaOverviewScreen extends ConsumerWidget {
                 value == null ? const SaNotPermitted() : _Platform(stats: value),
           ),
           const SaSectionRule(),
-          const DashboardBand(label: 'Onboarding'),
+          const _Band(label: 'Onboarding'),
           const _Onboarding(),
           // Round 3: one list of self sign-ups with their trials and demos, and the deletions.
           const SaSignupsEntry(),
           const SaDeletedAccountsEntry(),
           const SaSectionRule(),
-          const DashboardBand(label: 'Security'),
+          const _Band(label: 'Security'),
           const _Security(),
         ],
       ),
@@ -447,13 +447,13 @@ class _Security extends ConsumerWidget {
           data: (value) {
             final quiet = value == 0;
             final tone = quiet ? ApnivaasColors.textMuted : ApnivaasColors.error;
-            return FlatSurface(
+            return SaCard(
               weight: GlassWeight.regular,
               padding: const EdgeInsets.all(Space.xs),
               onTap: () => ref.read(saTabProvider.notifier).go(SaTabs.security),
               child: Row(
                 children: [
-                  StateBadge(label: quiet ? 'Clear' : 'Open', tone: tone),
+                  SaPill(label: quiet ? 'Clear' : 'Open', tone: tone),
                   const SizedBox(width: Space.sm),
                   Expanded(
                     child: Column(
@@ -506,7 +506,7 @@ class _CreateBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return FlatSurface(
+    return SaCard(
       weight: GlassWeight.regular,
       padding: const EdgeInsets.all(Space.md),
       child: Column(
@@ -577,4 +577,14 @@ class _PlatformSkeleton extends StatelessWidget {
       ],
     );
   }
+}
+
+/// A dashboard band in the clay look: the page-size section title the owner home uses.
+class _Band extends StatelessWidget {
+  const _Band({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) =>
+      SectionHeader(title: label, padding: const EdgeInsets.only(bottom: Space.sm));
 }

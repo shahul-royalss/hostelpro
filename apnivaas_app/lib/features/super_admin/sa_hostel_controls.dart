@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
+import '../../shared/clay/clay.dart';
 import '../../data/models/models.dart';
-import '../../shared/glass/glass.dart';
 import 'create/credentials_dialog.dart';
 import 'data/sa_models.dart';
 import 'data/sa_providers.dart';
@@ -265,7 +265,7 @@ Future<void> _resetPassword(BuildContext context, SaHostelRow hostel) async {
 
 Future<void> _changeEmail(BuildContext context, SaHostelRow hostel) {
   final messenger = ScaffoldMessenger.maybeOf(context);
-  return showGlassSheet<void>(
+  return showApnivaasSheet<void>(
     context: context,
     builder: (_) => _WorkingSheet<OwnerEmailChanged>(
       hostelId: hostel.hostelId,
@@ -330,7 +330,7 @@ Future<void> _setStatus(BuildContext context, SaHostelRow hostel, HostelStatus t
 Future<void> _cancelPlan(BuildContext context, SaHostelRow hostel) {
   final messenger = ScaffoldMessenger.maybeOf(context);
   final ends = hostel.subEnd == null ? '' : ', not on ${dateLabel(hostel.subEnd!)}';
-  return showGlassSheet<void>(
+  return showApnivaasSheet<void>(
     context: context,
     builder: (_) => _WorkingSheet<int>(
       hostelId: hostel.hostelId,
@@ -361,7 +361,7 @@ Future<void> _cancelPlan(BuildContext context, SaHostelRow hostel) {
 
 Future<void> _rename(BuildContext context, SaHostelRow hostel) {
   final messenger = ScaffoldMessenger.maybeOf(context);
-  return showGlassSheet<void>(
+  return showApnivaasSheet<void>(
     context: context,
     builder: (_) => _WorkingSheet<String>(
       hostelId: hostel.hostelId,

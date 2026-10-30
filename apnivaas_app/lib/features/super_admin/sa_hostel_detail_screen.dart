@@ -6,11 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../shared/clay/clay.dart';
 import '../../shared/glass/glass.dart';
 import '../common/refresh.dart';
 import 'sa_hostel_controls.dart';
 import 'sa_payout_card.dart';
-import '../../shared/dashboard.dart';
 import 'data/sa_models.dart';
 import 'data/sa_providers.dart';
 import 'widgets/sa_ui.dart';
@@ -125,7 +125,7 @@ class _Detail extends ConsumerWidget {
           const SizedBox(height: Space.md),
         ],
 
-        GlassCard(
+        SaCard(
           padding: const EdgeInsets.all(Space.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -202,7 +202,7 @@ class _Detail extends ConsumerWidget {
         ),
         _OperatingCard(hostelId: hostel.hostelId, openComplaints: hostel.openComplaints),
         const SaSectionRule(),
-        const DashboardBand(label: 'Where rent settles'),
+        const SaHeading(title: 'Where rent settles'),
         SaPayoutCard(hostelId: hostel.hostelId, ownerName: hostel.ownerName),
       ],
     );
@@ -277,7 +277,7 @@ class _OwnerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FlatSurface(
+    return SaCard(
       padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -316,7 +316,7 @@ class _SubscriptionCard extends ConsumerWidget {
     final history = ref.watch(saSubscriptionHistoryProvider(hostel.hostelId));
     final cancelled = _cancelledPlan(hostel, history);
 
-    return FlatSurface(
+    return SaCard(
       padding: const EdgeInsets.all(Space.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -460,7 +460,7 @@ class _StructureCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final row = ref.watch(hostelProvider(hostelId));
 
-    return FlatSurface(
+    return SaCard(
       padding: const EdgeInsets.all(Space.md),
       child: saAsync<Hostel?>(
         row,
@@ -545,23 +545,23 @@ class _OperatingCard extends ConsumerWidget {
             Row(
               children: [
                 Expanded(
-                  child: GlassStatCard(
+                  child: StatTile(
                     label: 'Fees collected',
                     value: money(value.feesCollected),
                     caption: '${count(value.studentsPaid)} paid, '
                         '${count(value.studentsUnpaid)} outstanding',
-                    icon: Icons.receipt_long_rounded,
-                    tone: ApnivaasColors.success,
+                    icon: ClayIcons.receipt,
+                    valueTone: ApnivaasColors.success,
                   ),
                 ),
                 const SizedBox(width: Space.sm),
                 Expanded(
-                  child: GlassStatCard(
+                  child: StatTile(
                     label: 'Fees pending',
                     value: money(value.feesPending),
                     caption: monthLabel(period),
-                    icon: Icons.pending_actions_rounded,
-                    tone: ApnivaasColors.warning,
+                    icon: ClayIcons.rentReminder,
+                    valueTone: ApnivaasColors.warning,
                   ),
                 ),
               ],
@@ -570,21 +570,21 @@ class _OperatingCard extends ConsumerWidget {
             Row(
               children: [
                 Expanded(
-                  child: GlassStatCard(
+                  child: StatTile(
                     label: 'Open complaints',
                     value: count(openComplaints),
                     caption: 'Open and in progress',
-                    icon: Icons.report_problem_rounded,
-                    tone: openComplaints > 0 ? ApnivaasColors.warning : null,
+                    icon: ClayIcons.complaint,
+                    valueTone: openComplaints > 0 ? ApnivaasColors.warning : null,
                   ),
                 ),
                 const SizedBox(width: Space.sm),
                 Expanded(
-                  child: GlassStatCard(
+                  child: StatTile(
                     label: 'Residents',
                     value: count(value.activeStudents),
                     caption: '${count(value.pendingLeaves)} on leave request',
-                    icon: Icons.people_alt_rounded,
+                    icon: ClayIcons.team,
                   ),
                 ),
               ],

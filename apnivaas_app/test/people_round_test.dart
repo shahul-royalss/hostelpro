@@ -76,6 +76,7 @@ class _FakePeople implements PeopleApi {
   int pending = 0;
   List<ReviewJoinRequest> requests = [];
   final decisions = <({String id, bool accept, String? note})>[];
+  final rents = <({double? fee, int? day})>[];
   Object? decideError;
   PlanStatus status = PlanStatus.fromJson(const {
     'hostel_id': _hostelId,
@@ -92,9 +93,11 @@ class _FakePeople implements PeopleApi {
   @override
   Future<List<ReviewJoinRequest>> joinRequests({String status = 'pending'}) async => requests;
   @override
-  Future<void> decideJoinRequest(String requestId, {required bool accept, String? note}) async {
+  Future<void> decideJoinRequest(String requestId,
+      {required bool accept, String? note, double? monthlyFee, int? dueDay}) async {
     if (decideError != null) throw decideError!;
     decisions.add((id: requestId, accept: accept, note: note));
+    rents.add((fee: monthlyFee, day: dueDay));
     requests = [];
     pending = 0;
   }
@@ -251,7 +254,33 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Decline request'));
       await _tick(tester);
       expect(people.decisions.single, (id: 'r-1', accept: false, note: 'No beds this month'));
+      expect(people.rents.single, (fee: null, day: null));
       expect(find.text('No requests waiting'), findsOneWidget);
+    });
+
+    testWidgets('accept requires the monthly rent and sends it with the due day', (tester) async {
+      final people = _FakePeople()..requests = [_request()];
+      await _pump(tester, const JoinRequestsScreen(), people);
+      await tester.tap(find.widgetWithText(FilledButton, 'Accept'));
+      await _tick(tester);
+      // Due day is prefilled with 5.
+      expect(find.widgetWithText(TextField, '5'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Accept request'));
+      await _tick(tester);
+      expect(find.text('Enter the monthly rent (₹1 to ₹10,00,000).'), findsOneWidget);
+      expect(people.decisions, isEmpty);
+
+      await tester.enterText(find.byKey(const ValueKey('rent-amount')), '6,500');
+      await tester.enterText(find.byKey(const ValueKey('rent-due-day')), '29');
+      await tester.tap(find.widgetWithText(FilledButton, 'Accept request'));
+      await _tick(tester);
+      expect(find.text('Choose a due day from 1 to 28.'), findsOneWidget);
+
+      await tester.enterText(find.byKey(const ValueKey('rent-due-day')), '7');
+      await tester.tap(find.widgetWithText(FilledButton, 'Accept request'));
+      await _tick(tester);
+      expect(people.decisions.single.accept, isTrue);
+      expect(people.rents.single, (fee: 6500.0, day: 7));
     });
 
     testWidgets('a refusal from the server is shown word for word', (tester) async {
@@ -261,6 +290,7 @@ void main() {
       await _pump(tester, const JoinRequestsScreen(), people);
       await tester.tap(find.widgetWithText(FilledButton, 'Accept'));
       await _tick(tester);
+      await tester.enterText(find.byKey(const ValueKey('rent-amount')), '6500');
       await tester.tap(find.widgetWithText(FilledButton, 'Accept request'));
       await _tick(tester);
       expect(find.text('Subscription expired — hostel is read-only.'), findsOneWidget);

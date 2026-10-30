@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
+import '../../shared/clay/clay.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../common/refresh.dart';
@@ -118,10 +119,10 @@ class _SaHostelsScreenState extends ConsumerState<SaHostelsScreen> {
       title: 'Hostels',
       scrollable: false,
       actions: [
-        IconButton(
-          tooltip: 'Create owner & hostel',
+        HeaderIconButton(
+          label: 'Create owner & hostel',
           onPressed: () => Navigator.of(context).push(CreateWizardScreen.route()),
-          icon: const Icon(Icons.add_business_rounded),
+          icon: Icons.add_business_rounded,
         ),
       ],
       child: Column(

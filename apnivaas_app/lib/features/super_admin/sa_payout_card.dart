@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
-import '../../shared/glass/glass.dart';
 import 'data/sa_models.dart';
 import 'data/sa_providers.dart';
+import 'widgets/sa_ui.dart' show SaCard;
 
 /// WHERE THIS HOSTEL'S RENT GOES — the only screen in the product that can change it.
 ///
@@ -34,8 +34,8 @@ class SaPayoutCard extends ConsumerWidget {
     final payout = ref.watch(saPayoutProvider(hostelId));
 
     return payout.when(
-      loading: () => const FlatSurface(padding: EdgeInsets.all(Space.md), child: Text('Checking where rent settles…')),
-      error: (e, _) => FlatSurface(
+      loading: () => const SaCard(padding: EdgeInsets.all(Space.md), child: Text('Checking where rent settles…')),
+      error: (e, _) => SaCard(
         padding: const EdgeInsets.all(Space.md),
         child: Row(
           children: [
@@ -47,7 +47,7 @@ class SaPayoutCard extends ConsumerWidget {
           ],
         ),
       ),
-      data: (p) => FlatSurface(
+      data: (p) => SaCard(
         padding: const EdgeInsets.all(Space.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

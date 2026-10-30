@@ -121,10 +121,32 @@ final allClaimsProvider =
 
 // ── Opening a UPI app ───────────────────────────────────────────────────────────────────────
 
-/// Hands a `upi://pay` link to an installed UPI app as an Android intent (never a browser).
+/// The four UPI apps offered by name (R4.3), each opened by a package-targeted intent.
+enum UpiApp {
+  phonepe('PhonePe', 'com.phonepe.app'),
+  paytm('Paytm', 'net.one97.paytm'),
+  gpay('Google Pay', 'com.google.android.apps.nbu.paisa.user'),
+  bhim('BHIM', 'in.org.npci.upiapp');
+
+  const UpiApp(this.label, this.package);
+  final String label;
+  final String package;
+}
+
+/// What came back from a UPI app: whether one opened, and its response string (a hint only).
+class UpiLaunchResult {
+  const UpiLaunchResult({required this.opened, this.response = const UpiResponse()});
+  final bool opened;
+  final UpiResponse response;
+}
+
+/// Hands a `upi://pay` link to a UPI app as an Android intent (never a browser).
 abstract interface class UpiLauncher {
-  /// False when no UPI app could take it. The app's answer is never trusted either way.
-  Future<bool> launch(Uri uri);
+  /// Which of [UpiApp] are installed and can take a `upi://pay` link.
+  Future<Set<UpiApp>> installedApps();
+
+  /// Opens [app] directly, or the system chooser when [app] is null.
+  Future<UpiLaunchResult> launch(Uri uri, {UpiApp? app});
 }
 
 final class ChannelUpiLauncher implements UpiLauncher {
@@ -132,16 +154,44 @@ final class ChannelUpiLauncher implements UpiLauncher {
   static const _channel = MethodChannel('apnivaas/upi');
 
   @override
-  Future<bool> launch(Uri uri) async {
-    if (uri.scheme != 'upi') return false;
+  Future<Set<UpiApp>> installedApps() async {
     try {
-      return await _channel.invokeMethod<bool>('pay', {'uri': uri.toString()}) ?? false;
+      final raw = await _channel.invokeListMethod<String>('installed', {
+        'packages': [for (final a in UpiApp.values) a.package],
+      });
+      final found = raw?.toSet() ?? const <String>{};
+      return {for (final a in UpiApp.values) if (found.contains(a.package)) a};
     } on PlatformException {
-      return false;
+      return const {};
     } on MissingPluginException {
-      return false;
+      return const {};
+    }
+  }
+
+  @override
+  Future<UpiLaunchResult> launch(Uri uri, {UpiApp? app}) async {
+    if (uri.scheme != 'upi' || uri.host != 'pay') return const UpiLaunchResult(opened: false);
+    try {
+      final raw = await _channel.invokeMapMethod<String, Object?>('pay', {
+        'uri': uri.toString(),
+        'package': ?app?.package,
+      });
+      final opened = raw?['opened'] == true;
+      final response = raw?['response'];
+      return UpiLaunchResult(
+        opened: opened,
+        response: UpiResponse.parse(response is String ? response : null),
+      );
+    } on PlatformException {
+      return const UpiLaunchResult(opened: false);
+    } on MissingPluginException {
+      return const UpiLaunchResult(opened: false);
     }
   }
 }
 
 final upiLauncherProvider = Provider<UpiLauncher>((_) => const ChannelUpiLauncher());
+
+/// The installed named UPI apps, read once per sheet.
+final installedUpiAppsProvider = FutureProvider.autoDispose<Set<UpiApp>>(
+    (ref) => ref.watch(upiLauncherProvider).installedApps());

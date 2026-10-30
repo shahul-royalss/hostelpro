@@ -143,6 +143,7 @@ class _UpiPaySheetState extends ConsumerState<UpiPaySheet> {
   String? _amountError;
   String? _utrError;
   String? _note;
+  FormNoteTone _noteTone = FormNoteTone.warning;
   String? _error;
   bool _busy = false;
 
@@ -158,7 +159,8 @@ class _UpiPaySheetState extends ConsumerState<UpiPaySheet> {
     return (v == null || v <= 0 || v > 10000000) ? null : v;
   }
 
-  Future<void> _open() async {
+  /// Opens [app] (or the chooser when null). Whatever comes back, the next step is the UTR.
+  Future<void> _open([UpiApp? app]) async {
     final amount = _parsedAmount;
     if (amount == null) {
       setState(() => _amountError = 'Enter a valid amount.');
@@ -174,19 +176,39 @@ class _UpiPaySheetState extends ConsumerState<UpiPaySheet> {
       vpa: s.vpa,
       payeeName: s.payeeName,
       amount: amount,
-      note: '${pg.length > 40 ? pg.substring(0, 40) : pg} rent ${monthLabel(widget.periodMonth)}',
-      ref: 'APV${DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase()}',
+      note: 'Rent ${monthLabel(widget.periodMonth)} $pg',
     );
-    final opened = await ref.read(upiLauncherProvider).launch(uri);
+    final result = await ref.read(upiLauncherProvider).launch(uri, app: app);
     if (!mounted) return;
+    final hint = result.response;
+    if (hint.utr != null && _utr.text.trim().isEmpty) _utr.text = hint.utr!;
     setState(() {
       _busy = false;
       _step = _Step.utr;
-      _note = opened
-          ? null
-          : 'No UPI app on this phone could open the payment. Pay ${s.vpa} from any UPI '
-              'app, then enter the UTR here.';
+      _noteTone = FormNoteTone.warning;
+      if (!result.opened) {
+        _note = '${app?.label ?? 'No UPI app'} could not open the payment. Copy the UPI ID, pay '
+            'from any UPI app, then enter the UTR here.';
+      } else if (hint.saysFailure) {
+        _note = 'Your UPI app said the payment did not go through. If money left your account, '
+            'enter the UTR from that app.';
+      } else if (hint.saysSuccess) {
+        _noteTone = FormNoteTone.success;
+        _note = 'Your UPI app reported a payment. Check the UTR below, then send it for '
+            'confirmation.';
+      } else {
+        _note = null;
+      }
     });
+  }
+
+  Future<void> _copyVpa() async {
+    await Clipboard.setData(ClipboardData(text: widget.settings.vpa));
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+      behavior: SnackBarBehavior.floating,
+      content: Text('UPI ID copied. Pay it from any UPI app, then enter the UTR.'),
+    ));
   }
 
   Future<void> _submit() async {
@@ -234,6 +256,8 @@ class _UpiPaySheetState extends ConsumerState<UpiPaySheet> {
     final t = Theme.of(context);
     final s = widget.settings;
     final muted = t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant);
+    final validVpa = isValidVpa(s.vpa);
+    final installed = ref.watch(installedUpiAppsProvider).value ?? const <UpiApp>{};
     return Padding(
       padding: EdgeInsets.fromLTRB(
           Space.lg, 0, Space.lg, Space.lg + MediaQuery.viewInsetsOf(context).bottom),
@@ -249,8 +273,24 @@ class _UpiPaySheetState extends ConsumerState<UpiPaySheet> {
                   : 'Your warden or owner checks it in their UPI app, then confirms.',
             ),
             const SizedBox(height: Space.md),
-            Text('To ${s.payeeName}', style: t.textTheme.titleMedium),
-            SelectableText(s.vpa, style: muted),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('To ${s.payeeName}', style: t.textTheme.titleMedium),
+                      SelectableText(s.vpa, style: muted),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Copy UPI ID',
+                  onPressed: _copyVpa,
+                  icon: const Icon(Icons.copy_rounded),
+                ),
+              ],
+            ),
             const SizedBox(height: Space.md),
             TextField(
               controller: _amount,
@@ -276,7 +316,8 @@ class _UpiPaySheetState extends ConsumerState<UpiPaySheet> {
                 inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9 ]'))],
                 decoration: InputDecoration(
                   labelText: 'UTR / transaction ID',
-                  helperText: 'In your UPI app\'s payment details. Usually 12 digits.',
+                  helperText: 'The 12-digit UTR / UPI reference in your UPI app\'s payment '
+                      'details.',
                   helperMaxLines: 2,
                   errorText: _utrError,
                   errorMaxLines: 3,
@@ -285,17 +326,45 @@ class _UpiPaySheetState extends ConsumerState<UpiPaySheet> {
             ],
             if (_note != null) ...[
               const SizedBox(height: Space.xs),
-              FormNote(_note!, tone: FormNoteTone.warning),
+              FormNote(_note!, tone: _noteTone),
             ],
             if (_error != null) ...[const SizedBox(height: Space.xs), FormNote(_error!)],
             const SizedBox(height: Space.md),
             if (_step == _Step.pay) ...[
-              BusyFilledButton(
-                label: 'Open UPI app',
-                icon: Icons.open_in_new_rounded,
-                busy: _busy,
-                busyLabel: 'Opening…',
-                onPressed: _open,
+              if (!validVpa)
+                const FormNote(
+                  'This UPI ID does not look right, so it cannot open a UPI app. Copy it and '
+                  'check with your PG.',
+                  tone: FormNoteTone.warning,
+                )
+              else ...[
+                Text('Pay with', style: t.textTheme.labelLarge),
+                const SizedBox(height: Space.xs),
+                Wrap(
+                  spacing: Space.xs,
+                  runSpacing: Space.xs,
+                  children: [
+                    for (final app in installed)
+                      OutlinedButton(
+                        key: ValueKey('upi-app-${app.name}'),
+                        onPressed: _busy ? null : () => _open(app),
+                        child: Text(app.label),
+                      ),
+                  ],
+                ),
+                if (installed.isNotEmpty) const SizedBox(height: Space.xs),
+                BusyFilledButton(
+                  label: installed.isEmpty ? 'Open UPI app' : 'Other UPI app',
+                  icon: Icons.open_in_new_rounded,
+                  busy: _busy,
+                  busyLabel: 'Opening…',
+                  onPressed: () => _open(),
+                ),
+              ],
+              TextButton.icon(
+                onPressed: _copyVpa,
+                icon: const Icon(Icons.copy_rounded, size: IconSize.md),
+                label: const Text('Copy UPI ID and pay by hand'),
               ),
               TextButton(
                 onPressed: _busy ? null : () => setState(() => _step = _Step.utr),
@@ -309,8 +378,8 @@ class _UpiPaySheetState extends ConsumerState<UpiPaySheet> {
                 onPressed: _submit,
               ),
               TextButton(
-                onPressed: _busy ? null : _open,
-                child: const Text('Open the UPI app again'),
+                onPressed: _busy ? null : () => setState(() => _step = _Step.pay),
+                child: const Text('Back to payment options'),
               ),
             ],
             const SizedBox(height: Space.xs),

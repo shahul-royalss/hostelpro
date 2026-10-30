@@ -7,14 +7,20 @@ library;
 import 'json_read.dart';
 
 final _vpa = RegExp(r'^[a-z0-9][a-z0-9._-]{1,254}@[a-z][a-z0-9.-]{1,63}$');
+// R4.3: the handle is letters only, as every UPI app's handle is. Both must match.
+final _vpaR4 = RegExp(r'^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$');
 final _utr = RegExp(r'^[A-Z0-9]{10,22}$');
 
 /// Lower-cased with every space removed, as the server stores it.
 String normalizeVpa(String raw) => raw.replaceAll(RegExp(r'\s'), '').toLowerCase();
 
 /// Null when [raw] is a valid UPI ID, else the server's sentence.
-String? vpaError(String raw) =>
-    _vpa.hasMatch(normalizeVpa(raw)) ? null : 'Enter a valid UPI ID, like name@okhdfcbank.';
+String? vpaError(String raw) => isValidVpa(raw) ? null : 'Enter a valid UPI ID, like name@okhdfcbank.';
+
+bool isValidVpa(String raw) {
+  final v = normalizeVpa(raw);
+  return _vpa.hasMatch(v) && _vpaR4.hasMatch(v);
+}
 
 String? payeeNameError(String raw) {
   final n = raw.trim().length;
@@ -28,18 +34,69 @@ String? utrError(String raw) => _utr.hasMatch(normalizeUtr(raw))
     ? null
     : 'Enter the UTR / transaction ID from your UPI app (usually 12 digits).';
 
-/// `upi://pay?...` with %20 for spaces (some UPI apps show a literal '+').
+/// The `upi://pay` link for a PERSONAL UPI ID (R4.3): pa, pn, am (2 decimals), cu, tn only.
+/// No `mc`, `tr`, `mode` or `orgid`: PhonePe, Paytm and GPay decline a P2P intent that has
+/// them. Every value is percent-encoded (%20, never '+').
 Uri buildUpiUri({
   required String vpa,
   required String payeeName,
   required double amount,
   required String note,
-  required String ref,
 }) {
   String e(String s) => Uri.encodeComponent(s);
-  final tn = note.length > 60 ? note.substring(0, 60) : note;
-  return Uri.parse('upi://pay?pa=${e(vpa)}&pn=${e(payeeName)}&am=${amount.toStringAsFixed(2)}'
-      '&cu=INR&tn=${e(tn)}&tr=${e(ref)}');
+  return Uri.parse('upi://pay?pa=${e(normalizeVpa(vpa))}&pn=${e(payeeName.trim())}'
+      '&am=${amount.toStringAsFixed(2)}&cu=INR&tn=${e(upiNote(note))}');
+}
+
+/// At most 40 printable ASCII characters, spaces collapsed.
+String upiNote(String raw) {
+  final ascii = raw.replaceAll(RegExp(r'[^\x20-\x7E]'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+  return (ascii.length > 40 ? ascii.substring(0, 40) : ascii).trim();
+}
+
+/// What a UPI app said on return. A HINT only: the rent is paid when the PG confirms.
+class UpiResponse {
+  const UpiResponse({this.status, this.utr});
+
+  /// `SUCCESS`, `FAILURE`, `SUBMITTED`, … upper-cased; null when the app said nothing.
+  final String? status;
+
+  /// A 12-digit reference to prefill the UTR field, when the app gave one.
+  final String? utr;
+
+  bool get saysSuccess => status == 'SUCCESS';
+  bool get saysFailure => status == 'FAILURE' || status == 'FAILED';
+
+  /// Parses `txnId=..&responseCode=..&Status=SUCCESS&txnRef=..&ApprovalRefNo=..`.
+  /// Keys are matched case-insensitively; anything odd is ignored.
+  static UpiResponse parse(String? raw) {
+    if (raw == null || raw.trim().isEmpty || raw.length > 2000) return const UpiResponse();
+    final fields = <String, String>{};
+    for (final part in raw.split('&')) {
+      final i = part.indexOf('=');
+      if (i <= 0) continue;
+      final key = part.substring(0, i).trim().toLowerCase();
+      var value = part.substring(i + 1).trim();
+      try {
+        value = Uri.decodeQueryComponent(value);
+      } catch (_) {}
+      fields[key] = value;
+    }
+    final status = fields['status']?.toUpperCase();
+    final twelve = RegExp(r'^\d{12}$');
+    String? utr;
+    for (final k in const ['approvalrefno', 'utr', 'txnref', 'txnid']) {
+      final v = fields[k]?.replaceAll(' ', '');
+      if (v != null && twelve.hasMatch(v)) {
+        utr = v;
+        break;
+      }
+    }
+    return UpiResponse(
+      status: (status != null && RegExp(r'^[A-Z_]{1,20}$').hasMatch(status)) ? status : null,
+      utr: utr,
+    );
+  }
 }
 
 /// `hostel_upi_settings` / `ow_set_upi_settings`.

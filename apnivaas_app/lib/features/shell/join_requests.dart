@@ -23,9 +23,11 @@ import '../../data/people_providers.dart';
 import '../../data/providers.dart' show studentsProvider;
 import '../../data/repositories/people_repository.dart';
 import '../../data/repositories/signup_repository.dart' show SignupFailure;
+import '../../data/repositories/tenant_admin_repository.dart' show rentlessResidentsProvider;
 import '../../shared/clay/clay.dart';
 import '../../shared/glass/glass.dart';
 import '../../shared/person_avatar.dart';
+import '../warden/actions/rent_sheet.dart';
 
 const _pendingStatus = 'pending';
 
@@ -156,18 +158,25 @@ class _JoinRequestCardState extends ConsumerState<JoinRequestCard> {
   Future<void> _decide(bool accept) async {
     final r = widget.request;
     final messenger = ScaffoldMessenger.of(context);
-    final note = await showDecisionSheet(context, request: r, accept: accept);
-    if (note == null || !mounted) return;
+    final decision = await showDecisionSheet(context, request: r, accept: accept);
+    if (decision == null || !mounted) return;
     setState(() => _busy = true);
     try {
-      await ref.read(peopleApiProvider).decideJoinRequest(r.requestId, accept: accept, note: note);
+      await ref.read(peopleApiProvider).decideJoinRequest(r.requestId,
+          accept: accept,
+          note: decision.note,
+          monthlyFee: decision.monthlyFee,
+          dueDay: decision.dueDay);
       ref.invalidate(joinRequestsProvider);
       ref.invalidate(pendingJoinCountProvider);
-      if (accept) ref.invalidate(studentsProvider);
+      if (accept) {
+        ref.invalidate(studentsProvider);
+        ref.invalidate(rentlessResidentsProvider);
+      }
       messenger.showSnackBar(SnackBar(
         behavior: SnackBarBehavior.floating,
         content: Text(accept
-            ? '${r.fullName} joined ${r.hostelName}. Add their room and rent from Students.'
+            ? '${r.fullName} joined ${r.hostelName}. Assign their bed from Students.'
             : 'Request declined. ${r.fullName} has been told.'),
       ));
     } catch (e) {
@@ -321,19 +330,22 @@ class _Line extends StatelessWidget {
   }
 }
 
-/// Accept or decline, with an optional note the tenant reads. Returns the note ('' for none),
-/// or null when the owner backed out.
-Future<String?> showDecisionSheet(
+/// What the owner or warden decided in the sheet. Rent and due day are set on accept only.
+typedef JoinDecision = ({String note, double? monthlyFee, int? dueDay});
+
+/// Accept (with the monthly rent and due day, R4.1) or decline, with an optional note the
+/// tenant reads. Null when they backed out.
+Future<JoinDecision?> showDecisionSheet(
   BuildContext context, {
   required ReviewJoinRequest request,
   required bool accept,
 }) =>
-    showApnivaasSheet<String>(
+    showApnivaasSheet<JoinDecision>(
       context: context,
       title: accept ? 'Accept ${request.fullName}?' : 'Decline ${request.fullName}?',
       subtitle: accept
-          ? 'They join ${request.hostelName} as a resident with no room yet. Add their room '
-              'and rent afterwards from Students.'
+          ? 'They join ${request.hostelName} as a resident. Set their monthly rent now; assign '
+              'a bed afterwards from Students.'
           : 'They are told, and can ask another PG.',
       builder: (ctx) => _DecisionForm(accept: accept),
     );
@@ -348,11 +360,32 @@ class _DecisionForm extends StatefulWidget {
 
 class _DecisionFormState extends State<_DecisionForm> {
   final _note = TextEditingController();
+  final _rent = TextEditingController();
+  final _dueDay = TextEditingController(text: '$defaultRentDueDay');
+  String? _rentError;
+  String? _dueError;
 
   @override
   void dispose() {
     _note.dispose();
+    _rent.dispose();
+    _dueDay.dispose();
     super.dispose();
+  }
+
+  void _submit() {
+    if (!widget.accept) {
+      Navigator.of(context).pop((note: _note.text.trim(), monthlyFee: null, dueDay: null));
+      return;
+    }
+    final fee = parseRent(_rent.text);
+    final day = parseDueDay(_dueDay.text);
+    setState(() {
+      _rentError = fee == null ? rentRangeMessage : null;
+      _dueError = _dueDay.text.trim().isNotEmpty && day == null ? dueDayRangeMessage : null;
+    });
+    if (_rentError != null || _dueError != null) return;
+    Navigator.of(context).pop((note: _note.text.trim(), monthlyFee: fee, dueDay: day));
   }
 
   @override
@@ -363,7 +396,17 @@ class _DecisionFormState extends State<_DecisionForm> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (widget.accept) ...[
+                RentFields(
+                  rent: _rent,
+                  dueDay: _dueDay,
+                  rentError: _rentError,
+                  dueDayError: _dueError,
+                ),
+                const SizedBox(height: Space.sm),
+              ],
               TextField(
+                key: const ValueKey('join-note'),
                 controller: _note,
                 maxLength: 300,
                 minLines: 2,
@@ -378,7 +421,7 @@ class _DecisionFormState extends State<_DecisionForm> {
               ),
               const SizedBox(height: Space.sm),
               FilledButton(
-                onPressed: () => Navigator.of(context).pop(_note.text.trim()),
+                onPressed: _submit,
                 style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
                 child: Text(widget.accept ? 'Accept request' : 'Decline request'),
               ),

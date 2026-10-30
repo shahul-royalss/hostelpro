@@ -9,6 +9,7 @@ import '../../../core/theme/tokens.dart';
 import '../../../data/models/models.dart';
 import '../../../shared/brow.dart';
 import '../../../shared/brow_header.dart';
+import '../../../shared/clay/clay.dart';
 import '../../../shared/glass/glass.dart';
 import '../../shell/staff_profile_sheet.dart';
 import '../../../data/people_providers.dart';
@@ -200,6 +201,18 @@ Color severityTone(BuildContext context, AlertSeverity severity) => switch (seve
   AlertSeverity.critical => context.tones.error,
 };
 
+/// A canonical or theme-resolved tone as the clay [StatusTone] a [StatusChip] speaks.
+StatusTone saStatusTone(BuildContext context, Color tone) {
+  final t = context.tones;
+  final c = t.resolve(tone);
+  if (c == t.success) return StatusTone.success;
+  if (c == t.warning) return StatusTone.warning;
+  if (c == t.error) return StatusTone.error;
+  if (c == t.info) return StatusTone.info;
+  if (c == t.muted) return StatusTone.neutral;
+  return StatusTone.brand;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // STRUCTURE
 // ─────────────────────────────────────────────────────────────────────────────
@@ -378,36 +391,16 @@ class SaPage extends StatelessWidget {
       body = RefreshIndicator(onRefresh: onRefresh!, child: body);
     }
 
+    // The forest header every pushed screen in the app now opens with (OwnerSubpageHeader).
     return Scaffold(
+      backgroundColor: t.scaffoldBackgroundColor,
       body: Column(
         children: [
-          GlassHeader(
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: 'Back',
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                ),
-                const SizedBox(width: Space.xxs),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (eyebrow != null) Text(eyebrow!, style: t.textTheme.labelSmall),
-                      // Same 16/700 as [SaScreen]'s header, and for the same reason.
-                      Text(
-                        title,
-                        style: t.textTheme.titleMedium,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                ...actions,
-              ],
-            ),
+          AppHeader(
+            leading: const HeaderBackButton(),
+            greeting: eyebrow == null ? null : _sentenceCase(eyebrow!),
+            title: title,
+            actions: actions,
           ),
           Expanded(child: body),
         ],
@@ -435,6 +428,60 @@ class SaPage extends StatelessWidget {
 /// colour before its label is read, the same way the other kits' `SectionHeading` does it.
 /// Drawn at [DomainIconSize.sm]: a 12px caps label beside a 40dp box would be the furniture
 /// outranking the data again. See [ApnivaasDomain] for the rule that keeps this from a rainbow.
+/// 'SUPER ADMIN' → 'Super admin': the clay header's greeting line is sentence case.
+String _sentenceCase(String s) {
+  final lower = s.trim().toLowerCase();
+  return lower.isEmpty ? lower : lower[0].toUpperCase() + lower.substring(1);
+}
+
+/// The console's card: the clay kit's surface (ListGroup / StatTile) — white, a hairline edge,
+/// the surface radius — with a press scale when it is tappable. [weight] is accepted so the
+/// FlatSurface call sites it replaced read the same; the clay look has one card fill.
+class SaCard extends StatelessWidget {
+  const SaCard({
+    super.key,
+    required this.child,
+    this.weight = GlassWeight.thin,
+    this.borderRadius = Radii.rSurface,
+    this.padding,
+    this.border = true,
+    this.onTap,
+    this.semanticLabel,
+  });
+
+  final Widget child;
+  final GlassWeight weight;
+  final BorderRadius borderRadius;
+  final EdgeInsetsGeometry? padding;
+  final bool border;
+  final VoidCallback? onTap;
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    Widget card = Material(
+      color: scheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: borderRadius,
+        side: border
+            ? BorderSide(color: scheme.outlineVariant, width: Strokes.hairline)
+            : BorderSide.none,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: padding == null ? child : Padding(padding: padding!, child: child),
+      ),
+    );
+    if (onTap != null) card = PressScale(child: card);
+    if (semanticLabel != null) {
+      card = Semantics(label: semanticLabel, container: true, child: card);
+    }
+    return card;
+  }
+}
+
 class SaHeading extends StatelessWidget {
   const SaHeading({
     super.key,
@@ -478,9 +525,16 @@ class SaHeading extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // labelMedium IS `label-caps` — Inter 12/16/600. A TextStyle cannot uppercase,
-                // so the string does it here.
-                Text(title.toUpperCase(), style: t.textTheme.labelMedium),
+                // The clay SectionHeader's card size: sentence case, Manrope, a real heading.
+                Semantics(
+                  header: true,
+                  child: Text(
+                    title,
+                    style: t.textTheme.headlineSmall?.copyWith(fontFeatures: const []),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 if (caption != null) ...[
                   const SizedBox(height: Space.xxs),
                   Text(caption!, style: t.textTheme.bodySmall),
@@ -514,14 +568,8 @@ class SaSectionRule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Space.lg),
-      child: Divider(
-        height: Strokes.hairline,
-        thickness: Strokes.hairline,
-        color: Theme.of(context).colorScheme.outlineVariant,
-      ),
-    );
+    // Clay sections are separated by air, not rules.
+    return const SizedBox(height: Space.lg);
   }
 }
 
@@ -625,26 +673,7 @@ class SaPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final tones = context.tones;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: Space.xs, vertical: Space.xxs),
-      decoration: BoxDecoration(
-        color: tones.chipFill(tone),
-        borderRadius: Radii.rControl,
-        border: Border.all(color: tones.chipBorder(tone)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: IconSize.xs, color: tones.resolve(tone)),
-            const SizedBox(width: Space.xxs),
-          ],
-          Text(label, style: t.textTheme.labelSmall?.copyWith(color: tones.resolve(tone))),
-        ],
-      ),
-    );
+    return StatusChip(label: label, tone: saStatusTone(context, tone), icon: icon);
   }
 }
 
@@ -864,7 +893,7 @@ class _SaSkeletonState extends State<SaSkeleton> with SingleTickerProviderStateM
       width: widget.width,
       height: widget.height,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.outlineVariant,
+        color: Skeleton.colorOf(context),
         borderRadius: BorderRadius.circular(widget.radius),
       ),
     );
@@ -894,8 +923,12 @@ class SaSkeletonCard extends StatelessWidget {
       height: height,
       padding: const EdgeInsets.all(Space.md),
       decoration: BoxDecoration(
-        borderRadius: Radii.rCard,
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: Radii.rSurface,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant,
+          width: Strokes.hairline,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -942,34 +975,49 @@ class SaEmpty extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final ink = tone == null ? t.colorScheme.outline : context.tones.resolve(tone!);
+    final ink = tone == null ? t.colorScheme.onSurfaceVariant : context.tones.resolve(tone!);
+    final disc = compact ? Space.xxl : Space.huge;
+    // The clay EmptyState's shape — a tinted disc, a Manrope title, one plain line — kept to
+    // an IconData because the console's empties name states the clay art set has no picture
+    // for (a withheld series, a refusal).
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: compact ? Space.sm : Space.xl),
-      child: Column(
+      padding: EdgeInsets.symmetric(vertical: compact ? Space.sm : Space.lg),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(icon, size: IconSize.md, color: ink),
-              const SizedBox(width: Space.xs),
-              Expanded(child: Text(title, style: t.textTheme.titleMedium)),
-            ],
+          Container(
+            width: disc,
+            height: disc,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: context.tones.chipFill(ink), shape: BoxShape.circle),
+            child: Icon(icon, size: compact ? IconSize.sm : IconSize.md, color: ink),
           ),
-          if (message != null) ...[
-            const SizedBox(height: Space.xxs),
-            Text(message!, style: t.textTheme.bodySmall),
-          ],
-          if (action != null) ...[
-            const SizedBox(height: Space.sm),
-            Align(alignment: Alignment.centerLeft, child: action!),
-          ],
+          const SizedBox(width: Space.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: t.textTheme.titleMedium),
+                if (message != null) ...[
+                  const SizedBox(height: Space.xxs),
+                  Text(
+                    message!,
+                    style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                  ),
+                ],
+                if (action != null) ...[
+                  const SizedBox(height: Space.sm),
+                  Align(alignment: Alignment.centerLeft, child: action!),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-/// A failure, with the next step spelled out and a retry only where retrying could work.
 class SaError extends StatelessWidget {
   const SaError({super.key, required this.error, this.onRetry, this.compact = false});
 
@@ -990,7 +1038,7 @@ class SaError extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(Space.md),
       decoration: BoxDecoration(
-        borderRadius: Radii.rCard,
+        borderRadius: Radii.rSurface,
         border: Border.all(color: tones.chipBorder(tone)),
         color: tones.chipFill(tone),
       ),
@@ -1212,7 +1260,7 @@ class SaUnverified extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(Space.md),
       decoration: BoxDecoration(
-        borderRadius: Radii.rCard,
+        borderRadius: Radii.rSurface,
         border: Border.all(color: tones.chipBorder(tone)),
         color: tones.chipFill(tone),
       ),
@@ -1265,7 +1313,7 @@ class SaNotPermitted extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(Space.md),
       decoration: BoxDecoration(
-        borderRadius: Radii.rCard,
+        borderRadius: Radii.rSurface,
         border: Border.all(color: context.tones.chipBorder(context.tones.warning)),
         color: context.tones.chipFill(context.tones.warning),
       ),
@@ -1313,7 +1361,7 @@ class SaSessionEnded extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(Space.md),
       decoration: BoxDecoration(
-        borderRadius: Radii.rCard,
+        borderRadius: Radii.rSurface,
         border: Border.all(color: tones.chipBorder(tone)),
         color: tones.chipFill(tone),
       ),
@@ -1355,7 +1403,7 @@ class SaTapCard extends StatelessWidget {
   final EdgeInsetsGeometry padding;
 
   @override
-  Widget build(BuildContext context) => FlatSurface(onTap: onTap, padding: padding, child: child);
+  Widget build(BuildContext context) => SaCard(onTap: onTap, padding: padding, child: child);
 }
 
 /// Copies one value and says so. Used for the owner's email and phone here, and for the
@@ -1483,49 +1531,17 @@ class SaKpiTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final accent = tone == null ? null : context.tones.resolve(tone!);
-
-    return Semantics(
-      label: semantics ?? '$label: $value',
-      excludeSemantics: true,
-      button: onTap != null,
-      child: FlatSurface(
-        onTap: onTap,
-        padding: const EdgeInsets.all(Space.sm),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label.toUpperCase(),
-              style: t.textTheme.labelSmall,
-              // Two lines, because the honest label for the money tile is "SUBSCRIPTION
-              // REVENUE" and the mockup's one-word "REVENUE" would be read on a platform
-              // console as rent collected across every hostel — a number ten times larger
-              // that this screen does not show. The row equalises its two tiles' heights, so
-              // a second line here costs nothing but height.
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: Space.xxs),
-            Text(
-              value,
-              // headlineSmall is 16/24/700 with tabular figures — the mockup's KPI size, and
-              // the tabular variant so four tiles' digits sit on the same rhythm.
-              style: t.textTheme.headlineSmall?.copyWith(color: accent),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              softWrap: false,
-            ),
-          ],
-        ),
-      ),
+    // The clay StatTile, at the width its row gives it.
+    return StatTile(
+      label: label,
+      value: value,
+      valueTone: tone,
+      onTap: onTap,
+      semanticLabel: semantics ?? '$label: $value',
     );
   }
 }
 
-/// One band of [SaSegmentBar], and one line of its legend.
 @immutable
 class SaSegment {
   const SaSegment({required this.label, required this.value, required this.tone, this.onTap});

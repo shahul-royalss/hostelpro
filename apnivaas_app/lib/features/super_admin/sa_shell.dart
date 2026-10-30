@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/perf/tab_warmer.dart';
-import '../../core/theme/tokens.dart';
+import '../../shared/clay/clay.dart';
 import '../../data/models/models.dart';
 import 'data/sa_providers.dart';
 import 'sa_hostels_screen.dart';
@@ -93,32 +93,13 @@ class _SaShellState extends ConsumerState<SaShell> {
   /// The area each tab belongs to, which is the colour its selected pill takes: the violet of
   /// the building on Hostels, the ledger green on Subscriptions, and the brand gold on the two
   /// that are the platform's own. A tab is a domain and never a state — see [ApnivaasDomain].
-  static ApnivaasDomain _domainOf(int index) => switch (index) {
-    SaTabs.hostels => ApnivaasDomain.rooms,
-    SaTabs.subscriptions => ApnivaasDomain.money,
-    _ => ApnivaasDomain.security,
-  };
-
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    final tones = context.tones;
     final index = ref.watch(saTabProvider).clamp(0, SaTabs.count - 1);
     final openAlerts = ref.watch(saOpenAlertCountProvider);
     _visited.add(index);
 
-    // The selected destination wears its own domain's colour: the pill is the design's 10%
-    // tint of it — the same recipe as every status badge in the file — and the glyph and
-    // label are the ink, which is AA on that tint by the contract in ApnivaasSemantics. The
-    // unselected three keep exactly what theme.dart gives them.
-    final ink = tones.resolve(_domainOf(index).tone);
-    final navTheme = t.navigationBarTheme;
-
     return Scaffold(
-      // The bar animated its own indicator and the page it commands did not, which reads as
-      // the two being unconnected. TabSwap keeps this ONE IndexedStack — swapping it out for
-      // an AnimatedSwitcher would change its key and throw away every tab's scroll position,
-      // which is the whole reason an IndexedStack is here. See shared/motion/tab_swap.dart.
       body: TabSwap(
         index: index,
         child: IndexedStack(
@@ -129,78 +110,39 @@ class _SaShellState extends ConsumerState<SaShell> {
           ],
         ),
       ),
-      bottomNavigationBar: NavigationBarTheme(
-        data: navTheme.copyWith(
-          indicatorColor: tones.chipFill(ink),
-          iconTheme: WidgetStateProperty.resolveWith((states) {
-            final base = navTheme.iconTheme?.resolve(states);
-            if (!states.contains(WidgetState.selected)) return base;
-            return (base ?? const IconThemeData()).copyWith(color: ink);
-          }),
-          labelTextStyle: WidgetStateProperty.resolveWith((states) {
-            final base = navTheme.labelTextStyle?.resolve(states);
-            if (!states.contains(WidgetState.selected)) return base;
-            return base?.copyWith(color: ink) ?? TextStyle(color: ink);
-          }),
-        ),
-        child: NavigationBar(
-          selectedIndex: index,
-          onDestinationSelected: (i) => ref.read(saTabProvider.notifier).go(i),
-          // 64dp keeps every destination above the 48dp minimum with room for the label.
-          // 64dp keeps every destination above the 48dp minimum with room for the label — at
-          // 1.0x. NavigationBar honours `height` LITERALLY: it does not grow for text scale, so
-          // at the root's 1.4x ceiling the label was clipped against the icon. Scaling it and
-          // capping the growth keeps the bar off the content. Same expression as
-          // warden_shell.dart:196, which had this right and was the only one of the four.
-          height: MediaQuery.textScalerOf(context).scale(64).clamp(64.0, 88.0),
-          backgroundColor: t.colorScheme.surface,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: [
-            const NavigationDestination(icon: Icon(Icons.grid_view_rounded), label: 'Overview'),
-            const NavigationDestination(icon: Icon(Icons.apartment_rounded), label: 'Hostels'),
-            const NavigationDestination(
-              icon: Icon(Icons.card_membership_rounded),
-              label: 'Subscriptions',
-            ),
-            NavigationDestination(
-              icon: _Badged(alerts: openAlerts, child: const Icon(Icons.shield_rounded)),
-              label: 'Security',
-            ),
-          ],
-        ),
+      bottomNavigationBar: ClayNavBar(
+        selectedIndex: index,
+        onDestinationSelected: (i) => ref.read(saTabProvider.notifier).go(i),
+        destinations: [
+          const ClayNavDestination(icon: ClayIcons.navHome, label: 'Overview'),
+          const ClayNavDestination(icon: ClayIcons.navProperty, label: 'Hostels'),
+          const ClayNavDestination(icon: ClayIcons.navMoney, label: 'Subscriptions'),
+          securityDestination(openAlerts),
+        ],
       ),
     );
   }
 }
 
-/// A count on a tab icon — and, when the count could not be read, a mark that says so.
-///
-/// A badge reading "0" is visual noise that trains people to ignore badges, so zero draws
-/// nothing and the absence of a badge is the message. STILL LOADING draws nothing either: a
-/// number that appears a moment later is not worth a placeholder.
-///
-/// A FAILED READ IS THE THIRD CASE AND IT USED TO LOOK LIKE THE FIRST. Folding it into "no
-/// badge" means the tab bar shows exactly what it shows on the best possible day — nothing to
-/// answer for — at the moment the console cannot tell whether there is. This draws a "?"
-/// instead: not a count, not silence, and the Security tab it points at carries the failure in
-/// full with a retry on it.
-class _Badged extends StatelessWidget {
-  const _Badged({required this.alerts, required this.child});
-  final AsyncValue<int> alerts;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    if (alerts.hasError && !alerts.hasValue) {
-      return Badge(
-        label: const Text('?'),
-        // Default badge colours: whatever this theme guarantees is legible on a badge. A tinted
-        // one hand-mixed here is the kind of thing that reads as white-on-amber in dark mode.
-        child: child,
-      );
-    }
-    final value = alerts.value;
-    if (value == null || value <= 0) return child;
-    return Badge.count(count: value, child: child);
+/// The Security tab, badged with the open-alert count. A count it could not read is marked
+/// (a dot, spoken as unavailable) rather than drawn as the best possible day; zero draws nothing.
+@visibleForTesting
+ClayNavDestination securityDestination(AsyncValue<int> alerts) {
+  const art = ClayIcons.security;
+  if (alerts.hasError && !alerts.hasValue) {
+    return const ClayNavDestination(
+      icon: art,
+      label: 'Security',
+      hasBadge: true,
+      badgeLabel: 'open alert count unavailable',
+    );
   }
+  final value = alerts.value ?? 0;
+  if (value <= 0) return const ClayNavDestination(icon: art, label: 'Security');
+  return ClayNavDestination(
+    icon: art,
+    label: 'Security',
+    badgeCount: value,
+    badgeLabel: '$value open',
+  );
 }
