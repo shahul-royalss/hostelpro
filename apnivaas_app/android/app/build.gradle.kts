@@ -90,6 +90,12 @@ android {
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
+    // Round 5: the Facebook app ID and client token are resource values (defaultConfig below),
+    // and AGP 8 builds none unless this is on.
+    buildFeatures {
+        resValues = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
