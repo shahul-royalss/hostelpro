@@ -372,7 +372,6 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                       decoration: InputDecoration(
                         labelText: 'Full name',
                         floatingLabelBehavior: FloatingLabelBehavior.always,
-                        hintText: 'First and last name',
                         errorText: _errors['fullName'],
                       ),
                     ),
@@ -389,7 +388,6 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                       decoration: InputDecoration(
                         labelText: 'Email',
                         floatingLabelBehavior: FloatingLabelBehavior.always,
-                        hintText: 'name@example.com',
                         // This is not a contact detail. It is what they will type to sign in,
                         // and it is unique across the whole platform.
                         helperText: 'This is their login id.',
@@ -414,7 +412,6 @@ class _AddStaffSheetState extends ConsumerState<_AddStaffSheet> {
                       decoration: InputDecoration(
                         labelText: 'Phone (optional)',
                         floatingLabelBehavior: FloatingLabelBehavior.always,
-                        hintText: '10-digit mobile number',
                         errorText: _errors['phone'],
                       ),
                     ),

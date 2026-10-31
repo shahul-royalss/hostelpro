@@ -66,6 +66,18 @@ abstract final class ApnivaasType {
 
   static const _tabular = [FontFeature.tabularFigures()];
 
+  /// THE INDIAN SCRIPTS (round 5). Outfit and Manrope are Latin; a Hindi, Telugu, Tamil,
+  /// Malayalam or Kannada character falls through to its own Noto Sans UI face, so every
+  /// language the app speaks is drawn in the typeface the owner chose for it. Latin text never
+  /// reaches these, and a script's face is only touched when that script is on screen.
+  static const indic = [
+    'NotoSansDevanagariUI',
+    'NotoSansTeluguUI',
+    'NotoSansTamilUI',
+    'NotoSansMalayalamUI',
+    'NotoSansKannadaUI',
+  ];
+
   static TextStyle _style({
     required String family,
     required double size,
@@ -78,8 +90,9 @@ abstract final class ApnivaasType {
     final isDisplay = family == display;
     return TextStyle(
       fontFamily: family,
-      // Outfit has no ₹; Manrope does, at every weight Outfit is used at.
-      fontFamilyFallback: isDisplay ? const [ApnivaasType.family] : null,
+      // Outfit has no ₹; Manrope does, at every weight Outfit is used at. Then the Indian
+      // scripts, for every style.
+      fontFamilyFallback: isDisplay ? const [ApnivaasType.family, ...indic] : indic,
       fontSize: size,
       height: lineHeight / size,
       fontWeight: w,

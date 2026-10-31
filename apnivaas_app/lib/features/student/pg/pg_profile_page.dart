@@ -1,10 +1,12 @@
-/// A PG's public page (R5): covers, amenities, rating and reviews, locality and city.
+/// A PG's public page (R5): covers, amenities, rating and reviews, locality and city, and —
+/// since round 5 — how many beds are free, so a tenant knows before asking to join.
 /// Owner contacts, the address and the map pin are never part of `st_pg_profile`.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/i18n/i18n.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/models/pg_profile.dart';
 import '../../../data/models/signup.dart' show HostelHit;
@@ -137,6 +139,10 @@ class _Body extends StatelessWidget {
             ),
           ],
         ),
+        if (profile.bedsFree != null) ...[
+          const SizedBox(height: Space.md),
+          BedAvailability(profile: profile),
+        ],
         if (profile.description != null) ...[
           const SizedBox(height: Space.md),
           Text(profile.description!, style: t.textTheme.bodyLarge),
@@ -170,6 +176,65 @@ class _Body extends StatelessWidget {
               'accepts you.',
         ),
       ],
+    );
+  }
+}
+
+/// "4 beds free · 2 sharing: 1 · 3 sharing: 3", or a plain "No beds free right now".
+class BedAvailability extends StatelessWidget {
+  const BedAvailability({super.key, required this.profile});
+  final PgPublicProfile profile;
+
+  static String sharingLabel(int sharing) => sharing == 1 ? 'Single room' : '$sharing sharing';
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final free = profile.bedsFree ?? 0;
+    final tones = context.tones;
+    final ink = free > 0 ? tones.success : tones.warning;
+    final title = free == 0
+        ? 'No beds free right now'
+        : free == 1
+            ? '1 bed free'
+            : '$free beds free';
+    return FlatSurface(
+      borderRadius: Radii.rSurface,
+      padding: const EdgeInsets.all(Space.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const ClayIcon(ClayIcons.beds, size: ClaySize.list),
+          const SizedBox(width: Space.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(context.tr(title), style: t.textTheme.titleMedium?.copyWith(color: ink)),
+                const SizedBox(height: Space.xxs),
+                if (free == 0)
+                  Text(
+                    'Every bed is taken. You can still ask to join; the owner can tell you when '
+                    'one opens.',
+                    style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                  )
+                else
+                  Wrap(
+                    spacing: Space.xs,
+                    runSpacing: Space.xs,
+                    children: [
+                      for (final s in profile.freeBySharing)
+                        StatusChip(
+                          label: '${sharingLabel(s.sharing)} · ${s.free} free',
+                          tone: StatusTone.success,
+                        ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -19,6 +20,8 @@ import 'core/theme/tokens.dart';
 import 'core/theme/typography.dart';
 import 'features/auth/app_lock_gate.dart';
 import 'features/auth/email_verification_service.dart';
+import 'core/i18n/i18n.dart' show supportedAppLocales;
+import 'core/i18n/language.dart' show appLocaleProvider;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -243,6 +246,15 @@ class _ApnivaasAppState extends ConsumerState<ApnivaasApp> {
 
     final router = ref.watch(routerProvider);
     return MaterialApp.router(
+      // ROUND 5: the language chosen on this phone (English until one is chosen). Material's own
+      // words follow it through the global delegates; the app's through context.tr.
+      locale: ref.watch(appLocaleProvider),
+      supportedLocales: supportedAppLocales,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       // The Android recents label. Title case, exactly as the logo writes it, and identical to
       // app_name in res/values/strings.xml and CFBundleDisplayName in ios/Runner/Info.plist.
       title: 'Apnivaas',

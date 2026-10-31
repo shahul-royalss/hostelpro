@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.3.0+13
+version: 1.4.0+14
 
 environment:
   sdk: ^3.13.1
@@ -29,6 +29,9 @@ environment:
 # versions available, run `flutter pub outdated`.
 dependencies:
   flutter:
+    sdk: flutter
+  # Round 5: Material's own words (OK, Cancel, dates) in the six languages the app speaks.
+  flutter_localizations:
     sdk: flutter
 
   # cupertino_icons is DELIBERATELY ABSENT. It ships one thing — the CupertinoIcons font — and
@@ -107,6 +110,7 @@ dependencies:
   geolocator: ^14.0.1
   # Round 3 biometric app lock (on-device only). Needs FlutterFragmentActivity.
   local_auth: ^3.0.2
+  flutter_facebook_auth: ^7.3.2
 
 dev_dependencies:
   flutter_test:
@@ -214,4 +218,37 @@ flutter:
         - asset: google_fonts/Manrope-SemiBold.ttf
           weight: 600
         - asset: google_fonts/Manrope-Bold.ttf
+          weight: 700
+    # ROUND 5: the Indian scripts, in the faces the owner chose (Noto Sans … UI, SIL Open Font
+    # License, google_fonts/NOTO-OFL.txt). Regular and Bold only: a 500 or 600 style lands on the
+    # nearer of the two, which keeps the APK about 1.6 MB lighter than shipping every weight.
+    - family: NotoSansDevanagariUI
+      fonts:
+        - asset: google_fonts/NotoSansDevanagariUI-Regular.ttf
+          weight: 400
+        - asset: google_fonts/NotoSansDevanagariUI-Bold.ttf
+          weight: 700
+    - family: NotoSansTeluguUI
+      fonts:
+        - asset: google_fonts/NotoSansTeluguUI-Regular.ttf
+          weight: 400
+        - asset: google_fonts/NotoSansTeluguUI-Bold.ttf
+          weight: 700
+    - family: NotoSansTamilUI
+      fonts:
+        - asset: google_fonts/NotoSansTamilUI-Regular.ttf
+          weight: 400
+        - asset: google_fonts/NotoSansTamilUI-Bold.ttf
+          weight: 700
+    - family: NotoSansMalayalamUI
+      fonts:
+        - asset: google_fonts/NotoSansMalayalamUI-Regular.ttf
+          weight: 400
+        - asset: google_fonts/NotoSansMalayalamUI-Bold.ttf
+          weight: 700
+    - family: NotoSansKannadaUI
+      fonts:
+        - asset: google_fonts/NotoSansKannadaUI-Regular.ttf
+          weight: 400
+        - asset: google_fonts/NotoSansKannadaUI-Bold.ttf
           weight: 700

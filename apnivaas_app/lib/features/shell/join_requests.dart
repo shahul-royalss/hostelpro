@@ -414,9 +414,6 @@ class _DecisionFormState extends State<_DecisionForm> {
                 textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
                   labelText: 'Note for them (optional)',
-                  hintText: widget.accept
-                      ? 'For example: Come to the office with your ID on Monday.'
-                      : 'For example: We have no beds free this month.',
                 ),
               ),
               const SizedBox(height: Space.sm),

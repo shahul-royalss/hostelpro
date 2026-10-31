@@ -205,7 +205,6 @@ class _PayoutDialogState extends ConsumerState<_PayoutDialog> {
                 autocorrect: false,
                 decoration: const InputDecoration(
                   labelText: 'Razorpay linked account',
-                  hintText: 'acc_XXXXXXXXXXXX',
                   helperText: 'From Razorpay Route, once the owner has completed their KYC.',
                 ),
               ),

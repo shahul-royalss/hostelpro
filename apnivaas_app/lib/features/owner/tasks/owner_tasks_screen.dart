@@ -373,7 +373,6 @@ class _AssignTaskSheetState extends ConsumerState<_AssignTaskSheet> {
             maxLength: 120,
             decoration: const InputDecoration(
               labelText: 'What needs doing',
-              hintText: 'Service the geyser on the second floor',
               counterText: '',
             ),
             validator: (raw) {
@@ -390,7 +389,6 @@ class _AssignTaskSheetState extends ConsumerState<_AssignTaskSheet> {
             textCapitalization: TextCapitalization.sentences,
             decoration: const InputDecoration(
               labelText: 'Details (optional)',
-              hintText: 'The plumber comes on Tuesdays; ask at the desk for the key.',
             ),
           ),
           const SizedBox(height: Space.sm),

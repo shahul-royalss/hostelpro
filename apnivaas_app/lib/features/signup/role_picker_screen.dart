@@ -15,6 +15,7 @@ import '../auth/auth_scaffold.dart';
 import '../common/form_parts.dart';
 import 'persona_store.dart';
 import 'signup_widgets.dart';
+import '../../core/i18n/i18n.dart';
 
 enum _Pick { owner, tenant, staff }
 
@@ -106,7 +107,7 @@ class _RolePickerScreenState extends ConsumerState<RolePickerScreen> {
           child: TextButton(
             onPressed: () => context.go('/login'),
             child: Text(
-              'I already have an account — Sign in',
+              context.tr('I already have an account — Sign in'),
               textAlign: TextAlign.center,
               style: t.textTheme.labelLarge,
             ),
@@ -171,10 +172,10 @@ class _PersonaCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(title, style: t.textTheme.titleLarge),
+                          Text(context.tr(title), style: t.textTheme.titleLarge),
                           const SizedBox(height: Space.xxs),
                           Text(
-                            desc,
+                            context.tr(desc),
                             style: t.textTheme.bodyMedium
                                 ?.copyWith(color: scheme.onSurfaceVariant),
                           ),

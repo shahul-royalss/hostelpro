@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/auth/password_recovery.dart' show passwordChangedMessage;
 import '../../core/auth/google_id_token.dart';
 import '../../core/router/routes.dart';
 import '../../core/theme/tokens.dart';
@@ -13,6 +14,7 @@ import '../common/form_parts.dart';
 import '../legal/legal_screen.dart';
 import 'auth_scaffold.dart';
 import 'social_buttons.dart';
+import '../../core/i18n/i18n.dart';
 
 /// Sign in — the sign-in board of the design canvas (`SignIn.dc.html`).
 ///
@@ -49,19 +51,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   // the router watches — so tapping Sign in read as "still restoring the session" and pushed
   // the user to the splash screen mid-login.
   bool _busy = false;
-  // Google has its own flag so its spinner sits on its own button: the quiet attempt below runs
-  // without anyone pressing anything, and a spinner on "Sign in" would read as "I pressed that".
+  // Google has its own flag so its spinner sits on its own button.
   bool _googleBusy = false;
   String? _error;
 
-  @override
-  void initState() {
-    super.initState();
-    // "Automated": a returning Google user is signed straight back in. After a deliberate
-    // sign-out there is nothing to restore — AuthController.signOut makes the phone forget the
-    // Google account — so this does nothing for them, and nothing at all in a build without Google.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _google(quietly: true));
-  }
+  // NO QUIET GOOGLE ATTEMPT ON OPENING (removed 2026-10-31). It made Google's account sheet
+  // appear by itself with the phone's accounts in it; the owner asked that sign-in and sign-up
+  // never suggest accounts. Google is asked only when "Continue with Google" is tapped, and the
+  // fields carry no autofill hints, so the phone does not offer saved logins either.
 
   @override
   void dispose() {
@@ -70,7 +67,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  /// "Continue with Google", or — [quietly] — the automatic attempt when the screen opens.
+  /// "Continue with Google". [quietly] is kept for a caller that must not show errors.
   Future<void> _google({bool quietly = false}) async {
     if (!mounted || _busy || _googleBusy) return;
     if (!ref.read(googleIdTokenSourceProvider).isAvailable) return;
@@ -133,7 +130,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 controller: controller,
                 keyboardType: TextInputType.emailAddress,
                 autocorrect: false,
-                autofillHints: const [AutofillHints.email],
+                autofillHints: null,
                 decoration: const InputDecoration(labelText: 'Email'),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Enter your email address' : null,
@@ -144,12 +141,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   if (formKey.currentState?.validate() != true) return;
                   Navigator.of(sheetContext).pop(controller.text.trim());
                 },
-                child: const Text('Send the link'),
+                child: Text(context.tr('Send the link')),
               ),
               const SizedBox(height: Space.xs),
               TextButton(
                 onPressed: () => Navigator.of(sheetContext).pop(),
-                child: const Text('Cancel'),
+                child: Text(context.tr('Cancel')),
               ),
             ],
           ),
@@ -265,11 +262,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         const SizedBox(height: Space.lg),
         Semantics(
           header: true,
-          child: Text('Welcome back', style: t.textTheme.headlineSmall, textAlign: TextAlign.center),
+          child: Text(context.tr('Welcome back'), style: t.textTheme.headlineSmall, textAlign: TextAlign.center),
         ),
         const SizedBox(height: Space.xxs),
         Text(
-          'Use the email or phone number on your account.',
+          context.tr('Use the email or phone number on your account.'),
           textAlign: TextAlign.center,
           style: bodyStyle?.copyWith(color: t.colorScheme.onSurfaceVariant),
         ),
@@ -282,7 +279,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               TextFormField(
                 controller: _id,
                 enabled: !busy,
-                autofillHints: const [AutofillHints.username],
+                autofillHints: null,
                 // Neither strictly email nor strictly phone: both are valid logins.
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
@@ -293,12 +290,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   context,
                   Space.sm + 56 + Space.xs + errorSlot + Space.xs + 52 + Space.md,
                 ),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   // 'Email or phone', not '… phone number': the longer label was cut to
                   // 'Email or phone num…' at text scale 1.4 on a 360 dp phone, and a label
                   // that is cut off is a label nobody can read. The validator below still
                   // says "phone number" in full, where the line is free to wrap.
-                  labelText: 'Email or phone',
+                  labelText: context.tr('Email or phone'),
                 ),
                 validator: (v) => (v == null || v.trim().isEmpty)
                     ? 'Enter your email or phone number'
@@ -309,7 +306,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 controller: _pw,
                 enabled: !busy,
                 obscureText: _obscure,
-                autofillHints: const [AutofillHints.password],
+                autofillHints: null,
                 textInputAction: TextInputAction.done,
                 onFieldSubmitted: (_) => _submit(),
                 scrollPadding: keepVisibleBelow(
@@ -334,7 +331,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               // server-down message, and the metadata step is not a size to read a paragraph at.
               ConstrainedBox(
                 constraints: BoxConstraints(minHeight: errorSlot),
-                child: error == null ? const SizedBox.shrink() : FormNote(error),
+                child: error == null
+                    ? const SizedBox.shrink()
+                    : FormNote(
+                        error,
+                        tone: error == passwordChangedMessage
+                            ? FormNoteTone.success
+                            : FormNoteTone.error,
+                      ),
               ),
               const SizedBox(height: Space.xs),
               BusyFilledButton(
@@ -349,7 +353,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               Center(
                 child: TextButton(
                   onPressed: busy ? null : _forgotPassword,
-                  child: const Text('Forgot your password?'),
+                  child: Text(context.tr('Forgot your password?')),
                 ),
               ),
             ],
@@ -374,7 +378,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         Center(
           child: TextButton(
             onPressed: busy ? null : () => GoRouter.of(context).go(startRoute),
-            child: const Text('New here? Create an account'),
+            child: Text(context.tr('New here? Create an account')),
           ),
         ),
       ],
@@ -458,7 +462,7 @@ class _DocumentLink extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: Space.xs),
         textStyle: t.textTheme.labelMedium,
       ),
-      child: Text(label),
+      child: Text(context.tr(label)),
     );
   }
 }

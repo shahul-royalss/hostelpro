@@ -7,6 +7,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../shared/clay/pressable.dart';
+import '../../core/i18n/i18n.dart';
 
 enum SocialProvider { google, facebook, truecaller }
 
@@ -136,7 +137,7 @@ class OrDivider extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: Space.sm - Space.hair),
             child: Text(
-              label,
+              context.tr(label),
               textAlign: TextAlign.center,
               style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
             ),

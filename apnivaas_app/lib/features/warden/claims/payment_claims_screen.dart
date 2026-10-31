@@ -300,7 +300,6 @@ class _RejectSheetState extends State<_RejectSheet> {
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
                 labelText: 'Note',
-                hintText: 'For example, no payment with this UTR reached my account',
                 errorText: _error,
                 errorMaxLines: 3,
               ),

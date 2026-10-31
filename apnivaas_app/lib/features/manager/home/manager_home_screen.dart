@@ -24,6 +24,7 @@ import '../expenses/record_money_sheet.dart';
 import '../tasks/task_sheet.dart';
 import '../widgets/in_out_bars.dart';
 import '../widgets/manager_ui.dart';
+import '../../common/refresh_all.dart';
 
 /// What needs attention today.
 ///
@@ -111,6 +112,8 @@ class ManagerHomeScreen extends ConsumerWidget {
             // without this a pull that did not land looked exactly like one that did. See
             // features/common/refresh.dart.
             onRefresh: () {
+              // Everything the app holds, not only this screen's figures (round 5).
+              refreshEverything(ref);
               ref.invalidate(hostelProvider(hostelId));
               ref.invalidate(taskLoadProvider(hostelId));
               ref.invalidate(managerFinanceProvider(hostelId));

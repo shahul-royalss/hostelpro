@@ -77,6 +77,21 @@ class OwnerPgProfile {
   final String? rules;
 
   bool get hasPin => latitude != null && longitude != null;
+
+  /// `ow_update_pg_profile` returns no rules (they have their own RPC), so a saved profile
+  /// takes them from the one it replaced.
+  OwnerPgProfile withRules(String? value) => OwnerPgProfile(
+        hostelId: hostelId,
+        name: name,
+        description: description,
+        amenities: amenities,
+        logoPath: logoPath,
+        coverPaths: coverPaths,
+        listed: listed,
+        latitude: latitude,
+        longitude: longitude,
+        rules: value,
+      );
 }
 
 /// One row of `pg_review_list` (first name only).
@@ -159,6 +174,9 @@ class PgPublicProfile {
     this.ratingAvg,
     this.ratingCount = 0,
     this.reviews = const [],
+    this.bedsTotal,
+    this.bedsFree,
+    this.freeBySharing = const [],
   });
 
   static PgPublicProfile? tryParse(Object? data) {
@@ -180,6 +198,14 @@ class PgPublicProfile {
       ratingAvg: jNum(row, 'rating_avg'),
       ratingCount: jInt(row, 'rating_count') ?? 0,
       reviews: PgReview.listFrom(row['reviews']),
+      bedsTotal: jInt(row, 'beds_total'),
+      bedsFree: jInt(row, 'beds_free'),
+      freeBySharing: [
+        for (final r in jRows(row['free_by_sharing']))
+          if ((jInt(r, 'sharing'), jInt(r, 'free')) case (final sharing?, final free?)
+              when free > 0)
+            (sharing: sharing, free: free),
+      ],
     );
   }
 
@@ -197,6 +223,13 @@ class PgPublicProfile {
   final double? ratingAvg;
   final int ratingCount;
   final List<PgReview> reviews;
+
+  /// Bed counts (round 5); null from a server older than round 5, which says nothing.
+  final int? bedsTotal;
+  final int? bedsFree;
+
+  /// Free beds by room type, smallest sharing first; full types are left out.
+  final List<({int sharing, int free})> freeBySharing;
 
   String get place => [locality, city].whereType<String>().join(', ');
 }

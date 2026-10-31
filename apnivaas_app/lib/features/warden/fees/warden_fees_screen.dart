@@ -41,11 +41,21 @@ import '../widgets/warden_ui.dart';
 /// step it sit beside it, so the month a warden is reading and the control that changes it are
 /// one object — and the page below starts with the money, not with a row of controls.
 class WardenFeesScreen extends ConsumerWidget {
-  const WardenFeesScreen({super.key});
+  const WardenFeesScreen({super.key, this.hostelId});
+
+  /// The owner's PG when the owner opens this from the dashboard (round 5); a warden's comes
+  /// from their session.
+  final String? hostelId;
+
+  /// Opened by the owner: who paid and who owes for [hostelId], optionally filtered.
+  static Route<void> ownerRoute(String hostelId) => MaterialPageRoute<void>(
+        builder: (_) => Scaffold(body: WardenFeesScreen(hostelId: hostelId)),
+      );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hostelId = ref.watch(currentHostelIdProvider);
+    final hostelId = this.hostelId ?? ref.watch(currentHostelIdProvider);
+    final pushed = this.hostelId != null;
     if (hostelId == null) {
       return const WardenScreen(
         title: 'Collections',
@@ -78,7 +88,15 @@ class WardenFeesScreen extends ConsumerWidget {
     final canGoForward = month.compareTo(_next(current)) < 0;
 
     return WardenScreen(
-      title: 'Collections',
+      title: pushed ? 'Rent this month' : 'Collections',
+      leading: pushed
+          ? IconButton(
+              tooltip: 'Back',
+              color: Colors.white,
+              onPressed: () => Navigator.of(context).maybePop(),
+              icon: const Icon(Icons.arrow_back_rounded),
+            )
+          : null,
       subtitle: month == current
           ? monthLabel(month)
           : '${monthLabel(month)} · ${month.compareTo(current) < 0 ? 'past month' : 'next month'}',

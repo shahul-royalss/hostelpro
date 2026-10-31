@@ -1,7 +1,7 @@
-/// Tenant → Pay rent → Pay with UPI app (R9).
+/// Tenant → Pay rent (R9, one button since 2026-10-31).
 ///
-/// Opens the tenant's UPI app with a `upi://pay` intent to the owner's UPI ID, then asks for
-/// the UTR and files a payment claim. The intent's answer is never trusted: the rent shows as
+/// With a UPI ID set by the owner, opens the tenant's UPI app with a `upi://pay` intent to it,
+/// then asks for the UTR and files a payment claim. The intent's answer is never trusted: the rent shows as
 /// paid only after a warden or the owner confirms the claim on the server.
 library;
 
@@ -15,46 +15,91 @@ import '../../data/repositories/signup_repository.dart' show SignupFailure;
 import '../../data/repositories/upi_repository.dart';
 import '../../shared/clay/clay.dart';
 import '../common/form_parts.dart';
+import '../payments/payments.dart' show payRent;
 import 'stay_screens.dart' show stayErrorText;
+import 'student_providers.dart' show refreshStudentData;
 import 'widgets/format.dart' show monthLabel, rupees;
 
-/// The button under Pay now; hidden until the PG has set up UPI.
-class PayWithUpiButton extends ConsumerWidget {
-  const PayWithUpiButton({super.key, required this.amount, required this.periodMonth});
+/// THE ONE PAY BUTTON on the rent card (owner, 2026-10-31: "keep one").
+///
+/// When the owner has set a UPI ID it opens [UpiPaySheet], so the money goes straight to the
+/// owner through PhonePe, Paytm, Google Pay or BHIM and is confirmed by UTR. Otherwise it opens
+/// Razorpay checkout ([payRent]). The route is decided when it is tapped, from the server's
+/// answer, so a slow settings read never sends rent the wrong way.
+class PayNowButton extends ConsumerStatefulWidget {
+  const PayNowButton({super.key, required this.amount, required this.periodMonth});
 
-  /// Suggested amount (the balance); the tenant may change it.
+  /// What is still owed; display only. Razorpay is charged the server's figure.
   final double amount;
   final String periodMonth;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(upiSettingsProvider(null)).value;
-    if (settings == null) return const SizedBox.shrink();
+  ConsumerState<PayNowButton> createState() => _PayNowButtonState();
+}
+
+class _PayNowButtonState extends ConsumerState<PayNowButton> {
+  bool _busy = false;
+
+  Future<void> _pay() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    UpiSettings? upi;
+    try {
+      upi = await ref.read(upiSettingsProvider(null).future).timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // No answer about UPI: Razorpay still works and is priced by the server.
+    }
+    if (!mounted) return;
+    try {
+      if (upi != null) {
+        final sent = await showApnivaasSheet<bool>(
+          context: context,
+          builder: (_) =>
+              UpiPaySheet(settings: upi!, amount: widget.amount, periodMonth: widget.periodMonth),
+        );
+        if (sent == true && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            duration: Motion.readMessage,
+            content: Text('Sent. Your warden or owner confirms it after checking their UPI app; '
+                'your rent updates then.'),
+          ));
+        }
+      } else {
+        await payRent(context, ref);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+        refreshStudentData(ref);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final upi = ref.watch(upiSettingsProvider(null)).value;
     final pending = (ref.watch(myPaymentClaimsProvider).value ?? const <PaymentClaim>[])
         .where((c) => c.status == ClaimStatus.pending)
         .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: Space.sm),
-        OutlinedButton.icon(
-          onPressed: () async {
-            final sent = await showApnivaasSheet<bool>(
-              context: context,
-              builder: (_) =>
-                  UpiPaySheet(settings: settings, amount: amount, periodMonth: periodMonth),
-            );
-            if (sent == true && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                behavior: SnackBarBehavior.floating,
-                duration: Motion.readMessage,
-                content: Text('Sent. Your warden or owner confirms it after checking their UPI '
-                    'app; your rent updates then.'),
-              ));
-            }
-          },
-          icon: const Icon(Icons.qr_code_2_rounded),
-          label: const Text('Pay with UPI app'),
+        BusyFilledButton(
+          label: 'Pay ${rupees(widget.amount)} now',
+          icon: Icons.lock_rounded,
+          busy: _busy,
+          busyLabel: 'Opening…',
+          onPressed: _pay,
+        ),
+        const SizedBox(height: Space.xs),
+        Text(
+          upi != null
+              ? 'Straight to your owner\'s UPI ID with PhonePe, Paytm, Google Pay or BHIM.'
+              : 'UPI, cards, net banking and wallets. Apnivaas never sees your card or UPI details.',
+          style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+          textAlign: TextAlign.center,
         ),
         for (final c in pending) ...[
           const SizedBox(height: Space.xs),

@@ -10,6 +10,7 @@ import '../brow.dart';
 import 'clay_icons.dart';
 import 'list_row.dart' show InitialsDisc;
 import 'word_fit.dart';
+import '../../core/i18n/i18n.dart';
 
 /// THE FOREST HEADER — the top of every dashboard and the brand's one full-bleed object.
 ///
@@ -190,12 +191,12 @@ class _TitleBlock extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (greeting != null)
-          Text(greeting!, style: styles.greeting, maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(context.tr(greeting!), style: styles.greeting, maxLines: 1, overflow: TextOverflow.ellipsis),
         if (greeting != null) const SizedBox(height: Space.hair),
         titleRow,
         if (subtitle != null) ...[
           const SizedBox(height: Space.hair),
-          Text(subtitle!, style: styles.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(context.tr(subtitle!), style: styles.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
         ],
       ],
     );

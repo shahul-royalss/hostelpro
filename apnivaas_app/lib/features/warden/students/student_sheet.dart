@@ -417,7 +417,12 @@ class _FeeHistory extends ConsumerWidget {
   }
 }
 
-/// Recovering a lost password, and correcting an address.
+/// How the resident signs in, and — for a phone-only login — a new password.
+///
+/// NO EMAIL OR PASSWORD EDITING FOR AN EMAIL LOGIN (owner, 2026-10-31): a resident who signs in
+/// with an email resets their own password from the sign-in screen's "Forgot password", which
+/// proves the address. A phone-only login has no address to prove, so "New password" stays for
+/// them alone; without it they would have no way back in.
 ///
 /// THE PASSWORD IS NEVER STORED, so there is nothing here to "show" — only to REPLACE. The
 /// owner originally asked for the temporary password to be kept on the student list and read
@@ -465,63 +470,37 @@ class _CredentialsBlockState extends ConsumerState<_CredentialsBlock> {
         await StudentCredentialsDialog.show(context, credentials: creds);
       });
 
-  Future<void> _editEmail() => _run(() async {
-        final next = await showStudentEmailSheet(context, student: widget.student);
-        if (next == null || !mounted) return;
-        final loginId = await ref
-            .read(wardenRepositoryProvider)
-            .setStudentEmail(widget.student.id, next.isEmpty ? null : next);
-        refreshResidents(ref);
-        if (!mounted) return;
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          SnackBar(
-            content: Text(
-              // Both consequences, because both surprise people: what they type now, and that
-              // the address has to be proved again (users_update_guard clears the old proof).
-              'They now sign in as $loginId, and will be asked to verify the new address.',
-            ),
-          ),
-        );
-      });
-
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final error = _error;
 
+    final email = widget.student.email?.trim() ?? '';
+    if (email.isNotEmpty) {
+      return Text(
+        'Signs in with $email. They reset their own password from the sign-in screen with '
+        '"Forgot password".',
+        style: t.textTheme.bodySmall,
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          widget.student.email?.trim().isNotEmpty ?? false
-              ? 'Signs in with ${widget.student.email!.trim()}'
-              : 'Signs in with their phone number, ${widget.student.phone}',
+          'Signs in with their phone number, ${widget.student.phone}. With no email to reset '
+          'it, a new password comes from you.',
           style: t.textTheme.bodySmall,
         ),
         const SizedBox(height: Space.sm),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _busy ? null : _reset,
-                icon: _busy
-                    ? const SizedBox.square(
-                        dimension: IconSize.md,
-                        child: CircularProgressIndicator(strokeWidth: InlineSpinner.stroke),
-                      )
-                    : const Icon(Icons.key_rounded, size: IconSize.md),
-                label: const Text('New password'),
-              ),
-            ),
-            const SizedBox(width: Space.xs),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _busy ? null : _editEmail,
-                icon: const Icon(Icons.alternate_email_rounded, size: IconSize.md),
-                label: const Text('Edit email'),
-              ),
-            ),
-          ],
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _reset,
+          icon: _busy
+              ? const SizedBox.square(
+                  dimension: IconSize.md,
+                  child: CircularProgressIndicator(strokeWidth: InlineSpinner.stroke),
+                )
+              : const Icon(Icons.key_rounded, size: IconSize.md),
+          label: const Text('New password'),
         ),
         if (error != null) ...[
           const SizedBox(height: Space.xs),
@@ -530,78 +509,6 @@ class _CredentialsBlockState extends ConsumerState<_CredentialsBlock> {
       ],
     );
   }
-}
-
-/// Ask for the resident's email address. Returns the new value, '' to clear it back to a
-/// phone-only login, or null if the warden backed out.
-///
-/// Deliberately a sheet and not an inline field: changing the address changes what the person
-/// TYPES to sign in, and clears the proof they had already given. That is worth a decision,
-/// not a stray keystroke in a scrolling form.
-Future<String?> showStudentEmailSheet(
-  BuildContext context, {
-  required Student student,
-}) {
-  final controller = TextEditingController(text: student.email ?? '');
-  final formKey = GlobalKey<FormState>();
-
-  return showGlassSheet<String>(
-    context: context,
-    builder: (sheetContext) {
-      final t = Theme.of(sheetContext);
-      return Form(
-        key: formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Email address', style: t.textTheme.titleLarge),
-            const SizedBox(height: Space.xxs),
-            Text(
-              'This is what ${student.fullName} types to sign in. Leaving it empty puts them '
-              'back on their phone number, ${student.phone}.',
-              style: t.textTheme.bodySmall,
-            ),
-            const SizedBox(height: Space.md),
-            TextFormField(
-              controller: controller,
-              keyboardType: TextInputType.emailAddress,
-              autocorrect: false,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                hintText: 'name@example.com',
-              ),
-              validator: (raw) {
-                final v = (raw ?? '').trim();
-                if (v.isEmpty) return null; // clearing is allowed and meaningful
-                // Deliberately loose. The server is the authority on what it will accept, and
-                // a clever regex here would only reject addresses that are in fact valid.
-                final ok = v.contains('@') &&
-                    !v.startsWith('@') &&
-                    !v.endsWith('@') &&
-                    !v.contains(' ') &&
-                    v.split('@').last.contains('.');
-                return ok ? null : 'That does not look like an email address.';
-              },
-            ),
-            const SizedBox(height: Space.lg),
-            FilledButton(
-              onPressed: () {
-                if (formKey.currentState?.validate() != true) return;
-                Navigator.of(sheetContext).pop(controller.text.trim());
-              },
-              child: const Text('Save address'),
-            ),
-            const SizedBox(height: Space.xs),
-            TextButton(
-              onPressed: () => Navigator.of(sheetContext).pop(),
-              child: const Text('Cancel'),
-            ),
-          ],
-        ),
-      );
-    },
-  );
 }
 
 /// The monthly rent and due day as a tappable row (R4.1). Amber while rent is unset: no dues

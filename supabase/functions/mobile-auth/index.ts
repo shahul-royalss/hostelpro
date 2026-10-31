@@ -502,7 +502,7 @@ async function verifyMfa(req: Request, body: Record<string, unknown>): Promise<R
 // up" ON, so a token for an unknown address must never reach GoTrue, which would create an account.
 //
 // Why the database still has its own guard: GoTrue's id_token grant and its browser redirect are
-// public, so "staff never use Google" is enforced again by the trigger in
+// public, so "administrators never use Google" is enforced again by the trigger in
 // db/migrations/2026-10-17-google-sign-in.sql, where the link is written. Step 4 is what gives
 // the app a sentence instead of GoTrue's "Database error".
 //
@@ -516,8 +516,9 @@ const GOOGLE_UNAVAILABLE =
 const GOOGLE_NOT_ON =
   "Google sign-in isn't switched on yet. Sign in with your phone number or email and password.";
 const GOOGLE_FAILED = "Google sign-in didn't go through. Please try again.";
-const GOOGLE_STAFF =
-  "Staff and administrator accounts sign in with the login they were given, not with Google.";
+// Since round 5 (2026-10-31) only a platform administrator is refused: managers and wardens
+// may use Google and Facebook (app.external_signin_allowed).
+const GOOGLE_STAFF = "Administrator accounts sign in with their password, not with Google.";
 const GOOGLE_ISSUERS = ["https://accounts.google.com", "accounts.google.com"];
 
 /**
@@ -845,7 +846,7 @@ async function externalSignIn(req: Request, x: ExternalLogin): Promise<Response>
     try {
       await assertMaySignIn(
         account,
-        `Staff and administrator accounts sign in with the login they were given, not with ${x.label}.`,
+        `Administrator accounts sign in with their password, not with ${x.label}.`,
         x.unavailableMessage,
       );
       // Matched by Facebook's address (not proved by us): an unverified self_email account loses its password.

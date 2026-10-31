@@ -282,6 +282,9 @@ class SelectedMonth extends Notifier<String> {
   /// reading an hour ago.
   void reset() => state = ref.read(currentPeriodMonthProvider);
 
+  /// Opens a given month ('YYYY-MM'): the owner's dashboard sends the month it is showing.
+  void set(String periodMonth) => state = periodMonth;
+
   /// Steps [months] whole months from the current selection. Negative goes back.
   void step(int months) {
     final parts = state.split('-');

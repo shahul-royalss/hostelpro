@@ -161,8 +161,9 @@ export default function TermsOfUsePage() {
             Otherwise the platform administrator creates the Owner account for a hostel, the Owner
             may create Manager and Warden accounts, and a Warden registers residents — who sign in with
             the phone number the hostel registered. Every account created for you comes with a
-            temporary password that must be changed at first sign-in. Owners and residents whose
-            login is a Google account&rsquo;s address may also sign in with Continue with Google.
+            temporary password that must be changed at first sign-in. Owners, residents, Managers
+            and Wardens whose login is a Google account&rsquo;s address may also sign in with
+            Continue with Google, or with Facebook where the app offers it.
           </p>
           <p>
             An account a hostel created belongs to the hostel&rsquo;s workspace rather than to you

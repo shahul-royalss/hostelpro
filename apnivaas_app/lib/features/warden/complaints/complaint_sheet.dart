@@ -552,7 +552,6 @@ class _ResolutionNoteSheetState extends State<_ResolutionNoteSheet> {
             textCapitalization: TextCapitalization.sentences,
             decoration: const InputDecoration(
               labelText: 'What was done',
-              hintText: 'Plumber replaced the tap on Tuesday',
               alignLabelWithHint: true,
             ),
           ),

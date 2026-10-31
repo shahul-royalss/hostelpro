@@ -102,7 +102,10 @@ class _FormState extends ConsumerState<_Form> {
         behavior: SnackBarBehavior.floating,
         content: Text('Thanks. Your review is saved.'),
       ));
-      if (mounted) Navigator.of(context).maybePop();
+      if (!mounted) return;
+      // Nothing to go back to (opened as the first screen): stay, with the button usable again.
+      final left = await Navigator.of(context).maybePop();
+      if (!left && mounted) setState(() => _busy = false);
     } on SignupFailure catch (f) {
       if (!mounted) return;
       setState(() {
@@ -164,7 +167,6 @@ class _FormState extends ConsumerState<_Form> {
           textCapitalization: TextCapitalization.sentences,
           decoration: InputDecoration(
             labelText: 'Your review (optional)',
-            hintText: 'Food, cleanliness, safety, staff',
             errorText: _commentError,
             errorMaxLines: 3,
           ),

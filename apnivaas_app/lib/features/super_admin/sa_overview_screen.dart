@@ -18,6 +18,7 @@ import 'data/sa_providers.dart';
 import 'sa_deletions_screen.dart';
 import 'sa_signups_screen.dart';
 import 'widgets/sa_ui.dart';
+import '../common/refresh_all.dart';
 
 /// SA-1 — the platform at a glance. FIGMA `screen-dashboard`, node 4:125.
 ///
@@ -82,6 +83,8 @@ class SaOverviewScreen extends ConsumerWidget {
       // never answers, riverpod's own retry schedule held the spinner for over two minutes and
       // then threw the failure out of the callback unhandled. See features/common/refresh.dart.
       onRefresh: () {
+        // Everything the app holds, not only this screen's figures (round 5).
+        refreshEverything(ref);
         ref.invalidate(saStatsProvider);
         ref.invalidate(saOnboardingProvider);
         ref.invalidate(saOpenAlertCountProvider);

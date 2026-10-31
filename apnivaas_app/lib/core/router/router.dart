@@ -4,14 +4,17 @@ import 'package:go_router/go_router.dart';
 
 import '../boot/splash_gate.dart';
 import '../auth/auth_controller.dart';
+import '../auth/password_recovery.dart';
 import '../auth/session.dart';
 import 'routes.dart';
 
 export 'routes.dart';
 import '../../features/auth/change_password_screen.dart';
 import '../../features/auth/login_screen.dart';
+import '../../features/onboarding/language_screen.dart';
 import '../../features/onboarding/onboarding_gate.dart';
 import '../../features/auth/mfa_screen.dart';
+import '../../features/auth/reset_password_screen.dart';
 import '../../features/legal/consent_gate.dart';
 import '../../features/settings/security_screen.dart';
 import '../../features/shell/role_shell.dart';
@@ -73,6 +76,10 @@ const changePasswordRoute = '/change-password';
 /// produced would be a permanent lockout. See isReachableLoginAddress.
 const verifyEmailRoute = '/verify-email';
 
+/// "Set a new password", where a reset link lands (round 5). Reachable ONLY while
+/// [passwordRecoveryProvider] holds; anyone else who arrives here is sent on.
+const resetPasswordRoute = '/reset-password';
+
 /// EVERY PATH THIS APP REGISTERS, AND THE SCREEN BEHIND IT.
 ///
 /// It is a map rather than a hand-written `routes:` list so a test can ask the question no test
@@ -93,9 +100,12 @@ final appScreens = <String, WidgetBuilder>{
   // a wrapper here rather than a phase in [resolveRedirect].
   // FIRST LAUNCH (1.3.0): the tour is step 1 and "Who are you?" is step 2, so finishing the tour
   // goes there rather than straight to the sign-in form. A returning launch is unchanged.
-  loginRoute: (_) => OnboardingGate(
-        onFirstRunDone: (context) => GoRouter.of(context).go(startRoute),
-        child: const LoginScreen(),
+  // ROUND 5: on a new phone the very first step is choosing the language, then the tour.
+  loginRoute: (_) => LanguageGate(
+        child: OnboardingGate(
+          onFirstRunDone: (context) => GoRouter.of(context).go(startRoute),
+          child: const LoginScreen(),
+        ),
       ),
   startRoute: (_) => const RolePickerScreen(),
   createAccountRoute: (_) => const CreateAccountScreen(),
@@ -135,6 +145,8 @@ final appScreens = <String, WidgetBuilder>{
   // BLOCKING: as the gate route there is nothing behind this screen, so it offers Sign out
   // rather than "later", and the back gesture does not walk through it.
   verifyEmailRoute: (_) => const ConsentGate(child: VerifyEmailScreen(blocking: true)),
+  // Outside every gate: the session a reset link opens is for this one form.
+  resetPasswordRoute: (_) => const ResetPasswordScreen(),
   // One shell per role. Each owns its own navigation, because forcing five roles through one
   // tab bar is what makes an operational tool feel like an admin template.
   //
@@ -161,6 +173,7 @@ String? resolveRedirect({
   required AsyncValue<AuthPhase> phase,
   required String here,
   bool openingFinished = true,
+  bool recovering = false,
 }) {
   // THE OPENING FINISHES BEFORE ANYTHING REPLACES IT.
   //
@@ -174,7 +187,9 @@ String? resolveRedirect({
   // why the clock lives in a provider rather than in the screen.
   if (!openingFinished && here == splashRoute) return null;
 
-  final to = _decide(phase: phase, here: here);
+  // A RESET LINK OUTRANKS EVERYTHING after the opening: the person came to set a password, and
+  // the session the link carries is good for nothing else.
+  final to = recovering ? resetPasswordRoute : _decide(phase: phase, here: here);
   // NEVER REDIRECT TO WHERE WE ALREADY ARE, whatever the rule below concluded.
   //
   // go_router counts a redirect to the current location as a redirect and runs the decision
@@ -261,6 +276,7 @@ String? _decide({
         here == mfaRoute ||
         here == mfaEnrolRoute ||
         here == verifyEmailRoute ||
+        here == resetPasswordRoute ||
         here == '/' ||
         _publicRoutes.contains(here)) {
       return home;
@@ -288,6 +304,8 @@ class _AuthRefresh extends ChangeNotifier {
     // after the opening finishes, so an app whose session resolved during the animation would
     // sit on a completed splash until something else happened to poke the router.
     _ref.listen(splashGateProvider, (_, _) => notifyListeners());
+    // And a reset link, which holds the app on "Set a new password" until it is finished.
+    _ref.listen(passwordRecoveryProvider, (_, _) => notifyListeners());
   }
   final Ref _ref;
 }
@@ -307,6 +325,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       phase: ref.read(authControllerProvider),
       here: state.matchedLocation,
       openingFinished: ref.read(splashGateProvider),
+      recovering: ref.read(passwordRecoveryProvider),
     ),
 
     // Built from [appScreens], so what the redirect can reach and what the router can draw are

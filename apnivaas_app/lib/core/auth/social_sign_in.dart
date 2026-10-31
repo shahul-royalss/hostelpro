@@ -1,16 +1,16 @@
-/// Self sign-up personas and the two sign-in providers that have no SDK in this build.
+/// Self sign-up personas and the Facebook and Truecaller sign-in providers.
 ///
-/// docs/self-signup-onboarding-spec.md, Flows 1–2. Facebook and Truecaller are integration
-/// POINTS: an interface shaped like [GoogleIdTokenSource], a NotConfigured implementation, and a
-/// build flag that keeps each button hidden while it is empty. Neither native SDK is in this
-/// build. When one lands, it implements the interface and replaces the provider below; nothing
-/// else in the app changes.
+/// docs/self-signup-onboarding-spec.md, Flows 1–2. Each provider is an interface shaped like
+/// [GoogleIdTokenSource] and a build flag that keeps its button hidden while it is empty.
+/// Facebook signs in natively since round 5 ([FacebookNativeSource]); Truecaller is still an
+/// integration point answering in the contract's words ([SocialSignInNotConfigured]).
 ///
 /// No secret lives here. The flags are public client identifiers; the app secret and the
 /// Truecaller exchange live in the `mobile-auth` Edge Function only.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'facebook_native.dart';
 
 /// Who the person said they are on "Who are you?". A HINT for one sign-up request, never
 /// authority: the server maps it to a role and the database refuses every other role for a
@@ -98,12 +98,8 @@ class SocialSignInNotConfigured implements SocialCredentialSource {
   Future<SocialCredentialOutcome> request() async => SocialCredentialFailed(message);
 }
 
-final facebookCredentialSourceProvider = Provider<SocialCredentialSource>(
-  (ref) => SocialSignInNotConfigured(
-    enabledByFlag: SocialSignInConfig.facebookEnabled,
-    message: SocialSignInWords.facebookNotSetUp,
-  ),
-);
+final facebookCredentialSourceProvider =
+    Provider<SocialCredentialSource>((ref) => FacebookNativeSource());
 
 final truecallerCredentialSourceProvider = Provider<SocialCredentialSource>(
   (ref) => SocialSignInNotConfigured(

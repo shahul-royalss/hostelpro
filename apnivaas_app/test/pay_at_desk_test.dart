@@ -350,8 +350,10 @@ Future<void> _showOwnerPayments(WidgetTester tester, List<RecentPayment> rows,
 
 void main() {
   // ───────────────────────────────────────────────────────────────────────────
-  group('the resident can pay in the app, and is still told where the desk is', () {
-    testWidgets('the fees screen keeps the real figures and points at the desk',
+  // ONE PAY BUTTON since 2026-10-31: the owner asked for "pay cash at the desk" to go and for a
+  // single button (owner's UPI ID when set, Razorpay otherwise — see PayNowButton).
+  group('the resident pays in the app, with one button', () {
+    testWidgets('the fees screen keeps the real figures and offers one Pay now',
         (tester) async {
       await _showFeesScreen(tester, rent: _ledger(due: 6200, paid: 0, status: 'unpaid'));
 
@@ -360,10 +362,10 @@ void main() {
       expect(find.text('UNPAID'), findsOneWidget);
       expect(find.text('still to pay'), findsOneWidget);
 
-      // And the action, which is a sentence rather than a button.
-      expect(find.text('Or pay cash at the desk'), findsOneWidget);
-      expect(find.textContaining('Hand ₹6,200 to Priya Nair'), findsOneWidget);
-      expect(find.textContaining('Desk: 9000000002'), findsOneWidget);
+      // No desk note any more.
+      expect(find.text('Or pay cash at the desk'), findsNothing);
+      expect(find.textContaining('Hand ₹6,200 to'), findsNothing);
+      expect(find.text('Pay with UPI app'), findsNothing, reason: 'one button, not two');
 
       // THE SCREEN NOW TAKES MONEY. The cream FilledButton is the app's one "do it now"
       // affordance and paying rent is what it is spent on here. The figure on it is the
@@ -379,22 +381,17 @@ void main() {
       expect(find.text('Or pay cash at the desk'), findsNothing);
     });
 
-    testWidgets('the panel is not dressed as an error', (tester) async {
+    testWidgets('an unpaid month is not dressed as an error', (tester) async {
       await _showFeesScreen(tester, rent: _ledger(due: 6200, paid: 0, status: 'unpaid'));
 
-      // The desk panel is a second route, not a failure — so none of the vocabulary a failure
-      // uses appears anywhere on the screen.
+      // Owing rent is not a failure — so none of the vocabulary a failure uses appears anywhere
+      // on the screen.
       expect(find.textContaining('Try again'), findsNothing);
       expect(find.textContaining('could not'), findsNothing);
       expect(find.textContaining('unavailable'), findsNothing);
       expect(find.textContaining('went wrong'), findsNothing);
       expect(find.byType(ErrorNote), findsNothing);
-      // What it says instead: where the office is, and what happens after you go there.
-      expect(find.textContaining('Hand ₹6,200 to'), findsOneWidget);
-      expect(
-        find.textContaining('It appears here as soon as your warden records it'),
-        findsOneWidget,
-      );
+      expect(find.text('Pay ₹6,200 now'), findsOneWidget);
     });
   });
 
@@ -449,11 +446,11 @@ void main() {
         ],
       );
 
-      // The card refuses to call it settled, and still points at the desk for the rest.
+      // The card refuses to call it settled, and offers to pay the rest.
       expect(find.text('paid in full'), findsNothing);
       expect(find.text('still to pay'), findsOneWidget);
       expect(find.text('PARTLY PAID'), findsWidgets);
-      expect(find.textContaining('Hand ₹3,000 to Priya Nair'), findsOneWidget);
+      expect(find.text('Pay ₹3,000 now'), findsOneWidget);
 
       await tester.tap(find.widgetWithText(OutlinedButton, 'View receipt'));
       await tester.pumpAndSettle();

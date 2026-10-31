@@ -20,6 +20,8 @@ import 'staff/owner_staff_screen.dart';
 import 'widgets/owner_header.dart';
 import 'widgets/states.dart' show EmptyNote, ErrorNote, whenAsync;
 import '../../data/repositories/tenant_admin_repository.dart' show tenantProfileProvider;
+import '../warden/actions/assign_bed_sheet.dart' show showAssignBedSheet;
+import '../warden/actions/record_payment_sheet.dart' show showRecordPaymentSheet;
 import '../warden/actions/rent_sheet.dart' show editRent;
 import '../warden/students/edit_tenant_sheet.dart' show showEditTenantSheet;
 
@@ -393,8 +395,10 @@ class _StudentDetail extends ConsumerWidget {
         ),
         if (s.isResident) ...[
           const SizedBox(height: Space.md),
-          // R4.1 / R4.2: the owner edits the same details and rent as the warden. This sheet
-          // shows a snapshot, so it closes after a save and the list re-reads.
+          // R4.1 / R4.2: the owner edits the same details and rent as the warden. Round 5: and
+          // places the tenant in a bed and records a payment, with the warden's own sheets
+          // (students_update and wd_record_payment both allow the owner). This sheet shows a
+          // snapshot, so it closes after a change and the list re-reads.
           Wrap(
             spacing: Space.xs,
             runSpacing: Space.xs,
@@ -427,6 +431,43 @@ class _StudentDetail extends ConsumerWidget {
                 icon: const Icon(Icons.currency_rupee_rounded, size: IconSize.md),
                 label: Text(s.monthlyFee > 0 ? 'Change rent' : 'Set rent'),
               ),
+              OutlinedButton.icon(
+                key: const ValueKey('owner-assign-bed'),
+                onPressed: () async {
+                  final nav = Navigator.of(context);
+                  final moved = await showAssignBedSheet(context, ref, student: s);
+                  if (moved) {
+                    ref.invalidate(studentsProvider);
+                    nav.maybePop();
+                  }
+                },
+                icon: const Icon(Icons.bed_outlined, size: IconSize.md),
+                label: Text(s.bedId == null ? 'Assign bed' : 'Move bed'),
+              ),
+              // Rent first: with no rent set the server records nothing (round 4).
+              if (s.monthlyFee > 0)
+                OutlinedButton.icon(
+                  key: const ValueKey('owner-record-payment'),
+                  onPressed: () async {
+                    final nav = Navigator.of(context);
+                    final recorded = await showRecordPaymentSheet(
+                      context,
+                      studentId: s.id,
+                      studentName: s.fullName,
+                      monthlyFee: s.monthlyFee,
+                      periodMonth: ref.read(currentPeriodMonthProvider),
+                    );
+                    if (recorded == true) {
+                      ref
+                        ..invalidate(studentFeeHistoryProvider(s.id))
+                        ..invalidate(hostelStatsProvider)
+                        ..invalidate(studentsProvider);
+                      nav.maybePop();
+                    }
+                  },
+                  icon: const Icon(Icons.payments_outlined, size: IconSize.md),
+                  label: const Text('Record payment'),
+                ),
             ],
           ),
         ],

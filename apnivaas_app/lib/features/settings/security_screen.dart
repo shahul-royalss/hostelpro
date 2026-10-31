@@ -1234,7 +1234,6 @@ class _CodeField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         counterText: '',
-        hintText: '000000',
       ),
       onChanged: (_) => onChanged(),
     );

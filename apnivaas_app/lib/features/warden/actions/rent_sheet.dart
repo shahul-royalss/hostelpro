@@ -71,7 +71,6 @@ class RentFields extends StatelessWidget {
       decoration: InputDecoration(
         labelText: 'Monthly rent',
         prefixText: '₹ ',
-        hintText: 'e.g. 6500',
         errorText: rentError,
         errorMaxLines: 3,
       ),

@@ -185,12 +185,11 @@ export default function PrivacyPolicyPage() {
               or stores one.
             </li>
             <li>
-              <strong>Owners and residents may use Continue with Google</strong> instead of their
-              password, if their login is an email address that is also a Google account. A Manager
-              or Warden an Owner created, and every platform administrator, cannot use Google,
-              Facebook or Truecaller: the database refuses it, and they sign in only with the login
-              they were given. A Manager or Warden who signed up themselves may keep using the
-              sign-in they signed up with.
+              <strong>Owners, residents, Managers and Wardens may use Continue with Google</strong>, or
+              Continue with Facebook where the app offers it, instead of their password, if their
+              login is an email address; Facebook sign-in goes through the Facebook app on the
+              phone. Platform administrators cannot use Google, Facebook or Truecaller: the database
+              refuses it, and they sign in only with their password and their second factor.
             </li>
             <li>A resident&rsquo;s account is deactivated when they check out of the hostel.</li>
           </ul>
@@ -232,7 +231,7 @@ export default function PrivacyPolicyPage() {
               ],
               [
                 "Email and password sign-up",
-                "Name, phone number, email address and, for an Owner or a tenant, city and pincode. The password is hashed by the authentication service, and the email address is confirmed by a link",
+                "Name, phone number and email address. The password is hashed by the authentication service, and the email address is confirmed by a link",
                 "Anyone who signs up with a password",
               ],
               [
@@ -366,7 +365,8 @@ export default function PrivacyPolicyPage() {
               &mdash; on by default for Owners, optional for everyone else &mdash; asks your
               phone&rsquo;s own fingerprint, face or screen lock to check it is you; the check
               happens on the phone, nothing biometric reaches {APP_NAME}, and whether the lock is
-              on is kept only on the phone.
+              on is kept only on the phone. The language you choose for the app is kept only on
+              the phone too.
               Four more are pulled in by the notification machinery itself &mdash; waking the
               device, vibrating, receiving the message and an internal, app-scoped receiver
               permission. The last two come from Razorpay&rsquo;s checkout SDK: NFC, so a payment
@@ -562,7 +562,7 @@ export default function PrivacyPolicyPage() {
               ],
               [
                 "Anyone signed in who is looking for a PG",
-                "The PG's name, type, who it is for, locality, city, distance, logo, cover photos, description, amenities, house rules, rating and reviews, each review with the reviewer's first name — never its full address, its map position or the Owner's contact details. A PG appears while it is listed and its plan or free month is running. The Owner can read reviews but not change or remove them",
+                "The PG's name, type, who it is for, locality, city, distance, logo, cover photos, description, amenities, house rules, how many beds are free in each room type (a count, never which bed or who is in the others), rating and reviews, each review with the reviewer's first name — never its full address, its map position or the Owner's contact details. A PG appears while it is listed and its plan or free month is running. The Owner can read reviews but not change or remove them",
               ],
               [
                 "Platform administrator",
@@ -610,7 +610,7 @@ export default function PrivacyPolicyPage() {
               [
                 "Meta (Facebook)",
                 "Only if the app offers Continue with Facebook and you choose it: confirming who you are when you sign in",
-                "The fact that you signed in to this app; it shares your Facebook user ID, name and email address with us",
+                "The fact that you signed in to this app; it shares your Facebook user ID, name and email address with us. Facebook's software in the app is used for sign-in only: its automatic event logging and the advertising ID are switched off",
               ],
               [
                 "Truecaller",

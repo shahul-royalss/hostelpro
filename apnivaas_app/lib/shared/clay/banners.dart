@@ -6,6 +6,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/theme/typography.dart';
 import 'clay_icons.dart';
 import 'pill_button.dart';
+import '../../core/i18n/i18n.dart';
 
 /// THE GOLD TASK BANNER — time-bound work that is waiting on the person: "Meter readings due",
 /// "KYC pending for 3 tenants", "Subscription ends in 5 days".
@@ -60,10 +61,10 @@ class ActionBanner extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: context.textRoles.tileTitle.copyWith(color: titleInk)),
+        Text(context.tr(title), style: context.textRoles.tileTitle.copyWith(color: titleInk)),
         if (message != null) ...[
           const SizedBox(height: Space.hair),
-          Text(message!, style: ApnivaasType.manrope(13, 18, FontWeight.w400, bodyInk)),
+          Text(context.tr(message!), style: ApnivaasType.manrope(13, 18, FontWeight.w400, bodyInk)),
         ],
         if (actionLabel != null && onAction != null) ...[
           const SizedBox(height: Space.tight),
@@ -143,10 +144,10 @@ class InfoBanner extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: context.textRoles.tileTitle.copyWith(color: titleInk)),
+        Text(context.tr(title), style: context.textRoles.tileTitle.copyWith(color: titleInk)),
         if (message != null) ...[
           const SizedBox(height: Space.hair),
-          Text(message!, style: ApnivaasType.manrope(12, 17, FontWeight.w400, bodyInk)),
+          Text(context.tr(message!), style: ApnivaasType.manrope(12, 17, FontWeight.w400, bodyInk)),
         ],
         if (action != null) ...[const SizedBox(height: Space.xs), action!],
       ],
@@ -213,7 +214,7 @@ class InfoNote extends StatelessWidget {
             const SizedBox(width: Space.xs),
           ],
           Expanded(
-            child: Text(message, style: ApnivaasType.manrope(13, 18, FontWeight.w400, ink)),
+            child: Text(context.tr(message), style: ApnivaasType.manrope(13, 18, FontWeight.w400, ink)),
           ),
         ],
       ),

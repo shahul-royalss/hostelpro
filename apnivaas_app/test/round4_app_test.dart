@@ -271,12 +271,12 @@ void main() {
       await _pump(tester, TenantDetailsForm(profile: _profile()),
           [tenantAdminApiProvider.overrideWithValue(api)]);
       await tester.enterText(find.byKey(const ValueKey('tenant-city')), 'Mumbai');
-      await tester.enterText(find.byKey(const ValueKey('tenant-email')), '');
       await tester.tap(find.text('Female'));
       await tester.tap(find.text('Save details'));
       await tester.pumpAndSettle();
-      expect(api.patches.single,
-          {'p_student_id': 's-1', 'p_email': '', 'p_gender': 'female', 'p_city': 'Mumbai'});
+      expect(api.patches.single, {'p_student_id': 's-1', 'p_gender': 'female', 'p_city': 'Mumbai'});
+      // Staff no longer edit the address (2026-10-31).
+      expect(find.byKey(const ValueKey('tenant-email')), findsNothing);
     });
 
     testWidgets('a server refusal lands under its field', (tester) async {

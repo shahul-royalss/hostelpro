@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../core/theme/typography.dart';
+import '../../core/i18n/i18n.dart';
 
 /// What a status means. Each maps to one canonical tone, and the chip resolves it for the theme.
 ///
@@ -108,7 +109,7 @@ class StatusChip extends StatelessWidget {
               const SizedBox(width: Space.xxs),
             ],
             Flexible(
-              child: Text(label, style: style, maxLines: 2, overflow: TextOverflow.ellipsis),
+              child: Text(context.tr(label), style: style, maxLines: 2, overflow: TextOverflow.ellipsis),
             ),
           ],
         ),

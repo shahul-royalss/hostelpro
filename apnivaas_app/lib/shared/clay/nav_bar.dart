@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../core/theme/tokens.dart';
 import 'clay_icons.dart';
 import 'status_chip.dart';
+import '../../core/i18n/i18n.dart';
 
 /// One tab of a [ClayNavBar]: a clay icon, a word, and anything waiting there.
 @immutable
@@ -304,7 +305,7 @@ class _ClayNavItem extends StatelessWidget {
               const SizedBox(height: ClayNavBar.labelGap),
               FittedBox(
                 fit: BoxFit.scaleDown,
-                child: Text(dest.label, maxLines: 1, softWrap: false, style: labelStyle),
+                child: Text(context.tr(dest.label), maxLines: 1, softWrap: false, style: labelStyle),
               ),
             ],
           ),

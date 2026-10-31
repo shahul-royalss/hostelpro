@@ -117,8 +117,14 @@ export const LEGAL = {
  * on-device biometric lock, PG profiles and reviews, check-out requests, UPI rent paid straight to
  * the owner, and what a permanent deletion keeps; the permission count goes to thirteen. Row:
  * db/migrations/2026-10-26-legal-version-round3.sql, same order as above.
+ *
+ * 2026-10-31 (round 5): managers and wardens may use Continue with Google and Facebook (only
+ * platform administrators may not), Facebook sign-in runs through the Facebook app with event
+ * logging and the advertising ID off, sign-up asks for no city or pincode, the chosen language
+ * stays on the phone, and a PG's page shows how many beds are free. Row:
+ * db/migrations/2026-10-31-legal-version-round5.sql.
  */
-export const LEGAL_VERSION = "2026-10-26";
+export const LEGAL_VERSION = "2026-10-31";
 
 /**
  * Android application id, so the deletion page can name the app Play users installed.

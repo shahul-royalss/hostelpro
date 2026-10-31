@@ -503,7 +503,6 @@ class _CheckInVisitorSheetState extends ConsumerState<_CheckInVisitorSheet> {
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(
                     labelText: 'Relation',
-                    hintText: 'Father, friend',
                     prefixIcon: Icon(Icons.badge_outlined),
                   ),
                 ),

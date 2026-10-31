@@ -279,7 +279,6 @@ Future<void> _changeEmail(BuildContext context, SaHostelRow hostel) {
             'Apnivaas treats it as theirs.',
       ],
       fieldLabel: 'New email',
-      hint: 'owner@example.com',
       keyboardType: TextInputType.emailAddress,
       submitLabel: 'Save email',
       validator: (v) => validateOwnerEmail(v, current: hostel.ownerEmail),
@@ -511,7 +510,6 @@ class _WorkingSheet<T> extends ConsumerStatefulWidget {
     required this.submit,
     required this.announce,
     this.initialValue = '',
-    this.hint,
     this.helper,
     this.maxLength,
     this.maxLines = 1,
@@ -538,7 +536,6 @@ class _WorkingSheet<T> extends ConsumerStatefulWidget {
   /// The sentence for a change that landed.
   final String Function(T result) announce;
   final String initialValue;
-  final String? hint;
   final String? helper;
   final int? maxLength;
   final int maxLines;
@@ -652,7 +649,6 @@ class _WorkingSheetState<T> extends ConsumerState<_WorkingSheet<T>> {
                 maxLines: widget.maxLines,
                 decoration: InputDecoration(
                   labelText: widget.fieldLabel,
-                  hintText: widget.hint,
                   helperText: widget.helper,
                   helperMaxLines: 2,
                   errorMaxLines: 3,

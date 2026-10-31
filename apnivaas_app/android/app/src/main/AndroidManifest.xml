@@ -190,6 +190,25 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/notification_accent" />
+        <!--
+          FACEBOOK LOGIN (round 5). The strings come from build.gradle.kts (environment or
+          ~/.hostelpro-keys/facebook.properties). The app asks the Facebook APP to sign in
+          (nativeOnly), so no browser activity is declared. Automatic app-event logging and the
+          advertising ID stay OFF: the SDK is here for sign-in and nothing else, which is what the
+          Privacy Policy and the Data safety form say.
+        -->
+        <meta-data
+            android:name="com.facebook.sdk.ApplicationId"
+            android:value="@string/facebook_app_id" />
+        <meta-data
+            android:name="com.facebook.sdk.ClientToken"
+            android:value="@string/facebook_client_token" />
+        <meta-data
+            android:name="com.facebook.sdk.AutoLogAppEventsEnabled"
+            android:value="false" />
+        <meta-data
+            android:name="com.facebook.sdk.AdvertiserIDCollectionEnabled"
+            android:value="false" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -237,5 +256,7 @@
         <package android:name="net.one97.paytm"/>
         <package android:name="com.google.android.apps.nbu.paisa.user"/>
         <package android:name="in.org.npci.upiapp"/>
+        <!-- Round 5: Continue with Facebook signs in through the Facebook app. -->
+        <package android:name="com.facebook.katana"/>
     </queries>
 </manifest>

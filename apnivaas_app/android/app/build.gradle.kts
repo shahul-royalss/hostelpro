@@ -56,6 +56,21 @@ val ksKeyPassword = signingValue("APNIVAAS_KEY_PASSWORD", "keyPassword")
 val hasReleaseKey = listOf(ksStoreFile, ksKeyAlias, ksStorePassword, ksKeyPassword)
     .all { !it.isNullOrBlank() } && File(ksStoreFile!!).exists()
 
+/*
+ * FACEBOOK LOGIN (round 5). The app ID and client token are public client identifiers — both
+ * ship inside the APK — but they are kept out of the repository all the same: environment
+ * variables first (CI), then ~/.hostelpro-keys/facebook.properties beside the signing key. With
+ * neither, the strings are empty, the SDK's auto-initialiser logs and carries on, and the app
+ * hides "Continue with Facebook" because FACEBOOK_APP_ID was not compiled in either.
+ */
+val facebookProps = Properties().apply {
+    val f = File(System.getProperty("user.home"), ".hostelpro-keys/facebook.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val facebookAppId = System.getenv("FACEBOOK_APP_ID") ?: facebookProps.getProperty("appId") ?: ""
+val facebookClientToken =
+    System.getenv("FACEBOOK_CLIENT_TOKEN") ?: facebookProps.getProperty("clientToken") ?: ""
+
 android {
     namespace = "com.nivorasr.app"
     /*
@@ -117,6 +132,10 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        resValue("string", "facebook_app_id", facebookAppId)
+        resValue("string", "facebook_client_token", facebookClientToken)
+        resValue("string", "fb_login_protocol_scheme", "fb$facebookAppId")
 
         // ── A SINGLE-ABI BUILD MUST PACKAGE A SINGLE ABI ────────────────────────────────────
         //

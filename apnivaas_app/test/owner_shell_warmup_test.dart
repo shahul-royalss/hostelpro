@@ -21,6 +21,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/features/owner/owner_pg_list_screen.dart';
 import 'package:mobile/core/auth/auth_controller.dart';
 import 'package:mobile/core/auth/session.dart';
 import 'package:mobile/core/perf/session_keep_alive.dart';
@@ -235,6 +236,16 @@ Future<void> _tapTab(WidgetTester tester, String label) async {
   await tester.pump();
 }
 
+/// The second PG's card. Since round 5 each card carries a "PG profile & photos" button, so on
+/// this 800x600 test screen the second card starts below the fold and is scrolled to, as an
+/// owner with two PGs would.
+Future<void> _seeLakeview(WidgetTester tester) async {
+  final list = find
+      .descendant(of: find.byType(OwnerPgListScreen), matching: find.byType(Scrollable))
+      .first;
+  await tester.scrollUntilVisible(find.text('Lakeview'), 150, scrollable: list);
+}
+
 void main() {
   testWidgets('after warm-up, every tab arrives drawn — no skeleton, no spinner, no refetch',
       (tester) async {
@@ -260,6 +271,7 @@ void main() {
     await _tapTab(tester, 'Property');
     _expectNoLoadingUi();
     expect(find.text('Sunrise Residency'), findsWidgets);
+    await _seeLakeview(tester);
     expect(find.text('Lakeview'), findsWidgets);
 
     // People is warmed like the rest: the roster's first page is already in hand, so the tap
@@ -330,6 +342,7 @@ void main() {
     // Drain: once the stubs resolve, the same screen fills in with no further taps.
     await _letWarmupRun(tester);
     _expectNoLoadingUi();
+    await _seeLakeview(tester);
     expect(find.text('Lakeview'), findsWidgets);
   });
 
@@ -340,6 +353,7 @@ void main() {
     await _letWarmupRun(tester);
 
     await _tapTab(tester, 'Property');
+    await _seeLakeview(tester);
     expect(find.text('Lakeview'), findsWidgets);
 
     // What a silent background refresh does: invalidate while the tab is on screen.
@@ -358,6 +372,7 @@ void main() {
     expect(_statsFetches, {_sunriseId: 2, _lakeviewId: 2});
     _expectNoLoadingUi();
     expect(find.text('Sunrise Residency'), findsWidgets);
+    await _seeLakeview(tester);
     expect(find.text('Lakeview'), findsWidgets);
 
     // Let the refresh land so no stub timer outlives the test.

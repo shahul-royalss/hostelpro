@@ -9,6 +9,7 @@ import '../../../data/providers.dart';
 import '../../../shared/clay/clay.dart';
 import '../../../shared/illustrations.dart';
 import '../../../shared/sign_in_again.dart';
+import '../../../core/i18n/i18n.dart';
 
 /// The small kit every student screen is built from.
 ///
@@ -691,7 +692,7 @@ class DetailRow extends StatelessWidget {
     final t = Theme.of(context);
     final shown = (value ?? '').trim();
     final labelText = Text(
-      label,
+      context.tr(label),
       style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
     );
     // Selectable so a resident can copy their guardian's number or their own address out of

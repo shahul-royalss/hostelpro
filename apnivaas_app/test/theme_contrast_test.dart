@@ -1509,10 +1509,14 @@ void main() {
   group('typography — Outfit and Manrope, and the bundle is real', () {
     final text = ApnivaasType.textTheme(ApnivaasColors.ink, ApnivaasColors.inkMuted);
 
-    test('the pubspec declares exactly the two families, and nothing in the folder ships loose',
+    test('the pubspec declares the two Latin families and the five Indian scripts, nothing loose',
         () {
       final declared = _declaredFonts();
-      expect(declared.keys.toSet(), {ApnivaasType.display, ApnivaasType.family});
+      expect(declared.keys.toSet(), {ApnivaasType.display, ApnivaasType.family, ...ApnivaasType.indic});
+      // Round 5: each script ships Regular and Bold, nothing more.
+      for (final f in ApnivaasType.indic) {
+        expect(declared[f], {'google_fonts/$f-Regular.ttf': 400, 'google_fonts/$f-Bold.ttf': 700});
+      }
       expect(declared[ApnivaasType.display], {
         'google_fonts/Outfit-Medium.ttf': 500,
         'google_fonts/Outfit-SemiBold.ttf': 600,
@@ -1531,14 +1535,14 @@ void main() {
       expect(pubspec.any((l) => l.contains('family: Inter')), isFalse);
     });
 
-    test('the test runner registers the same seven files the pubspec declares', () {
+    test('the test runner registers the same files the pubspec declares', () {
       // flutter_test_config.dart loads the faces for every test; if it drifted from the pubspec
       // every layout test would be measuring a typeface nobody ships.
       final declared = _declaredFonts().map((k, v) => MapEntry(k, v.keys.toSet()));
       expect(appFonts.map((k, v) => MapEntry(k, v.toSet())), declared);
     });
 
-    test('SEVEN FILES, SEVEN WEIGHTS, SEVEN DIFFERENT FACES', () {
+    test('SEVENTEEN FILES, EACH ITS OWN STATIC FACE', () {
       // Filenames prove nothing; the tables do.
       final seen = <String, Uint8List>{};
       _declaredFonts().forEach((family, files) {
@@ -1553,7 +1557,8 @@ void main() {
           seen[path] = face.glyf;
         });
       });
-      expect(seen, hasLength(7));
+      // Outfit 3 + Manrope 4 + five scripts × Regular and Bold.
+      expect(seen, hasLength(17));
       final names = seen.keys.toList();
       for (var i = 0; i < names.length; i++) {
         for (var j = i + 1; j < names.length; j++) {
@@ -1569,6 +1574,8 @@ void main() {
 
     test('Manrope draws the rupee at every weight; Outfit has none, so it falls back', () {
       _declaredFonts().forEach((family, files) {
+        // The Indian scripts carry no figures of their own: amounts stay in Manrope.
+        if (ApnivaasType.indic.contains(family)) return;
         for (final path in files.keys) {
           final face = _sfnt(File(path));
           expect(face.hasRupee, family == ApnivaasType.family,
@@ -1580,7 +1587,7 @@ void main() {
         }
       });
       for (final style in _allSlots(text).where((s) => s.fontFamily == ApnivaasType.display)) {
-        expect(style.fontFamilyFallback, [ApnivaasType.family],
+        expect(style.fontFamilyFallback, [ApnivaasType.family, ...ApnivaasType.indic],
             reason: 'an Outfit slot without the Manrope fallback draws ₹ as a missing glyph');
       }
     });

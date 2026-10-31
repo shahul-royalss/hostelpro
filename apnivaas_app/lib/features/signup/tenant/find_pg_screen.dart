@@ -363,9 +363,6 @@ class _RequestSheetState extends State<_RequestSheet> {
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
                 labelText: 'Message (optional)',
-                hintText: widget.forStaff
-                    ? 'For example, your shift or who asked you to join'
-                    : 'For example, your room number or move-in date',
               ),
             ),
             const SizedBox(height: Space.sm),

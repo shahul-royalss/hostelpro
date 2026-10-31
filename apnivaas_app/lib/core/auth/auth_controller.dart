@@ -12,7 +12,9 @@ import '../../data/models/failure.dart';
 import '../boot/startup.dart';
 import 'auth_endpoint.dart';
 import '../config/env.dart';
+import 'facebook_native.dart';
 import 'google_id_token.dart';
+import 'password_recovery.dart';
 import 'social_sign_in.dart';
 import 'session.dart';
 import 'session_standing.dart';
@@ -288,6 +290,8 @@ class AuthController extends AsyncNotifier<AuthPhase> {
           case AuthEventAction.reresolve:
             _signedOutByDeadToken = false;
             ref.invalidateSelf();
+          case AuthEventAction.recoverPassword:
+            ref.read(passwordRecoveryProvider.notifier).begin();
         }
       },
       // ═══ THE HANDLER THAT WAS NOT THERE ═══
@@ -348,6 +352,13 @@ class AuthController extends AsyncNotifier<AuthPhase> {
     // The rule from the top of the file: name the cause the person can act on, and put the
     // detail here. debugPrint is stripped in release, so this cannot reach a production log.
     debugPrint('auth stream error (token refresh): ${error.runtimeType} $error');
+
+    // Not a refresh at all: a reset link that could not be exchanged. Say so on sign-in.
+    if (isDeadRecoveryLink(error)) {
+      ref.read(passwordRecoveryProvider.notifier).end();
+      state = const AsyncData(AuthSignedOut(message: deadRecoveryLinkMessage));
+      return;
+    }
 
     final next = phaseAfterFailedRefresh(sessionStandingOf(_db));
     if (next == null) return;
@@ -1157,7 +1168,94 @@ class AuthController extends AsyncNotifier<AuthPhase> {
     // Google attempt would sign the same person straight back in. Unawaited — Google's own
     // housekeeping must never hold up leaving.
     unawaited(ref.read(googleIdTokenSourceProvider).forget());
+    final facebook = ref.read(facebookCredentialSourceProvider);
+    if (facebook is FacebookNativeSource) unawaited(facebook.forget());
     await _db.auth.signOut();
+    state = const AsyncData(AuthSignedOut());
+  }
+
+  /// Sets [newPassword] on the session a reset link opened, then signs out everywhere, so the
+  /// new password is the only way back in and every check sign-in makes runs again.
+  ///
+  /// An account with a second factor may be refused the change at aal1; then the outcome asks
+  /// for [code], which is verified first (aal2) before the change is tried again.
+  Future<RecoveryOutcome> completePasswordRecovery(String newPassword, {String? code}) async {
+    if (_db.auth.currentSession == null) {
+      ref.read(passwordRecoveryProvider.notifier).end();
+      state = const AsyncData(AuthSignedOut(message: deadRecoveryLinkMessage));
+      return (error: deadRecoveryLinkMessage, needsCode: false);
+    }
+    // The change announces `userUpdated`; this method publishes the outcome itself, so that
+    // event must not start a profile read that could land after it (see [actionForAuthEvent]).
+    _installingSelf = true;
+    try {
+      if (code != null) {
+        final factors = await _db.auth.mfa.listFactors().timeout(_networkTimeout);
+        final totp = factors.totp.where((f) => f.status == FactorStatus.verified).firstOrNull;
+        if (totp == null) {
+          return (error: 'This account has no authenticator app to check.', needsCode: false);
+        }
+        await _db.auth.mfa
+            .challengeAndVerify(factorId: totp.id, code: code.trim())
+            .timeout(_networkTimeout);
+      }
+      await _db.auth
+          .updateUser(UserAttributes(password: newPassword))
+          .timeout(_networkTimeout);
+    } on AuthException catch (e) {
+      debugPrint('password recovery failed: ${e.runtimeType} ${e.code} ${e.message}');
+      final m = e.message.toLowerCase();
+      if (e.code == 'insufficient_aal' || m.contains('aal2')) {
+        return (error: null, needsCode: true);
+      }
+      if (e.code == 'mfa_verification_failed' || m.contains('invalid totp')) {
+        return (
+          error: 'That code is not right. Codes change every 30 seconds — try the current one.',
+          needsCode: true,
+        );
+      }
+      if (e.code == 'same_password') {
+        return (error: 'Choose a password different from your old one.', needsCode: code != null);
+      }
+      if (e.code == 'weak_password') return (error: e.message, needsCode: code != null);
+      if (e.code == 'session_not_found' || e.code == 'session_expired' || e.statusCode == '401') {
+        ref.read(passwordRecoveryProvider.notifier).end();
+        state = const AsyncData(AuthSignedOut(message: deadRecoveryLinkMessage));
+        return (error: deadRecoveryLinkMessage, needsCode: false);
+      }
+      return (error: _friendly(e), needsCode: code != null);
+    } catch (e) {
+      debugPrint('password recovery failed (transport): ${e.runtimeType} $e');
+      return (error: _unreachable(e), needsCode: code != null);
+    } finally {
+      _installingSelf = false;
+    }
+
+    // ═══ THE PASSWORD IS CHANGED. Nothing below may report failure. ═══
+    unawaited(ref.read(googleIdTokenSourceProvider).forget());
+    try {
+      await _db.auth.signOut(scope: SignOutScope.global).timeout(_networkTimeout);
+    } catch (e) {
+      debugPrint('global sign-out after recovery failed: ${e.runtimeType} $e');
+      try {
+        await _db.auth.signOut(scope: SignOutScope.local);
+      } catch (_) {
+        // The local copy is gone either way once the app restarts.
+      }
+    }
+    ref.read(passwordRecoveryProvider.notifier).end();
+    state = const AsyncData(AuthSignedOut(message: passwordChangedMessage));
+    return (error: null, needsCode: false);
+  }
+
+  /// Leaves "Set a new password" without changing anything; the link's session is dropped.
+  Future<void> abandonPasswordRecovery() async {
+    try {
+      await _db.auth.signOut(scope: SignOutScope.local).timeout(_networkTimeout);
+    } catch (e) {
+      debugPrint('leaving recovery: ${e.runtimeType} $e');
+    }
+    ref.read(passwordRecoveryProvider.notifier).end();
     state = const AsyncData(AuthSignedOut());
   }
 
@@ -1453,6 +1551,10 @@ enum AuthEventAction {
 
   /// Re-run the profile read and republish the phase.
   reresolve,
+
+  /// A reset-password link was opened: hold the app on "Set a new password"
+  /// ([passwordRecoveryProvider]). The session it carries is only for that.
+  recoverPassword,
 }
 
 /// ═══ THE RULE THAT ENDED 825 PROFILE READS A SECOND ═══
@@ -1524,6 +1626,8 @@ AuthEventAction actionForAuthEvent({
       // login screen, the refresh that just succeeded is the evidence that it was wrong, and
       // holding the person there would be the sulk after the mistake.
       return signedOutByDeadToken ? AuthEventAction.reresolve : AuthEventAction.ignore;
+    case AuthChangeEvent.passwordRecovery:
+      return AuthEventAction.recoverPassword;
     default:
       return AuthEventAction.ignore;
   }

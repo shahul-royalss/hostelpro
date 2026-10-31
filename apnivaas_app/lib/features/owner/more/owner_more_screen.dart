@@ -12,6 +12,7 @@ import '../owner_complaints_screen.dart';
 import '../owner_pg_detail_screen.dart';
 import '../owner_providers.dart';
 import '../plan/plan_billing_screen.dart';
+import '../profile/pg_profile_editor_screen.dart';
 import '../../signup/owner/book_demo_screen.dart';
 import '../staff/owner_staff_screen.dart';
 import '../tasks/owner_tasks_screen.dart';
@@ -101,6 +102,13 @@ class OwnerMoreScreen extends ConsumerWidget {
                           builder: (_) => OwnerPgDetailScreen(hostelId: hostelId),
                         ),
                       ),
+              showChevron: hostelId != null,
+            ),
+            ListRow(
+              icon: ClayIcons.reviews,
+              title: 'PG profile',
+              subtitle: 'Logo, photos, amenities and reviews tenants see',
+              onTap: hostelId == null ? null : () => push(PgProfileEditorScreen.route(hostelId)),
               showChevron: hostelId != null,
             ),
           ],

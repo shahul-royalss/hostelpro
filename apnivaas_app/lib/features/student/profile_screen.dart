@@ -12,11 +12,16 @@ import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../../shared/clay/clay.dart';
 import '../legal/account_deletion.dart';
+import '../onboarding/language_screen.dart' show LanguageRow;
 import '../settings/security_screen.dart';
 import '../shell/change_photo.dart';
 import '../../shared/person_avatar.dart';
 import '../../data/models/stay.dart';
+import '../../data/models/pg_profile.dart' show MyReview;
+import '../../data/repositories/pg_profile_repository.dart' show myReviewProvider;
 import '../../data/repositories/stay_repository.dart';
+import 'pg/pg_profile_page.dart';
+import 'pg/review_screen.dart';
 import 'stay_screens.dart';
 import 'student_providers.dart';
 import 'widgets/common.dart';
@@ -140,6 +145,18 @@ class _Profile extends ConsumerWidget {
                 caption: _checkoutCaption(ref.watch(myCheckoutRequestProvider).value),
                 onTap: () => Navigator.of(context).push(CheckoutScreen.route()),
               ),
+              _AccountRow(
+                art: ClayIcons.reviews,
+                label: 'Rate your PG',
+                caption: _reviewCaption(ref.watch(myReviewProvider).value),
+                onTap: () => Navigator.of(context).push(ReviewScreen.route(me.hostelId)),
+              ),
+              _AccountRow(
+                art: ClayIcons.rooms,
+                label: 'Your PG\'s page',
+                caption: 'Photos, amenities and reviews, as people looking for a PG see them.',
+                onTap: () => Navigator.of(context).push(PgProfilePage.route(me.hostelId)),
+              ),
             ],
           ),
 
@@ -154,6 +171,8 @@ class _Profile extends ConsumerWidget {
           const SizedBox(height: Space.sm),
           ListGroup(
             children: [
+              // Round 5: the app's language.
+              const LanguageRow(),
               _AccountRow(
                 art: ClayIcons.security,
                 label: 'Change password',
@@ -205,6 +224,10 @@ class _Profile extends ConsumerWidget {
     );
   }
 }
+
+String _reviewCaption(MyReview? r) => r == null
+    ? 'Stars and a few words, to help people choosing a PG.'
+    : 'You gave ${r.rating == 1 ? '1 star' : '${r.rating} stars'} · tap to update';
 
 String _checkoutCaption(CheckoutRequest? r) => switch (r?.status) {
       CheckoutStatus.pending => 'Requested for ${dayLabel(r!.preferredDate)} · waiting for the warden',

@@ -1,13 +1,14 @@
-# Releasing Apnivaas 1.3.0 on Google Play: step by step
+# Releasing Apnivaas 1.4.0 on Google Play: step by step
 
-The file to upload is **`dist/APNIVAAS-1.3.0-b12.aab`** (version 1.3.0, version code 12, signed with the upload key).
+The file to upload is **`dist/APNIVAAS-1.4.0-b14.aab`** (version 1.4.0, version code 14, signed with the upload key).
+If you never uploaded 1.3.0, upload this one instead; Play only needs the newest.
 Do the steps in order. Each one says where to click.
 
 ---
 
 ## Before you start (5 minutes)
 1. **Check the website is updated.** Open https://hostelpro-three.vercel.app/legal/privacy and confirm it says
-   **26 October 2026**. Vercel deploys about 2 minutes after the GitHub push. If the page still shows an older date,
+   **31 October 2026**. Vercel deploys about 2 minutes after the GitHub push. If the page still shows an older date,
    open vercel.com → project → Deployments and wait for the newest deployment to turn green.
 2. **Razorpay:** dashboard.razorpay.com → Settings → Webhooks → open the Apnivaas webhook → make sure
    **payment.captured** and **order.paid** are both ticked → Save.
@@ -20,15 +21,15 @@ Do the steps in order. Each one says where to click.
 1. Go to **play.google.com/console** → choose the **ShaReshi Tech** account → open **Apnivaas**.
 2. Left menu: **Test and release → Production** (or **Testing → Internal testing** if you want to try it with
    your own phone first, which is recommended). Click **Create new release**.
-3. **App bundles → Upload** → choose `dist/APNIVAAS-1.3.0-b12.aab`. Wait for "1.3.0 (12)" to appear.
-4. **Release name:** `1.3.0 (12)`.
+3. **App bundles → Upload** → choose `dist/APNIVAAS-1.4.0-b14.aab`. Wait for "1.4.0 (14)" to appear.
+4. **Release name:** `1.4.0 (14)`.
 5. **Release notes** (paste under `<en-IN>`):
    ```
-   • A fresh new design for owners, managers, wardens and tenants
-   • Create your account in the app — owners set up their PG with a free first month
-   • Tenants find a PG nearby and send a join request; owners accept in one tap
-   • Pay rent straight to your owner's UPI ID, or through Razorpay
-   • Check-out requests, rent history from your check-in date, and an app lock
+   • Apnivaas now speaks English, Hindi, Telugu, Tamil, Malayalam and Kannada
+   • Continue with Facebook, and Google sign-in for managers and wardens too
+   • Forgot your password? The email link now opens a screen to set a new one
+   • Owners: PG profile with logo, photos and amenities; assign beds and record payments
+   • Tenants: see free beds before asking to join, rate your PG, and one Pay now button
    ```
 6. Click **Next**. Read the warnings. Warnings in yellow are fine; red errors must be fixed. Then **Save**.
    Don't send it for review yet. Finish section B first.
@@ -79,7 +80,7 @@ Open each item below and press **Save** in each one.
 1. Keep the name **Apnivaas** and the short and full descriptions. Add one line about "create your account
    and pay rent by UPI" if you like.
 2. **Phone screenshots:** replace them with new ones of the redesigned app, at least 4: sign-in, owner home,
-   tenant home and payments. Take them on your phone with build 12 installed. Use portrait, 1080×1920 or larger.
+   tenant home and payments. Take them on your phone with build 14 installed. Use portrait, 1080×1920 or larger.
 3. **Save**.
 
 ---
@@ -95,10 +96,11 @@ Open each item below and press **Save** in each one.
 ## E. After it is live
 - Install it from the Play Store on a phone that does **not** have the test APK; uninstall the test APK first.
   Check Google sign-in. It works because the Play signing key's fingerprint is registered with Google.
-- **Oct 30 or later (Facebook and Truecaller):** when Facebook is published and Truecaller approves the app,
-  I add their sign-in code to the app and you upload the next version the same way, as version code 13.
+- **Facebook is live in 1.4.0.** "Continue with Facebook" signs in through the Facebook app on the
+  phone, so test it on a phone that has the Facebook app. **Truecaller** still waits for Truecaller's
+  review; when they approve it, the next version adds it.
 
 ## If something goes wrong
-- **"Version code 12 has already been used"**: ask me for a new build with the next number.
+- **"Version code 14 has already been used"**: ask me for a new build with the next number.
 - **Data safety rejected**: Play's email names the field. Compare it with the table above and `docs/data-safety.md`.
 - **App access rejected**: the reviewer couldn't sign in. Check that the login you gave works on a fresh phone.

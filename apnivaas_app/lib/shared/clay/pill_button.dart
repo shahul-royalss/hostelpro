@@ -3,6 +3,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
+import '../../core/i18n/i18n.dart';
 
 /// The small capsule action that sits at the end of a row or inside a banner — "Remind",
 /// "Assign", "Review", "Start".
@@ -56,7 +57,7 @@ class PillButton extends StatelessWidget {
           Icon(icon, size: IconSize.md),
           const SizedBox(width: Space.tight),
         ],
-        Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis)),
+        Flexible(child: Text(context.tr(label), maxLines: 1, overflow: TextOverflow.ellipsis)),
       ],
     );
 

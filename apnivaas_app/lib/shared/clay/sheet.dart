@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
 import '../glass/glass.dart';
+import '../../core/i18n/i18n.dart';
 
 /// Presents a bottom sheet with an optional title and subtitle above its body.
 ///
@@ -50,10 +51,10 @@ class SheetTitle extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Semantics(header: true, child: Text(title, style: t.textTheme.titleLarge)),
+        Semantics(header: true, child: Text(context.tr(title), style: t.textTheme.titleLarge)),
         if (subtitle != null) ...[
           const SizedBox(height: Space.xxs),
-          Text(subtitle!, style: t.textTheme.bodyMedium),
+          Text(context.tr(subtitle!), style: t.textTheme.bodyMedium),
         ],
       ],
     );

@@ -3,6 +3,9 @@
 /// The manual form on top (`signup_password`), then "or continue with" and the round provider
 /// buttons. Facebook and Truecaller are drawn only when configured. Every refusal is the
 /// server's own sentence. After sign-up the router takes over: consent, then onboarding.
+///
+/// No city or pincode (the owner asked them gone on 2026-10-31; the server takes both as
+/// optional), and no autofill: the phone does not offer saved accounts on this form.
 library;
 
 import 'package:flutter/material.dart';
@@ -23,15 +26,13 @@ import '../common/form_parts.dart';
 import '../legal/legal_screen.dart';
 import 'persona_store.dart';
 import 'signup_widgets.dart';
+import '../../core/i18n/i18n.dart';
 
 enum _Busy { form, google, facebook, truecaller }
 
 /// Email shape only; the server decides the rest.
 bool looksLikeEmail(String raw) =>
     RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$').hasMatch(raw.trim());
-
-/// A 6-digit Indian pincode (no leading zero).
-bool looksLikePincode(String raw) => RegExp(r'^[1-9]\d{5}$').hasMatch(raw.trim());
 
 class CreateAccountScreen extends ConsumerStatefulWidget {
   const CreateAccountScreen({super.key});
@@ -47,8 +48,6 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
-  final _city = TextEditingController();
-  final _pincode = TextEditingController();
   bool _obscure = true;
   _Busy? _busy;
   String? _error;
@@ -64,7 +63,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
 
   @override
   void dispose() {
-    for (final c in [_name, _phone, _email, _password, _confirm, _city, _pincode]) {
+    for (final c in [_name, _phone, _email, _password, _confirm]) {
       c.dispose();
     }
     super.dispose();
@@ -82,15 +81,12 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
       _error = null;
     });
     final personas = ref.read(pendingPersonaProvider.notifier);
-    final withAddress = persona != SignupPersona.staff;
     final attempt = await ref.read(authControllerProvider.notifier).signUpWithPassword(
           persona: persona,
           fullName: _name.text,
           phone: _phone.text,
           email: _email.text,
           password: _password.text,
-          city: withAddress ? _city.text : null,
-          pincode: withAddress ? _pincode.text : null,
         );
     if (attempt.signedIn) personas.clear();
     if (!mounted) return;
@@ -158,7 +154,6 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
           ClayIcons.roleWarden,
         ),
     };
-    final withAddress = persona != SignupPersona.staff;
     final providers = <SocialCircleButton>[
       if (google.isAvailable)
         SocialCircleButton(
@@ -193,128 +188,93 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
           alignment: AlignmentDirectional.centerStart,
           child: TextButton(
             onPressed: busy ? null : () => context.go(startRoute),
-            child: const Text('Not you? Change'),
+            child: Text(context.tr('Not you? Change')),
           ),
         ),
-        AutofillGroup(
-          child: Form(
-            key: _form,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextFormField(
-                  key: const ValueKey('signup-name'),
-                  controller: _name,
-                  enabled: !busy,
-                  textCapitalization: TextCapitalization.words,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.name],
-                  decoration: const InputDecoration(labelText: 'Full name'),
-                  validator: (v) {
-                    final n = (v ?? '').trim().length;
-                    return _server('fullName') ??
-                        (n < 2 || n > 80 ? 'Enter a name between 2 and 80 characters.' : null);
-                  },
-                ),
-                gap(),
-                TextFormField(
-                  key: const ValueKey('signup-phone'),
-                  controller: _phone,
-                  enabled: !busy,
-                  keyboardType: TextInputType.phone,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.telephoneNumber],
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]'))],
-                  decoration: const InputDecoration(labelText: 'Mobile number'),
-                  validator: (v) =>
-                      _server('phone') ??
-                      (looksLikeIndianMobile(v ?? '')
-                          ? null
-                          : 'Enter a valid 10-digit mobile number.'),
-                ),
-                gap(),
-                TextFormField(
-                  key: const ValueKey('signup-email'),
-                  controller: _email,
-                  enabled: !busy,
-                  keyboardType: TextInputType.emailAddress,
-                  autocorrect: false,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.email],
-                  decoration: const InputDecoration(labelText: 'Email'),
-                  validator: (v) =>
-                      _server('email') ??
-                      (looksLikeEmail(v ?? '') ? null : 'Enter a valid email address'),
-                ),
-                gap(),
-                TextFormField(
-                  key: const ValueKey('signup-password'),
-                  controller: _password,
-                  enabled: !busy,
-                  obscureText: _obscure,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.newPassword],
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    suffixIcon: IconButton(
-                      tooltip: _obscure ? 'Show password' : 'Hide password',
-                      icon: Icon(
-                          _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                      onPressed: () => setState(() => _obscure = !_obscure),
-                    ),
+        Form(
+          key: _form,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                key: const ValueKey('signup-name'),
+                controller: _name,
+                enabled: !busy,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
+                autofillHints: null,
+                decoration: InputDecoration(labelText: context.tr('Full name')),
+                validator: (v) {
+                  final n = (v ?? '').trim().length;
+                  return _server('fullName') ??
+                      (n < 2 || n > 80 ? 'Enter a name between 2 and 80 characters.' : null);
+                },
+              ),
+              gap(),
+              TextFormField(
+                key: const ValueKey('signup-phone'),
+                controller: _phone,
+                enabled: !busy,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                autofillHints: null,
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]'))],
+                decoration: InputDecoration(labelText: context.tr('Mobile number')),
+                validator: (v) =>
+                    _server('phone') ??
+                    (looksLikeIndianMobile(v ?? '')
+                        ? null
+                        : 'Enter a valid 10-digit mobile number.'),
+              ),
+              gap(),
+              TextFormField(
+                key: const ValueKey('signup-email'),
+                controller: _email,
+                enabled: !busy,
+                keyboardType: TextInputType.emailAddress,
+                autocorrect: false,
+                textInputAction: TextInputAction.next,
+                autofillHints: null,
+                decoration: InputDecoration(labelText: context.tr('Email')),
+                validator: (v) =>
+                    _server('email') ??
+                    (looksLikeEmail(v ?? '') ? null : 'Enter a valid email address'),
+              ),
+              gap(),
+              TextFormField(
+                key: const ValueKey('signup-password'),
+                controller: _password,
+                enabled: !busy,
+                obscureText: _obscure,
+                textInputAction: TextInputAction.next,
+                autofillHints: null,
+                decoration: InputDecoration(
+                  labelText: context.tr('Password'),
+                  suffixIcon: IconButton(
+                    tooltip: _obscure ? 'Show password' : 'Hide password',
+                    icon: Icon(
+                        _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                    onPressed: () => setState(() => _obscure = !_obscure),
                   ),
-                  validator: (v) => _server('password') ?? validateNewPassword(v),
                 ),
-                if (_password.text.isNotEmpty) ...[
-                  const SizedBox(height: Space.xs),
-                  PasswordStrengthMeter(password: _password.text),
-                ],
-                gap(),
-                TextFormField(
-                  key: const ValueKey('signup-confirm'),
-                  controller: _confirm,
-                  enabled: !busy,
-                  obscureText: _obscure,
-                  textInputAction: withAddress ? TextInputAction.next : TextInputAction.done,
-                  autofillHints: const [AutofillHints.newPassword],
-                  decoration: const InputDecoration(labelText: 'Confirm password'),
-                  validator: (v) => v == _password.text ? null : "The two passwords don't match",
-                ),
-                if (withAddress) ...[
-                  gap(),
-                  TextFormField(
-                    key: const ValueKey('signup-city'),
-                    controller: _city,
-                    enabled: !busy,
-                    textCapitalization: TextCapitalization.words,
-                    textInputAction: TextInputAction.next,
-                    autofillHints: const [AutofillHints.addressCity],
-                    decoration: const InputDecoration(labelText: 'City'),
-                    validator: (v) {
-                      final n = (v ?? '').trim().length;
-                      return _server('city') ?? (n < 2 || n > 60 ? 'Enter your city.' : null);
-                    },
-                  ),
-                  gap(),
-                  TextFormField(
-                    key: const ValueKey('signup-pincode'),
-                    controller: _pincode,
-                    enabled: !busy,
-                    keyboardType: TextInputType.number,
-                    textInputAction: TextInputAction.done,
-                    autofillHints: const [AutofillHints.postalCode],
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(6),
-                    ],
-                    decoration: const InputDecoration(labelText: 'Pincode'),
-                    validator: (v) =>
-                        _server('pincode') ??
-                        (looksLikePincode(v ?? '') ? null : 'Enter a valid 6-digit pincode.'),
-                  ),
-                ],
+                validator: (v) => _server('password') ?? validateNewPassword(v),
+              ),
+              if (_password.text.isNotEmpty) ...[
+                const SizedBox(height: Space.xs),
+                PasswordStrengthMeter(password: _password.text),
               ],
-            ),
+              gap(),
+              TextFormField(
+                key: const ValueKey('signup-confirm'),
+                controller: _confirm,
+                enabled: !busy,
+                obscureText: _obscure,
+                textInputAction: TextInputAction.done,
+                autofillHints: null,
+                decoration: InputDecoration(labelText: context.tr('Confirm password')),
+                validator: (v) => v == _password.text ? null : "The two passwords don't match",
+              ),
+            ],
           ),
         ),
         if (_error != null) ...[
@@ -338,7 +298,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
           child: TextButton(
             onPressed: busy ? null : () => context.go('/login'),
             child: Text(
-              'I already have an account — Sign in',
+              context.tr('I already have an account — Sign in'),
               textAlign: TextAlign.center,
               style: t.textTheme.labelLarge,
             ),
@@ -360,15 +320,15 @@ class _Terms extends StatelessWidget {
       alignment: WrapAlignment.center,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text('By continuing you agree to the', style: muted, textAlign: TextAlign.center),
+        Text(context.tr('By continuing you agree to the'), style: muted, textAlign: TextAlign.center),
         TextButton(
           onPressed: () => openLegal(context, initial: 'terms'),
-          child: const Text('Terms'),
+          child: Text(context.tr('Terms')),
         ),
-        Text('and', style: muted),
+        Text(context.tr('and'), style: muted),
         TextButton(
           onPressed: () => openLegal(context, initial: 'privacy'),
-          child: const Text('Privacy Policy'),
+          child: Text(context.tr('Privacy Policy')),
         ),
       ],
     );

@@ -168,7 +168,6 @@ class _FormState extends ConsumerState<_Form> {
           textInputAction: TextInputAction.next,
           decoration: InputDecoration(
             labelText: 'UPI ID',
-            hintText: 'name@okhdfcbank',
             errorText: _vpaError,
             errorMaxLines: 3,
           ),

@@ -256,8 +256,9 @@ void main() {
       expect(find.text('Enter a valid 10-digit mobile number.'), findsOneWidget);
       expect(find.text('Enter a valid email address'), findsOneWidget);
       expect(find.text('Use at least 8 characters'), findsOneWidget);
-      expect(find.text('Enter your city.'), findsOneWidget);
-      expect(find.text('Enter a valid 6-digit pincode.'), findsOneWidget);
+      // City and pincode left the form on 2026-10-31.
+      expect(find.text('Enter your city.'), findsNothing);
+      expect(find.text('Enter a valid 6-digit pincode.'), findsNothing);
       expect(auth.signups, isEmpty);
     });
 
@@ -281,13 +282,11 @@ void main() {
       await type('signup-email', 'riya@example.com');
       await type('signup-password', 'Hostel@2026');
       await type('signup-confirm', 'Hostel@2026');
-      await type('signup-city', 'Pune');
-      await type('signup-pincode', '411001');
       await _tap(tester, find.widgetWithText(FilledButton, 'Create account'));
 
       expect(auth.signups.single['persona'], SignupPersona.tenant);
-      expect(auth.signups.single['city'], 'Pune');
-      expect(auth.signups.single['pincode'], '411001');
+      expect(auth.signups.single['city'], isNull);
+      expect(auth.signups.single['pincode'], isNull);
       expect(find.textContaining('An account already uses this email'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

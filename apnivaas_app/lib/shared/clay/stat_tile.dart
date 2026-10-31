@@ -9,6 +9,7 @@ import 'pressable.dart';
 import 'skeleton.dart';
 import 'status_chip.dart';
 import 'word_fit.dart';
+import '../../core/i18n/i18n.dart';
 
 /// How a [StatTile] presents itself.
 enum StatTileStyle {
@@ -182,7 +183,7 @@ class StatTile extends StatelessWidget {
             ),
           SizedBox(height: tonal ? Space.sm - Space.hair : Space.xs),
           if (tonal)
-            Text(value,
+            Text(context.tr(value),
                 style: valueStyle,
                 textScaler: WordFit.scalerFor(context, value, valueStyle, words),
                 maxLines: 2,
@@ -190,14 +191,14 @@ class StatTile extends StatelessWidget {
           else
             _Figure(value, style: valueStyle),
           const SizedBox(height: Space.hair),
-          Text(label,
+          Text(context.tr(label),
               style: labelStyle,
               textScaler: WordFit.scalerFor(context, label, labelStyle, words),
               maxLines: lines,
               overflow: TextOverflow.ellipsis),
           if (caption != null) ...[
             const SizedBox(height: Space.hair),
-            Text(caption!,
+            Text(context.tr(caption!),
                 style: labelStyle,
                 textScaler: WordFit.scalerFor(context, caption!, labelStyle, words),
                 maxLines: lines,
@@ -236,7 +237,7 @@ class StatTile extends StatelessWidget {
                 // The label stops short of the clay icon in the corner rather than running
                 // under it.
                 padding: EdgeInsetsDirectional.only(end: art == null ? 0 : _artInset(art)),
-                child: Text(label, style: sub, maxLines: 2, overflow: TextOverflow.ellipsis),
+                child: Text(context.tr(label), style: sub, maxLines: 2, overflow: TextOverflow.ellipsis),
               ),
               const SizedBox(height: Space.xl + Space.tight),
               Padding(
@@ -248,7 +249,7 @@ class StatTile extends StatelessWidget {
                 child: _Figure(value, style: figureStyle),
               ),
               if (caption != null)
-                Text(caption!,
+                Text(context.tr(caption!),
                     style: sub.copyWith(fontWeight: FontWeight.w400),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis),
@@ -302,7 +303,7 @@ class _Figure extends StatelessWidget {
   Widget build(BuildContext context) => FittedBox(
         fit: BoxFit.scaleDown,
         alignment: AlignmentDirectional.centerStart,
-        child: Text(value, style: style, maxLines: 1, softWrap: false),
+        child: Text(context.tr(value), style: style, maxLines: 1, softWrap: false),
       );
 }
 

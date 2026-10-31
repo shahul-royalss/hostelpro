@@ -10,6 +10,7 @@ import 'owner_format.dart';
 import 'owner_insights.dart';
 import 'owner_pg_detail_screen.dart';
 import 'owner_providers.dart';
+import 'profile/pg_profile_editor_screen.dart';
 import 'widgets/meter.dart';
 import 'widgets/owner_header.dart';
 import 'widgets/states.dart' show ErrorNote, whenAsync;
@@ -17,7 +18,8 @@ import 'widgets/states.dart' show ErrorNote, whenAsync;
 /// Every PG on this owner's account, and which of them needs them today — the Property tab.
 ///
 /// Each card opens that PG's room grid, and the floor plan is one tap further in (see
-/// [OwnerPgDetailScreen]). The shell draws the forest header ("Your PGs") above it.
+/// [OwnerPgDetailScreen]); its "PG profile & photos" button opens what tenants see (see
+/// [PgProfileEditorScreen]). The shell draws the forest header ("Your PGs") above it.
 ///
 /// READS: hostels (owned by this user) · rpc_hostel_stats (one call per PG).
 ///
@@ -203,6 +205,16 @@ class _PgCard extends ConsumerWidget {
                     style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
                   )
                 : _PgFigures(stats: s, period: period),
+          ),
+          const SizedBox(height: Space.xs),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              onPressed: () =>
+                  Navigator.of(context).push(PgProfileEditorScreen.route(hostel.id)),
+              icon: const Icon(Icons.photo_library_outlined, size: IconSize.sm),
+              label: const Text('PG profile & photos'),
+            ),
           ),
         ],
       ),

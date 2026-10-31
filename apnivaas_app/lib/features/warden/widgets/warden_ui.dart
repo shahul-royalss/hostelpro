@@ -359,12 +359,16 @@ class WardenScreen extends StatelessWidget {
     required this.child,
     this.subtitle,
     this.actions = const [],
+    this.leading,
   });
 
   final String title;
   final String? subtitle;
   final List<Widget> actions;
   final Widget child;
+
+  /// In place of the brand dot: a back arrow, when the screen is opened on top of another.
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
@@ -376,7 +380,7 @@ class WardenScreen extends StatelessWidget {
           // those carry the theme's ink and beat the brow's white. See BrowText.
           child: BrowTitleBlock(
             // The brand disc in front of the page name. Gold on the brow; see ToneDot.
-            leading: const ToneDot(tone: ApnivaasColors.primary),
+            leading: leading ?? const ToneDot(tone: ApnivaasColors.primary),
             title: title,
             subtitle: subtitle,
             actions: actions,

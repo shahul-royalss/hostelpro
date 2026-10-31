@@ -430,13 +430,14 @@ void main() {
       expect(google.quietRequests, 0);
     });
 
-    testWidgets('with Google configured: the button, and ONE quiet attempt on opening',
+    testWidgets('with Google configured: the button, and nothing asked until it is tapped',
         (tester) async {
       final google = _FakeGoogle();
       await pump(tester, google);
 
       expect(_googleButton, findsOneWidget);
-      expect(google.quietRequests, 1, reason: 'the "automated" sign-in for a returning user');
+      // No account suggestions on opening (2026-10-31): the quiet attempt is gone.
+      expect(google.quietRequests, 0);
       expect(google.requests, 0, reason: 'the account sheet opens only when asked');
       expect(tester.takeException(), isNull);
     });

@@ -37,6 +37,27 @@ const appFonts = <String, List<String>>{
     'google_fonts/Manrope-SemiBold.ttf',
     'google_fonts/Manrope-Bold.ttf',
   ],
+  // Round 5: the Indian scripts, so a translated screen measures in the faces that ship.
+  'NotoSansDevanagariUI': [
+    'google_fonts/NotoSansDevanagariUI-Regular.ttf',
+    'google_fonts/NotoSansDevanagariUI-Bold.ttf',
+  ],
+  'NotoSansTeluguUI': [
+    'google_fonts/NotoSansTeluguUI-Regular.ttf',
+    'google_fonts/NotoSansTeluguUI-Bold.ttf',
+  ],
+  'NotoSansTamilUI': [
+    'google_fonts/NotoSansTamilUI-Regular.ttf',
+    'google_fonts/NotoSansTamilUI-Bold.ttf',
+  ],
+  'NotoSansMalayalamUI': [
+    'google_fonts/NotoSansMalayalamUI-Regular.ttf',
+    'google_fonts/NotoSansMalayalamUI-Bold.ttf',
+  ],
+  'NotoSansKannadaUI': [
+    'google_fonts/NotoSansKannadaUI-Regular.ttf',
+    'google_fonts/NotoSansKannadaUI-Bold.ttf',
+  ],
 };
 
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {

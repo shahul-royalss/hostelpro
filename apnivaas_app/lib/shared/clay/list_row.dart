@@ -6,6 +6,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/theme/typography.dart';
 import 'clay_icons.dart';
 import 'status_chip.dart';
+import '../../core/i18n/i18n.dart';
 
 /// A card of rows — "Needs attention", "Recent payments": the warm white card with its hairline,
 /// rows separated by the divider ink and nothing after the last.
@@ -136,7 +137,7 @@ class ListRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          title,
+          context.tr(title),
           style: t.textTheme.titleMedium,
           maxLines: scale >= 1.3 ? 2 : 1,
           overflow: TextOverflow.ellipsis,
@@ -144,7 +145,7 @@ class ListRow extends StatelessWidget {
         if (subtitle != null) ...[
           const SizedBox(height: Space.hair),
           Text(
-            subtitle!,
+            context.tr(subtitle!),
             style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
             maxLines: scale >= 1.3 ? 3 : 2,
             overflow: TextOverflow.ellipsis,

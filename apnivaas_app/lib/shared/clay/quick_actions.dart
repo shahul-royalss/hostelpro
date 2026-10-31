@@ -7,6 +7,7 @@ import '../../core/theme/tokens.dart';
 import 'clay_icons.dart';
 import 'section_header.dart';
 import 'word_fit.dart';
+import '../../core/i18n/i18n.dart';
 
 /// One quick action: a clay icon in a soft well, and the words for what it does.
 ///
@@ -83,7 +84,7 @@ class _QuickActionTileState extends State<QuickActionTile> {
     );
 
     final label = Text(
-      widget.label,
+      context.tr(widget.label),
       textAlign: TextAlign.center,
       maxLines: scale >= 1.5 ? 3 : 2,
       overflow: TextOverflow.ellipsis,
@@ -286,7 +287,7 @@ class _WideAction extends StatelessWidget {
               ),
               const SizedBox(width: Space.xs),
               Expanded(
-                child: Text(tile.label,
+                child: Text(context.tr(tile.label),
                     maxLines: 3, overflow: TextOverflow.ellipsis, style: t.textTheme.labelMedium),
               ),
             ],

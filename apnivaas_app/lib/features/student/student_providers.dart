@@ -7,6 +7,7 @@ import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../../data/repositories/stay_repository.dart';
 import '../common/refresh.dart';
+import '../common/refresh_all.dart';
 
 /// Composition, not data access.
 ///
@@ -108,6 +109,8 @@ void refreshStudentData(WidgetRef ref) {
   ref.invalidate(unreadCountProvider);
   ref.invalidate(myCheckoutRequestProvider);
   ref.invalidate(myTimelineProvider);
+  // And everything else the app holds, the account included (round 5).
+  refreshEverything(ref);
 }
 
 /// Waits for the reads a pull-to-refresh actually shows, so the spinner disappears when the

@@ -76,11 +76,23 @@ final class PgProfileRepository implements PgProfileApi {
   @override
   Future<String> uploadMedia(String hostelId, PgMediaKind kind, Uint8List jpeg) => _run(() async {
         final path = '$hostelId/${kind.name}/${randomUuidV4()}.jpg';
-        await db.storage.from(pgMediaBucket).uploadBinary(
-              path,
-              jpeg,
-              fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: false),
+        try {
+          await db.storage.from(pgMediaBucket).uploadBinary(
+                path,
+                jpeg,
+                fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: false),
+              );
+        } on StorageException catch (e) {
+          // The insert policy refuses past 40 uploads a day, or while the PG is read-only.
+          if (e.statusCode == '403' || e.statusCode == '400') {
+            throw SignupFailure(
+              'This photo was not accepted. A PG can upload up to 40 photos a day, and only '
+              'while its plan is active.',
+              field: kind == PgMediaKind.logo ? 'logo' : 'covers',
             );
+          }
+          rethrow;
+        }
         return path;
       }, _uploadDeadline);
 

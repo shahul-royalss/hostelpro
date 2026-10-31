@@ -114,7 +114,6 @@ class _EditMealSheetState extends ConsumerState<_EditMealSheet> {
             textCapitalization: TextCapitalization.sentences,
             decoration: const InputDecoration(
               labelText: 'What is being served',
-              hintText: 'Idli, sambar, coconut chutney',
             ),
           ),
           const SizedBox(height: Space.xs),

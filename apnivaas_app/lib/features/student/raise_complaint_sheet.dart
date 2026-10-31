@@ -145,7 +145,6 @@ class _RaiseComplaintSheetState extends ConsumerState<_RaiseComplaintSheet> {
                 maxLength: 120,
                 decoration: const InputDecoration(
                   labelText: 'Title',
-                  hintText: 'Bathroom tap leaking on 1st floor',
                 ),
                 validator: (value) {
                   final text = (value ?? '').trim();

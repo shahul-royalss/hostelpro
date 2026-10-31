@@ -12,6 +12,7 @@ import '../../payments/payments.dart';
 import 'common.dart';
 import 'format.dart';
 import '../pay_upi.dart';
+import '../../../core/i18n/i18n.dart';
 
 /// The rent cards — the one thing a resident opens this app to check.
 ///
@@ -118,7 +119,7 @@ class RentCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(eyebrow, style: eyebrowStyle),
+                  Text(context.tr(eyebrow), style: eyebrowStyle),
                   const SizedBox(height: Space.xs),
                   // titleLarge, not the figure's slot. There is no figure here, and a sentence
                   // set at the size of one shouts louder than the card ever does when it has
@@ -176,7 +177,7 @@ class RentCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(eyebrow, style: eyebrowStyle),
+                      Text(context.tr(eyebrow), style: eyebrowStyle),
                       const SizedBox(height: Space.xs),
                       // The hero figure is what is OUTSTANDING when anything is outstanding,
                       // and what was paid when nothing is. A resident checking this card is
@@ -187,7 +188,7 @@ class RentCard extends StatelessWidget {
                           color: owes ? accent : t.colorScheme.onSurface,
                         ),
                       ),
-                      Text(owes ? 'still to pay' : 'paid in full', style: t.textTheme.bodyMedium),
+                      Text(context.tr(owes ? 'still to pay' : 'paid in full'), style: t.textTheme.bodyMedium),
                       const SizedBox(height: Space.sm),
                       StatusPill(
                         label: rent.status.label,
@@ -257,20 +258,16 @@ class RentCard extends StatelessWidget {
               //
               // This card is drawn on the resident's HOME as well as on their Fees tab, so
               // paying is one tap from opening the app — which is the reason the app gets
-              // opened at all. The checkout is Razorpay's own native sheet, taking UPI, cards,
-              // netbanking and wallets (features/payments/pay_rent.dart).
+              // opened at all.
               //
-              // It is the screen's one filled forest button, and it means "the action" — paying
-              // rent IS the action on this card.
+              // ONE BUTTON (owner, 2026-10-31): it pays the owner's UPI ID through the tenant's
+              // UPI app when one is set, and Razorpay checkout otherwise ([PayNowButton]). The
+              // "pay cash at the desk" note was removed at the same time.
               //
               // ONLY WHEN SOMETHING IS OWED: the whole block sits inside `if (owes)`. A settled
               // month shows no button, because an app that offers to take money it is not owed
               // is one a resident stops trusting.
-              PayRentButton(amount: rent.balance),
-              const SizedBox(height: Space.sm),
-              PayWithUpiButton(amount: rent.balance, periodMonth: periodMonth),
-              const SizedBox(height: Space.sm),
-              PayAtDeskNote(amount: rent.balance),
+              PayNowButton(amount: rent.balance, periodMonth: periodMonth),
             ],
           ],
         ),
@@ -388,72 +385,8 @@ class _ReceiptAction extends ConsumerWidget {
   }
 }
 
-/// "Or pay cash at the desk" — the SECOND of the two ways to settle rent.
-///
-/// Online checkout now sits directly above this ([PayRentButton]). This panel stayed, and stayed
-/// unchanged in tone, because the desk is not a fallback for a broken app — it is how nearly
-/// every PG in the country already works, and a resident with no bank app, a declined card, or
-/// cash in hand still walks to the office. A screen offering only the online path would strand
-/// exactly the people this one is for.
-///
-/// IT IS NOT DRAWN AS AN ERROR. No error tone, no retry, no dead button: money is handed over at
-/// the office and a warden records it (features/warden/actions/record_payment_sheet.dart is the
-/// other half).
-///
-/// EVERY VALUE ON IT IS REAL. [amount] is `balance` from the resident's own `rpc_fee_ledger`
-/// row — the same column the hero figure above prints, so the card cannot name two prices — and
-/// the warden's name and phone come from `st_hostel_contacts`. Nothing is invented: no due
-/// date (the schema has no due-date column), no office hours, no counter number.
-///
-/// THE CONTACT READ IS ALLOWED TO BE ABSENT. `hostelContactsProvider` may be in flight, may
-/// have failed, or may genuinely have no warden on the hostel — and none of those change what
-/// this panel is for. It degrades to the sentence without a name rather than growing a fourth
-/// state of its own: the resident's Profile screen owns the contact card and its loading,
-/// empty and failed states, and repeating them inside the rent card would be two places telling
-/// one story.
-class PayAtDeskNote extends ConsumerWidget {
-  const PayAtDeskNote({super.key, required this.amount});
-
-  /// What is still owed this month, in rupees. A column, never a sum computed here.
-  final double amount;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context);
-    // `.value` and not `.requireValue`: absent is a normal answer here. Riverpod 3 keeps a
-    // failed provider in AsyncLoading-carrying-the-error while it retries, and `.value` reads
-    // through both without pretending the read succeeded.
-    final contacts = ref.watch(hostelContactsProvider).value;
-    final warden = contacts?.wardenName?.trim();
-    final phone = contacts?.wardenPhone?.trim();
-
-    return _Well(
-      // The warden at the desk — a person, because this route is a person.
-      art: ClayIcons.roleWarden,
-      children: [
-        Text('Or pay cash at the desk', style: t.textTheme.titleSmall),
-        const SizedBox(height: Space.xxs),
-        Text(
-          'Hand ${rupees(amount)} to '
-          '${warden == null || warden.isEmpty ? 'your warden' : warden} '
-          'at the office.',
-          style: t.textTheme.bodyMedium,
-        ),
-        const SizedBox(height: Space.xs),
-        Text(
-          phone == null || phone.isEmpty
-              ? 'It appears here as soon as your warden records it.'
-              : 'It appears here as soon as your warden records it. Desk: $phone',
-          style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
-        ),
-      ],
-    );
-  }
-}
-
 /// A well INSIDE the rent card, not a second card on top of it: the neutral fill one step off
-/// the card, a 46dp clay figure, and the words beside it. Shared by the desk note and the refund
-/// note so the two asides on one card are visibly the same kind of thing.
+/// the card, a 46dp clay figure, and the words beside it. Used by the refund note.
 class _Well extends StatelessWidget {
   const _Well({required this.art, required this.children});
 
@@ -613,7 +546,7 @@ class _Line extends StatelessWidget {
           Expanded(
             flex: 6,
             child: Text(
-              label,
+              context.tr(label),
               style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant),
             ),
           ),

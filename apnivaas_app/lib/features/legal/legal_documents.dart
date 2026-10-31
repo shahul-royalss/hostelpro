@@ -64,10 +64,16 @@ library;
 /// location, the on-device biometric lock, PG profiles and reviews, check-out requests, UPI rent
 /// paid straight to the owner, and what a permanent deletion keeps; the permission count went to
 /// thirteen. Row: db/migrations/2026-10-26-legal-version-round3.sql.
-const kLegalVersion = '2026-10-26';
+///
+/// 2026-10-31 (round 5): managers and wardens may use Continue with Google and Facebook (only
+/// platform administrators may not), Facebook sign-in runs through the Facebook app with its
+/// event logging and advertising ID off, sign-up no longer asks for a city or pincode, the
+/// chosen language stays on the phone, and a PG's page shows how many beds are free. The
+/// permission count is unchanged. Row: db/migrations/2026-10-31-legal-version-round5.sql.
+const kLegalVersion = '2026-10-31';
 
 /// Human-readable form of [kLegalVersion], for the "last updated" line.
-const kLegalVersionLabel = '26 October 2026';
+const kLegalVersionLabel = '31 October 2026';
 
 const kTermsUrl = 'https://hostelpro-three.vercel.app/legal/terms';
 const kPrivacyUrl = 'https://hostelpro-three.vercel.app/legal/privacy';
@@ -221,12 +227,12 @@ const kPrivacyPolicy = LegalDocument(
           'us.',
         ),
         Para(
-          'Owners and residents whose login is an email address that is also a Google account '
-          'may sign in with Continue with Google instead of their password. A manager or warden '
-          'an owner created, and every platform administrator, cannot use Google, Facebook or '
-          'Truecaller: the database refuses it, and they sign in only with the login they were '
-          'given. A manager or warden who signed up themselves may keep using the sign-in they '
-          'signed up with.',
+          'Owners, residents, managers and wardens whose login is an email address may sign in '
+          'with Continue with Google, or with Continue with Facebook where the app offers it, '
+          'instead of their password. Facebook sign-in goes through the Facebook app on your '
+          'phone. Platform administrators cannot use Google, Facebook or Truecaller: the '
+          'database refuses it, and they sign in only with their password and their second '
+          'factor.',
         ),
         Para(
           'If a hostel registered you, most of what is here was typed in by its staff, from '
@@ -259,9 +265,9 @@ const kPrivacyPolicy = LegalDocument(
           ),
           (
             term: 'Email and password sign-up',
-            detail: 'If you sign up with a password: your name, phone number, email address and, '
-                'for an owner or a tenant, your city and pincode. The password is hashed by the '
-                'sign-in service, and your email address is confirmed by a link.',
+            detail: 'If you sign up with a password: your name, phone number and email address. '
+                'The password is hashed by the sign-in service, and your email address is '
+                'confirmed by a link.',
           ),
           (
             term: 'Your own details',
@@ -434,7 +440,8 @@ const kPrivacyPolicy = LegalDocument(
           'No fingerprint, face or PIN. The optional app lock — on by default for owners — asks '
               'your phone\'s own screen lock to check it is you. That check happens on the phone; '
               'nothing biometric reaches $kLegalProductName, and whether the lock is on is kept '
-              'only on the phone.',
+              'only on the phone. The language you choose for the app is kept only on the phone '
+              'too.',
           'No notification content beyond what you already see in the app. Push notifications '
               'ARE sent — see "What is collected" above for the device registration they '
               'require, and section 6 for the part Google plays in delivering them.',
@@ -546,7 +553,9 @@ const kPrivacyPolicy = LegalDocument(
           'A tenant\'s check-out request is seen by the wardens and the owner of their PG.',
           'Anyone signed in who is looking for a PG sees its name, type, who it is for, '
               'locality, city, distance, logo, cover photos, description, amenities, house rules, '
-              'rating and reviews, each review with the reviewer\'s first name — never its full '
+              'how many beds are free in each room type (a count, never which bed or who is in '
+              'the others), rating and reviews, each review with the reviewer\'s first name — '
+              'never its full '
               'address, its map position or the owner\'s contact details. A PG appears while it '
               'is listed and its plan or free month is running. The owner can read reviews but '
               'not change or remove them.',
@@ -604,7 +613,9 @@ const kPrivacyPolicy = LegalDocument(
             term: 'Meta (Facebook)',
             detail: 'Only if the app offers Continue with Facebook and you choose it. It confirms '
                 'who you are and shares your Facebook user ID, name and email address; it learns '
-                'that you signed in to this app.',
+                'that you signed in to this app. Facebook\'s software in the app is used for '
+                'sign-in only: its automatic event logging and the advertising ID are switched '
+                'off.',
           ),
           (
             term: 'Truecaller',
@@ -883,8 +894,9 @@ const kTermsOfUse = LegalDocument(
           'gets no access until the owner of the PG it asked to join accepts it and chooses the '
           'role; an owner may also create staff accounts. Any other account was '
           'created for you and comes with a temporary password you must change when you first '
-          'sign in; owners and residents whose login is a Google account\'s address may also '
-          'sign in with Continue with Google.',
+          'sign in; owners, residents, managers and wardens whose login is a Google account\'s '
+          'address may also sign in with Continue with Google, or with Facebook where the app '
+          'offers it.',
         ),
         Para(
           'An account a hostel created belongs to the hostel\'s workspace rather than to you '

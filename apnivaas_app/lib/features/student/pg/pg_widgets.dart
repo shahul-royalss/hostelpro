@@ -11,6 +11,7 @@ import '../../../data/models/pg_profile.dart';
 import '../../../data/people_providers.dart' show signedUrlProvider;
 import '../../../data/repositories/pg_profile_repository.dart' show pgMediaBucket;
 import '../../../shared/clay/clay.dart';
+import '../../../core/i18n/i18n.dart';
 
 /// A pg-media photo through a short signed URL, or [bytes] picked on this phone. Draws
 /// [fallback] while loading, when refused, or when there is nothing to show.
@@ -34,7 +35,13 @@ class PgMediaImage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final local = bytes;
     if (local != null) {
-      return Image.memory(local, fit: fit, cacheWidth: cacheWidth, excludeFromSemantics: true);
+      return Image.memory(
+        local,
+        fit: fit,
+        cacheWidth: cacheWidth,
+        excludeFromSemantics: true,
+        errorBuilder: (_, _, _) => fallback,
+      );
     }
     final p = path;
     if (p == null || p.isEmpty) return fallback;
@@ -184,7 +191,7 @@ class AmenityChips extends StatelessWidget {
               children: [
                 Icon(amenityIcon(k), size: 16, color: t.colorScheme.primary),
                 const SizedBox(width: Space.xxs),
-                Flexible(child: Text(amenityLabel(k), style: t.textTheme.labelMedium)),
+                Flexible(child: Text(context.tr(amenityLabel(k)), style: t.textTheme.labelMedium)),
               ],
             ),
           ),

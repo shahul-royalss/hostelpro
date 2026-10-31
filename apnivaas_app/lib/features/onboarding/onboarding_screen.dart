@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/tokens.dart';
 import '../../shared/clay/clay_icons.dart';
 import '../auth/auth_scaffold.dart' show AuthTopBar;
+import '../../core/i18n/i18n.dart';
 
 /// WHAT THIS APP IS, said once, before anybody is asked to sign in.
 ///
@@ -131,7 +132,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: AuthTopBar(
                 trailing: _last
                     ? null
-                    : TextButton(onPressed: widget.onDone, child: const Text('Skip')),
+                    : TextButton(onPressed: widget.onDone, child: Text(context.tr('Skip'))),
               ),
             ),
             Expanded(
@@ -156,7 +157,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       minimumSize: const Size.fromHeight(Space.huge + Space.xs),
                       shape: const RoundedRectangleBorder(borderRadius: Radii.rButtonLarge),
                     ),
-                    child: Text(_last ? 'Get started' : 'Next'),
+                    child: Text(context.tr(_last ? 'Get started' : 'Next')),
                   ),
                 ],
               ),
@@ -204,7 +205,7 @@ class _PageBody extends StatelessWidget {
               Semantics(
                 header: true,
                 child: Text(
-                  page.title,
+                  context.tr(page.title),
                   textAlign: TextAlign.center,
                   style: t.textTheme.displayMedium,
                 ),
@@ -214,7 +215,7 @@ class _PageBody extends StatelessWidget {
                 // A paragraph keeps a readable measure on a tablet instead of one long line.
                 constraints: const BoxConstraints(maxWidth: 360),
                 child: Text(
-                  page.body,
+                  context.tr(page.body),
                   textAlign: TextAlign.center,
                   style: t.textTheme.bodyLarge?.copyWith(color: t.colorScheme.onSurfaceVariant),
                 ),

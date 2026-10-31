@@ -258,7 +258,7 @@ void main() {
 
   // ───────────────────────────────────────────────────────────────────────────
   group('RentCard', () {
-    testWidgets('an unpaid month leads with what is owed, and says where to pay it',
+    testWidgets('an unpaid month leads with what is owed, and offers one way to pay',
         (tester) async {
       await show(
         tester,
@@ -272,34 +272,25 @@ void main() {
       expect(find.text('UNPAID'), findsOneWidget);
       expect(find.text('Received so far'), findsOneWidget);
 
-      // ═══ THE PROPERTY THIS WHOLE CHANGE EXISTS FOR ═══
-      // There is NO CHECKOUT. Rent is handed over at the warden's desk, and the card says so
-      // instead of offering a button that opens a payment flow the server cannot complete.
-      expect(find.text('Or pay cash at the desk'), findsOneWidget);
-      expect(
-        find.textContaining('Hand ₹6,200 to Priya Nair'),
-        findsOneWidget,
-        reason: 'the panel repeats the balance the hero prints, and names the real warden',
-      );
+      // ONE WAY TO PAY (owner, 2026-10-31): the "pay cash at the desk" panel and the second
+      // "Pay with UPI app" button are gone; PayNowButton chooses the owner's UPI or Razorpay.
+      expect(find.text('Or pay cash at the desk'), findsNothing);
+      expect(find.textContaining('Hand ₹6,200 to'), findsNothing);
+      expect(find.text('Pay with UPI app'), findsNothing);
 
       // This card takes money. Asserted on the WIDGET as well as the words: the cream
       // FilledButton is the app's one "do it now" affordance and rent is what it is spent on.
-      // EXACTLY ONE — a second cream button on the card would mean the desk panel had grown an
-      // affordance of its own, which is the thing that must never happen (paying at the desk is
-      // something a person does at an office, not something this app can do).
       expect(find.byType(FilledButton), findsOneWidget);
       // The figure on the button is the BALANCE from the ledger row, never the month's rent.
       expect(find.text('Pay ₹6,200 now'), findsOneWidget);
     });
 
-    testWidgets('with no contact card, the panel still says where to pay', (tester) async {
+    testWidgets('with no contact card, paying still works', (tester) async {
       // st_hostel_contacts can be in flight, can fail, and can genuinely have no warden on the
-      // hostel. None of those change what a resident is supposed to do with their rent, so the
-      // panel degrades to the sentence without a name rather than vanishing or erroring.
+      // hostel. None of those change how a resident pays.
       await show(tester, const RentCard(periodMonth: '2026-08', row: unpaidRow));
 
-      expect(find.text('Or pay cash at the desk'), findsOneWidget);
-      expect(find.textContaining('Hand ₹6,200 to your warden'), findsOneWidget);
+      expect(find.text('Pay ₹6,200 now'), findsOneWidget);
       expect(find.textContaining('Desk:'), findsNothing);
     });
 
@@ -319,9 +310,9 @@ void main() {
       // also matches the checkout button's own "UPI, cards, net banking and wallets" subtitle,
       // which says what a resident COULD pay with and is a different sentence entirely.
       expect(find.text('16 Aug 2026 · UPI'), findsOneWidget);
-      // The panel asks for the BALANCE, not the month's rent. A part-payer handing over ₹6,000
+      // The button asks for the BALANCE, not the month's rent. A part-payer paying ₹6,000
       // again is the mistake this line exists to prevent.
-      expect(find.textContaining('Hand ₹3,000'), findsOneWidget);
+      expect(find.text('Pay ₹3,000 now'), findsOneWidget);
     });
 
     testWidgets('a paid month says so and asks for nothing', (tester) async {

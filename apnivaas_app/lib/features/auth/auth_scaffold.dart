@@ -8,6 +8,7 @@ import '../../core/theme/tokens.dart';
 import '../../shared/clay/clay_icons.dart';
 import '../../shared/wordmark.dart';
 import '../common/form_parts.dart';
+import '../../core/i18n/i18n.dart';
 
 /// THE SIGN-IN FAMILY'S PAGE — sign-in, the second factor, the forced password change and the
 /// email gate. The screens a new account meets before it reaches a home share one frame, so the
@@ -186,11 +187,11 @@ class AuthHeading extends StatelessWidget {
     final words = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Semantics(header: true, child: Text(title, style: t.textTheme.displaySmall)),
+        Semantics(header: true, child: Text(context.tr(title), style: t.textTheme.displaySmall)),
         if (message != null) ...[
           const SizedBox(height: Space.xxs),
           Text(
-            message!,
+            context.tr(message!),
             style: t.textTheme.bodyLarge?.copyWith(color: t.colorScheme.onSurfaceVariant),
           ),
         ],

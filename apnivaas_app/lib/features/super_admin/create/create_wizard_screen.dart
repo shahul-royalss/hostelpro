@@ -295,7 +295,6 @@ class _OwnerStep extends ConsumerWidget {
         if (mode == OwnerMode.create) ...[
           _Field(
             label: 'Full name',
-            hint: 'e.g. Priya Sharma',
             initial: state.draft.ownerName,
             error: state.errorFor('owner.name'),
             onChanged: controller.setOwnerName,
@@ -303,7 +302,6 @@ class _OwnerStep extends ConsumerWidget {
           ),
           _Field(
             label: 'Email address',
-            hint: 'owner@example.com',
             helper: "Used as the owner's login ID",
             initial: state.draft.ownerEmail,
             error: state.errorFor('owner.email'),
@@ -312,7 +310,6 @@ class _OwnerStep extends ConsumerWidget {
           ),
           _Field(
             label: 'Phone number',
-            hint: '98765 43210',
             initial: state.draft.ownerPhone,
             error: state.errorFor('owner.phone'),
             onChanged: controller.setOwnerPhone,
@@ -510,7 +507,6 @@ class _HostelStep extends ConsumerWidget {
       children: [
         _Field(
           label: 'Hostel name',
-          hint: 'e.g. Sunny Days PG, Koramangala',
           initial: draft.hostelName,
           error: state.errorFor('hostel.name'),
           onChanged: controller.setHostelName,
@@ -548,7 +544,6 @@ class _HostelStep extends ConsumerWidget {
         ),
         _Field(
           label: 'Address',
-          hint: 'Street, area, city, PIN',
           initial: draft.address,
           error: state.errorFor('hostel.address'),
           onChanged: controller.setAddress,
@@ -639,7 +634,6 @@ class _SubscriptionStep extends ConsumerWidget {
         ),
         _Field(
           label: 'Amount (₹)',
-          hint: 'e.g. 24000',
           initial: draft.amount == null ? '' : draft.amount!.toStringAsFixed(0),
           error: state.errorFor('subscription.amount'),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -648,7 +642,6 @@ class _SubscriptionStep extends ConsumerWidget {
         ),
         _Field(
           label: 'Notes',
-          hint: 'e.g. Annual plan, paid via UPI',
           helper: 'Optional — plan name, payment reference',
           initial: draft.notes,
           error: state.errorFor('subscription.notes'),
@@ -999,7 +992,6 @@ class _Field extends StatefulWidget {
     required this.label,
     required this.initial,
     required this.onChanged,
-    this.hint,
     this.helper,
     this.error,
     this.keyboardType,
@@ -1012,7 +1004,6 @@ class _Field extends StatefulWidget {
   final String label;
   final String initial;
   final ValueChanged<String> onChanged;
-  final String? hint;
   final String? helper;
   final String? error;
   final TextInputType? keyboardType;
@@ -1058,7 +1049,6 @@ class _FieldState extends State<_Field> {
           textCapitalization: widget.textCapitalization,
           autocorrect: false,
           decoration: InputDecoration(
-            hintText: widget.hint,
             helperText: widget.helper,
             errorText: widget.error,
           ),

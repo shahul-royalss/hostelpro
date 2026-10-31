@@ -27,6 +27,10 @@ import 'tasks/owner_tasks_screen.dart';
 import 'widgets/cashflow_chart.dart';
 import 'widgets/owner_header.dart';
 import 'widgets/states.dart' show ErrorNote, whenAsync;
+import '../warden/data/warden_providers.dart' show feeFilterProvider, selectedMonthProvider;
+import '../warden/fees/warden_fees_screen.dart' show WardenFeesScreen;
+import '../common/refresh_all.dart';
+import '../../core/i18n/i18n.dart';
 
 /// HOME — "how is my PG business doing, and what is waiting on me?" — answered in the order an
 /// owner asks it.
@@ -94,6 +98,8 @@ class OwnerDashboardScreen extends ConsumerWidget {
 
     return RefreshIndicator(
       onRefresh: () async {
+        // Everything the app holds, not only this screen's figures (round 5).
+        refreshEverything(ref);
         refreshOwnerDashboard(ref, hostelId: hostelId, period: period);
         ref.invalidate(ownerCheckoutSummaryProvider);
         try {
@@ -196,7 +202,11 @@ class _Gutter extends StatelessWidget {
 
 /// The Overview strip: money in, money owed, beds, complaints, today's ledger, and the way to
 /// the expense trends — in that order, because that is the order the questions come in.
-class _Overview extends StatelessWidget {
+///
+/// EVERY TILE OPENS ITS DETAIL (round 5): Collected and Pending open the month's rent, resident
+/// by resident (the warden's collections screen for this PG, Pending filtered to the unpaid);
+/// Booked in today opens the payments received.
+class _Overview extends ConsumerWidget {
   const _Overview({required this.stats, required this.hostelId, required this.period});
 
   final HostelStats stats;
@@ -204,9 +214,14 @@ class _Overview extends StatelessWidget {
   final String period;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final s = stats;
     final month = monthNameOnly(period);
+    void openRent(FeeStatus? filter) {
+      ref.read(feeFilterProvider.notifier).set(filter);
+      ref.read(selectedMonthProvider.notifier).set(period);
+      Navigator.of(context).push(WardenFeesScreen.ownerRoute(hostelId));
+    }
     final billed = s.feesCollected + s.feesPending;
     final share = collectedShare(s);
     final rate = s.occupancyRate;
@@ -227,6 +242,7 @@ class _Overview extends StatelessWidget {
               ? 'of ${money(billed)} billed${share == null ? '' : ' · ${percentLabel(share)}'}'
               : collectionsCaption(s),
           progress: share,
+          onTap: () => openRent(null),
         ),
         StatTile(
           icon: ClayIcons.invoice,
@@ -236,6 +252,7 @@ class _Overview extends StatelessWidget {
           // alarm colour teaches an owner to stop reading the colour.
           valueTone: s.feesPending > 0 ? ApnivaasColors.error : ApnivaasColors.success,
           caption: unpaid > 0 ? countLabel(unpaid, 'outstanding bill') : 'Nothing outstanding',
+          onTap: () => openRent(s.feesPending > 0 ? FeeStatus.unpaid : null),
         ),
         StatTile(
           icon: ClayIcons.beds,
@@ -272,6 +289,7 @@ class _Overview extends StatelessWidget {
           caption: s.expensesToday > 0
               ? '${money(s.expensesToday)} booked out'
               : 'From the revenue ledger',
+          onTap: () => ref.read(ownerTabProvider.notifier).go(OwnerTab.money),
         ),
         StatTile(
           style: StatTileStyle.tonal,
@@ -682,7 +700,7 @@ class _Figure extends StatelessWidget {
     if (inline) {
       return Row(
         children: [
-          Expanded(child: Text(label, style: labelStyle)),
+          Expanded(child: Text(context.tr(label), style: labelStyle)),
           const SizedBox(width: Space.sm),
           valueText,
         ],
@@ -691,7 +709,7 @@ class _Figure extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: labelStyle),
+        Text(context.tr(label), style: labelStyle),
         const SizedBox(height: Space.xxs),
         valueText,
       ],

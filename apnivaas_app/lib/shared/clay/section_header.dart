@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../core/theme/typography.dart';
+import '../../core/i18n/i18n.dart';
 
 /// How loud a [SectionHeader] is.
 enum SectionHeaderSize {
@@ -64,13 +65,13 @@ class SectionHeader extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: Space.xs),
           textStyle: t.textTheme.titleSmall?.copyWith(fontFeatures: const []),
         ),
-        child: Text(actionLabel!),
+        child: Text(context.tr(actionLabel!)),
       );
     }
 
     final heading = Semantics(
       header: true,
-      child: Text(title, style: style, maxLines: 2, overflow: TextOverflow.ellipsis),
+      child: Text(context.tr(title), style: style, maxLines: 2, overflow: TextOverflow.ellipsis),
     );
 
     // Full width either way, like the Row this used to be: spaceBetween needs the whole line

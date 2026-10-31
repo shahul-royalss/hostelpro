@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../shared/clay/clay_icons.dart';
+import '../../core/i18n/i18n.dart';
 
 /// THE SCREEN'S ONE PRIMARY ACTION — a [FilledButton] that stays forest while it works.
 ///
@@ -89,13 +90,13 @@ class BusyFilledButton extends StatelessWidget {
         onPressed: busy ? null : onPressed,
         style: style,
         icon: busy ? spinner : (icon == null ? null : Icon(icon, size: IconSize.md)),
-        label: Text(busy ? (busyLabel ?? label) : label),
+        label: Text(context.tr(busy ? (busyLabel ?? label) : label)),
       );
     }
     return FilledButton(
       onPressed: busy ? null : onPressed,
       style: style,
-      child: busy ? Semantics(label: 'Working', child: spinner) : Text(label),
+      child: busy ? Semantics(label: 'Working', child: spinner) : Text(context.tr(label)),
     );
   }
 }
@@ -135,7 +136,7 @@ class FormNote extends StatelessWidget {
           const SizedBox(width: Space.xs),
           Expanded(
             child: Text(
-              message,
+              context.tr(message),
               textAlign: textAlign,
               style: t.textTheme.bodyMedium?.copyWith(color: ink),
             ),
@@ -249,7 +250,7 @@ class CheckRow extends StatelessWidget {
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.only(top: math.max(0, (box - firstLine) / 2)),
-                    child: Text(label, style: style),
+                    child: Text(context.tr(label), style: style),
                   ),
                 ),
               ],

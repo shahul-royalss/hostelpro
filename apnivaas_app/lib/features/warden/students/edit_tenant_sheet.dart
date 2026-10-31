@@ -1,6 +1,8 @@
 /// R4.2: the owner or a warden edits every detail a tenant gave at sign-up, through
 /// `wd_update_tenant_profile`. Only changed fields are sent; the server re-validates each one
 /// and never touches the role, the PG, the login email or the sign-in identifier.
+///
+/// No email field (owner, 2026-10-31): the address is the tenant's own, changed by them.
 library;
 
 import 'package:flutter/material.dart';
@@ -71,12 +73,11 @@ class TenantDetailsForm extends ConsumerStatefulWidget {
   ConsumerState<TenantDetailsForm> createState() => _TenantDetailsFormState();
 }
 
-enum _F { fullName, phone, email, gender, dob, eName, ePhone, address, city, pincode }
+enum _F { fullName, phone, gender, dob, eName, ePhone, address, city, pincode }
 
 const _hintToField = {
   'full_name': _F.fullName,
   'phone': _F.phone,
-  'email': _F.email,
   'gender': _F.gender,
   'date_of_birth': _F.dob,
   'emergency_contact_name': _F.eName,
@@ -87,7 +88,6 @@ const _hintToField = {
 };
 
 final _phoneRe = RegExp(r'^[6-9]\d{9}$');
-final _emailRe = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 final _pinRe = RegExp(r'^[1-9]\d{5}$');
 
 /// Digits only, a leading 91 / 0 dropped, as the server normalises it.
@@ -103,7 +103,6 @@ class _TenantDetailsFormState extends ConsumerState<TenantDetailsForm> {
   late final _c = <_F, TextEditingController>{
     _F.fullName: TextEditingController(text: p.fullName),
     _F.phone: TextEditingController(text: p.phone),
-    _F.email: TextEditingController(text: p.email ?? ''),
     _F.eName: TextEditingController(text: p.emergencyName ?? ''),
     _F.ePhone: TextEditingController(text: p.emergencyPhone ?? ''),
     _F.address: TextEditingController(text: p.address ?? ''),
@@ -138,10 +137,6 @@ class _TenantDetailsFormState extends ConsumerState<TenantDetailsForm> {
     if (name.length < 2 || name.length > 80) e[_F.fullName] = 'Enter the full name (2 to 80 characters).';
     final phone = _digits(_t(_F.phone));
     if (!_phoneRe.hasMatch(phone)) e[_F.phone] = 'Enter a valid 10-digit mobile number.';
-    final email = _t(_F.email);
-    if (email.isNotEmpty && (email.length > 254 || !_emailRe.hasMatch(email))) {
-      e[_F.email] = 'Enter a valid email address.';
-    }
     final eName = _t(_F.eName);
     if (eName.isNotEmpty && (eName.length < 2 || eName.length > 80)) {
       e[_F.eName] = "Enter the emergency contact's name (2 to 80 characters).";
@@ -177,7 +172,6 @@ class _TenantDetailsFormState extends ConsumerState<TenantDetailsForm> {
     return TenantProfilePatch(
       fullName: _t(_F.fullName) == p.fullName.trim() ? null : _t(_F.fullName),
       phone: phone == _digits(p.phone) ? null : phone,
-      email: _changed(_F.email, p.email),
       emergencyName: _changed(_F.eName, p.emergencyName),
       emergencyPhone: _changed(_F.ePhone, p.emergencyPhone),
       address: _changed(_F.address, p.address),
@@ -288,8 +282,6 @@ class _TenantDetailsFormState extends ConsumerState<TenantDetailsForm> {
               maxLength: 16,
               formatters: digits,
               helper: p.hasAccount ? 'Changing it does not change how they sign in.' : null),
-          _field(_F.email, 'Email (shown to staff)',
-              keyboard: TextInputType.emailAddress, maxLength: 254),
           if (p.hasAccount) ...[
             Text('Gender', style: t.textTheme.labelLarge),
             const SizedBox(height: Space.xxs),

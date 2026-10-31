@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
 import 'clay_icons.dart';
+import '../../core/i18n/i18n.dart';
 
 /// The state a list is in when it has nothing to show — or could not load.
 ///
@@ -73,7 +74,7 @@ class EmptyState extends StatelessWidget {
 
     Widget? cta = action;
     if (cta == null && actionLabel != null && onAction != null) {
-      cta = FilledButton(onPressed: onAction, child: Text(actionLabel!));
+      cta = FilledButton(onPressed: onAction, child: Text(context.tr(actionLabel!)));
     }
 
     return Center(
@@ -99,7 +100,7 @@ class EmptyState extends StatelessWidget {
               ),
               SizedBox(height: compact ? Space.sm : Space.md),
               Text(
-                title,
+                context.tr(title),
                 textAlign: TextAlign.center,
                 // Proportional figures in both: a title is words, not a column of numbers.
                 style: (compact ? t.textTheme.labelLarge : t.textTheme.headlineSmall)
@@ -107,7 +108,7 @@ class EmptyState extends StatelessWidget {
               ),
               if (body != null) ...[
                 const SizedBox(height: Space.tight),
-                Text(body!, textAlign: TextAlign.center, style: t.textTheme.bodyMedium),
+                Text(context.tr(body!), textAlign: TextAlign.center, style: t.textTheme.bodyMedium),
               ],
               if (cta != null) ...[
                 SizedBox(height: compact ? Space.md : Space.lg),

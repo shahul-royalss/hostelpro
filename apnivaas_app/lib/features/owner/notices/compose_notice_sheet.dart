@@ -207,7 +207,6 @@ class _ComposeNoticeSheetState extends ConsumerState<_ComposeNoticeSheet> {
                       decoration: InputDecoration(
                         labelText: 'Title',
                         floatingLabelBehavior: FloatingLabelBehavior.always,
-                        hintText: 'What the notice is about',
                         errorText: _errors['title'],
                       ),
                     ),
@@ -231,7 +230,6 @@ class _ComposeNoticeSheetState extends ConsumerState<_ComposeNoticeSheet> {
                         labelText: 'Notice',
                         floatingLabelBehavior: FloatingLabelBehavior.always,
                         alignLabelWithHint: true,
-                        hintText: 'The dates, the details, what to do',
                         errorText: _errors['body'],
                       ),
                     ),

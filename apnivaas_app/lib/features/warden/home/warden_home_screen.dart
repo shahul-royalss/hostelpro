@@ -30,6 +30,7 @@ import 'desk_sheets.dart';
 import 'rent_needed.dart';
 import '../../../data/repositories/tenant_admin_repository.dart' show rentlessResidentsProvider;
 import '../claims/payment_claims_screen.dart';
+import '../../common/refresh_all.dart';
 
 /// What needs doing today.
 ///
@@ -166,6 +167,8 @@ class _Body extends ConsumerWidget {
           hostelId: hostelId,
           periodMonth: ref.read(currentPeriodMonthProvider),
         ));
+        // Everything the app holds, not only this screen's figures (round 5).
+        refreshEverything(ref);
         ref.invalidate(hostelStatsProvider);
         ref.invalidate(visitorsOnSiteProvider(hostelId));
         ref.invalidate(pendingLeavesProvider(hostelId));

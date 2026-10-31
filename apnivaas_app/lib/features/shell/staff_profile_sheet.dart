@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,8 +17,12 @@ import '../../shared/clay/status_chip.dart';
 import '../../shared/glass/glass.dart';
 import '../common/staff_hostel_switcher.dart';
 import '../legal/account_deletion.dart';
+import '../onboarding/language_screen.dart' show LanguageRow;
 import '../settings/security_screen.dart';
+import '../student/profile_screen.dart';
+import '../student/widgets/common.dart' show StudentPushPage;
 import 'change_photo.dart';
+import '../../core/i18n/i18n.dart';
 
 /// Who you are signed in as, and the two things you can do about it.
 ///
@@ -38,17 +44,61 @@ import 'change_photo.dart';
 /// owner or super admin creates the account, the same way a resident's are set by their warden,
 /// and there is no self-service write for them anywhere in the product. Drawing an edit affordance
 /// here would promise a screen that does not exist behind it.
-Future<void> showStaffProfile(BuildContext context) => showModalBottomSheet<void>(
-  context: context,
-  isScrollControlled: true,
-  useSafeArea: true,
-  backgroundColor: Colors.transparent,
-  // The sheet draws its own grip on its own pane. Left to the theme, Material adds a second one
-  // in a 48dp band ABOVE the pane — a grey pill floating over the dimmed page, the bug
-  // showGlassSheet's grip exists to avoid (see shared/glass/glass.dart).
-  showDragHandle: false,
-  builder: (_) => const _StaffProfileSheet(),
-);
+/// SLIDES IN FROM THE LEFT (owner, 2026-10-31: "it has to come from left sidebar"), from the
+/// avatar at the top left of every role's header, as a drawer does. A tap outside, the back
+/// gesture, a swipe towards the edge or the close button puts it away.
+Future<void> showStaffProfile(BuildContext context) {
+  final still = MediaQuery.of(context).disableAnimations;
+  return showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Close your account',
+    barrierColor: Colors.black.withValues(alpha: 0.45),
+    transitionDuration: still ? Duration.zero : const Duration(milliseconds: 260),
+    pageBuilder: (_, _, _) => const _SidePanel(child: _StaffProfileSheet()),
+    transitionBuilder: (_, animation, _, child) => SlideTransition(
+      position: Tween(begin: const Offset(-1, 0), end: Offset.zero).animate(CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      )),
+      child: child,
+    ),
+  );
+}
+
+/// The left-hand panel: at most 400dp, and never the whole width, so the page it came from
+/// stays in sight behind it.
+class _SidePanel extends StatelessWidget {
+  const _SidePanel({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = math.min(MediaQuery.sizeOf(context).width * 0.86, 400.0);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: GestureDetector(
+        onHorizontalDragEnd: (d) {
+          if ((d.primaryVelocity ?? 0) < -250) Navigator.of(context).maybePop();
+        },
+        child: SizedBox(
+          width: width,
+          height: double.infinity,
+          child: Material(
+            type: MaterialType.transparency,
+            child: FlatSurface(
+              weight: GlassWeight.thick,
+              borderRadius: const BorderRadius.horizontal(right: Radius.circular(Radii.sheet)),
+              padding: EdgeInsets.zero,
+              child: SafeArea(right: false, child: child),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _StaffProfileSheet extends ConsumerWidget {
   const _StaffProfileSheet();
@@ -79,34 +129,20 @@ class _StaffProfileSheet extends ConsumerWidget {
     }
     final canSwitch = hostels.length >= 2;
 
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.62,
-      maxChildSize: 0.92,
-      builder: (context, controller) => FlatSurface(
-        weight: GlassWeight.thick,
-        borderRadius: Radii.rSheetTop,
-        padding: EdgeInsets.zero,
-        child: ListView(
-          controller: controller,
-          padding: const EdgeInsets.fromLTRB(Space.md, Space.sm, Space.md, Space.xl),
+    return Semantics(
+      scopesRoute: true,
+      namesRoute: true,
+      explicitChildNodes: true,
+      label: 'Your account',
+      child: ListView(
+          padding: const EdgeInsets.fromLTRB(Space.md, Space.xs, Space.md, Space.xl),
           children: [
-            // The grip every other sheet has: 36 by 4, in the control border, because a handle
-            // is a control and 3:1 applies to it.
-            Semantics(
-              label: 'Drag down to dismiss',
-              child: Center(
-                child: Container(
-                  width: Space.xxl + Space.xxs,
-                  height: Space.xxs,
-                  margin: const EdgeInsets.only(bottom: Space.md),
-                  decoration: BoxDecoration(
-                    color: t.brightness == Brightness.dark
-                        ? ApnivaasColors.darkControlBorder
-                        : ApnivaasColors.controlBorder,
-                    borderRadius: Radii.rPill,
-                  ),
-                ),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: IconButton(
+                tooltip: 'Close',
+                onPressed: () => Navigator.of(context).maybePop(),
+                icon: const Icon(Icons.close_rounded),
               ),
             ),
             Row(
@@ -168,11 +204,35 @@ class _StaffProfileSheet extends ConsumerWidget {
               ),
             ],
 
+            if (session.role == UserRole.student) ...[
+              const SizedBox(height: Space.lg),
+              ListGroup(
+                children: [
+                  _Action(
+                    icon: ClayIcons.roleTenant,
+                    label: 'My profile',
+                    caption: 'Your room, roommates, stay, rating your PG and more.',
+                    onTap: () {
+                      final nav = Navigator.of(context);
+                      nav.pop();
+                      nav.push(MaterialPageRoute<void>(
+                        builder: (_) => const StudentPushPage(
+                          title: 'Profile',
+                          child: StudentProfileScreen(),
+                        ),
+                      ));
+                    },
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: Space.lg),
             // The resident's Account card, row for row: the same clay art for the same action,
             // so "my account" reads the same whoever is signed in.
             ListGroup(
               children: [
+                // Round 5: the app's language, for every role.
+                const LanguageRow(),
                 _Action(
                   icon: ClayIcons.kyc,
                   label: 'Two-factor authentication',
@@ -220,7 +280,6 @@ class _StaffProfileSheet extends ConsumerWidget {
             ),
           ],
         ),
-      ),
     );
   }
 }
@@ -243,7 +302,7 @@ class _Row extends StatelessWidget {
           SizedBox(
             width: 96,
             child: Text(
-              label,
+              context.tr(label),
               style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
             ),
           ),
@@ -252,7 +311,7 @@ class _Row extends StatelessWidget {
               child: Text(
                 // "Not recorded" rather than an empty gap: a blank line reads as a rendering
                 // fault, and the absence is itself information for whoever created the account.
-                shown.isEmpty ? 'Not recorded' : shown,
+                shown.isEmpty ? context.tr('Not recorded') : shown,
                 style: shown.isEmpty
                     ? t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)
                     : t.textTheme.bodyMedium,

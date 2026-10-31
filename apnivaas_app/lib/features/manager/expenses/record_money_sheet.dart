@@ -310,7 +310,6 @@ class _RecordMoneySheetState extends ConsumerState<_RecordMoneySheet> {
               textInputAction: TextInputAction.done,
               decoration: const InputDecoration(
                 labelText: 'Note (optional)',
-                hintText: 'Vegetables from the Tuesday market',
               ),
             ),
             const SizedBox(height: Space.md),

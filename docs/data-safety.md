@@ -478,6 +478,23 @@ Privacy policy and terms describe all of it from version 2026-10-26.
   `test/legal_consent_test.dart` checks the count of ours against both policies; re-count the merged
   manifest of the release build before upload.
 
+### 3.9 Round 5 (from legal version 2026-10-31, app 1.4.0)
+
+Built per `docs/round5-api.md`; migration `db/migrations/2026-10-31-round5.sql`; legal row
+`db/migrations/2026-10-31-legal-version-round5.sql`. Nothing on the Data safety form changes:
+
+- **Facebook Login SDK (`flutter_facebook_auth`, facebook-login 18.x).** It is used for sign-in only.
+  `AutoLogAppEventsEnabled` and `AdvertiserIDCollectionEnabled` are false in the manifest, and AD_ID
+  stays removed (`tools:node="remove"`). The Facebook user ID, name and email were already declared
+  under Personal info › User IDs / Name / Email for sign-in (§3.7). Sign-in goes through the Facebook
+  app (`nativeOnly`), with no browser and no web view. The SDK adds no `<uses-permission>` of its own
+  beyond INTERNET, which is already counted. Re-count the merged manifest of the release build: it
+  must still be thirteen.
+- **Staff Google and Facebook sign-in.** Same data, more roles. Nothing new is collected.
+- **Language choice.** One file on the phone (`app_language`). It is never sent, so it is not collected.
+- **Free beds on a PG's page.** Counts derived from rooms and beds the PG already stores. No personal data.
+- **Sign-up no longer asks for city or pincode.** One less optional field. The answers do not change.
+
 ## 4. Razorpay: service provider, not third party
 
 Play distinguishes **"shared with third parties"** from **"handled by a service provider"**. Tick
