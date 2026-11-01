@@ -162,6 +162,14 @@ class _FakeApi implements SignupApi {
     return hits;
   }
 
+  List<HostelHit> browse = const [];
+
+  @override
+  Future<List<HostelHit>> browseHostels() async {
+    calls.add('browse');
+    return browse;
+  }
+
   @override
   Future<void> requestJoin(String hostelId, {String? message}) async =>
       calls.add('requestJoin:$hostelId');
@@ -526,8 +534,8 @@ void main() {
       await tester.enterText(find.widgetWithText(TextFormField, 'City'), 'Bengaluru');
       await tester.enterText(find.widgetWithText(TextFormField, 'Pincode'), '560102');
       await tester.enterText(find.widgetWithText(TextFormField, 'Rooms'), '10');
-      await _tap(tester, find.text('Use my current location (optional)'));
-      expect(find.text('Map pin added from your location'), findsOneWidget);
+      await _tap(tester, find.text('Use my current location'));
+      expect(find.text('Map pin set'), findsOneWidget);
       await _tap(tester, find.text('Create my PG'));
 
       expect(api.lastHostel['name'], 'Green Nest PG');

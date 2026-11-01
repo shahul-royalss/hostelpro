@@ -70,10 +70,16 @@ library;
 /// event logging and advertising ID off, sign-up no longer asks for a city or pincode, the
 /// chosen language stays on the phone, and a PG's page shows how many beds are free. The
 /// permission count is unchanged. Row: db/migrations/2026-10-31-legal-version-round5.sql.
-const kLegalVersion = '2026-10-31';
+///
+/// 2026-11-01 (round 6): a listed PG's page shows the owner's map pin, which a tenant can open in
+/// Google Maps, and says only whether a bed is free (never how many); maps come from Esri
+/// (satellite) and OpenStreetMap; Truecaller sign-in runs through the Truecaller app; Google
+/// Play tells the app when a newer version exists. The permission count is unchanged. Row:
+/// db/migrations/2026-11-01-legal-version-round6.sql.
+const kLegalVersion = '2026-11-01';
 
 /// Human-readable form of [kLegalVersion], for the "last updated" line.
-const kLegalVersionLabel = '31 October 2026';
+const kLegalVersionLabel = '1 November 2026';
 
 const kTermsUrl = 'https://hostelpro-three.vercel.app/legal/terms';
 const kPrivacyUrl = 'https://hostelpro-three.vercel.app/legal/privacy';
@@ -312,7 +318,8 @@ const kPrivacyPolicy = LegalDocument(
             term: 'Your PG',
             detail: 'If you are an owner: the PG\'s name, type, who it is for, address, locality, '
                 'city and pincode, its floors and rooms, and — only if you set it — its exact '
-                'position on the map, from your phone\'s precise location or a pin you place. '
+                'position on the map, from your phone\'s precise location or a pin you place on '
+                'a map. While the PG is listed, people looking for a PG see that pin. '
                 'Also its profile: a logo, up to six cover photos, a description, amenities and '
                 'house rules.',
           ),
@@ -553,10 +560,10 @@ const kPrivacyPolicy = LegalDocument(
           'A tenant\'s check-out request is seen by the wardens and the owner of their PG.',
           'Anyone signed in who is looking for a PG sees its name, type, who it is for, '
               'locality, city, distance, logo, cover photos, description, amenities, house rules, '
-              'how many beds are free in each room type (a count, never which bed or who is in '
-              'the others), rating and reviews, each review with the reviewer\'s first name — '
-              'never its full '
-              'address, its map position or the owner\'s contact details. A PG appears while it '
+              'whether any bed is free (never how many, which bed or who is in the others), its '
+              'map pin if the owner set one, which they can open in Google Maps, rating and '
+              'reviews, each review with the reviewer\'s first name — never its street address '
+              'or the owner\'s contact details. A PG appears while it '
               'is listed and its plan or free month is running. The owner can read reviews but '
               'not change or remove them.',
           'The tenants of a PG see its UPI ID and payee name, so they can pay. A UPI payment '
@@ -619,9 +626,22 @@ const kPrivacyPolicy = LegalDocument(
           ),
           (
             term: 'Truecaller',
-            detail: 'Only if the app offers Continue with Truecaller and you choose it. It confirms '
-                'your phone number and shares it with your name and Truecaller ID; it learns that '
-                'you signed in to this app.',
+            detail: 'Only if the app offers Continue with Truecaller and you choose it. It runs '
+                'through the Truecaller app on your phone, confirms your phone number and shares '
+                'it with your name and Truecaller ID; it learns that you signed in to this app.',
+          ),
+          (
+            term: 'Esri and OpenStreetMap',
+            detail: 'When the app shows a map — an owner placing the PG\'s pin, or a PG\'s page — '
+                'the map pictures come from Esri (satellite imagery) and OpenStreetMap (street '
+                'map). Like any website they receive your phone\'s IP address and which part of '
+                'the map is on screen; never your name or your account.',
+          ),
+          (
+            term: 'Google Play and Google Maps',
+            detail: 'Google Play tells the app whether a newer version is available, so it can '
+                'offer the update. Open in Google Maps hands a PG\'s pin to the Google Maps app '
+                'on your phone, under Google\'s own policy.',
           ),
         ]),
         Para(

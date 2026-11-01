@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/models/failure.dart';
 import '../../data/providers.dart' show supabaseClientProvider;
+import '../../data/device/apps_launcher.dart';
 import 'app_release.dart';
 
 /// READING THE PUBLISHED RELEASE, AND DECIDING WHETHER TO SAY ANYTHING ABOUT IT.
@@ -85,6 +86,52 @@ final latestReleaseProvider = FutureProvider<AppRelease?>((ref) async {
 final updateStatusProvider = Provider<UpdateStatus>((ref) {
   final release = ref.watch(latestReleaseProvider).value;
   return decideUpdate(ref.watch(installedBuildProvider), release);
+});
+
+/// Google Play's own answer, asked ONCE per cold start (round 6). It needs nothing from us: the
+/// moment a release is live on Play, every older build installed from Play hears about it, with
+/// no row to update by hand. A build that was not installed from Play hears nothing here.
+final playUpdateProvider = FutureProvider<PlayUpdate>((ref) {
+  return ref.watch(appsLauncherProvider).checkUpdate();
+});
+
+/// What the app offers, if anything: the published row first (it can name the version and mark
+/// it mandatory), then Google Play.
+final class UpdateOffer {
+  const UpdateOffer({required this.status, this.versionName, this.versionCode, this.notes});
+
+  final UpdateStatus status;
+  final String? versionName;
+  final int? versionCode;
+  final String? notes;
+
+  bool get showing => status == UpdateStatus.available || status == UpdateStatus.required;
+  bool get mandatory => status == UpdateStatus.required;
+
+  /// "Apnivaas 1.4.1", or "A new version of Apnivaas" when only Play has spoken.
+  String get title =>
+      versionName == null ? 'A new version of Apnivaas' : 'Apnivaas $versionName';
+}
+
+final updateOfferProvider = Provider<UpdateOffer>((ref) {
+  final installed = ref.watch(installedBuildProvider);
+  final release = ref.watch(latestReleaseProvider).value;
+  final fromRow = decideUpdate(installed, release);
+  if (release != null && (fromRow == UpdateStatus.available || fromRow == UpdateStatus.required)) {
+    return UpdateOffer(
+      status: fromRow,
+      versionName: release.versionName,
+      versionCode: release.versionCode,
+      notes: release.notes,
+    );
+  }
+  final play = ref.watch(playUpdateProvider).value;
+  final mine = installed.versionCode;
+  final playCode = play?.versionCode;
+  if (play != null && play.available && (playCode == null || mine == null || playCode > mine)) {
+    return UpdateOffer(status: UpdateStatus.available, versionCode: playCode);
+  }
+  return UpdateOffer(status: fromRow == UpdateStatus.upToDate ? fromRow : UpdateStatus.unknown);
 });
 
 /// The version code the user has waved away, for this run of the app.

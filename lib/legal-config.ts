@@ -123,8 +123,13 @@ export const LEGAL = {
  * logging and the advertising ID off, sign-up asks for no city or pincode, the chosen language
  * stays on the phone, and a PG's page shows how many beds are free. Row:
  * db/migrations/2026-10-31-legal-version-round5.sql.
+ *
+ * 2026-11-01 (round 6): a listed PG's page shows the owner's map pin (opened in Google Maps) and
+ * only whether a bed is free, never how many; maps come from Esri and OpenStreetMap; Truecaller
+ * runs through its app; Google Play tells the app when a newer version exists. Row:
+ * db/migrations/2026-11-01-legal-version-round6.sql.
  */
-export const LEGAL_VERSION = "2026-10-31";
+export const LEGAL_VERSION = "2026-11-01";
 
 /**
  * Android application id, so the deletion page can name the app Play users installed.

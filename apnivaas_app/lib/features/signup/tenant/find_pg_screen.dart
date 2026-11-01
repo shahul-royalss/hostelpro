@@ -6,6 +6,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/i18n/i18n.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../data/device/signup_device.dart';
 import '../../../data/models/signup.dart';
@@ -26,7 +27,19 @@ class FindPgScreen extends ConsumerStatefulWidget {
     this.declined,
     this.sendRequest,
     this.forStaff = false,
+    this.browseOnly = false,
   });
+
+  /// Round 6: a tenant who already lives in a PG browses other PGs from their profile. Pages and
+  /// photos only: moving needs their owner to check them out first (the owner's choice), so
+  /// there is no request button.
+  static Route<void> browseRoute() => MaterialPageRoute(
+        builder: (_) => FindPgScreen(
+          browseOnly: true,
+          onRequested: (_) {},
+          onEditDetails: () {},
+        ),
+      );
 
   /// The request was sent; [String] is the PG's name for the waiting screen.
   final ValueChanged<String> onRequested;
@@ -41,6 +54,8 @@ class FindPgScreen extends ConsumerStatefulWidget {
   /// A staff applicant (R8): staff copy, and no "Your details" step.
   final bool forStaff;
 
+  final bool browseOnly;
+
   @override
   ConsumerState<FindPgScreen> createState() => _FindPgScreenState();
 }
@@ -48,6 +63,9 @@ class FindPgScreen extends ConsumerStatefulWidget {
 class _FindPgScreenState extends ConsumerState<FindPgScreen> {
   final _query = TextEditingController();
   List<HostelHit>? _hits;
+
+  /// True while [_hits] is the opening list rather than an answer to a search.
+  bool _browsing = false;
   bool _searching = false;
   String? _note;
   String? _error;
@@ -58,6 +76,27 @@ class _FindPgScreenState extends ConsumerState<FindPgScreen> {
     'Add your phone number in Your details first.',
     'Add a profile photo before sending a request.',
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _browse();
+  }
+
+  /// Round 6: PGs to look at before anything is typed. A failure here is quiet — search and
+  /// "PGs near you" are right there — and an answer that comes after a search is dropped.
+  Future<void> _browse() async {
+    try {
+      final hits = await ref.read(signupApiProvider).browseHostels();
+      if (!mounted || _hits != null || _searching) return;
+      setState(() {
+        _hits = hits;
+        _browsing = true;
+      });
+    } on SignupFailure {
+      // Nothing to say.
+    }
+  }
 
   @override
   void dispose() {
@@ -116,6 +155,7 @@ class _FindPgScreenState extends ConsumerState<FindPgScreen> {
       setState(() {
         _searching = false;
         _hits = hits;
+        _browsing = false;
       });
     } on SignupFailure catch (f) {
       if (!mounted) return;
@@ -159,6 +199,10 @@ class _FindPgScreenState extends ConsumerState<FindPgScreen> {
   }
 
   Future<void> _view(HostelHit hit) async {
+    if (widget.browseOnly) {
+      await Navigator.of(context).push(PgProfilePage.route(hit.hostelId, title: hit.name));
+      return;
+    }
     final go = await Navigator.of(context).push(
       PgProfilePage.route(hit.hostelId, title: hit.name, requestLabel: 'Request to join'),
     );
@@ -170,10 +214,14 @@ class _FindPgScreenState extends ConsumerState<FindPgScreen> {
     final t = Theme.of(context);
     final hits = _hits;
     final declined = widget.declined;
-    return SignupPage(
-      showSignOut: true,
-      onBack: widget.forStaff ? null : widget.onEditDetails,
-      children: [
+    final children = <Widget>[
+        if (widget.browseOnly) ...[
+          const SizedBox(height: Space.xs),
+          const InfoNote(
+            message: 'You can look at any PG on Apnivaas. To move to one, ask your owner to '
+                'check you out first; then you can send a request.',
+          ),
+        ] else ...[
         const SizedBox(height: Space.md),
         AuthHeading(
           title: widget.forStaff ? 'Request to join a PG as staff' : 'Find your PG',
@@ -182,6 +230,7 @@ class _FindPgScreenState extends ConsumerState<FindPgScreen> {
               : 'Ask your PG to take you in. They see your request in the app.',
           icon: widget.forStaff ? ClayIcons.team : ClayIcons.gate,
         ),
+        ],
         if (declined != null) ...[
           const SizedBox(height: Space.md),
           InfoBanner(
@@ -240,23 +289,43 @@ class _FindPgScreenState extends ConsumerState<FindPgScreen> {
             icon: ClayIcons.rooms,
             compact: true,
           )
-        else if (hits != null)
+        else if (hits != null) ...[
+          if (_browsing) ...[
+            Text(context.tr('PGs on Apnivaas'), style: t.textTheme.titleMedium),
+            const SizedBox(height: Space.sm),
+          ],
           for (final hit in hits) ...[
             _HitCard(
               hit: hit,
               busy: _requesting == hit.hostelId,
-              onRequest: _requesting == null ? () => _request(hit) : null,
+              onRequest: widget.browseOnly || _requesting != null ? null : () => _request(hit),
+              showRequest: !widget.browseOnly,
               onView: () => _view(hit),
             ),
             const SizedBox(height: Space.sm),
           ],
-        if (hits == null && !_searching)
+        ],
+        if ((hits == null || _browsing) && !_searching)
           Text(
             'Only PGs that use Apnivaas are listed.',
             textAlign: TextAlign.center,
             style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
           ),
-      ],
+    ];
+    if (widget.browseOnly) {
+      return Scaffold(
+        appBar: AppBar(title: Text(context.tr('Find a PG'))),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(Space.md, 0, Space.md, Space.huge),
+          children: children,
+        ),
+      );
+    }
+    return SignupPage(
+      showSignOut: true,
+      // Round 6: staff have no details step behind this one, so back leaves sign-up.
+      onBack: widget.forStaff ? () => leaveSignup(context, ref) : widget.onEditDetails,
+      children: children,
     );
   }
 }
@@ -267,12 +336,14 @@ class _HitCard extends StatelessWidget {
     required this.busy,
     required this.onRequest,
     required this.onView,
+    this.showRequest = true,
   });
 
   final HostelHit hit;
   final bool busy;
   final VoidCallback? onRequest;
   final VoidCallback onView;
+  final bool showRequest;
 
   @override
   Widget build(BuildContext context) {
@@ -313,7 +384,8 @@ class _HitCard extends StatelessWidget {
             AmenityChips(amenities: hit.amenities, limit: 3),
           ],
           const SizedBox(height: Space.sm),
-          BusyFilledButton(label: 'Request to join', busy: busy, onPressed: onRequest),
+          if (showRequest)
+            BusyFilledButton(label: 'Request to join', busy: busy, onPressed: onRequest),
           Center(
             child: TextButton(onPressed: onView, child: const Text('See photos and reviews')),
           ),

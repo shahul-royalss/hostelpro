@@ -217,6 +217,11 @@
         <meta-data
             android:name="com.facebook.sdk.AdvertiserIDCollectionEnabled"
             android:value="false" />
+        <!-- Round 6: Continue with Truecaller. The client ID is a public identifier, compiled in
+             from the TRUECALLER_CLIENT_ID dart-define (android/app/build.gradle.kts). -->
+        <meta-data
+            android:name="com.truecaller.android.sdk.ClientId"
+            android:value="@string/truecaller_client_id" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -266,5 +271,15 @@
         <package android:name="in.org.npci.upiapp"/>
         <!-- Round 5: Continue with Facebook signs in through the Facebook app. -->
         <package android:name="com.facebook.katana"/>
+        <!-- Round 6: Continue with Truecaller signs in through the Truecaller app. -->
+        <package android:name="com.truecaller"/>
+        <!-- Round 6: "Update now" opens the Play Store app, and a PG's pin opens in Google Maps
+             (MainActivity "apnivaas/apps"). Neither ever falls back to a browser. -->
+        <package android:name="com.android.vending"/>
+        <package android:name="com.google.android.apps.maps"/>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="geo"/>
+        </intent>
     </queries>
 </manifest>

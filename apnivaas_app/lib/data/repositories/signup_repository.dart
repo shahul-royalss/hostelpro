@@ -133,6 +133,9 @@ abstract interface class SignupApi {
 
   Future<List<HostelHit>> nearbyHostels(double lat, double lng);
   Future<List<HostelHit>> searchHostels(String query);
+
+  /// Round 6: listed PGs before anything is typed (`st_browse_hostels`).
+  Future<List<HostelHit>> browseHostels();
   Future<void> requestJoin(String hostelId, {String? message});
   Future<void> cancelJoinRequest();
   Future<JoinRequest?> myJoinRequest();
@@ -283,6 +286,9 @@ final class SignupRepository implements SignupApi {
   @override
   Future<List<HostelHit>> searchHostels(String query) async =>
       _hits(await _rpc('st_search_hostels', {'p_query': query}));
+
+  @override
+  Future<List<HostelHit>> browseHostels() async => _hits(await _rpc('st_browse_hostels'));
 
   @override
   Future<void> requestJoin(String hostelId, {String? message}) async {

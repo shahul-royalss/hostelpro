@@ -3,6 +3,7 @@
 /// Owner contacts, the address and the map pin are never part of `st_pg_profile`.
 library;
 
+import '../../common/map_pin.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -139,9 +140,20 @@ class _Body extends StatelessWidget {
             ),
           ],
         ),
-        if (profile.bedsFree != null) ...[
+        if (profile.bedsAvailable != null) ...[
           const SizedBox(height: Space.md),
           BedAvailability(profile: profile),
+        ],
+        if (profile.hasPin) ...[
+          const SizedBox(height: Space.xl),
+          const SectionHeader(title: 'Location'),
+          const SizedBox(height: Space.sm),
+          PgLocationCard(
+            latitude: profile.latitude!,
+            longitude: profile.longitude!,
+            name: profile.name,
+            place: profile.place,
+          ),
         ],
         if (profile.description != null) ...[
           const SizedBox(height: Space.md),
@@ -172,7 +184,7 @@ class _Body extends StatelessWidget {
         const SizedBox(height: Space.lg),
         const InfoNote(
           icon: Icons.lock_outline_rounded,
-          message: 'The owner\'s phone number and the full address are shared once the PG '
+          message: 'The owner\'s phone number and the street address are shared once the PG '
               'accepts you.',
         ),
       ],
@@ -180,24 +192,19 @@ class _Body extends StatelessWidget {
   }
 }
 
-/// "4 beds free · 2 sharing: 1 · 3 sharing: 3", or a plain "No beds free right now".
+/// "Beds available" or "No beds free right now" — never how many (round 6, the owner's rule:
+/// tenants only learn whether there is room).
 class BedAvailability extends StatelessWidget {
   const BedAvailability({super.key, required this.profile});
   final PgPublicProfile profile;
 
-  static String sharingLabel(int sharing) => sharing == 1 ? 'Single room' : '$sharing sharing';
-
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final free = profile.bedsFree ?? 0;
+    final open = profile.bedsAvailable ?? false;
     final tones = context.tones;
-    final ink = free > 0 ? tones.success : tones.warning;
-    final title = free == 0
-        ? 'No beds free right now'
-        : free == 1
-            ? '1 bed free'
-            : '$free beds free';
+    final ink = open ? tones.success : tones.warning;
+    final title = open ? 'Beds available' : 'No beds free right now';
     return FlatSurface(
       borderRadius: Radii.rSurface,
       padding: const EdgeInsets.all(Space.md),
@@ -212,24 +219,13 @@ class BedAvailability extends StatelessWidget {
               children: [
                 Text(context.tr(title), style: t.textTheme.titleMedium?.copyWith(color: ink)),
                 const SizedBox(height: Space.xxs),
-                if (free == 0)
-                  Text(
-                    'Every bed is taken. You can still ask to join; the owner can tell you when '
-                    'one opens.',
-                    style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
-                  )
-                else
-                  Wrap(
-                    spacing: Space.xs,
-                    runSpacing: Space.xs,
-                    children: [
-                      for (final s in profile.freeBySharing)
-                        StatusChip(
-                          label: '${sharingLabel(s.sharing)} · ${s.free} free',
-                          tone: StatusTone.success,
-                        ),
-                    ],
-                  ),
+                Text(
+                  context.tr(open
+                      ? 'Ask to join and the PG will tell you the room and the rent.'
+                      : 'Every bed is taken. You can still ask to join; the owner can tell you '
+                          'when one opens.'),
+                  style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                ),
               ],
             ),
           ),

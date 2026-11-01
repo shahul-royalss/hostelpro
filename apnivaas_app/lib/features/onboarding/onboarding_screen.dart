@@ -116,9 +116,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _controller.nextPage(duration: Motion.slow, curve: Motion.move);
   }
 
+  void _previous() {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.jumpToPage(_index - 1);
+      return;
+    }
+    _controller.previousPage(duration: Motion.slow, curve: Motion.move);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // Round 6: a back arrow from the second page on, and Android's back button turns the page
+    // back instead of closing the app.
+    return PopScope(
+      canPop: _index == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _index > 0) _previous();
+      },
+      child: Scaffold(
       body: SafeArea(
         child: Column(
           children: [
@@ -130,6 +145,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               // under it is a coin toss. The brand sits at the leading edge either way, so
               // nothing moves when it leaves.
               child: AuthTopBar(
+                leading: _index == 0
+                    ? null
+                    : IconButton(
+                        key: const Key('tour-back'),
+                        tooltip: context.tr('Back'),
+                        icon: const Icon(Icons.arrow_back_rounded),
+                        onPressed: _previous,
+                      ),
                 trailing: _last
                     ? null
                     : TextButton(onPressed: widget.onDone, child: Text(context.tr('Skip'))),
@@ -164,6 +187,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

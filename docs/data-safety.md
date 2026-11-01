@@ -495,6 +495,25 @@ Built per `docs/round5-api.md`; migration `db/migrations/2026-10-31-round5.sql`;
 - **Free beds on a PG's page.** Counts derived from rooms and beds the PG already stores. No personal data.
 - **Sign-up no longer asks for city or pincode.** One less optional field. The answers do not change.
 
+### 3.10 Round 6 (from legal version 2026-11-01, app 1.4.1)
+
+Built per `docs/round6-api.md`; migration `db/migrations/2026-11-01-round6.sql`; legal row
+`db/migrations/2026-11-01-legal-version-round6.sql`. Nothing on the Data safety form changes:
+
+- **The PG's map pin on its page.** The owner's pin was already declared (Location › Precise location,
+  owners only, §3.7–3.8). A listed PG's page now shows it to signed-in tenants. It describes a
+  business's location chosen by its owner, not a user's whereabouts, and nothing new is collected.
+- **Beds: available or not.** One yes/no derived from beds the PG already stores. No personal data.
+- **Maps (flutter_map).** Tiles are fetched from Esri (satellite) and OpenStreetMap (street map), which
+  see the IP address and the map area, as any web request does. Nothing is sent with the user's
+  identity, so it is not "collected" or "shared" in Play's definitions (§1). Named in the privacy policy.
+- **Truecaller SDK (`truecaller_sdk`, truecaller-sdk 3.x).** Sign-in only, `OPTION_VERIFY_ONLY_TC_USERS`.
+  The verified phone number, name and Truecaller ID were already declared for sign-in (§3.7). Re-count
+  the merged manifest: if the SDK merges any phone or call-log permission, remove it with
+  `tools:node="remove"` before release; the count must stay thirteen.
+- **Play in-app update check (`com.google.android.play:app-update`).** Asks Google Play whether a newer
+  version exists. Sends nothing of ours; adds no permission.
+
 ## 4. Razorpay: service provider, not third party
 
 Play distinguishes **"shared with third parties"** from **"handled by a service provider"**. Tick

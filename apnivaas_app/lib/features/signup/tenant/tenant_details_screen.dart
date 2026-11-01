@@ -265,6 +265,7 @@ class _TenantDetailsScreenState extends ConsumerState<TenantDetailsScreen> {
 
     return SignupPage(
       showSignOut: true,
+      onBack: busy ? null : () => leaveSignup(context, ref),
       children: [
         const SizedBox(height: Space.md),
         const StepIndicator(step: 4),

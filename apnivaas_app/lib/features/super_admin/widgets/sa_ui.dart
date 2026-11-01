@@ -1512,9 +1512,16 @@ class SaKpiTile extends StatelessWidget {
     this.semantics,
     this.tone,
     this.onTap,
+    this.icon,
+    this.caption,
   });
 
   final String label;
+
+  /// Round 6: the clay art and the one-line context under the figure, so a tile is never a
+  /// number floating in an empty card.
+  final String? icon;
+  final String? caption;
 
   /// Already formatted for display by one of the formatters at the top of this file.
   final String value;
@@ -1535,6 +1542,8 @@ class SaKpiTile extends StatelessWidget {
     return StatTile(
       label: label,
       value: value,
+      icon: icon,
+      caption: caption,
       valueTone: tone,
       onTap: onTap,
       semanticLabel: semantics ?? '$label: $value',

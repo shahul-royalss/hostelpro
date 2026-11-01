@@ -174,9 +174,9 @@ class PgPublicProfile {
     this.ratingAvg,
     this.ratingCount = 0,
     this.reviews = const [],
-    this.bedsTotal,
-    this.bedsFree,
-    this.freeBySharing = const [],
+    this.bedsAvailable,
+    this.latitude,
+    this.longitude,
   });
 
   static PgPublicProfile? tryParse(Object? data) {
@@ -198,14 +198,9 @@ class PgPublicProfile {
       ratingAvg: jNum(row, 'rating_avg'),
       ratingCount: jInt(row, 'rating_count') ?? 0,
       reviews: PgReview.listFrom(row['reviews']),
-      bedsTotal: jInt(row, 'beds_total'),
-      bedsFree: jInt(row, 'beds_free'),
-      freeBySharing: [
-        for (final r in jRows(row['free_by_sharing']))
-          if ((jInt(r, 'sharing'), jInt(r, 'free')) case (final sharing?, final free?)
-              when free > 0)
-            (sharing: sharing, free: free),
-      ],
+      bedsAvailable: row['beds_available'] is bool ? row['beds_available'] as bool : null,
+      latitude: jNum(row, 'latitude'),
+      longitude: jNum(row, 'longitude'),
     );
   }
 
@@ -224,12 +219,15 @@ class PgPublicProfile {
   final int ratingCount;
   final List<PgReview> reviews;
 
-  /// Bed counts (round 5); null from a server older than round 5, which says nothing.
-  final int? bedsTotal;
-  final int? bedsFree;
+  /// Round 6: only WHETHER a bed is free, never how many (the owner's rule). Null from a server
+  /// that does not say, which shows nothing.
+  final bool? bedsAvailable;
 
-  /// Free beds by room type, smallest sharing first; full types are left out.
-  final List<({int sharing, int free})> freeBySharing;
+  /// Round 6: the owner's map pin, when one is set. Opened in Google Maps from the PG page.
+  final double? latitude;
+  final double? longitude;
+
+  bool get hasPin => latitude != null && longitude != null;
 
   String get place => [locality, city].whereType<String>().join(', ');
 }

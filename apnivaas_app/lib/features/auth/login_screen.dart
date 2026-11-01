@@ -5,6 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/auth/password_recovery.dart' show passwordChangedMessage;
 import '../../core/auth/google_id_token.dart';
+import '../../core/auth/social_sign_in.dart';
+import '../../core/version/app_release.dart';
+import '../onboarding/language_screen.dart';
+import '../../core/i18n/language.dart';
 import '../../core/router/routes.dart';
 import '../../core/theme/tokens.dart';
 import '../../shared/clay/sheet.dart';
@@ -51,8 +55,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   // the router watches — so tapping Sign in read as "still restoring the session" and pushed
   // the user to the splash screen mid-login.
   bool _busy = false;
-  // Google has its own flag so its spinner sits on its own button.
-  bool _googleBusy = false;
+  // Which round button is working, so its spinner sits on its own button.
+  SocialProvider? _socialBusy;
   String? _error;
 
   // NO QUIET GOOGLE ATTEMPT ON OPENING (removed 2026-10-31). It made Google's account sheet
@@ -67,37 +71,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  /// "Continue with Google". [quietly] is kept for a caller that must not show errors.
-  Future<void> _google({bool quietly = false}) async {
-    if (!mounted || _busy || _googleBusy) return;
-    if (!ref.read(googleIdTokenSourceProvider).isAvailable) return;
-    // Not when the router brought us here to say why (deactivated, not set up): a quiet attempt
-    // would only repeat the refusal over the top of the sentence explaining it.
-    if (quietly) {
-      final phase = ref.read(authControllerProvider).value;
-      if (phase is AuthSignedOut && phase.message != null) return;
-    }
-    if (!quietly) FocusScope.of(context).unfocus();
+  /// "Continue with Google / Facebook / Truecaller" (Facebook and Truecaller joined in round 6:
+  /// the owner's screenshot showed only Google here, while sign-up already had all three).
+  Future<void> _social(SocialProvider provider) async {
+    if (!mounted || _busy || _socialBusy != null) return;
+    FocusScope.of(context).unfocus();
     setState(() {
-      _googleBusy = true;
-      if (!quietly) _error = null;
+      _socialBusy = provider;
+      _error = null;
     });
-    final attempt =
-        await ref.read(authControllerProvider.notifier).continueWithGoogle(quietly: quietly);
+    final auth = ref.read(authControllerProvider.notifier);
+    final attempt = await switch (provider) {
+      SocialProvider.google => auth.continueWithGoogle(),
+      SocialProvider.facebook => auth.continueWithFacebook(),
+      SocialProvider.truecaller => auth.continueWithTruecaller(),
+    };
     // On success the router navigates away and this widget is gone.
     if (!mounted) return;
-    // NO ACCOUNT FOR THIS GOOGLE ADDRESS: "Who are you?" is where an account is made
-    // (docs/self-signup-api.md §1.1). Branched on the code, never on the sentence, and never
-    // for the quiet attempt nobody asked for.
-    if (!quietly && attempt.noAccount) {
-      setState(() => _googleBusy = false);
+    // NO ACCOUNT FOR THIS SIGN-IN: "Who are you?" is where an account is made
+    // (docs/self-signup-api.md §1.1). Branched on the code, never on the sentence.
+    if (attempt.noAccount) {
+      setState(() => _socialBusy = null);
       GoRouter.of(context).go(startRoute);
       return;
     }
-    final message = attempt.message;
     setState(() {
-      _googleBusy = false;
-      if (message != null && !(quietly && attempt.noAccount)) _error = message;
+      _socialBusy = null;
+      _error = attempt.message;
     });
   }
 
@@ -233,8 +233,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final busy = _busy || _googleBusy;
+    final busy = _busy || _socialBusy != null;
     final google = ref.watch(googleIdTokenSourceProvider);
+    final facebook = ref.watch(facebookCredentialSourceProvider);
+    final truecaller = ref.watch(truecallerCredentialSourceProvider);
+    SocialCircleButton round(SocialProvider p) => SocialCircleButton(
+          provider: p,
+          busy: _socialBusy == p,
+          onPressed: busy ? null : () => _social(p),
+        );
+    final providers = <SocialCircleButton>[
+      if (google.isAvailable) round(SocialProvider.google),
+      if (facebook.isAvailable) round(SocialProvider.facebook),
+      if (truecaller.isAvailable) round(SocialProvider.truecaller),
+    ];
     // This attempt's own failure first: it is about what the user just typed, and it replaces
     // whatever brought them here. The arrival message is suppressed while a submission is in
     // flight so a stale reason cannot sit under a spinner.
@@ -254,8 +266,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     return AuthScaffold(
       footer: const _Foot(),
-      // Round 3: no brand bar and no hero card — the logo itself heads the page.
-      topBar: const SizedBox.shrink(),
+      // Round 3: no brand bar and no hero card — the logo itself heads the page. Round 6: the
+      // language switch sits at the top corner, so a phone that picked the wrong language on
+      // its first launch is not stuck reading it until after sign-in.
+      topBar: const Align(alignment: AlignmentDirectional.centerEnd, child: _LanguageChip()),
       children: [
         const SizedBox(height: Space.lg),
         const _BrandLogo(),
@@ -298,7 +312,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   labelText: context.tr('Email or phone'),
                 ),
                 validator: (v) => (v == null || v.trim().isEmpty)
-                    ? 'Enter your email or phone number'
+                    ? context.tr('Enter your email or phone number')
                     : null,
               ),
               const SizedBox(height: Space.sm),
@@ -314,7 +328,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Space.xs + errorSlot + Space.xs + 52 + Space.md,
                 ),
                 decoration: InputDecoration(
-                  labelText: 'Password',
+                  labelText: context.tr('Password'),
                   suffixIcon: IconButton(
                     tooltip: _obscure ? 'Show password' : 'Hide password',
                     icon: Icon(
@@ -322,7 +336,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     onPressed: () => setState(() => _obscure = !_obscure),
                   ),
                 ),
-                validator: (v) => (v == null || v.isEmpty) ? 'Enter your password' : null,
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? context.tr('Enter your password') : null,
               ),
               const SizedBox(height: Space.xs),
               // Announced to a screen reader, and never a driver message. [FormNote] sets it in
@@ -359,19 +374,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ],
           ),
         ),
-        // Only in a build that carries a Web client ID (Env.googleWebClientId). A button that
-        // can only fail is worse than no button.
-        if (google.isAvailable) ...[
+        // Each only in a build that carries its client ID. A button that can only fail is worse
+        // than no button.
+        if (providers.isNotEmpty) ...[
           const SizedBox(height: Space.sm),
           const OrDivider(),
           const SizedBox(height: Space.md),
-          SocialButtonRow(buttons: [
-            SocialCircleButton(
-              provider: SocialProvider.google,
-              busy: _googleBusy,
-              onPressed: busy ? null : _google,
-            ),
-          ]),
+          SocialButtonRow(buttons: providers),
         ],
         const SizedBox(height: Space.sm),
         // SELF SIGN-UP (1.3.0): owners and tenants make their own account from "Who are you?".
@@ -440,7 +449,31 @@ class _Foot extends StatelessWidget {
             const _DocumentLink(label: 'Privacy Policy', document: 'privacy'),
           ],
         ),
+        // Round 6: which build this is, so a support call starts from a fact.
+        if (InstalledBuild.current.versionName != 'unknown')
+          Text('${context.tr('Version')} ${InstalledBuild.current.versionName}', style: muted),
       ],
+    );
+  }
+}
+
+/// The top-corner language switch: the current language's own name, and the sheet of six.
+class _LanguageChip extends ConsumerWidget {
+  const _LanguageChip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context);
+    final current = ref.watch(languageProvider).value;
+    return TextButton.icon(
+      key: const Key('login-language'),
+      onPressed: () => showLanguageSheet(context),
+      icon: const Icon(Icons.translate_rounded, size: IconSize.md),
+      label: Text(current?.nativeName ?? 'English'),
+      style: TextButton.styleFrom(
+        foregroundColor: t.colorScheme.primary,
+        textStyle: t.textTheme.labelLarge,
+      ),
     );
   }
 }

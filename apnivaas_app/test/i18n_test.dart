@@ -173,46 +173,40 @@ void main() {
     });
   });
 
-  group('free beds on a PG page', () {
-    PgPublicProfile profile(int free, List<({int sharing, int free})> by) => PgPublicProfile(
-        hostelId: 'h', name: 'Sunrise PG', bedsTotal: 8, bedsFree: free, freeBySharing: by);
+  group('beds on a PG page: available or not, never how many (round 6)', () {
+    PgPublicProfile profile(bool open) =>
+        PgPublicProfile(hostelId: 'h', name: 'Sunrise PG', bedsAvailable: open);
 
-    test('read from st_pg_profile; a full type is left out', () {
+    test('read from st_pg_profile, with the map pin', () {
       final p = PgPublicProfile.tryParse({
         'hostel_id': 'h',
         'name': 'Sunrise PG',
-        'beds_total': 8,
-        'beds_free': 3,
-        'free_by_sharing': [
-          {'sharing': 2, 'free': 1},
-          {'sharing': 3, 'free': 2},
-          {'sharing': 4, 'free': 0},
-        ],
+        'beds_available': true,
+        'latitude': 12.971599,
+        'longitude': 77.594566,
       })!;
-      expect(p.bedsTotal, 8);
-      expect(p.bedsFree, 3);
-      expect(p.freeBySharing, [(sharing: 2, free: 1), (sharing: 3, free: 2)]);
-      expect(PgPublicProfile.tryParse({'hostel_id': 'h', 'name': 'Old server'})!.bedsFree, isNull);
+      expect(p.bedsAvailable, isTrue);
+      expect(p.hasPin, isTrue);
+      expect(p.latitude, closeTo(12.971599, 1e-9));
+      final old = PgPublicProfile.tryParse({'hostel_id': 'h', 'name': 'Old server'})!;
+      expect(old.bedsAvailable, isNull);
+      expect(old.hasPin, isFalse);
     });
 
-    testWidgets('counts by room type, in the chosen language', (tester) async {
-      await tester.pumpWidget(_app(BedAvailability(
-          profile: profile(3, const [(sharing: 1, free: 1), (sharing: 3, free: 2)]))));
+    testWidgets('a PG with room says so with no number, in the chosen language', (tester) async {
+      await tester.pumpWidget(_app(BedAvailability(profile: profile(true))));
       await tester.pumpAndSettle();
-      expect(find.text('3 beds free'), findsOneWidget);
-      expect(find.text('Single room · 1 free'), findsOneWidget);
-      expect(find.text('3 sharing · 2 free'), findsOneWidget);
+      expect(find.text('Beds available'), findsOneWidget);
+      expect(find.textContaining(RegExp(r'[0-9]')), findsNothing);
 
-      await tester.pumpWidget(_app(
-          BedAvailability(profile: profile(3, const [(sharing: 3, free: 2)])),
-          locale: const Locale('hi')));
+      await tester.pumpWidget(
+          _app(BedAvailability(profile: profile(true)), locale: const Locale('hi')));
       await tester.pumpAndSettle();
-      expect(find.text('3 बेड ख़ाली'), findsOneWidget);
-      expect(find.text('3 शेयरिंग · 2 ख़ाली'), findsOneWidget);
+      expect(find.text('बेड ख़ाली हैं'), findsOneWidget);
     });
 
     testWidgets('a full PG says so, and still lets the tenant ask', (tester) async {
-      await tester.pumpWidget(_app(BedAvailability(profile: profile(0, const []))));
+      await tester.pumpWidget(_app(BedAvailability(profile: profile(false))));
       await tester.pumpAndSettle();
       expect(find.text('No beds free right now'), findsOneWidget);
       expect(find.textContaining('You can still ask to join'), findsOneWidget);

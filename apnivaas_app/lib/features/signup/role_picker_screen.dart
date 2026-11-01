@@ -78,6 +78,8 @@ class _RolePickerScreenState extends ConsumerState<RolePickerScreen> {
     ref.watch(pendingPersonaProvider);
     final picked = _picked ?? _initial;
     return SignupPage(
+      // Round 6: back to the sign-in screen, the step before this one.
+      onBack: () => context.go('/login'),
       children: [
         const SizedBox(height: Space.md),
         const StepIndicator(step: 2),

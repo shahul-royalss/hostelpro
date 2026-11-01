@@ -2,8 +2,8 @@
 ///
 /// docs/self-signup-onboarding-spec.md, Flows 1–2. Each provider is an interface shaped like
 /// [GoogleIdTokenSource] and a build flag that keeps its button hidden while it is empty.
-/// Facebook signs in natively since round 5 ([FacebookNativeSource]); Truecaller is still an
-/// integration point answering in the contract's words ([SocialSignInNotConfigured]).
+/// Facebook signs in natively since round 5 ([FacebookNativeSource]) and Truecaller since round 6
+/// ([TruecallerNativeSource]); [SocialSignInNotConfigured] stays for tests and staging builds.
 ///
 /// No secret lives here. The flags are public client identifiers; the app secret and the
 /// Truecaller exchange live in the `mobile-auth` Edge Function only.
@@ -11,6 +11,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'facebook_native.dart';
+import 'truecaller_native.dart';
 
 /// Who the person said they are on "Who are you?". A HINT for one sign-up request, never
 /// authority: the server maps it to a role and the database refuses every other role for a
@@ -101,9 +102,6 @@ class SocialSignInNotConfigured implements SocialCredentialSource {
 final facebookCredentialSourceProvider =
     Provider<SocialCredentialSource>((ref) => FacebookNativeSource());
 
-final truecallerCredentialSourceProvider = Provider<SocialCredentialSource>(
-  (ref) => SocialSignInNotConfigured(
-    enabledByFlag: SocialSignInConfig.truecallerEnabled,
-    message: SocialSignInWords.truecallerNotSetUp,
-  ),
-);
+/// Round 6: Truecaller's own consent sheet ([TruecallerNativeSource]).
+final truecallerCredentialSourceProvider =
+    Provider<SocialCredentialSource>((ref) => TruecallerNativeSource());

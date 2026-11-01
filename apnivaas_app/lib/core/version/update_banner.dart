@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/device/apps_launcher.dart';
 import '../../shared/glass/glass.dart';
+import '../i18n/i18n.dart';
 import '../theme/tokens.dart';
-import 'app_release.dart';
 import 'release_check.dart';
 
 /// THE NOTICE ON THE OLD APP THAT A NEW BUILD EXISTS.
@@ -40,97 +41,172 @@ import 'release_check.dart';
 /// confirmation, and pasting a link into Chrome is a step people already know. The URL is also
 /// on screen in full, selectable, so a phone that refuses the clipboard still leaves something
 /// a person can read out.
+///
+/// ═══ ROUND 6: THE APP IS ON GOOGLE PLAY NOW ═══
+///
+/// The owner's words: "whenever I release an update, the old version has to show a popup update
+/// option and send them to the Play Store to update." So a newer build is now announced twice:
+/// once as a POPUP when the shell first draws (once per version per launch), and as the bar
+/// above the shell until it is updated or waved away. "Update now" opens this app's listing in
+/// the Play Store APP through MainActivity's market:// intent — still no browser. Google Play
+/// itself says a newer build exists ([playUpdateProvider]), so nothing has to be published by
+/// hand; the app_releases row still works for a build that must be mandatory. The install page
+/// stays as the fallback for a phone with no Play Store.
 
 /// Wraps a role's shell and puts a bar above it when a newer build exists.
 ///
 /// ═══ WHY IT WRAPS THE SHELL RATHER THAN LIVING INSIDE A HEADER ═══
 ///
-/// [RoleShell] is the single widget behind all five role homes — warden, manager and super
-/// admin delegate to their own shells from inside it, the owner and student draw theirs there.
-/// Wrapping it is therefore ONE mounting point that reaches every signed-in screen, instead of
-/// five edits in five feature directories that four future roles would have to remember.
+/// [RoleShell] is the single widget behind all five role homes, so wrapping it is ONE mounting
+/// point that reaches every signed-in screen.
 ///
-/// THE STATUS-BAR INSET MOVES WITH THE BAR. Every header — the forest `AppHeader`, and
-/// [GlassHeader] on the screens still built on it — adds `MediaQuery.paddingOf().top` to its
-/// own padding, so a bar placed above it would sit UNDER the clock and the battery icon
-/// while the header below reserved space for a notch that was no longer at the top of the
-/// screen. This widget takes the top inset itself and then removes it from the subtree, so the
-/// header underneath draws flush and nothing is counted twice.
-class UpdateBannerHost extends ConsumerWidget {
+/// THE STATUS-BAR INSET MOVES WITH THE BAR. Every header adds `MediaQuery.paddingOf().top` to its
+/// own padding, so this widget takes the top inset itself and removes it from the subtree.
+class UpdateBannerHost extends ConsumerStatefulWidget {
   const UpdateBannerHost({super.key, required this.child});
 
   final Widget child;
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final status = ref.watch(updateStatusProvider);
-    final release = ref.watch(latestReleaseProvider).value;
+  /// The offer this run has already shown the popup for. Static: the shell is rebuilt as the
+  /// person changes role tabs, and the popup is once per version per launch, not per rebuild.
+  static Object? prompted;
 
-    // upToDate and unknown both draw nothing. See UpdateStatus: a check that has not answered,
-    // or could not, is silence — not an error message about a question nobody asked.
-    final showing = release != null &&
-        (status == UpdateStatus.available || status == UpdateStatus.required);
-    if (!showing) return child;
+  @override
+  ConsumerState<UpdateBannerHost> createState() => _UpdateBannerHostState();
+}
+
+class _UpdateBannerHostState extends ConsumerState<UpdateBannerHost> {
+  void _maybePrompt(UpdateOffer offer) {
+    final key = offer.versionCode ?? offer.title;
+    if (!offer.showing || UpdateBannerHost.prompted == key) return;
+    UpdateBannerHost.prompted = key;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) showUpdatePrompt(context, offer);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final offer = ref.watch(updateOfferProvider);
+    // upToDate and unknown both draw nothing: a check that has not answered, or could not, is
+    // silence — not an error message about a question nobody asked.
+    if (!offer.showing) return widget.child;
+    _maybePrompt(offer);
 
     // Dismissal is keyed by version code, so waving away 1.0.1 says nothing about 1.1.0.
-    final dismissed = ref.watch(updateDismissalProvider) == release.versionCode;
-    if (status == UpdateStatus.available && dismissed) return child;
+    final code = offer.versionCode;
+    final dismissed = code != null && ref.watch(updateDismissalProvider) == code;
+    if (!offer.mandatory && dismissed) return widget.child;
 
     return Column(
       children: [
-        _UpdateBar(release: release, blocking: status == UpdateStatus.required),
+        _UpdateBar(offer: offer),
         Expanded(
-          child: MediaQuery.removePadding(
-            context: context,
-            removeTop: true,
-            child: child,
-          ),
+          child: MediaQuery.removePadding(context: context, removeTop: true, child: widget.child),
         ),
       ],
     );
   }
 }
 
-/// The bar itself. One row: icon, sentence, and either a chevron or a chevron plus a dismiss.
+/// Opens this app in the Play Store app; when that cannot happen, the sheet with the fallback.
+Future<void> openPlayStore(BuildContext context, WidgetRef ref) async {
+  final opened = await ref.read(appsLauncherProvider).openStore();
+  if (!opened && context.mounted) await showUpdateSheet(context);
+}
+
+/// The popup: "Update available", with Update now and (unless mandatory) Later.
+Future<void> showUpdatePrompt(BuildContext context, UpdateOffer offer) {
+  return showDialog<void>(
+    context: context,
+    barrierDismissible: !offer.mandatory,
+    builder: (ctx) => Consumer(
+      builder: (ctx, ref, _) {
+        final t = Theme.of(ctx);
+        return AlertDialog(
+          icon: Icon(Icons.system_update_rounded, color: t.colorScheme.primary, size: 40),
+          title: Text(
+            ctx.tr(offer.mandatory ? 'Update required' : 'Update available'),
+            textAlign: TextAlign.center,
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                ctx.tr('A new version of Apnivaas is on Google Play. Update now to get the '
+                    'latest features and fixes.'),
+                textAlign: TextAlign.center,
+              ),
+              if (offer.notes case final notes? when notes.isNotEmpty) ...[
+                const SizedBox(height: Space.sm),
+                Text(
+                  notes,
+                  textAlign: TextAlign.center,
+                  style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
+                ),
+              ],
+            ],
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            if (!offer.mandatory)
+              TextButton(
+                key: const Key('update-later'),
+                onPressed: () {
+                  final code = offer.versionCode;
+                  if (code != null) ref.read(updateDismissalProvider.notifier).dismiss(code);
+                  Navigator.of(ctx).pop();
+                },
+                child: Text(ctx.tr('Later')),
+              ),
+            FilledButton.icon(
+              key: const Key('update-now'),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                openPlayStore(context, ref);
+              },
+              icon: const Icon(Icons.shop_rounded, size: IconSize.md),
+              label: Text(ctx.tr('Update now')),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+/// The bar itself. One row: icon, sentence, and either a dismiss or a chevron.
 class _UpdateBar extends ConsumerWidget {
-  const _UpdateBar({required this.release, required this.blocking});
+  const _UpdateBar({required this.offer});
 
-  final AppRelease release;
-
-  /// `mandatory` on the release row. A blocking bar has NO dismiss control — the flag means the
-  /// build being replaced gets something wrong, and a close button on that is a close button on
-  /// the fix. It is constrained in the database too: a mandatory release must have a download
-  /// URL, so this bar can never be an exit-less screen with nowhere to go.
-  final bool blocking;
+  /// A mandatory offer has NO dismiss control: the flag means the build being replaced gets
+  /// something wrong, and a close button on that is a close button on the fix.
+  final UpdateOffer offer;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
-    // Two registers, because they are two different events. An optional update is information
-    // (info blue); a mandatory one is something to act on now (the warning gold).
+    final blocking = offer.mandatory;
+    // An optional update is information (info blue); a mandatory one is the warning gold.
     final tone = blocking ? context.tones.warning : context.tones.info;
     final label = blocking
-        ? 'Update required — Apnivaas ${release.versionName}'
-        : 'Apnivaas ${release.versionName} is available';
+        ? '${context.tr('Update required')} — ${offer.title}'
+        : '${offer.title} · ${context.tr('Update available')}';
 
     return Material(
       color: t.colorScheme.surface,
       child: Ink(
         decoration: BoxDecoration(
-          // The design's own chip recipe (ApnivaasSemantics.chipFill): a 10% tint of the tone,
-          // which is all this palette takes before 12px type on it stops clearing AA.
           color: context.tones.chipFill(tone),
           border: Border(
             bottom: BorderSide(color: tone.withValues(alpha: 0.32), width: Strokes.hairline),
           ),
         ),
         child: InkWell(
-          onTap: () => showUpdateSheet(context),
+          onTap: () => openPlayStore(context, ref),
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Space.md,
-              vertical: Space.sm,
-            ).add(EdgeInsets.only(top: MediaQuery.paddingOf(context).top)),
+            padding: const EdgeInsets.symmetric(horizontal: Space.md, vertical: Space.sm)
+                .add(EdgeInsets.only(top: MediaQuery.paddingOf(context).top)),
             child: Row(
               children: [
                 Icon(Icons.system_update_rounded, size: IconSize.md, color: tone),
@@ -141,15 +217,13 @@ class _UpdateBar extends ConsumerWidget {
                     children: [
                       Text(
                         label,
-                        style: t.textTheme.bodyMedium?.copyWith(
-                          color: tone,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: t.textTheme.bodyMedium
+                            ?.copyWith(color: tone, fontWeight: FontWeight.w600),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        'Tap to see how to install it',
+                        context.tr('Tap to update on Google Play'),
                         style: t.textTheme.bodySmall?.copyWith(color: context.tones.muted),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -157,12 +231,12 @@ class _UpdateBar extends ConsumerWidget {
                     ],
                   ),
                 ),
-                if (!blocking)
+                if (!blocking && offer.versionCode != null)
                   IconButton(
                     tooltip: 'Not now',
                     onPressed: () => ref
                         .read(updateDismissalProvider.notifier)
-                        .dismiss(release.versionCode),
+                        .dismiss(offer.versionCode!),
                     icon: Icon(Icons.close_rounded, size: IconSize.md, color: context.tones.muted),
                   )
                 else
@@ -176,12 +250,10 @@ class _UpdateBar extends ConsumerWidget {
   }
 }
 
-/// Opens the update sheet.
+/// The sheet behind "Update now" when the Play Store app could not be opened.
 ///
-/// The sheet is opened FIRST and reads the providers from inside its own build, rather than
-/// this function awaiting a value and then presenting it. Riverpod 3 throws
-/// UnmountedRefException across an await gap when nothing is listening, and that pattern has
-/// already cost this project a debugging session. Nothing here awaits anything.
+/// Opened FIRST and reading the providers from inside its own build: Riverpod 3 throws
+/// UnmountedRefException across an await gap when nothing is listening.
 Future<void> showUpdateSheet(BuildContext context) {
   return showGlassSheet<void>(context: context, builder: (_) => const _UpdateSheet());
 }
@@ -193,9 +265,9 @@ class _UpdateSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
     final installed = ref.watch(installedBuildProvider);
-    final async = ref.watch(latestReleaseProvider);
-    final release = async.value;
-    final status = ref.watch(updateStatusProvider);
+    final offer = ref.watch(updateOfferProvider);
+    final checking =
+        ref.watch(latestReleaseProvider).isLoading || ref.watch(playUpdateProvider).isLoading;
 
     return SingleChildScrollView(
       child: Column(
@@ -203,37 +275,29 @@ class _UpdateSheet extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            status == UpdateStatus.required
-                ? 'Update required'
-                : 'A new version of Apnivaas is ready',
+            context.tr(offer.mandatory ? 'Update required' : 'Update available'),
             style: t.textTheme.titleLarge,
           ),
           const SizedBox(height: Space.xs),
-
-          // BOTH NUMBERS, ALWAYS. "An update is available" is a claim; "you have build 1, build
-          // 4 is out" is a fact somebody can check against the install page, and it is the line
-          // that makes a support call two minutes instead of twenty.
+          // BOTH NUMBERS when both are known: a fact somebody can check.
           Text(
-            release == null
+            offer.versionCode == null
                 ? 'You are running ${installed.label}.'
                 : 'You are running ${installed.label}. '
-                    'The current build is ${release.label}.',
+                    '${offer.title} (build ${offer.versionCode}) is out.',
             style: t.textTheme.bodyMedium?.copyWith(color: context.tones.muted),
           ),
-
-          if (release?.notes case final notes? when notes.isNotEmpty) ...[
-            const SizedBox(height: Space.md),
-            FlatSurface(
-              weight: GlassWeight.regular,
-              padding: const EdgeInsets.all(Space.sm),
-              child: Text(notes, style: t.textTheme.bodyMedium),
-            ),
-          ],
-
+          const SizedBox(height: Space.md),
+          FilledButton.icon(
+            onPressed: () async {
+              final opened = await ref.read(appsLauncherProvider).openStore();
+              if (opened && context.mounted) Navigator.of(context).maybePop();
+            },
+            icon: const Icon(Icons.shop_rounded, size: IconSize.md),
+            label: Text(context.tr('Update now')),
+          ),
           const SizedBox(height: Space.lg),
-
-          // ── WHERE TO GET IT ──────────────────────────────────────────────
-          Text('Where to get it', style: t.textTheme.titleSmall),
+          Text('No Play Store on this phone?', style: t.textTheme.titleSmall),
           const SizedBox(height: Space.xs),
           Text(
             'Open this page in your phone browser. It has the download and the one Android '
@@ -251,40 +315,22 @@ class _UpdateSheet extends ConsumerWidget {
           ),
           const SizedBox(height: Space.sm),
           const _CopyLinkButton(),
-
           const SizedBox(height: Space.lg),
-
-          // ── THE PART THE OWNER CALLED "WITHOUT ANY ERROR" ────────────────
-          Text('If Android refuses to install it', style: t.textTheme.titleSmall),
-          const SizedBox(height: Space.xs),
-          Text(
-            'Installing over the top only works when the new file is signed with the same key '
-            'as the one on your phone, and has a higher build number. Both are true of every '
-            'build published from the release script, so the normal case is that it just '
-            'replaces this app and your data stays.\n\n'
-            'If you see "App not installed", the file you downloaded was signed with a '
-            'different key — usually a test build. Do not keep retrying: uninstall Apnivaas '
-            'first, then install the downloaded file. You will have to sign in again '
-            'afterwards, and nothing kept on the server is lost.',
-            style: t.textTheme.bodyMedium?.copyWith(color: context.tones.muted),
-          ),
-
-          const SizedBox(height: Space.lg),
-
           Row(
             children: [
-              // A CONTROL THAT DOES SOMETHING VISIBLE: invalidating re-runs the read, this
-              // sheet is watching it, and the numbers above redraw from the answer.
               TextButton(
-                onPressed: async.isLoading
+                onPressed: checking
                     ? null
-                    : () => ref.invalidate(latestReleaseProvider),
-                child: Text(async.isLoading ? 'Checking…' : 'Check again'),
+                    : () {
+                        ref.invalidate(latestReleaseProvider);
+                        ref.invalidate(playUpdateProvider);
+                      },
+                child: Text(checking ? 'Checking…' : 'Check again'),
               ),
               const Spacer(),
               TextButton(
                 onPressed: () => Navigator.of(context).maybePop(),
-                child: const Text('Close'),
+                child: Text(context.tr('Close')),
               ),
             ],
           ),
@@ -294,12 +340,9 @@ class _UpdateSheet extends ConsumerWidget {
   }
 }
 
-/// Copy, with a confirmation that lasts long enough to be read.
-///
-/// Same shape as the copy buttons in the security screen and the credentials dialogs, and for
-/// the same reason: `Clipboard.setData` crosses a MethodChannel and CAN throw, and a copy that
-/// silently did not happen is worse than one that says so — the person walks away believing
-/// they have the link.
+/// Copy, with a confirmation that lasts long enough to be read. `Clipboard.setData` crosses a
+/// MethodChannel and CAN throw, and a copy that silently did not happen is worse than one that
+/// says so.
 class _CopyLinkButton extends StatefulWidget {
   const _CopyLinkButton();
 
@@ -333,7 +376,7 @@ class _CopyLinkButtonState extends State<_CopyLinkButton> {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.icon(
+    return OutlinedButton.icon(
       onPressed: _copy,
       icon: Icon(_copied ? Icons.check_rounded : Icons.copy_rounded, size: IconSize.md),
       label: Text(_copied ? 'Link copied' : 'Copy the link'),

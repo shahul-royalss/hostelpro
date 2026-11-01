@@ -266,7 +266,7 @@ export default function PrivacyPolicyPage() {
               ],
               [
                 "Your PG",
-                "Its name, type, who it is for, address, locality, city, pincode, floors and rooms; only if the owner sets it, its exact map position, from the phone's precise location or a pin; and its profile: a logo, up to six cover photos, a description, amenities and house rules",
+                "Its name, type, who it is for, address, locality, city, pincode, floors and rooms; only if the owner sets it, its exact map position, from the phone's precise location or a pin placed on a map, which people looking for a PG see while it is listed; and its profile: a logo, up to six cover photos, a description, amenities and house rules",
                 "The owner, by inference",
               ],
               [
@@ -562,7 +562,7 @@ export default function PrivacyPolicyPage() {
               ],
               [
                 "Anyone signed in who is looking for a PG",
-                "The PG's name, type, who it is for, locality, city, distance, logo, cover photos, description, amenities, house rules, how many beds are free in each room type (a count, never which bed or who is in the others), rating and reviews, each review with the reviewer's first name — never its full address, its map position or the Owner's contact details. A PG appears while it is listed and its plan or free month is running. The Owner can read reviews but not change or remove them",
+                "The PG's name, type, who it is for, locality, city, distance, logo, cover photos, description, amenities, house rules, whether any bed is free (never how many, which bed or who is in the others), its map pin if the Owner set one, which they can open in Google Maps, rating and reviews, each review with the reviewer's first name — never its street address or the Owner's contact details. A PG appears while it is listed and its plan or free month is running. The Owner can read reviews but not change or remove them",
               ],
               [
                 "Platform administrator",
@@ -615,7 +615,17 @@ export default function PrivacyPolicyPage() {
               [
                 "Truecaller",
                 "Only if the app offers Continue with Truecaller and you choose it: confirming your phone number when you sign in",
-                "The fact that you signed in to this app; it shares your verified phone number, name and Truecaller ID with us",
+                "The fact that you signed in to this app; it shares your verified phone number, name and Truecaller ID with us. It runs through the Truecaller app on your phone",
+              ],
+              [
+                "Esri and OpenStreetMap",
+                "The map pictures in the app, when an Owner places the PG's pin or a PG's page shows it: satellite imagery from Esri and the street map from OpenStreetMap",
+                "Like any website, your phone's IP address and which part of the map is on screen; never your name or your account",
+              ],
+              [
+                "Google Play and Google Maps",
+                "Telling the app whether a newer version is available, so it can offer the update; and, when you choose Open in Google Maps, showing a PG's pin in the Google Maps app",
+                "For the update check, the fact that the app asked; for a map, the pin you open, under Google's own policy",
               ],
             ]}
           />

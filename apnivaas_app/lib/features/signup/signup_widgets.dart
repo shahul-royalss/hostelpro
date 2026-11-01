@@ -5,8 +5,11 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/i18n/i18n.dart';
+import '../../core/router/routes.dart';
 import '../../core/theme/tokens.dart';
 import '../auth/auth_scaffold.dart';
 
@@ -73,26 +76,67 @@ class SignupPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return AuthScaffold(
+    final back = onBack;
+    final page = AuthScaffold(
       footer: footer,
       topBar: AuthTopBar(
-        leading: onBack == null
+        leading: back == null
             ? null
             : IconButton(
-                tooltip: 'Back',
+                key: const Key('signup-back'),
+                tooltip: context.tr('Back'),
                 icon: const Icon(Icons.arrow_back_rounded),
-                onPressed: onBack,
+                onPressed: back,
               ),
         trailing: showSignOut
             ? TextButton(
                 onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
-                child: const Text('Sign out'),
+                child: Text(context.tr('Sign out')),
               )
             : null,
       ),
       children: children,
     );
+    // Round 6: Android's own back button does what the arrow does. Every step is reached with
+    // go(), so without this the system back closed the app from the middle of sign-up.
+    if (back == null) return page;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) back();
+      },
+      child: page,
+    );
   }
+}
+
+/// THE BACK ARROW ON A STEP AFTER THE ACCOUNT EXISTS (round 6). The account cannot be un-made by
+/// going back, so back asks, then signs out and returns to "Who are you?". Signing in again with
+/// the same details continues at the step that was left.
+Future<void> leaveSignup(BuildContext context, WidgetRef ref) async {
+  final router = GoRouter.of(context);
+  final leave = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(ctx.tr('Go back to the start?')),
+      content: Text(ctx.tr('Your account is saved. Sign in with the same details any time to '
+          'finish from this step.')),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: Text(ctx.tr('Stay here')),
+        ),
+        FilledButton(
+          key: const Key('signup-leave'),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: Text(ctx.tr('Go back')),
+        ),
+      ],
+    ),
+  );
+  if (leave != true) return;
+  await ref.read(authControllerProvider.notifier).signOut();
+  router.go(startRoute);
 }
 
 /// THE WORDS BEFORE THE SYSTEM PROMPT. Answers true only on an explicit "Continue".

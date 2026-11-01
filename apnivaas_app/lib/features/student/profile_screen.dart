@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../signup/tenant/find_pg_screen.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/router/router.dart';
 import '../../core/theme/tokens.dart';
@@ -156,6 +157,13 @@ class _Profile extends ConsumerWidget {
                 label: 'Your PG\'s page',
                 caption: 'Photos, amenities and reviews, as people looking for a PG see them.',
                 onTap: () => Navigator.of(context).push(PgProfilePage.route(me.hostelId)),
+              ),
+              // Round 6: other PGs too — to look at; moving needs a check-out first.
+              _AccountRow(
+                art: ClayIcons.gate,
+                label: 'Find a PG',
+                caption: 'Search other PGs on Apnivaas: photos, reviews, beds and the map.',
+                onTap: () => Navigator.of(context).push(FindPgScreen.browseRoute()),
               ),
             ],
           ),

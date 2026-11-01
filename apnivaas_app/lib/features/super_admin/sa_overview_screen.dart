@@ -63,7 +63,9 @@ class SaOverviewScreen extends ConsumerWidget {
     return SaScreen(
       title: 'Platform overview',
       masthead: true,
-      subtitle: _greeting(ref.watch(sessionProvider)?.fullName),
+      // The NAME, not a sentence: the masthead greets with it and draws the initials from it.
+      // Handing it "Good afternoon, Platform" put "Hello Good" and "GP" in the header (round 6).
+      subtitle: ref.watch(sessionProvider)?.fullName,
       actions: [
         // Two-factor enrolment. Every role's header carries one — see
         // features/settings/security_screen.dart.
@@ -129,12 +131,6 @@ class SaOverviewScreen extends ConsumerWidget {
     );
   }
 
-  static String _greeting(String? fullName) {
-    final hour = DateTime.now().hour;
-    final part = hour < 12 ? 'Good morning' : (hour < 17 ? 'Good afternoon' : 'Good evening');
-    final name = (fullName ?? '').trim();
-    return name.isEmpty ? part : '$part, ${name.split(RegExp(r'\s+')).first}';
-  }
 }
 
 /// The KPI block and the subscription-health bar — 4:140 and 4:160.
@@ -150,7 +146,10 @@ class _Platform extends ConsumerWidget {
         // 4:141 and 4:150 — two rows of two, 8dp apart, in the mockup's own order.
         _KpiRow(
           left: SaKpiTile(
+            icon: ClayIcons.money,
             label: 'Subscription revenue',
+            caption: 'Started or renewed this month',
+            onTap: () => ref.read(saTabProvider.notifier).go(SaTabs.subscriptions),
             value: money(stats.monthlySubscriptionRevenue),
             // Says exactly what the SQL sums: rows CREATED this calendar month, which is new
             // sales plus renewals — not a recurring monthly figure. Labelling the tile "MRR"
@@ -159,7 +158,10 @@ class _Platform extends ConsumerWidget {
                 'calendar month: ${money(stats.monthlySubscriptionRevenue)}',
           ),
           right: SaKpiTile(
+            icon: ClayIcons.rooms,
             label: 'Hostels',
+            caption: '${count(stats.activeSubs)} on an active plan',
+            onTap: () => ref.read(saTabProvider.notifier).go(SaTabs.hostels),
             value: count(stats.totalHostels),
             semantics: 'Hostels on Apnivaas: ${count(stats.totalHostels)}',
           ),
@@ -167,13 +169,18 @@ class _Platform extends ConsumerWidget {
         const SizedBox(height: Space.xs),
         _KpiRow(
           left: SaKpiTile(
+            icon: ClayIcons.roleOwner,
             label: 'Owners',
+            caption: 'Accounts that run a PG',
+            onTap: () => ref.read(saTabProvider.notifier).go(SaTabs.hostels),
             value: count(stats.totalOwners),
             semantics: 'Owner accounts that can sign in and run a property: '
                 '${count(stats.totalOwners)}',
           ),
           right: SaKpiTile(
+            icon: ClayIcons.beds,
             label: 'Residents',
+            caption: 'Living in every PG today',
             value: count(stats.totalStudents),
             semantics: 'Residents in residence across every hostel: '
                 '${count(stats.totalStudents)}',

@@ -71,6 +71,20 @@ val facebookAppId = System.getenv("FACEBOOK_APP_ID") ?: facebookProps.getPropert
 val facebookClientToken =
     System.getenv("FACEBOOK_CLIENT_TOKEN") ?: facebookProps.getProperty("clientToken") ?: ""
 
+/*
+ * TRUECALLER (round 6). The SDK reads its client ID from the manifest, and the Dart side shows
+ * "Continue with Truecaller" only when TRUECALLER_CLIENT_ID was compiled in. One source for both:
+ * the same --dart-define, which the Flutter Gradle plugin hands over base64-encoded.
+ */
+val dartDefines: Map<String, String> = (project.findProperty("dart-defines") as String?)
+    ?.split(",")
+    ?.mapNotNull { runCatching { String(java.util.Base64.getDecoder().decode(it)) }.getOrNull() }
+    ?.mapNotNull { d -> d.split("=", limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
+    ?.toMap()
+    ?: emptyMap()
+val truecallerClientId =
+    dartDefines["TRUECALLER_CLIENT_ID"] ?: System.getenv("TRUECALLER_CLIENT_ID") ?: ""
+
 android {
     namespace = "com.nivorasr.app"
     /*
@@ -142,6 +156,7 @@ android {
         resValue("string", "facebook_app_id", facebookAppId)
         resValue("string", "facebook_client_token", facebookClientToken)
         resValue("string", "fb_login_protocol_scheme", "fb$facebookAppId")
+        resValue("string", "truecaller_client_id", truecallerClientId)
 
         // ── A SINGLE-ABI BUILD MUST PACKAGE A SINGLE ABI ────────────────────────────────────
         //
@@ -212,6 +227,9 @@ dependencies {
     // Pinned, not ranged: a floating version here is a build that can break on a machine that
     // has never seen this project, on a day nobody touched it.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    // Round 6: Google Play's in-app update check, so an old build learns a newer one is on Play
+    // (MainActivity "apnivaas/apps" → checkUpdate). Pinned for the same reason as above.
+    implementation("com.google.android.play:app-update:2.1.0")
 }
 
 /*

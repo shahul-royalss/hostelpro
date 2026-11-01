@@ -1,14 +1,15 @@
-# Releasing Apnivaas 1.4.0 on Google Play: step by step
+# Releasing Apnivaas 1.4.1 on Google Play: step by step
 
-The file to upload is **`dist/APNIVAAS-1.4.0-b14.aab`** (version 1.4.0, version code 14, signed with the upload key).
-If you never uploaded 1.3.0, upload this one instead; Play only needs the newest.
+The file to upload is **`dist/APNIVAAS-1.4.1-b15.aab`** (version 1.4.1, version code 15, signed with the upload key).
+If build 14 (1.4.0) was never uploaded, upload this one instead; Play only needs the newest. If a draft
+release with build 14 is open in Production, remove build 14 from it and add build 15.
 Do the steps in order. Each one says where to click.
 
 ---
 
 ## Before you start (5 minutes)
 1. **Check the website is updated.** Open https://hostelpro-three.vercel.app/legal/privacy and confirm it says
-   **31 October 2026**. Vercel deploys about 2 minutes after the GitHub push. If the page still shows an older date,
+   **1 November 2026**. Vercel deploys about 2 minutes after the GitHub push. If the page still shows an older date,
    open vercel.com → project → Deployments and wait for the newest deployment to turn green.
 2. **Razorpay:** dashboard.razorpay.com → Settings → Webhooks → open the Apnivaas webhook → make sure
    **payment.captured** and **order.paid** are both ticked → Save.
@@ -21,15 +22,15 @@ Do the steps in order. Each one says where to click.
 1. Go to **play.google.com/console** → choose the **ShaReshi Tech** account → open **Apnivaas**.
 2. Left menu: **Test and release → Production** (or **Testing → Internal testing** if you want to try it with
    your own phone first, which is recommended). Click **Create new release**.
-3. **App bundles → Upload** → choose `dist/APNIVAAS-1.4.0-b14.aab`. Wait for "1.4.0 (14)" to appear.
-4. **Release name:** `1.4.0 (14)`.
+3. **App bundles → Upload** → choose `dist/APNIVAAS-1.4.1-b15.aab`. Wait for "1.4.1 (15)" to appear.
+4. **Release name:** `1.4.1 (15)`.
 5. **Release notes** (paste under `<en-IN>`):
    ```
-   • Apnivaas now speaks English, Hindi, Telugu, Tamil, Malayalam and Kannada
-   • Continue with Facebook, and Google sign-in for managers and wardens too
-   • Forgot your password? The email link now opens a screen to set a new one
-   • Owners: PG profile with logo, photos and amenities; assign beds and record payments
-   • Tenants: see free beds before asking to join, rate your PG, and one Pay now button
+   • English, Hindi, Telugu, Tamil, Malayalam and Kannada, switchable on the sign-in screen
+   • Sign in with Google, Facebook or Truecaller
+   • Owners drop the PG's exact pin on a satellite map; tenants open it in Google Maps
+   • Tenants browse PGs and see whether beds are available before asking to join
+   • Back buttons on every sign-up step, and an update reminder when a new version is out
    ```
 6. Click **Next**. Read the warnings. Warnings in yellow are fine; red errors must be fixed. Then **Save**.
    Don't send it for review yet. Finish section B first.
@@ -80,7 +81,7 @@ Open each item below and press **Save** in each one.
 1. Keep the name **Apnivaas** and the short and full descriptions. Add one line about "create your account
    and pay rent by UPI" if you like.
 2. **Phone screenshots:** replace them with new ones of the redesigned app, at least 4: sign-in, owner home,
-   tenant home and payments. Take them on your phone with build 14 installed. Use portrait, 1080×1920 or larger.
+   tenant home and payments. Take them on your phone with build 15 installed. Use portrait, 1080×1920 or larger.
 3. **Save**.
 
 ---
@@ -96,11 +97,15 @@ Open each item below and press **Save** in each one.
 ## E. After it is live
 - Install it from the Play Store on a phone that does **not** have the test APK; uninstall the test APK first.
   Check Google sign-in. It works because the Play signing key's fingerprint is registered with Google.
-- **Facebook is live in 1.4.0.** "Continue with Facebook" signs in through the Facebook app on the
-  phone, so test it on a phone that has the Facebook app. **Truecaller** still waits for Truecaller's
-  review; when they approve it, the next version adds it.
+- **Facebook** signs in through the Facebook app on the phone, so test it on a phone that has it.
+- **Truecaller is in 1.4.1.** It works once Truecaller has approved the app in its developer console
+  (developer.truecaller.com → your app) with package `com.nivorasr.app` and the SHA-1 fingerprints of
+  BOTH keys: the upload key and the Play app signing key (Play Console → Test and release → Setup →
+  App signing). Until then the button answers "Truecaller could not sign you in".
+- **Update popup.** From 1.4.1 on, an older build shows "Update available" when Play has a newer
+  version and opens the Play Store app. Builds 12–14 do not have it; they learn by Play's own updates.
 
 ## If something goes wrong
-- **"Version code 14 has already been used"**: ask me for a new build with the next number.
+- **"Version code 15 has already been used"**: ask me for a new build with the next number.
 - **Data safety rejected**: Play's email names the field. Compare it with the table above and `docs/data-safety.md`.
 - **App access rejected**: the reviewer couldn't sign in. Check that the login you gave works on a fresh phone.

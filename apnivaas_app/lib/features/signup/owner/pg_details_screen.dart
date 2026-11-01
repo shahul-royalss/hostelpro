@@ -4,6 +4,7 @@
 /// own sentences; a sentence whose `hint` names a field is shown under that field.
 library;
 
+import '../../common/map_pin.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -76,8 +77,8 @@ class _PgDetailsScreenState extends ConsumerState<PgDetailsScreen> {
             context,
             title: 'Use your location?',
             message: 'Apnivaas will ask your phone for your exact location to pin your PG '
-                'on the map, so tenants nearby can find it. You can skip this and type the '
-                'address only.',
+                'on the map. Tenants looking for a PG see the pin and can open it in Google '
+                'Maps. You can skip this and type the address only.',
           ),
         );
     if (!mounted) return;
@@ -91,6 +92,16 @@ class _PgDetailsScreenState extends ConsumerState<PgDetailsScreen> {
         case LocationUnavailable(:final message):
           _locationNote = message;
       }
+    });
+  }
+
+  /// Round 6: drop the pin exactly, on a map.
+  Future<void> _pickOnMap() async {
+    final fix = await pickPinOnMap(context, latitude: _pin?.latitude, longitude: _pin?.longitude);
+    if (fix == null || !mounted) return;
+    setState(() {
+      _pin = fix;
+      _locationNote = null;
     });
   }
 
@@ -176,6 +187,7 @@ class _PgDetailsScreenState extends ConsumerState<PgDetailsScreen> {
     Widget gap() => const SizedBox(height: Space.sm);
     return SignupPage(
       showSignOut: true,
+      onBack: _busy ? null : () => leaveSignup(context, ref),
       children: [
         const SizedBox(height: Space.md),
         const StepIndicator(step: 4),
@@ -318,6 +330,7 @@ class _PgDetailsScreenState extends ConsumerState<PgDetailsScreen> {
           pinned: _pin != null,
           busy: _locating,
           onUse: _busy || _locating ? null : _useLocation,
+          onMap: _busy || _locating ? null : _pickOnMap,
           onClear: _busy ? null : () => setState(() => _pin = null),
         ),
         if (_locationNote != null) ...[
@@ -360,12 +373,14 @@ class _LocationRow extends StatelessWidget {
     required this.pinned,
     required this.busy,
     required this.onUse,
+    required this.onMap,
     required this.onClear,
   });
 
   final bool pinned;
   final bool busy;
   final VoidCallback? onUse;
+  final VoidCallback? onMap;
   final VoidCallback? onClear;
 
   @override
@@ -376,18 +391,32 @@ class _LocationRow extends StatelessWidget {
         children: [
           Icon(Icons.place_rounded, color: t.colorScheme.primary),
           const SizedBox(width: Space.xs),
-          Expanded(child: Text('Map pin added from your location', style: t.textTheme.bodyMedium)),
+          Expanded(child: Text('Map pin set', style: t.textTheme.bodyMedium)),
+          TextButton(onPressed: onMap, child: const Text('Adjust')),
           TextButton(onPressed: onClear, child: const Text('Remove')),
         ],
       );
     }
-    return OutlinedButton.icon(
-      onPressed: onUse,
-      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-      icon: busy
-          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-          : const Icon(Icons.my_location_rounded),
-      label: const Text('Use my current location (optional)'),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FilledButton.tonalIcon(
+          key: const Key('signup-pin-map'),
+          onPressed: onMap,
+          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+          icon: const Icon(Icons.map_rounded),
+          label: const Text('Set the pin on the map (optional)'),
+        ),
+        const SizedBox(height: Space.xs),
+        OutlinedButton.icon(
+          onPressed: onUse,
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+          icon: busy
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.my_location_rounded),
+          label: const Text('Use my current location'),
+        ),
+      ],
     );
   }
 }

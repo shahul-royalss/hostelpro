@@ -26,6 +26,9 @@ const PUBLIC_PATHS = [
   // cases, not signed into the web app at all, and behind the session gate every confirmation
   // would land on /login looking like a failure.
   "/verify-email",
+  // Round 6: the app's "no Play Store on this phone?" fallback copies this address. It only
+  // points at the Play listing, so a person who is not signed in must be able to read it.
+  "/install",
   "/manifest.webmanifest",
   "/icons",
   "/api/health",

@@ -7,6 +7,7 @@
 /// failed save does not upload it twice.
 library;
 
+import '../../common/map_pin.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -271,8 +272,8 @@ class _EditorState extends ConsumerState<_Editor> {
             context,
             title: 'Use your location?',
             message: 'Stand at your PG. Apnivaas will ask your phone for your exact location to '
-                'pin it on the map, so tenants nearby can find it. They see how far away it is, '
-                'never the pin itself.',
+                'pin it on the map. Tenants looking for a PG see the pin on your PG\'s page and '
+                'can open it in Google Maps.',
           ),
         );
     if (!mounted) return;
@@ -286,6 +287,21 @@ class _EditorState extends ConsumerState<_Editor> {
         case LocationUnavailable(:final message):
           _pinNote = message;
       }
+    });
+  }
+
+  /// Round 6: drop the pin exactly, on a map.
+  Future<void> _pickOnMap() async {
+    final start = _pin;
+    final fix = await pickPinOnMap(
+      context,
+      latitude: start?.latitude ?? _base.latitude,
+      longitude: start?.longitude ?? _base.longitude,
+    );
+    if (fix == null || !mounted) return;
+    setState(() {
+      _pin = fix;
+      _pinNote = null;
     });
   }
 
@@ -586,8 +602,8 @@ class _EditorState extends ConsumerState<_Editor> {
                                 ),
                                 const SizedBox(height: Space.hair),
                                 Text(
-                                  'Tenants nearby see how far your PG is, never the pin. '
-                                  'Stand at the PG to set it.',
+                                  'Tenants looking for a PG see this pin on your PG\'s page '
+                                  'and can open it in Google Maps.',
                                   style: muted,
                                 ),
                               ],
@@ -596,6 +612,13 @@ class _EditorState extends ConsumerState<_Editor> {
                         ],
                       ),
                       const SizedBox(height: Space.sm),
+                      FilledButton.tonalIcon(
+                        key: const Key('pg-pin-map'),
+                        onPressed: saving || _locating ? null : _pickOnMap,
+                        icon: const Icon(Icons.map_rounded, size: IconSize.sm),
+                        label: Text(pinned ? 'Move the pin on the map' : 'Set the pin on the map'),
+                      ),
+                      const SizedBox(height: Space.xs),
                       OutlinedButton.icon(
                         onPressed: saving || _locating ? null : _usePin,
                         icon: _locating
