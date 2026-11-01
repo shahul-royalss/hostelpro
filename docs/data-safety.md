@@ -508,9 +508,11 @@ Built per `docs/round6-api.md`; migration `db/migrations/2026-11-01-round6.sql`;
   see the IP address and the map area, as any web request does. Nothing is sent with the user's
   identity, so it is not "collected" or "shared" in Play's definitions (§1). Named in the privacy policy.
 - **Truecaller SDK (`truecaller_sdk`, truecaller-sdk 3.x).** Sign-in only, `OPTION_VERIFY_ONLY_TC_USERS`.
-  The verified phone number, name and Truecaller ID were already declared for sign-in (§3.7). Re-count
-  the merged manifest: if the SDK merges any phone or call-log permission, remove it with
-  `tools:node="remove"` before release; the count must stay thirteen.
+  The verified phone number, name and Truecaller ID were already declared for sign-in (§3.7). The SDK
+  merges ONE permission, `com.truecaller.permission.sdk.internal.read_account_state` (asks the
+  Truecaller app whether the person is signed in to it; without it the OAuth flow reports itself
+  unusable). The count is now FOURTEEN, and both copies of the privacy policy name it. No phone,
+  call-log or SMS permission is merged.
 - **Play in-app update check (`com.google.android.play:app-update`).** Asks Google Play whether a newer
   version exists. Sends nothing of ours; adds no permission.
 

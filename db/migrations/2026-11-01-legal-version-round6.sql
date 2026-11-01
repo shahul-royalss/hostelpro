@@ -12,7 +12,9 @@ values (
   'A listed PG''s page now shows the map pin its owner placed, which you can open in Google Maps, and says '
   'only whether a bed is free, never how many. Maps in the app come from Esri (satellite) and OpenStreetMap, '
   'which see your phone''s IP address and the part of the map on screen. Continue with Truecaller works '
-  'through the Truecaller app. Google Play tells the app when a newer version is available.'
+  'through the Truecaller app, and the app declares one more Android permission for it (fourteen in all), '
+  'which only asks the Truecaller app whether you are signed in to it. Google Play tells the app when a newer '
+  'version is available.'
 )
 on conflict (version) do update
   set effective_at = excluded.effective_at,

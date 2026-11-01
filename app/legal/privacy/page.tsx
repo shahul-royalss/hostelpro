@@ -351,7 +351,7 @@ export default function PrivacyPolicyPage() {
             </li>
             <li>
               <strong>No location history, no device contacts, no calendar, no biometric data, no
-              advertising identifier.</strong> The Android build declares thirteen permissions and
+              advertising identifier.</strong> The Android build declares fourteen permissions and
               no others. Seven are ours: internet access; the ability to tell whether you are
               online; the camera, used only when you choose to photograph yourself, an identity
               document, a receipt, a complaint or your PG, and never opened on its own; permission
@@ -371,7 +371,9 @@ export default function PrivacyPolicyPage() {
               device, vibrating, receiving the message and an internal, app-scoped receiver
               permission. The last two come from Razorpay&rsquo;s checkout SDK: NFC, so a payment
               card can be tapped, and a basic phone-state permission. {APP_NAME} reads neither of
-              Razorpay&rsquo;s two. The advertising-ID permission is stripped from the build
+              Razorpay&rsquo;s two. One comes from Truecaller&rsquo;s sign-in: it lets the app ask the
+              Truecaller app on your phone whether you are signed in to it, and is used only when
+              you tap Continue with Truecaller. The advertising-ID permission is stripped from the build
               explicitly, so that no future dependency can quietly reintroduce it.
             </li>
             <li>

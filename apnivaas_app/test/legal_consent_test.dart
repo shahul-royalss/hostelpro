@@ -572,13 +572,14 @@ void main() {
 
   // The policy promises a fixed list of Android permissions. The count of OUR permissions is the
   // one part Dart can check: the <uses-permission> lines in the app's own manifest that are not
-  // tools:node="remove". The other six (FCM's four, Razorpay's two) arrive by manifest merge and
+  // tools:node="remove". The other seven (FCM's four, Razorpay's two, Truecaller's one) arrive by manifest merge and
   // are re-counted in the release build. If a permission is added or dropped, this fails until
   // both copies of the policy are corrected and the version is bumped.
   group('the permission sentence matches the manifest', () {
     const words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
-    // Ours plus the six that arrive by merge (FCM's four, Razorpay's two).
-    const totals = {10: 'ten', 11: 'eleven', 12: 'twelve', 13: 'thirteen'};
+    // Ours plus the seven that arrive by merge (FCM's four, Razorpay's two, and since round 6
+    // Truecaller's account-state permission).
+    const totals = {11: 'eleven', 12: 'twelve', 13: 'thirteen', 14: 'fourteen'};
     final manifest = File('android/app/src/main/AndroidManifest.xml');
 
     int ownPermissions() {
@@ -599,7 +600,7 @@ void main() {
       expect(privacy.contains('$capital are $kLegalProductName' "'s own"), isTrue,
           reason: 'the app policy does not say "$capital are ...\'s own"; the manifest declares '
               '$own of our own');
-      expect(privacy.contains('${totals[own + 6]} permissions and no others'), isTrue);
+      expect(privacy.contains('${totals[own + 7]} permissions and no others'), isTrue);
       expect(privacy.contains('precise location'), isTrue);
     });
 
@@ -611,7 +612,7 @@ void main() {
       final capital = words[own][0].toUpperCase() + words[own].substring(1);
       expect(source.contains('$capital are ours'), isTrue,
           reason: 'the web policy does not say "$capital are ours"');
-      expect(source.contains('${totals[own + 6]} permissions and no others'), isTrue);
+      expect(source.contains('${totals[own + 7]} permissions and no others'), isTrue);
     });
   });
 }

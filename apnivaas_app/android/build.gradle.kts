@@ -68,6 +68,16 @@ subprojects {
 subprojects {
     project.evaluationDependsOn(":app")
 }
+// Round 6: truecaller_sdk declares resValue strings in its defaultConfig, and AGP 9 leaves the
+// resValues feature off for libraries ("defaultConfig contains custom resource values, but the
+// feature is disabled"). Switched on for every Android library as it is applied.
+subprojects {
+    plugins.withId("com.android.library") {
+        (extensions.findByName("android") as? com.android.build.api.dsl.LibraryExtension)
+            ?.buildFeatures
+            ?.resValues = true
+    }
+}
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)

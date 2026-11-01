@@ -1,3 +1,4 @@
+import java.util.Base64
 import java.util.Properties
 
 plugins {
@@ -78,8 +79,11 @@ val facebookClientToken =
  */
 val dartDefines: Map<String, String> = (project.findProperty("dart-defines") as String?)
     ?.split(",")
-    ?.mapNotNull { runCatching { String(java.util.Base64.getDecoder().decode(it)) }.getOrNull() }
-    ?.mapNotNull { d -> d.split("=", limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
+    ?.mapNotNull<String, Pair<String, String>> { encoded ->
+        val decoded = runCatching { String(Base64.getDecoder().decode(encoded)) }.getOrNull()
+        val parts = decoded?.split("=", limit = 2)
+        if (parts != null && parts.size == 2) Pair(parts[0], parts[1]) else null
+    }
     ?.toMap()
     ?: emptyMap()
 val truecallerClientId =

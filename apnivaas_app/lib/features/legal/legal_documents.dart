@@ -74,8 +74,8 @@ library;
 /// 2026-11-01 (round 6): a listed PG's page shows the owner's map pin, which a tenant can open in
 /// Google Maps, and says only whether a bed is free (never how many); maps come from Esri
 /// (satellite) and OpenStreetMap; Truecaller sign-in runs through the Truecaller app; Google
-/// Play tells the app when a newer version exists. The permission count is unchanged. Row:
-/// db/migrations/2026-11-01-legal-version-round6.sql.
+/// Play tells the app when a newer version exists. The permission count goes to fourteen: the
+/// Truecaller SDK's account-state permission. Row: db/migrations/2026-11-01-legal-version-round6.sql.
 const kLegalVersion = '2026-11-01';
 
 /// Human-readable form of [kLegalVersion], for the "last updated" line.
@@ -406,7 +406,7 @@ const kPrivacyPolicy = LegalDocument(
               'ID: $kLegalProductName never receives or holds that money, and stores only the '
               'UTR, amount and month you enter.',
           'No location history, and no contacts, calendar, microphone or biometric data. The '
-              'Android app declares thirteen permissions and no others. Seven are '
+              'Android app declares fourteen permissions and no others. Seven are '
               '$kLegalProductName\'s own: internet access; the ability to tell whether you are '
               'online; the camera, used only when you choose to take a photo of yourself, an '
               'identity document, a resident, a receipt or your PG; permission to show '
@@ -418,8 +418,10 @@ const kPrivacyPolicy = LegalDocument(
               'run the app: waking the device, vibrating, receiving a message, and an internal '
               'permission only this app can hold. The last two come from Razorpay\'s checkout: '
               'NFC, so a payment card can be tapped, and a basic phone-state permission; '
-              '$kLegalProductName reads neither. The advertising-ID permission is removed from the '
-              'app explicitly.',
+              '$kLegalProductName reads neither. One comes from Truecaller\'s sign-in: it lets the '
+              'app ask the Truecaller app on your phone whether you are signed in to it, and is '
+              'used only when you tap Continue with Truecaller. The advertising-ID permission is '
+              'removed from the app explicitly.',
           'No advertising, no advertising identifier and no profiling. Nothing here is used to '
               'build a picture of you or to make an automated decision about you.',
           // NOT "there is no third-party tracking code in the app". That sentence was true of the
