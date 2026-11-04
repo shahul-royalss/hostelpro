@@ -148,6 +148,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
       throw new HttpError(404, "Your student record could not be found. Contact your warden.");
     }
 
+    // 2026-11-04: Razorpay takes rent only for the PGs that keep it (hostels.rent_gateway, the
+    // PGs of owner Rukesh Akanambattu); every other PG uses Cashfree (functions/cashfree-order).
+    const { data: gatewayRow, error: gatewayError } = await supabase
+      .from("hostels")
+      .select("rent_gateway")
+      .eq("id", student.hostel_id)
+      .maybeSingle();
+    if (gatewayError) throw dbError(gatewayError);
+    if ((gatewayRow as { rent_gateway?: string } | null)?.rent_gateway !== "razorpay") {
+      throw new HttpError(409, "Your PG takes rent through Cashfree. Please update the app and tap Pay now.");
+    }
+
     const period = currentPeriodMonth();
 
     // ── 3. THE AMOUNT. Derived here; re-derived by the database in step 6. ────

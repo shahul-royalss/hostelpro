@@ -14,6 +14,7 @@ import 'sa_payout_card.dart';
 import 'data/sa_models.dart';
 import 'data/sa_providers.dart';
 import 'widgets/sa_ui.dart';
+import 'sa_rent_payments_screen.dart';
 
 /// One hostel, as the platform sees it.
 ///
@@ -119,6 +120,16 @@ class _Detail extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // 2026-11-04: Cashfree rent payments for this PG, with Refund for disputes.
+        Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: TextButton.icon(
+            key: const Key('sa-online-payments'),
+            onPressed: () => Navigator.of(context).push(SaRentPaymentsScreen.route(hostel.hostelId, hostel.hostelName)),
+            icon: const Icon(Icons.payments_outlined),
+            label: const Text('Online payments'),
+          ),
+        ),
         // The consequence first. Everything below is reporting; this is the thing to act on.
         if (!hostel.isWritable) ...[
           _ReadOnlyBand(hostel: hostel),

@@ -600,8 +600,13 @@ export default function PrivacyPolicyPage() {
                 "Encrypted backup archives, retained 90 days",
               ],
               [
+                "Cashfree Payments",
+                "Taking rent paid in the app for most PGs and settling it to the PG Owner's own UPI ID (Cashfree Easy Split)",
+                "From a tenant who pays: name, phone, email and the amount; Cashfree's checkout runs inside the app and hands UPI payments to the UPI app the tenant picks, and those details never reach us. From an Owner who turns on online rent: legal name, email, phone, UPI ID, PAN and, if they have one, GSTIN, which Cashfree needs to verify them and settle to them. We keep the UPI ID and only the last four characters of the PAN, and receive back payment and settlement statuses, amounts, identifiers, bank references and UTRs. Cashfree keeps its own records under its own policy",
+              ],
+              [
                 "Razorpay",
-                "Processing an online rent payment, only when you choose to pay in the app, and an Owner's payment for an Apnivaas plan",
+                "Processing an online rent payment for the PGs that still take rent through Razorpay, and an Owner's payment for an Apnivaas plan",
                 "Your name, email and phone, so the payment can be attributed to you. On Android its checkout runs inside the app: while a payment is open it takes the card, UPI or netbanking details you type and checks which UPI apps are installed so it can offer them, and those details go to Razorpay, never to us. We receive back only the amount, the identifiers and the method, and Razorpay keeps its own record under its own policy",
               ],
               [

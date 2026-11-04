@@ -16,6 +16,8 @@ import '../../data/repositories/upi_repository.dart';
 import '../../shared/clay/clay.dart';
 import '../common/form_parts.dart';
 import '../payments/payments.dart' show payRent;
+import '../payments/cashfree/cashfree_pay_screen.dart' show CashfreePayScreen;
+import '../../data/repositories/cashfree_repository.dart';
 import 'stay_screens.dart' show stayErrorText;
 import 'student_providers.dart' show refreshStudentData;
 import 'widgets/format.dart' show monthLabel, rupees;
@@ -40,46 +42,50 @@ class PayNowButton extends ConsumerStatefulWidget {
 class _PayNowButtonState extends ConsumerState<PayNowButton> {
   bool _busy = false;
 
+  /// 2026-11-04: the PG's gateway decides. Razorpay for the PGs that keep it (Rukesh
+  /// Akanambattu's); Cashfree for every other PG, once its owner's Cashfree account is verified.
+  /// The "pay the owner's UPI ID and type the UTR" path is gone: Cashfree confirms rent
+  /// automatically instead of a warden confirming it by hand.
   Future<void> _pay() async {
     if (_busy) return;
     setState(() => _busy = true);
-    UpiSettings? upi;
     try {
-      upi = await ref.read(upiSettingsProvider(null).future).timeout(const Duration(seconds: 8));
-    } catch (_) {
-      // No answer about UPI: Razorpay still works and is priced by the server.
-    }
-    if (!mounted) return;
-    try {
-      if (upi != null) {
-        final sent = await showApnivaasSheet<bool>(
-          context: context,
-          builder: (_) =>
-              UpiPaySheet(settings: upi!, amount: widget.amount, periodMonth: widget.periodMonth),
-        );
-        if (sent == true && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            behavior: SnackBarBehavior.floating,
-            duration: Motion.readMessage,
-            content: Text('Sent. Your warden or owner confirms it after checking their UPI app; '
-                'your rent updates then.'),
-          ));
-        }
-      } else {
+      RentGateway gateway;
+      try {
+        gateway = await ref.read(cashfreeApiProvider).gateway();
+      } on SignupFailure catch (f) {
+        if (mounted) _say(f.message);
+        return;
+      }
+      if (!mounted) return;
+      if (gateway.isRazorpay) {
         await payRent(context, ref);
+      } else if (!gateway.ready) {
+        _say(gateway.message ?? 'Online rent payment is not set up for your PG yet. Please pay your PG directly.');
+      } else {
+        await Navigator.of(context).push(CashfreePayScreen.route());
       }
     } finally {
       if (mounted) {
         setState(() => _busy = false);
         refreshStudentData(ref);
+        ref.invalidate(myRentPaymentsProvider);
       }
     }
+  }
+
+  void _say(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      duration: Motion.readMessage,
+      content: Text(message),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final upi = ref.watch(upiSettingsProvider(null)).value;
+    final gateway = ref.watch(rentGatewayProvider).value;
     final pending = (ref.watch(myPaymentClaimsProvider).value ?? const <PaymentClaim>[])
         .where((c) => c.status == ClaimStatus.pending)
         .toList();
@@ -95,9 +101,10 @@ class _PayNowButtonState extends ConsumerState<PayNowButton> {
         ),
         const SizedBox(height: Space.xs),
         Text(
-          upi != null
-              ? 'Straight to your owner\'s UPI ID with PhonePe, Paytm, Google Pay or BHIM.'
-              : 'UPI, cards, net banking and wallets. Apnivaas never sees your card or UPI details.',
+          gateway != null && gateway.isRazorpay
+              ? 'UPI, cards, net banking and wallets. Apnivaas never sees your card or UPI details.'
+              : 'UPI with PhonePe, Google Pay, Paytm or BHIM through Cashfree. Confirmed automatically, '
+                  'and settled to your PG owner.',
           style: t.textTheme.bodySmall?.copyWith(color: t.colorScheme.onSurfaceVariant),
           textAlign: TextAlign.center,
         ),

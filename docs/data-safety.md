@@ -516,6 +516,21 @@ Built per `docs/round6-api.md`; migration `db/migrations/2026-11-01-round6.sql`;
 - **Play in-app update check (`com.google.android.play:app-update`).** Asks Google Play whether a newer
   version exists. Sends nothing of ours; adds no permission.
 
+### 3.11 Cashfree rent (from legal version 2026-11-04, app 1.5.0)
+
+Built per `docs/cashfree-rent.md`; migration `db/migrations/2026-11-04-cashfree-rent.sql`; legal row
+`db/migrations/2026-11-04-legal-version-cashfree.sql`. **The Data safety form changes:**
+
+- **Financial info › User payment info — Yes (already Yes for Razorpay).** Tenants' payments now also go to
+  Cashfree Payments (a service provider processing payments on our behalf, like Razorpay in §4): name, phone,
+  email, amount. UPI details are entered in Cashfree's checkout / the UPI app and never reach us.
+- **Owners' settlement details — new:** legal name, email, phone, **UPI ID** (Financial info › Other financial
+  info: collected, shared with Cashfree for settlement) and **PAN** (government ID, §6: sent to Cashfree for
+  vendor KYC, only its last 4 characters stored). Purpose: Payments/account management. Required for owners
+  who turn on online rent; not collected from anyone else.
+- **Flutter SDK (`flutter_cashfree_pg_sdk`, com.cashfree.pg:api).** Re-count the merged manifest of the
+  release build; any new permission must be named in both copies of the privacy policy before release.
+
 ## 4. Razorpay: service provider, not third party
 
 Play distinguishes **"shared with third parties"** from **"handled by a service provider"**. Tick

@@ -76,10 +76,14 @@ library;
 /// (satellite) and OpenStreetMap; Truecaller sign-in runs through the Truecaller app; Google
 /// Play tells the app when a newer version exists. The permission count goes to fourteen: the
 /// Truecaller SDK's account-state permission. Row: db/migrations/2026-11-01-legal-version-round6.sql.
-const kLegalVersion = '2026-11-01';
+/// 2026-11-04 (Cashfree): rent for most PGs is paid through Cashfree Payments and settled to the
+/// owner's own UPI ID with Cashfree Easy Split; owners give Cashfree their legal name, email,
+/// phone, UPI ID and PAN (and GSTIN if they have one) for that; Razorpay stays only for the PGs
+/// that keep it and for owners' plan payments. Row: db/migrations/2026-11-04-legal-version-cashfree.sql.
+const kLegalVersion = '2026-11-04';
 
 /// Human-readable form of [kLegalVersion], for the "last updated" line.
-const kLegalVersionLabel = '1 November 2026';
+const kLegalVersionLabel = '4 November 2026';
 
 const kTermsUrl = 'https://hostelpro-three.vercel.app/legal/terms';
 const kPrivacyUrl = 'https://hostelpro-three.vercel.app/legal/privacy';
@@ -601,8 +605,21 @@ const kPrivacyPolicy = LegalDocument(
                 'for 90 days.',
           ),
           (
+            term: 'Cashfree Payments',
+            detail: 'Takes rent paid in the app for most PGs and settles it to the PG owner\'s own '
+                'UPI ID. A tenant who pays gives Cashfree their name, phone, email and the '
+                'amount; Cashfree\'s checkout runs inside this app and hands UPI payments to the UPI '
+                'app the tenant picks, and the UPI details never reach us. An owner who turns on '
+                'online rent gives Cashfree their legal name, email, phone, UPI ID, PAN and, if '
+                'they have one, GSTIN, which Cashfree needs to verify them and settle to them; '
+                '$kLegalProductName keeps the UPI ID and only the last four characters of the PAN. '
+                'We receive back the payment\'s status, amount, identifiers and bank reference, and '
+                'the settlement\'s status and UTR. Cashfree keeps its own records under its own '
+                'privacy policy.',
+          ),
+          (
             term: 'Razorpay',
-            detail: 'Only where you choose to pay rent in the app, or an owner pays for a '
+            detail: 'Only for the PGs that still take rent through Razorpay, and when an owner pays for a '
                 '$kLegalProductName plan. Receives your name, email, phone and the amount. Its checkout runs inside this app on Android: while a '
                 'payment is open it takes the card, UPI or netbanking details you type, and checks '
                 'which UPI apps are installed so it can offer them. Those details go to Razorpay '

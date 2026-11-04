@@ -129,7 +129,10 @@ export const LEGAL = {
  * runs through its app; Google Play tells the app when a newer version exists. Row:
  * db/migrations/2026-11-01-legal-version-round6.sql.
  */
-export const LEGAL_VERSION = "2026-11-01";
+/* 2026-11-04 (Cashfree): rent for most PGs through Cashfree Payments with Easy Split settlement to
+ * the owner's UPI ID; owners' legal name, email, phone, UPI ID, PAN (and GSTIN) go to Cashfree.
+ * Row: db/migrations/2026-11-04-legal-version-cashfree.sql. */
+export const LEGAL_VERSION = "2026-11-04";
 
 /**
  * Android application id, so the deletion page can name the app Play users installed.

@@ -43,7 +43,10 @@ import '../../data/models/models.dart';
 /// the online value returns with online payment.
 enum ReceiptChannel {
   /// Cash, UPI or a bank transfer handed over at the office and recorded by staff.
-  desk('PAID AT THE OFFICE');
+  desk('PAID AT THE OFFICE'),
+
+  /// 2026-11-04: rent paid in the app through Cashfree and confirmed by Cashfree's API.
+  online('PAID ONLINE · CASHFREE');
 
   const ReceiptChannel(this.stamp);
 
@@ -196,6 +199,47 @@ class Receipt {
       // the app telling one story about the same month.
       totalLabel: payment.status.label.toUpperCase(),
       totalValue: received,
+    );
+  }
+
+  /// A receipt for one Cashfree payment (2026-11-04), from a rent_payments row the server marked
+  /// SUCCESS after reading it back from Cashfree. Null for anything that was not captured.
+  static Receipt? forOnlinePayment({
+    required String receiptNo,
+    required double amount,
+    required String periodMonth,
+    required DateTime paidAt,
+    required String paymentId,
+    String? bankReference,
+    double refunded = 0,
+    String? payerName,
+    String? hostelName,
+  }) {
+    if (!(amount > 0)) return null;
+    final payer = _clean(payerName);
+    return Receipt._(
+      reference: receiptNo,
+      referenceLabel: 'RECEIPT NO',
+      amount: amount,
+      amountCaption: 'paid for ${receiptMonth(periodMonth)}',
+      periodMonth: periodMonth,
+      paidAt: paidAt,
+      channel: ReceiptChannel.online,
+      payerName: payer,
+      hostelName: _clean(hostelName),
+      facts: [
+        if (payer != null) ReceiptLine('Resident', payer),
+        ReceiptLine('Rent for', receiptMonth(periodMonth)),
+        const ReceiptLine('Method', 'UPI via Cashfree'),
+        ReceiptLine('Cashfree payment ID', paymentId),
+        if (bankReference != null && bankReference.isNotEmpty) ReceiptLine('Bank reference', bankReference),
+      ],
+      amounts: [
+        ReceiptLine('Paid', _money(amount)),
+        if (refunded > 0) ReceiptLine('Refunded', _money(refunded)),
+      ],
+      totalLabel: refunded >= amount ? 'REFUNDED' : 'PAID',
+      totalValue: _money(amount - refunded),
     );
   }
 

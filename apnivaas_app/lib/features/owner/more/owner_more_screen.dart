@@ -17,6 +17,7 @@ import '../../signup/owner/book_demo_screen.dart';
 import '../staff/owner_staff_screen.dart';
 import '../tasks/owner_tasks_screen.dart';
 import '../widgets/owner_header.dart';
+import '../payments/owner_payments_screen.dart';
 
 /// THE OWNER'S FIFTH TAB: everything that is not a daily question, grouped by what it is about.
 ///
@@ -47,6 +48,14 @@ class OwnerMoreScreen extends ConsumerWidget {
         const _Group(title: 'Your team'),
         ListGroup(
           children: [
+            // 2026-11-04: rent paid in the app through Cashfree, settled to the owner's UPI ID.
+            ListRow(
+              key: const Key('owner-online-rent'),
+              icon: ClayIcons.money,
+              title: 'Online rent',
+              subtitle: 'Cashfree payments, settlements to your UPI ID, refunds',
+              onTap: () => push(OwnerPaymentsScreen.route()),
+            ),
             ListRow(
               icon: ClayIcons.team,
               title: 'Staff accounts',

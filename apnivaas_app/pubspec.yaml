@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.4.1+15
+version: 1.5.0+16
 
 environment:
   sdk: ^3.13.1
@@ -114,6 +114,10 @@ dependencies:
   # Round 6: "Continue with Truecaller" through Truecaller's own OAuth sheet (no browser). The
   # authorization code and PKCE verifier go to mobile-auth, which holds the exchange.
   truecaller_sdk: ^1.2.0
+  # Cashfree rent checkout (2026-11-04): the official SDK's in-app checkout. UPI apps open through
+  # it; the order and its payment session come from supabase/functions/cashfree-order, and only
+  # the server decides whether rent was paid.
+  flutter_cashfree_pg_sdk: 2.6.0+54
   # Round 6: the owner drops the PG's exact pin on a map, and the PG page shows it. OpenStreetMap
   # tiles need no API key; tenants open the pin in the Google Maps app for directions.
   flutter_map: ^8.3.2

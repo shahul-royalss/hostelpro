@@ -147,14 +147,27 @@ void main() {
       expect(part!.paidAt, DateTime.parse('2026-08-24'));
     });
 
-    test('there is no way to print a receipt for money paid inside the app', () {
-      // The online factory went with the checkout. This is a compile-time property rather than
-      // a runtime one — `Receipt` has exactly one factory and it takes a fee_payments row — and
-      // the assertion that stands in for it is that every receipt this build can make is
-      // stamped as desk-paid.
-      expect(ReceiptChannel.values, [ReceiptChannel.desk]);
+    test('a receipt for money paid inside the app exists only for a captured Cashfree payment', () {
+      // 2026-11-04: online payment returned with Cashfree, and so did its receipt. It is built
+      // only from a rent_payments row the server marked SUCCESS (the screens pass those alone),
+      // it is stamped as paid online, and an amount of nothing is refused like a desk row.
+      expect(ReceiptChannel.values, [ReceiptChannel.desk, ReceiptChannel.online]);
       expect(_deskReceipt.channel, ReceiptChannel.desk);
       expect(_deskReceipt.metaText, contains('PAID AT THE OFFICE'));
+      final online = Receipt.forOnlinePayment(
+        receiptNo: 'APV-2611-ABCDEF12',
+        amount: 5000,
+        periodMonth: '2026-11',
+        paidAt: DateTime(2026, 11, 4),
+        paymentId: '777',
+      )!;
+      expect(online.channel, ReceiptChannel.online);
+      expect(online.metaText, contains('PAID ONLINE · CASHFREE'));
+      expect(online.reference, 'APV-2611-ABCDEF12');
+      expect(
+        Receipt.forOnlinePayment(receiptNo: 'x', amount: 0, periodMonth: '2026-11', paidAt: DateTime(2026, 11, 4), paymentId: '1'),
+        isNull,
+      );
     });
   });
 

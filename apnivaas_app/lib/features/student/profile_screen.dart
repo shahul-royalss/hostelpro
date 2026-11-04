@@ -28,6 +28,7 @@ import 'student_providers.dart';
 import 'widgets/common.dart';
 import 'widgets/format.dart';
 import 'widgets/rent.dart';
+import '../payments/cashfree/cashfree_pay_screen.dart' show RentPaymentHistoryScreen;
 
 /// Everything the hostel holds about this resident, and who to call about it.
 ///
@@ -134,6 +135,12 @@ class _Profile extends ConsumerWidget {
           const SizedBox(height: Space.sm),
           ListGroup(
             children: [
+              _AccountRow(
+                art: ClayIcons.money,
+                label: 'Online payments',
+                caption: 'Rent you paid in the app, with receipts.',
+                onTap: () => Navigator.of(context).push(RentPaymentHistoryScreen.route()),
+              ),
               _AccountRow(
                 art: ClayIcons.calendar,
                 label: 'Timeline',
