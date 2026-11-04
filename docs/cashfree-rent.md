@@ -121,3 +121,31 @@ The Cashfree API shapes were read from the official reference on 2026-11-04:
 - **Credentials:** set the production App ID and Secret and `CASHFREE_ENVIRONMENT=production`. No code change is needed.
 - **Production webhook:** register the same URL in Live mode.
 - **Settlement schedule:** choose the cycle with Cashfree; `CASHFREE_SCHEDULE_OPTION` is optional.
+
+## Sandbox test checklist (run once the sandbox keys are set)
+
+Automated so far:
+- Database: 9 sections, run on live inside a rolled-back transaction. They cover vendor onboarding, wrong amounts, failed, pending, successful and duplicate payments, the split's 2-minute wait and retries, settlement success and failure, full and partial refunds, duplicate webhooks, and blocking another owner.
+- Cashfree module: 11 Deno tests for signature verification, request shapes, retry rules and vendor validation.
+- App: tests for the paid, failed and pending screens, an owner who is not set up, the dashboard, refunds and the account form.
+
+Needs the real Cashfree sandbox. Each step must end in the stated result:
+
+1. **Owner (sandbox build):** go to More → Online rent → Set up, and enter a name, PAN `BIAPA2934N` and UPI `success@upi`.
+   - **Result:** the account shows "Pending". About 10 minutes later the worker turns it to "Verified".
+2. **Invalid vendor:** submit a malformed PAN or UPI ID.
+   - **Result:** the app refuses it before sending. A value that only Cashfree rejects shows Cashfree's message.
+3. **Tenant:** tap Pay now, and in the checkout pay with Cashfree's sandbox success UPI.
+   - **Result:** "Rent paid", a receipt, the rent card updated, and the owner notified.
+4. **Failed payment:** pay with the sandbox failure UPI.
+   - **Result:** "Payment not completed", and the rent is unchanged.
+5. **Pending payment:** close the checkout before paying.
+   - **Result:** "Payment is being confirmed", then reconciled within 5 minutes.
+6. **Split:** wait 3 minutes after a success.
+   - **Result:** the payment shows "Awaiting settlement" (split created) on the owner dashboard.
+7. **Settlement:** call `POST /simulate/settlement/vendor` with status SUCCESS, then again with status FAILED.
+   - **Result:** the payment shows Settled with a UTR, or Settlement failed.
+8. **Refunds:** refund ₹100, then the rest.
+   - **Result:** a partial refund, then Refunded, with the rent ledger reversed only after SUCCESS. A third refund is refused.
+9. **Webhook security:** resend the same webhook, and send one with a wrong signature.
+   - **Result:** `payment_webhook_events` shows a duplicate, and the wrong signature gets HTTP 401 with nothing changed.
